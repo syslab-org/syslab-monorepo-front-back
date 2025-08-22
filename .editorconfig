@@ -1,0 +1,44 @@
+# EditorConfig ayuda a mantener estilos consistentes entre editores/IDEs
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# Python: 4 espacios (PEP 8)
+[*.py]
+indent_size = 4
+
+# Makefile: tabs reales (requisito de make)
+[Makefile]
+indent_style = tab
+
+# Shell scripts
+[*.sh]
+indent_size = 2
+
+# JSON / JSONC (VSCode settings, tsconfig, etc.)
+[*.{json,jsonc}]
+indent_size = 2
+
+# YAML (GitHub Actions, k8s, etc.)
+[*.{yml,yaml}]
+indent_size = 2
+
+# Terraform
+[*.tf]
+indent_size = 2
+
+# Markdown: no recortar espacios al final (para tablas) y respetar saltos
+[*.md]
+trim_trailing_whitespace = false
+insert_final_newline = true
+
+# JSX/TSX/TS/JS
+[*.{js,jsx,ts,tsx}]
+indent_size = 2
+
