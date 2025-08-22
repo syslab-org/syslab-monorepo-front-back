@@ -1,0 +1,19 @@
+[
+    {
+        "pk": 1,
+        "model": "api.Cloud",
+        "fields": {
+            "name": "aws",
+            "parameters": ""
+        }
+    },
+    {
+        "pk": 2,
+        "model": "api.Cloud",
+        "fields": {
+            "name": "gcp",
+            "parameters": ""
+        }
+    }
+
+]

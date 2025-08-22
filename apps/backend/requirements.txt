@@ -1,0 +1,11 @@
+Django==4.1.7
+djangorestframework
+django-cors-headers
+Pillow
+celery
+redis
+flower
+dj-database-url
+psycopg2-binary
+python-decouple
+gunicorn

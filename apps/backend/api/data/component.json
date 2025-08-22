@@ -1,0 +1,27 @@
+[
+    {
+        "pk": 1,
+        "model": "api.Component",
+        "fields": {
+            "name": "Router",
+            "image": ""
+        }
+    },
+    {
+        "pk": 2,
+        "model": "api.Component",
+        "fields": {
+            "name": "Switch",
+            "image": ""
+        }
+    },
+    {
+        "pk": 3,
+        "model": "api.Component",
+        "fields": {
+            "name": "Workstation",
+            "image": ""
+        }
+    }
+
+]
