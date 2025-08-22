@@ -32,4 +32,3 @@ terraform.tfvars
 # VSCode / Devcontainer
 .vscode/
 .devcontainer/data
-
