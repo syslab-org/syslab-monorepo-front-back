@@ -1,0 +1,35 @@
+# Node
+node_modules
+dist
+build
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+env/
+*.egg-info
+.pytest_cache/
+
+# Django
+db.sqlite3
+media/
+staticfiles/
+
+# Docker
+*.log
+*.pid
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+terraform.tfvars
+*.tfplan
+
+# VSCode / Devcontainer
+.vscode/
+.devcontainer/data
+

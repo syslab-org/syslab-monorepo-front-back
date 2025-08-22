@@ -1,0 +1,5 @@
+POST http://localhost:8080/
+Content-Type: application/json
+
+
+{"vpc":{"name":"main-192.193.10.0","cidr_block":"192.193.10.0","internet_gateway":false,"nat_gateway":{"enabled":false,"public_subnet":"","elastic_ip":""},"subnets":[{"name":"subnet1","cidr_block":"192.193.10.0/26","route_table":"public","instances":[{"id":"v0keF6DfO7jiK9vvTUssD6ELOZ0GQsC6EhczLkzCepI1Dt19AVUjmb0Gfyh6JsA6MAm51rrUyYtxq9pQ3sRejueY06ERUaCxm7Yl","ami":"ami-0a2bf868f9c25cd7e","instance_type":"server","ip_address":"192.193.10.130","name":"instance-1","ssh_access":"false"}]},{"name":"subnet2","cidr_block":"192.193.10.8/26","route_table":"public","instances":[{"id":"dvhEQ4ogSAyyFZ1AZa3ryhbGue1wxG7S5ULsDtp11QoHISWs71tvPZz2XMXaWSRMkDpNRrRKnUlocqdMXFl0ortfoHSoreL4utTJ","ami":"1111","instance_type":"print","ip_address":"192.193.10.195","name":"print","ssh_access":"true"}]}],"route_tables":[{"name":"route-table-1","routes":[{"name":"route-1","dest_cidr":"192.193.10.11/26"},{"name":"route-2","dest_cidr":"192.193.10.19/26"}]}]}}

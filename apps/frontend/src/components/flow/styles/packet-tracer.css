@@ -1,0 +1,412 @@
+/* Overrides para modo oscuro activando .theme-dark en <body> */
+.theme-dark {
+    --pt-bg: #0c1118;
+    --pt-card: #101727;
+    --pt-card-2: #0c1423;
+    --pt-border: #1a2438;
+    --pt-text: #e7ebf6;
+    --pt-subtext: #9fb0c9;
+
+    --pt-green: #2ecc71;
+    --pt-yellow: #f5c451;
+    --pt-red: #ff6b6b;
+    --pt-cyan: #34c6f3;
+
+    --pt-vpc: #4b82ff;
+    --pt-subnet: #16b39a;
+    --pt-inst-pc: #6f9bff;
+    --pt-inst-sv: #9aa2ff;
+    --pt-inst-pr: #67c7f5;
+    --pt-router: #ff9a6a;
+
+    --pt-radius: 14px;
+    --pt-shadow: 0 6px 16px rgba(5, 12, 25, .28);
+    --pt-shadow-strong: 0 12px 28px rgba(5, 12, 25, .45);
+}
+
+
+/* ---------- Packet Tracer inspired UI — LIGHT THEME ---------- */
+:root {
+    /* Base (light) */
+    --pt-bg: #f5f7fa;
+    --pt-card: #ffffff;
+    --pt-card-2: #ffffff;
+    /* en claro mantenemos uniforme */
+    --pt-border: #d9dee6;
+    --pt-text: #1a1d29;
+    --pt-subtext: #5a6275;
+
+    /* Estados */
+    --pt-green: #28a745;
+    --pt-yellow: #f0b429;
+    --pt-red: #e55353;
+    --pt-cyan: #26b4d7;
+
+    /* Acentos por tipo (claros, legibles en blanco) */
+    --pt-vpc: #2f6fed;
+    /* azul */
+    --pt-subnet: #26b4d7;
+    /* cyan/teal */
+    --pt-inst-pc: #4b8bff;
+    /* azul suave */
+    --pt-inst-sv: #8d92ff;
+    /* violeta suave */
+    --pt-inst-pr: #3dc8d0;
+    /* celeste/teal */
+    --pt-router: #ff9a6a;
+    /* naranja */
+
+    --pt-radius: 10px;
+    --pt-shadow: 0 6px 16px rgba(0, 0, 0, .06);
+    --pt-shadow-strong: 0 10px 24px rgba(0, 0, 0, .10);
+}
+
+/* ---------- Node chrome ---------- */
+
+/* cuerpo interno sobrio */
+.pt-node__body {
+    padding: 10px 12px 12px;
+    background: #f8fafd;
+    /* leve contraste sobre blanco */
+    border-radius: 8px;
+    border: 1px solid #ecf0f6;
+}
+
+/* Base de nodos */
+.pt-node {
+    position: relative;
+    border-radius: var(--pt-radius);
+    background: var(--pt-card);
+    color: var(--pt-text);
+    border: 1px solid var(--pt-border);
+    box-shadow: var(--pt-shadow);
+    overflow: hidden;
+    user-select: none;
+    transition: transform .12s ease, box-shadow .2s ease, border-color .2s ease;
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+/* Hover / selected */
+.pt-node:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--pt-shadow-strong);
+}
+
+.react-flow__node.selected .pt-node {
+    border-color: #2f6fed;
+    box-shadow: 0 0 0 3px rgba(47, 111, 237, .18), var(--pt-shadow-strong);
+}
+
+/* Header con banda de color */
+.pt-node__header {
+    display: grid;
+    grid-template-columns: 6px 1fr auto;
+    align-items: center;
+    column-gap: 10px;
+    padding: 10px 12px;
+    background: #f4f6fb;
+    /* gris muy claro */
+    border-bottom: 1px solid #edf1f6;
+}
+
+.pt-node__stripe {
+    width: 6px;
+    height: 20px;
+    border-radius: 999px;
+    background: var(--pt-vpc);
+}
+
+/* Título + subtítulo */
+.pt-node__title {
+    font-weight: 600;
+    letter-spacing: .2px;
+    line-height: 1.1;
+    color: var(--pt-text);
+}
+
+.pt-node__subtitle {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--pt-subtext);
+}
+
+/* LED de estado */
+.pt-led {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--pt-subtext);
+}
+
+.pt-led__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--pt-green);
+    box-shadow: 0 0 0 3px rgba(40, 167, 69, .12);
+    animation: pt-led 1.6s ease-in-out infinite;
+}
+
+@keyframes pt-led {
+
+    0%,
+    100% {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+
+    50% {
+        transform: scale(1.06);
+        filter: brightness(1.15);
+    }
+}
+
+.pt-led--warn .pt-led__dot {
+    background: var(--pt-yellow);
+    box-shadow: 0 0 0 3px rgba(240, 180, 41, .12);
+}
+
+.pt-led--down .pt-led__dot {
+    background: var(--pt-red);
+    box-shadow: 0 0 0 3px rgba(229, 83, 83, .12);
+}
+
+/* Badges de puertos/info */
+.pt-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.pt-badge {
+    font-size: 11px;
+    color: #324156;
+    border: 1px solid #e1e7f0;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #f7f9fc;
+}
+
+/* Toolbelt superior-derecha */
+.pt-toolbelt {
+    display: flex;
+    gap: 6px;
+}
+
+.pt-btn {
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid #e1e7f0;
+    background: #f7f9fc;
+    color: #2b3a50;
+    font-size: 12px;
+}
+
+.pt-btn:hover {
+    border-color: #2f6fed;
+    background: #f2f6ff;
+}
+
+/* Variantes por tipo (colores de banda) */
+.pt-node--vpc .pt-node__stripe {
+    background: var(--pt-vpc);
+}
+
+.pt-node--subnet .pt-node__stripe {
+    background: var(--pt-subnet);
+}
+
+.pt-node--inst.pc .pt-node__stripe {
+    background: var(--pt-inst-pc);
+}
+
+.pt-node--inst.server .pt-node__stripe {
+    background: var(--pt-inst-sv);
+}
+
+.pt-node--inst.printer .pt-node__stripe {
+    background: var(--pt-inst-pr);
+}
+
+.pt-node--router .pt-node__stripe {
+    background: var(--pt-router);
+}
+
+/* Tamaños sugeridos (min-only para respetar resizer) */
+.pt-size--vpc {
+    min-width: 520px;
+    min-height: 220px;
+}
+
+.pt-size--subnet {
+    min-width: 320px;
+    min-height: 120px;
+}
+
+.pt-size--inst {
+    min-width: 220px;
+    min-height: 80px;
+}
+
+.pt-size--router {
+    min-width: 260px;
+    min-height: 110px;
+}
+
+/* Fill del wrapper del nodo (React Flow controla el tamaño externo) */
+.pt-fill {
+    width: 100%;
+    height: 100%;
+}
+
+/* ---------- Handles ---------- */
+
+/* Handler points redondos (contenedores: VPC/Subnet/Router-card) */
+.pt-handle {
+    width: 10px;
+    height: 10px;
+    background: #2f6fed;
+    /* azul consistente */
+    border: 2px solid #ffffff;
+    /* contraste en claro */
+    border-radius: 999px;
+    box-shadow: 0 0 0 2px rgba(47, 111, 237, .18);
+}
+
+/* separa los handles del borde */
+.react-flow__handle {
+    transform: translateY(-2px);
+}
+
+.react-flow__handle-bottom {
+    transform: translateY(2px);
+}
+
+.react-flow__handle-left {
+    transform: translateX(-2px);
+}
+
+.react-flow__handle-right {
+    transform: translateX(2px);
+}
+
+/* ---------- Helpers específicos (opcionales) ---------- */
+
+/* Atenuar borde al deshabilitar (si lo usas) */
+.pt-node.is-disabled {
+    opacity: .6;
+    filter: grayscale(.1);
+}
+
+/* Un poco más de contraste al seleccionar texto dentro del modal */
+::selection {
+    background: rgba(47, 111, 237, .18);
+}
+
+
+/* === Toolbar === */
+.pt-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.pt-toolbar__title {
+    flex: 0 0 auto;
+    font-weight: 700;
+    letter-spacing: .3px;
+}
+
+.pt-toolbar__group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.pt-toolbar__spacer {
+    flex: 1 1 auto;
+    min-width: 8px;
+}
+
+.pt-btn {
+    white-space: nowrap;
+    min-width: 0;
+    padding-inline: 12px;
+}
+
+.pt-ibtn {
+    flex: 0 0 auto;
+}
+
+.pt-panel {
+    width: 100%;
+}
+
+/* Asegura que el LED se posicione relativo al círculo */
+.pt-device {
+    position: relative;
+    /* por si otro estilo pisa el inline */
+}
+
+/* Si quieres el LED arriba-derecha */
+.pt-device__led {
+    position: absolute;
+    top: 8px;
+    /* antes 6px */
+    right: 8px;
+    /* antes 6px */
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #34d399;
+    /* up */
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
+}
+
+.pt-device__led--warn {
+    background: #f59e0b;
+}
+
+.pt-device__led--down {
+    background: #ef4444;
+}
+
+/* Etiquetas bajo el router */
+.pt-device__label {
+    font-weight: 600;
+    text-align: center;
+    max-width: 140px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 8px;
+}
+
+.pt-device__sublabel {
+    font-size: 12px;
+    color: #6b7280;
+    text-align: center;
+    margin-top: 2px;
+}
+
+/* por defecto ocultos */
+.pt-device .pt-handle-tri {
+    opacity: 0;
+    transition: opacity .15s ease;
+}
+
+/* visibles al hover del círculo o si hay drag conexionando */
+.pt-device:hover .pt-handle-tri,
+.react-flow__node:has(.pt-device) .connecting .pt-handle-tri {
+    opacity: 1;
+}

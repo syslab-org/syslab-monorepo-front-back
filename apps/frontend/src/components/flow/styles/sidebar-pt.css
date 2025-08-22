@@ -1,0 +1,127 @@
+/* =========================
+   End Devices – Sidebar PT
+   ========================= */
+
+/* Panel lateral estilo Packet Tracer */
+.pt-sidebar {
+  height: 100%;
+  background: linear-gradient(180deg, #0f1522, #0c1320);
+  border-right: 1px solid #1a2438;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Encabezado */
+.pt-sidebar__header {
+  padding: 14px 16px;
+  font-weight: 700;
+  letter-spacing: .3px;
+  color: #e8eefc;
+  border-bottom: 1px solid rgba(34, 51, 85, .6);
+}
+
+/* Lista */
+.pt-sidebar__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 6px;
+  overflow-y: auto;                 /* scroll sutil si crece */
+}
+
+/* Scrollbar sutil */
+.pt-sidebar__list::-webkit-scrollbar { width: 8px; }
+.pt-sidebar__list::-webkit-scrollbar-thumb {
+  background: rgba(125, 160, 230, .25);
+  border-radius: 8px;
+}
+
+/* Ítem: altura fija + espacio reservado a la izquierda */
+.pt-sidebar__item {
+  position: relative;               /* para posicionar el dot */
+  display: grid;
+  grid-template-columns: 28px 1fr;  /* icon + label */
+  align-items: center;
+  gap: 10px;
+
+  height: 52px;                     /* ← fija: evita saltos */
+  padding: 0 10px 0 36px;           /* ← reserva hueco para el dot SIEMPRE */
+
+  color: #d8e6ff;
+  border-radius: 10px;
+  border: 1px solid transparent;    /* ← borde constante */
+  cursor: grab;
+  user-select: none;
+  transition: background .15s ease, border-color .15s ease, transform .08s ease;
+}
+
+.pt-sidebar__item:active {
+  cursor: grabbing;
+  transform: scale(.995);
+}
+
+/* Hover sin cambiar caja (solo color) */
+.pt-sidebar__item:hover {
+  background: rgba(44, 217, 255, .08);
+  border-color: rgba(44, 217, 255, .25);
+}
+
+/* Estado activo opcional */
+.pt-sidebar__item--active {
+  background: rgba(44, 217, 255, .14);
+  border-color: rgba(44, 217, 255, .45);
+}
+
+/* Icono */
+.pt-sidebar__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: #8fb3ff;                   /* azul icon PT */
+  flex: 0 0 auto;
+}
+
+/* Label (no truncar salvo que realmente no quepa) */
+.pt-sidebar__label {
+  font-weight: 600;
+  letter-spacing: .2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;                     /* clave para grid/flex */
+  flex: 1 1 auto;
+}
+
+.pt-sidebar__icon,
+.pt-sidebar__label {
+  pointer-events: none; /* ← clave para que el drag lo capture el contenedor */
+}
+
+
+/* DOT absoluto: no empuja el texto */
+.pt-sidebar__item::before {
+  content: "";
+  position: absolute;
+  left: 14px;                       /* dentro del padding reservado */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #6aa6ff;             /* color default */
+  opacity: 0;                       /* oculto visualmente */
+  transition: opacity .15s ease;
+  pointer-events: none;             /* no interfiere con drag */
+}
+
+/* Mostrar el dot al hover sin cambiar layout */
+.pt-sidebar__item:hover::before { opacity: 1; }
+
+/* Colores por tipo (se mantienen) */
+.pt-sidebar__item[data-key="vpc"]::before        { background: #5aa0ff; }
+.pt-sidebar__item[data-key="subnetwork"]::before { background: #22c1a7; }
+.pt-sidebar__item[data-key="computer"]::before   { background: #6aa6ff; }
+.pt-sidebar__item[data-key="server"]::before     { background: #9f8cff; }
+.pt-sidebar__item[data-key="printer"]::before    { background: #36c2ff; }
+.pt-sidebar__item[data-key="router"]::before     { background: #ff996a; }

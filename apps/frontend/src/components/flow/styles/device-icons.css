@@ -1,0 +1,83 @@
+/* ——— Dispositivo estilo Cisco Packet Tracer ——— */
+.pt-device {
+  width: 110px;           /* base, se puede redimensionar desde RF si quieres */
+  height: 90px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #1a3d7a 0%, #0c2247 100%);  /* azul PT */
+  border: 1.5px solid #153262;
+  box-shadow: 0 8px 20px rgba(8, 18, 36, .45), inset 0 1px 0 rgba(255,255,255,.08);
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+}
+.pt-device::after { /* brillo diagonal sutil */
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,.06), transparent 40%);
+  pointer-events: none;
+}
+
+/* LED de estado arriba‑derecha */
+.pt-device__led {
+  position: absolute; top: 6px; right: 6px;
+  width: 10px; height: 10px; border-radius: 999px;
+  background: #2ecc71; box-shadow: 0 0 10px rgba(46,204,113,.8);
+}
+.pt-device__led--down  { background:#e74c3c; box-shadow: 0 0 8px rgba(231,76,60,.8); }
+.pt-device__led--warn  { background:#f1c40f; box-shadow: 0 0 8px rgba(241,196,15,.8); }
+
+/* Ícono (usa tu getIconByInstanceType) */
+.pt-device__icon { font-size: 42px; color: #cfe3ff; opacity:.95; }
+
+/* Etiqueta debajo del dispositivo */
+.pt-device__label {
+  margin-top: 6px;
+  text-align: center;
+  color: #e8eefc;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .2px;
+}
+.pt-device__sublabel {
+  margin-top: 2px;
+  text-align: center;
+  color: #9fb3d9;
+  font-size: 11px;
+}
+
+/* ——— Handles triangulares (puertos verdes estilo PT) ——— */
+.pt-handle-tri {
+  width: 0; height: 0;
+  border-style: solid;
+  position: absolute;
+  filter: drop-shadow(0 0 2px rgba(0,0,0,.4));
+}
+.pt-handle-tri--on   { border-color: transparent transparent #26d07c transparent; } /* default */
+.pt-handle-tri--off  { border-color: transparent transparent #8ea3c6 transparent; }
+
+/* Top */
+.react-flow__handle-top.pt-handle-tri {
+  border-width: 0 6px 10px 6px;  /* triángulo apuntando hacia abajo */
+  top: -6px; left: 50%; transform: translateX(-50%);
+}
+/* Bottom */
+.react-flow__handle-bottom.pt-handle-tri {
+  border-width: 10px 6px 0 6px;  /* triángulo apuntando hacia arriba */
+  bottom: -6px; left: 50%; transform: translateX(-50%);
+  border-color: #26d07c transparent transparent transparent;
+}
+/* Left */
+.react-flow__handle-left.pt-handle-tri {
+  border-width: 6px 10px 6px 0;  /* triángulo apuntando a la derecha */
+  left: -8px; top: 50%; transform: translateY(-50%);
+  border-color: transparent #26d07c transparent transparent;
+}
+/* Right */
+.react-flow__handle-right.pt-handle-tri {
+  border-width: 6px 0 6px 10px;  /* triángulo apuntando a la izquierda */
+  right: -8px; top: 50%; transform: translateY(-50%);
+  border-color: transparent transparent transparent #26d07c;
+}
+
+/* Si usas también los handles redondos "pt-handle" en VPC/Subnet, mantenlos. */

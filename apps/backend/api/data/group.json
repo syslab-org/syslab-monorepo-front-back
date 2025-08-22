@@ -1,0 +1,27 @@
+[
+    {
+        "pk": 1,
+        "model": "api.Group",
+        "fields": {
+            "name": "administrator",
+            "permissions": ""
+        }
+    },
+    {
+        "pk": 2,
+        "model": "api.Group",
+        "fields": {
+            "name": "student",
+            "permissions": ""
+        }
+    },
+    {
+        "pk": 3,
+        "model": "api.Group",
+        "fields": {
+            "name": "professor",
+            "permissions": ""
+        }
+    }
+
+]
