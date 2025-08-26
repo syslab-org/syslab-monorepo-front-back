@@ -1,0 +1,112 @@
+name: tesis-container
+
+services:
+  frontend:
+    container_name: tesis-container-frontend
+    build:
+      context: ../..
+      dockerfile: tools/docker/frontend.Dockerfile
+    volumes:
+      - ../../apps/frontend:/app
+      - frontend_node_modules:/app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - appnet
+
+  backend:
+    container_name: tesis-container-backend
+    build:
+      context: ../..
+      dockerfile: tools/docker/backend.Dockerfile
+    volumes:
+      - ../../apps/backend:/app
+    env_file:
+      - ../../.env
+    environment:
+      - DJANGO_SETTINGS_MODULE=teg.settings
+      # si quieres forzar, puedes añadir (no obligatorio si settings.py ya lo hace):
+      # - CELERY_BROKER_URL=redis://redis:6379/0
+      # - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - appnet
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  celery:
+    container_name: tesis-container-celery
+    build:
+      context: ../..
+      dockerfile: tools/docker/backend.Dockerfile
+    command: bash -lc "celery -A teg worker -E --loglevel=INFO --pool=solo"
+    volumes:
+      - ../../apps/backend:/app
+    env_file:
+      - ../../.env
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks:
+      - appnet
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A teg inspect ping | grep -q 'pong'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  flower:
+    container_name: tesis-container-flower
+    build:
+      context: ../..
+      dockerfile: tools/docker/flower.Dockerfile
+    command:
+      ["celery", "--broker=redis://redis:6379/0", "flower", "--port=5555"]
+    ports:
+      - "5555:5555"
+    depends_on:
+      redis:
+        condition: service_healthy
+      celery:
+        condition: service_healthy
+    networks:
+      - appnet
+
+  redis:
+    container_name: tesis-container-redis
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 2s
+      retries: 15
+    networks:
+      - appnet
+
+volumes:
+  frontend_node_modules:
+
+networks:
+  appnet:
+    driver: bridge
