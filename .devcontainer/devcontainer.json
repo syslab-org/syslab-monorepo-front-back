@@ -1,0 +1,31 @@
+{
+  "name": "Tesis Monorepo Dev",
+  "dockerComposeFile": ["../tools/docker/compose.dev.yml"],
+  "service": "backend",
+  "workspaceFolder": "/workspaces/tesis-monorepo",
+  "overrideCommand": false,
+  "updateRemoteUserUID": true,
+  "remoteUser": "root",
+  "shutdownAction": "stopCompose",
+  "portsAttributes": {
+    "5173": { "label": "Vite Frontend" },
+    "8000": { "label": "Django API" },
+    "5555": { "label": "Flower" }
+  },
+  "forwardPorts": [5173, 8000, 5555],
+  "postCreateCommand": "make setup",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.black-formatter",
+        "charliermarsh.ruff",
+        "ms-azuretools.vscode-docker",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "hashicorp.terraform"
+      ]
+    }
+  }
+}
+
