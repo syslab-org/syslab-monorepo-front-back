@@ -106,3 +106,61 @@ sh-flower:
 
 sh-redis:
 	$(COMPOSE) exec $(SVC_REDIS) sh
+
+  #############################################
+# ECR: login, tag y push de imágenes
+#############################################
+
+# Parámetros (puedes overridear al invocar: make push TAG=v1 AWS_REGION=us-east-2)
+AWS_REGION ?= us-east-1
+AWS_PROFILE ?= tesis
+TAG ?= dev-latest
+
+# Descubre dinámicamente tu Account ID
+AWS_ACCOUNT_ID := $(shell aws sts get-caller-identity --query Account --output text --profile $(AWS_PROFILE))
+
+# Repos de ECR (coinciden con los creados por Terraform)
+ECR_BACKEND := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/tesis-dev-backend
+ECR_CELERY  := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/tesis-dev-celery
+
+# Imágenes locales (nombres que construyes con docker compose)
+LOCAL_BACKEND := tesis-container-backend:latest
+LOCAL_CELERY  := tesis-container-celery:latest
+
+.PHONY: ecr-login tag-backend tag-celery push-backend push-celery push check-images
+
+ecr-login:
+	@echo "🔐 Login en ECR para $(AWS_ACCOUNT_ID) (perfil: $(AWS_PROFILE), región: $(AWS_REGION))"
+	aws ecr get-login-password --region $(AWS_REGION) --profile $(AWS_PROFILE) | \
+	docker login --username AWS --password-stdin $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
+
+check-images:
+	@echo "🔎 Verificando que existen las imágenes locales..."
+	@if ! docker image inspect $(LOCAL_BACKEND) >/dev/null 2>&1; then \
+		echo "❌ No existe la imagen local $(LOCAL_BACKEND). Ejecuta 'make up' o construye la imagen antes."; exit 1; \
+	fi
+	@if ! docker image inspect $(LOCAL_CELERY) >/dev/null 2>&1; then \
+		echo "❌ No existe la imagen local $(LOCAL_CELERY). Ejecuta 'make up' o construye la imagen antes."; exit 1; \
+	fi
+	@echo "✅ Imágenes locales encontradas."
+
+tag-backend: check-images
+	@echo "🏷️  Tag backend -> $(ECR_BACKEND):$(TAG)"
+	docker tag $(LOCAL_BACKEND) $(ECR_BACKEND):$(TAG)
+
+tag-celery: check-images
+	@echo "🏷️  Tag celery  -> $(ECR_CELERY):$(TAG)"
+	docker tag $(LOCAL_CELERY) $(ECR_CELERY):$(TAG)
+
+push-backend: ecr-login tag-backend
+	@echo "⬆️  Push backend -> $(ECR_BACKEND):$(TAG)"
+	docker push $(ECR_BACKEND):$(TAG)
+
+push-celery: ecr-login tag-celery
+	@echo "⬆️  Push celery  -> $(ECR_CELERY):$(TAG)"
+	docker push $(ECR_CELERY):$(TAG)
+
+# Push de ambas imágenes
+push: push-backend push-celery
+	@echo "🎉 Push completado. Etiqueta: $(TAG)"
+
