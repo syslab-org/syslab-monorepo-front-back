@@ -164,3 +164,39 @@ push-celery: ecr-login tag-celery
 push: push-backend push-celery
 	@echo "🎉 Push completado. Etiqueta: $(TAG)"
 
+# -------------------------------------------------------------------
+# AWS Infra Management
+# -------------------------------------------------------------------
+
+# Levantar servicios mínimos de backend en AWS (sin Celery)
+aws-start:
+	cd infra/terraform && terraform apply -auto-approve \
+		-var="backend_desired_count=1" \
+		-var="celery_desired_count=0"
+
+# Apagar backend/celery (deja S3 y DynamoDB intactos)
+aws-stop:
+	cd infra/terraform && terraform apply -auto-approve \
+		-var="backend_desired_count=0" \
+		-var="celery_desired_count=0"
+
+# Apagar todo lo que cuesta (ECS, ALB, Redis, etc.) pero mantener S3+Dynamo
+aws-down:
+	cd infra/terraform && terraform destroy -auto-approve
+
+# Revisar estado actual de Terraform en AWS
+aws-status:
+	cd infra/terraform && terraform state list
+
+
+# aws-start:
+# 	./scripts/aws-control.sh start
+
+# aws-stop:
+# 	./scripts/aws-control.sh stop
+
+# aws-down:
+# 	./scripts/aws-control.sh down
+
+# aws-status:
+# 	./scripts/aws-control.sh status
