@@ -23,6 +23,5 @@ def healthz(_request):
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
-    path('healthz/', healthz, name='healthz'),
-    # path('', include(('api.users.urls', 'users'), namespace='users')),
+    path('healthz/', healthz),
 ]
