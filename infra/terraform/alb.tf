@@ -25,10 +25,10 @@ resource "aws_lb_target_group" "backend" {
 
   health_check {
     path                = var.backend_healthcheck_path
-    matcher             = "200-399"
+    matcher             = "200"
     healthy_threshold   = 2
     unhealthy_threshold = 2
-    interval            = 15
+    interval            = 10
     timeout             = 5
   }
 

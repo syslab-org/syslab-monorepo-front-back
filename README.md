@@ -124,6 +124,8 @@ Se creó un `Makefile` para simplificar comandos:
 - `make sh-backend`, `make sh-frontend`, etc → entrar a un contenedor.
 - `make lint` / `make test` → calidad de código y tests.
 - **Nuevo:** `make push` → loguea en ECR, taggea y pushea imágenes backend/celery.
+- **Infra AWS:** `make aws-start`, `make aws-stop`, `make aws-down`, `make aws-status`.
+- **Debug:** `make echo-backend-url`, `make tf-outputs`.
 
 ---
 
@@ -138,34 +140,103 @@ Se creó un `Makefile` para simplificar comandos:
 
 ---
 
-## 8. ¿Qué sigue?
+## 8. Deploy en AWS ECS
 
-Una vez que tengamos las imágenes en ECR:
+Terraform define:
 
-- Definir en Terraform los **ECS Task Definitions** que usen esas imágenes.
-- Crear un **ECS Cluster** (con Fargate).
-- Configurar servicios (backend + celery workers).
-- Conectar todo a una **VPC**, **subnets**, y **load balancer**.
+- **ECS Cluster** (`tesis-dev-cluster`).
+- **ECS Task Definitions** para backend y celery.
+- **ECS Services** (backend detrás de ALB, celery sin ALB).
+- **Load Balancer (ALB)** con healthchecks.
+- **Redis (ElastiCache)** como broker/result backend.
 
-Así tendremos un **deploy directo en AWS ECS**.
+### 🔄 Flujo de Deploy
+
+1. **Construir imágenes locales**:
+   ```bash
+   make build
+   ```
+2. **Construir imágenes locales**:
+   ```bash
+   make push
+   ```
+3. **Aplicar Terraform para desplegar ECS**:
+   ```bash
+   make aws-start
+   ```
+4. **Verificar healthcheck**:
+   ```bash
+   make echo-backend-url
+   curl -s "$BACKEND_URL/healthz/"
+   ```
+5. **Probar Celery**:
+   ```bash
+   make test-celery N=7
+   ```
 
 ---
 
-## 9. Beneficios de la Arquitectura
+## 9. Administración de Infra
 
-- **Reproducibilidad**: todo está en Docker y Terraform.
-- **Escalabilidad**: ECS puede escalar workers Celery según la carga.
-- **Seguridad**: S3 y DynamoDB aseguran estado de Terraform, ECR guarda imágenes privadas.
-- **Simplicidad**: un solo Makefile orquesta desarrollo y deploy.
+- **Levantar backend (sin Celery)**
+  ```bash
+  make aws-start
+  ```
+- **Apagar backend/celery (manteniendo S3+DynamoDB):**
+  ```bash
+  make aws-stop
+  ```
+- **Apagar todo lo que cuesta 💸 (ECS, ALB, Redis, etc.)**
+  ```bash
+  make aws-down
+  ```
+- **Ver estado actual**
+  ```bash
+  make aws-status
+  ```
+
+## 10) Encaje de piezas (por qué esta arquitectura)
+
+- **Docker** normaliza el runtime entre dev y prod.
+- **ECR** guarda las imágenes que ECS ejecutará.
+- **ECS/Fargate** corre contenedores sin administrar servidores.
+- **ALB** expone el backend con healthchecks y failover.
+- **Redis (ElastiCache)**: cola y resultados para Celery (persistencia en RAM administrada).
+- **CloudWatch Logs**: logs centralizados sin instalar nada.
+- **Terraform**: infra reproducible, declarativa y versionada.
 
 ---
 
-# ✅ Resumen
+## 11) Costos y cómo apagar para no pagar
 
-- S3 → guarda estado Terraform.
-- DynamoDB → maneja locks.
-- ECR → repos privados de imágenes Docker.
-- Docker Compose → stack local completo.
-- Celery + Redis + Flower → sistema de colas y monitoreo.
-- Terraform → infra como código, consistente y versionada.
-- Makefile → automatiza comandos, incluido el push a ECR.
+- **ECS/Fargate + ALB + ElastiCache** generan costo mientras están activos.
+- Para ahorrar:
+  - **Poner desired_count=0** (apaga tareas, deja ALB/Redis vivos):
+    ```bash
+    make aws-stop
+    ```
+  - **Destruir todo lo “caro”** (ECS, ALB, Redis, etc. — mantiene S3+DynamoDB del state):
+    ```bash
+    make aws-down
+    ```
+- **S3 + DynamoDB** del state cuestan muy poco; conviene **mantenerlos**.
+
+---
+
+## 12) Tips de operación
+
+- Cambias código backend/celery → **reconstruye y sube**:
+
+  ```bash
+  make push
+  make aws-start
+  ```
+
+- Escalar Celery (ejemplo a 3 réplicas)\*\*:
+  ```bash
+  cd infra/terraform
+  terraform apply -var="celery_desired_count=3"
+  ```
+- Logs:
+  Backend → CloudWatch /ecs/tesis/dev/backend
+  Celery → CloudWatch /ecs/tesis/dev/celery

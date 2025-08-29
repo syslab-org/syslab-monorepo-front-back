@@ -11,14 +11,18 @@ DATABASE_URL = config('DATABASE_URL', default=f"sqlite:///{BASE_DIR / 'db.sqlite
 
 # --- Seguridad y entorno ---
 SECRET_KEY = config('SECRET_KEY')
-DEBUG = config('DEBUG', default=False, cast=bool)
+DEBUG = os.getenv("DEBUG", "true").lower() == "true"
 ALLOWED_HOSTS_RAW = config('ALLOWED_HOSTS', default='')
-ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_RAW.split(',') if host.strip()]
+
+# Hosts permitidos (coma-separado en ENV). En dev: "*" está OK.
+ALLOWED_HOSTS = [h for h in os.getenv("ALLOWED_HOSTS", "*").split(",") if h]
+
 
 
 # --- CORS ---
 CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_HEADERS = ['*']
+
 
 # --- Aplicaciones instaladas ---
 INSTALLED_APPS = [
@@ -43,6 +47,15 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+]
+
+# Si DEBUG=True, permitimos todo; si no, usamos la lista explícita
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+
+# Para cuando NO quieras abrir todo, usa esta lista (coma-separada en ENV)
+# Ejemplo: "http://localhost:5173,https://mi-frontend.com"
+CORS_ALLOWED_ORIGINS = [
+    o for o in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",") if o
 ]
 
 ROOT_URLCONF = 'teg.urls'
