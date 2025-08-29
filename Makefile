@@ -200,3 +200,31 @@ aws-status:
 
 # aws-status:
 # 	./scripts/aws-control.sh status
+
+
+# --- Terraform / AWS defaults ---
+AWS_PROFILE ?= tesis
+export AWS_PROFILE
+
+TF := terraform -chdir=infra/terraform
+
+# Lee la URL del ALB desde el state remoto
+BACKEND_URL ?= $(shell $(TF) output -raw backend_url 2>/dev/null)
+
+.PHONY: test-celery echo-backend-url tf-outputs
+
+# Imprime la URL detectada (debug)
+echo-backend-url:
+	@echo "BACKEND_URL = $(BACKEND_URL)"
+
+# Muestra todos los outputs de terraform (debug)
+tf-outputs:
+	@$(TF) output
+
+# Test Celery (usa BACKEND_URL auto o el exportado manualmente)
+test-celery:
+	@if [ -z "$(BACKEND_URL)" ]; then \
+	  echo "❌ BACKEND_URL vacío. Corre 'make echo-backend-url' para debug o exporta BACKEND_URL manualmente."; \
+	  exit 1; \
+	fi
+	@N=$(or $(N),5) ./scripts/test_celery.sh
