@@ -129,11 +129,6 @@ LOCAL_CELERY  := tesis-container-celery:latest
 
 .PHONY: ecr-login tag-backend tag-celery push-backend push-celery push check-images
 
-ecr-login:
-	@echo "🔐 Login en ECR para $(AWS_ACCOUNT_ID) (perfil: $(AWS_PROFILE), región: $(AWS_REGION))"
-	aws ecr get-login-password --region $(AWS_REGION) --profile $(AWS_PROFILE) | \
-	docker login --username AWS --password-stdin $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
-
 check-images:
 	@echo "🔎 Verificando que existen las imágenes locales..."
 	@if ! docker image inspect $(LOCAL_BACKEND) >/dev/null 2>&1; then \
@@ -203,8 +198,7 @@ aws-status:
 
 
 # --- Terraform / AWS defaults ---
-AWS_PROFILE ?= tesis
-export AWS_PROFILE
+
 
 TF := terraform -chdir=infra/terraform
 
@@ -228,3 +222,91 @@ test-celery:
 	  exit 1; \
 	fi
 	@N=$(or $(N),5) ./scripts/test_celery.sh
+
+
+# =======================
+# Deploy rápidos a AWS
+# =======================
+
+# --- Paths de Dockerfiles (ajusta si cambian) ---
+BACKEND_DOCKERFILE := tools/docker/backend.Dockerfile
+CELERY_DOCKERFILE  := tools/docker/celery.Dockerfile
+
+# --- Imágenes locales (ya usabas estos tags) ---
+LOCAL_BACKEND := tesis-container-backend:latest
+LOCAL_CELERY  := tesis-container-celery:latest
+
+# --- Parámetros AWS / ECR (usa los ya definidos si existen) ---
+AWS_REGION  ?= us-east-1
+AWS_PROFILE ?= tesis
+TAG         ?= dev-latest
+
+AWS_ACCOUNT_ID := $(shell aws sts get-caller-identity --query Account --output text --profile $(AWS_PROFILE))
+ECR_BACKEND    := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/tesis-dev-backend
+ECR_CELERY     := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/tesis-dev-celery
+
+# --- Terraform helper ---
+TF := terraform -chdir=infra/terraform
+
+# --- Réplicas por defecto para apply (puedes overridear al invocar) ---
+BACKEND_DESIRED ?= 1
+CELERY_DESIRED  ?= 1
+
+.PHONY: build-backend build-celery deploy-backend deploy-celery deploy-all tf-redeploy ecr-login
+
+build-backend:
+	@echo "🧱 Build backend (local) -> $(LOCAL_BACKEND)"
+	docker build -f $(BACKEND_DOCKERFILE) -t $(LOCAL_BACKEND) .
+
+build-celery:
+	@echo "🧱 Build celery (local) -> $(LOCAL_CELERY)"
+	docker build -f $(CELERY_DOCKERFILE) -t $(LOCAL_CELERY) .
+
+ecr-login:
+	@echo "🔐 Login en ECR para $(AWS_ACCOUNT_ID) (perfil: $(AWS_PROFILE), región: $(AWS_REGION))"
+	aws ecr get-login-password --region $(AWS_REGION) --profile $(AWS_PROFILE) | \
+	docker login --username AWS --password-stdin $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
+
+deploy-backend: build-backend ecr-login
+	@echo "🏷️  Tag backend -> $(ECR_BACKEND):$(TAG)"
+	docker tag $(LOCAL_BACKEND) $(ECR_BACKEND):$(TAG)
+	@echo "⬆️  Push backend -> $(ECR_BACKEND):$(TAG)"
+	docker push $(ECR_BACKEND):$(TAG)
+	@$(MAKE) tf-redeploy
+
+deploy-celery: build-celery ecr-login
+	@echo "🏷️  Tag celery -> $(ECR_CELERY):$(TAG)"
+	docker tag $(LOCAL_CELERY) $(ECR_CELERY):$(TAG)
+	@echo "⬆️  Push celery -> $(ECR_CELERY):$(TAG)"
+	docker push $(ECR_CELERY):$(TAG)
+	@$(MAKE) tf-redeploy
+
+deploy-all: build-backend build-celery ecr-login
+	@echo "🏷️  Tag & push backend -> $(ECR_BACKEND):$(TAG)"
+	docker tag $(LOCAL_BACKEND) $(ECR_BACKEND):$(TAG)
+	docker push $(ECR_BACKEND):$(TAG)
+	@echo "🏷️  Tag & push celery -> $(ECR_CELERY):$(TAG)"
+	docker tag $(LOCAL_CELERY) $(ECR_CELERY):$(TAG)
+	docker push $(ECR_CELERY):$(TAG)
+	@$(MAKE) tf-redeploy
+
+tf-redeploy:
+	@echo "📦 Terraform apply (backend_desired=$(BACKEND_DESIRED), celery_desired=$(CELERY_DESIRED))"
+	$(TF) apply -auto-approve \
+	  -var="backend_desired_count=$(BACKEND_DESIRED)" \
+	  -var="celery_desired_count=$(CELERY_DESIRED)"
+
+# --- Frontend Dev ---
+FRONTEND_DIR := apps/frontend
+
+# URL por defecto (cambia según quieras AWS o local)
+VITE_API_URL ?= http://localhost:8000
+
+.PHONY: frontend frontend-aws
+
+frontend:
+	cd $(FRONTEND_DIR) && VITE_API_URL=$(VITE_API_URL) pnpm dev
+
+# Levanta el frontend apuntando al backend en AWS (ALB)
+frontend-aws:
+	cd $(FRONTEND_DIR) && VITE_API_URL=$$(terraform -chdir=infra/terraform output -raw backend_url) pnpm dev

@@ -2,16 +2,6 @@
 # Task Definitions
 #########################
 
-
-# Descubre los repos ECR por nombre
-data "aws_ecr_repository" "backend" {
-  name = "${var.project}-${var.env}-backend" # -> tesis-dev-backend
-}
-
-data "aws_ecr_repository" "celery" {
-  name = "${var.project}-${var.env}-celery"  # -> tesis-dev-celery
-}
-
 # Backend Task Definition
 resource "aws_ecs_task_definition" "backend" {
   family                   = "${var.project}-${var.env}-backend"
@@ -24,7 +14,7 @@ resource "aws_ecs_task_definition" "backend" {
   container_definitions = jsonencode([
     {
       name      = "backend"
-      image = "${data.aws_ecr_repository.backend.repository_url}:dev-latest"
+      image     = "${aws_ecr_repository.backend.repository_url}:dev-latest"
       essential = true
       portMappings = [
         {
@@ -39,8 +29,10 @@ resource "aws_ecs_task_definition" "backend" {
         { name = "DEBUG", value = "true" },
         { name = "ALLOWED_HOSTS", value = "*" },
         { name = "REDEPLOY_AT", value = timestamp() },
-        { name = "CELERY_BROKER_URL",     value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:${aws_elasticache_cluster.redis.port}/0" },
-        { name = "CELERY_RESULT_BACKEND", value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:${aws_elasticache_cluster.redis.port}/0" }
+        { name = "CELERY_BROKER_URL", value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:${aws_elasticache_cluster.redis.port}/0" },
+        { name = "CELERY_RESULT_BACKEND", value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:${aws_elasticache_cluster.redis.port}/0" },
+        { name = "CORS_ALLOWED_ORIGINS", value = "http://localhost:5173" }
+
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -76,16 +68,18 @@ resource "aws_ecs_task_definition" "celery" {
   container_definitions = jsonencode([
     {
       name      = "celery"
-      image = "${data.aws_ecr_repository.celery.repository_url}:dev-latest"
+      image     = "${aws_ecr_repository.celery.repository_url}:dev-latest"
       essential = true
       command   = ["celery", "-A", "teg", "worker", "-E", "--loglevel=INFO", "--pool=solo"]
       environment = [
         { name = "DJANGO_SETTINGS_MODULE", value = "teg.settings" },
         { name = "SECRET_KEY", value = var.secret_key },
-        { name = "DEBUG",                  value = "true" },
-        { name = "ALLOWED_HOSTS",          value = "*" },
-        { name = "CELERY_BROKER_URL",      value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:${aws_elasticache_cluster.redis.port}/0" },
-        { name = "CELERY_RESULT_BACKEND",  value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:${aws_elasticache_cluster.redis.port}/0" }
+        { name = "DEBUG", value = "true" },
+        { name = "ALLOWED_HOSTS", value = "*" },
+        { name = "CELERY_BROKER_URL", value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:${aws_elasticache_cluster.redis.port}/0" },
+        { name = "CELERY_RESULT_BACKEND", value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:${aws_elasticache_cluster.redis.port}/0" },
+        { name = "CORS_ALLOWED_ORIGINS", value = "http://localhost:5173" }
+
       ]
       logConfiguration = {
         logDriver = "awslogs"
