@@ -4,7 +4,7 @@ from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
 from celery.result import AsyncResult
 from .validators import validate_network_plan
-from .tasks import prueba_larga, process_network_plan  # ← IMPORTANTE
+from .tasks import prueba_larga, process_network_plan
 
 @csrf_exempt
 def ping(_request):
