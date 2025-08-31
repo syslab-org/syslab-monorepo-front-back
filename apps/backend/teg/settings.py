@@ -1,30 +1,50 @@
+# apps/backend/teg/settings.py
 from pathlib import Path
-from decouple import config, Csv
+from decouple import config
 import dj_database_url
 import os
-
-redis_url = config("REDIS_URL", default="redis://localhost:6379/0").replace("rediss://", "redis://")
+from corsheaders.defaults import default_headers
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-DATABASE_URL = config('DATABASE_URL', default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}")
-
-# --- Seguridad y entorno ---
+# =========================
+# Seguridad y entorno
+# =========================
 SECRET_KEY = config('SECRET_KEY')
-DEBUG = os.getenv("DEBUG", "true").lower() == "true"
-ALLOWED_HOSTS_RAW = config('ALLOWED_HOSTS', default='')
+DEBUG = config("DEBUG", default="false").lower() == "true"
 
-# Hosts permitidos (coma-separado en ENV). En dev: "*" está OK.
-ALLOWED_HOSTS = [h for h in os.getenv("ALLOWED_HOSTS", "*").split(",") if h]
+# Hosts permitidos (CSV: "api.midominio.com,alb-xyz.amazonaws.com")
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "*").split(",") if h.strip()]
 
+# CSRF trusted origins (CSV con esquema: "https://api.midominio.com,https://alb-xyz.amazonaws.com")
+CSRF_TRUSTED_ORIGINS = [
+    o.strip() for o in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()
+]
 
+# Django detrás de ALB / proxy
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 
-# --- CORS ---
-CORS_ORIGIN_ALLOW_ALL = True
-CORS_ALLOW_HEADERS = ['*']
+# =========================
+# CORS
+# =========================
+# En dev abrimos todo; en prod especificamos lista blanca
+CORS_ALLOW_ALL_ORIGINS = DEBUG
 
+# Lista blanca cuando NO abrimos todo (CSV sin esquema adicional)
+# Ej: "http://localhost:5173,https://frontend-produccion.com"
+CORS_ALLOWED_ORIGINS = [
+    o.strip() for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()
+]
 
-# --- Aplicaciones instaladas ---
+CORS_ALLOW_HEADERS = list(default_headers)
+CORS_ALLOW_CREDENTIALS = True
+
+# =========================
+# Apps instaladas
+# =========================
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -32,30 +52,28 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'api.apps.ApiConfig',
-    'rest_framework',
+
     'corsheaders',
+    'rest_framework',
     'rest_framework.authtoken',
+
+    'api.apps.ApiConfig',
 ]
 
-# --- Middleware ---
+# =========================
+# Middleware (CORS antes de Common/CSRF)
+# =========================
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
+
     'corsheaders.middleware.CorsMiddleware',
+
+    'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-]
-
-# Si DEBUG=True, permitimos todo; si no, usamos la lista explícita
-CORS_ALLOW_ALL_ORIGINS = DEBUG
-
-# Para cuando NO quieras abrir todo, usa esta lista (coma-separada en ENV)
-# Ejemplo: "http://localhost:5173,https://mi-frontend.com"
-CORS_ALLOWED_ORIGINS = [
-    o for o in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",") if o
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
 ROOT_URLCONF = 'teg.urls'
@@ -63,7 +81,7 @@ ROOT_URLCONF = 'teg.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [],  # agrega rutas si usas templates custom
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -78,43 +96,40 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'teg.wsgi.application'
 
-# --- Base de datos ---
+# =========================
+# Base de datos
+# =========================
+DATABASE_URL = config('DATABASE_URL', default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}")
 DATABASES = {
     'default': dj_database_url.parse(
         DATABASE_URL,
         conn_max_age=600,
-        ssl_require=DATABASE_URL.startswith('postgres')
+        ssl_require=DATABASE_URL.startswith(('postgres://', 'postgresql://')),
     )
 }
 
-# --- Validación de contraseñas ---
-AUTH_PASSWORD_VALIDATORS = [
-    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
-]
-
-# --- Internacionalización ---
+# =========================
+# Internacionalización
+# =========================
 LANGUAGE_CODE = config('LANGUAGE_CODE', default='en-us')
 TIME_ZONE = config('TIME_ZONE', default='UTC')
 USE_I18N = True
 USE_TZ = True
 
-# --- Archivos estáticos ---
+# =========================
+# Archivos estáticos
+# =========================
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# --- Configuración por defecto de IDs ---
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# --- Celery ---
-
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
-
+# =========================
+# Celery / Redis
+# =========================
+# REDIS_URL puede venir como rediss:// en Render u otros; normalizamos a redis://
+REDIS_URL = config("REDIS_URL", default="redis://redis:6379/0").replace("rediss://", "redis://")
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", REDIS_URL)
-
-# Asegura compatibilidad con el namespace 'CELERY'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
