@@ -79,3 +79,44 @@ variable "secret_key" {
 }
 
 
+# ------- Django / CORS -------
+variable "django_debug" {
+  type        = bool
+  default     = true # en prod cámbialo a false desde tfvars/vars de pipeline
+  description = "Equivalente a DEBUG en Django"
+}
+
+variable "allowed_hosts" {
+  type        = list(string)
+  default     = ["*"] # en prod: ["api.mi-dominio.com"]
+  description = "Lista de hosts permitidos por Django (ALLOWED_HOSTS)"
+}
+
+variable "cors_allowed_origins" {
+  type        = list(string)
+  default     = ["http://localhost:5173"]
+  description = "Orígenes permitidos para CORS"
+}
+
+variable "csrf_trusted_origins" {
+  type        = list(string)
+  default     = []
+  description = "Orígenes confiables para CSRF (https://... del ALB o dominio)"
+}
+variable "acm_certificate_arn" {
+  type        = string
+  default     = ""
+  description = "ARN del certificado ACM para el ALB (HTTPS)"
+}
+
+variable "backend_desired_count" {
+  type        = number
+  default     = 1
+  description = "Número de tasks del servicio backend"
+}
+
+variable "celery_desired_count" {
+  type        = number
+  default     = 1
+  description = "Número de tasks del servicio celery"
+}

@@ -1,10 +1,17 @@
 # apps/backend/api/tasks.py
 from celery import shared_task
-import time
 
-@shared_task(bind=True)
-def prueba_larga(self, n=5):
-    """Duerme n segundos y devuelve un resultado simple."""
-    for i in range(n):
-        time.sleep(1)
+@shared_task
+def prueba_larga(n: int = 5):
+    import time
+    time.sleep(n)
     return {"ok": True, "n": n}
+
+@shared_task(name="api.tasks.process_network_plan", bind=True)
+def process_network_plan(self, payload: dict):
+    """
+    Recibe el dict validado por la vista.
+    Haz aquí lo que necesites (crear VPCs, subnets, etc. o solo simular).
+    """
+    # TODO: lógica real. Por ahora, devolvemos un OK de prueba:
+    return {"ok": True, "received": payload}
