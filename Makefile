@@ -269,3 +269,89 @@ frontend:
 # Levanta el frontend apuntando al backend en AWS (ALB)
 frontend-aws:
 	cd $(FRONTEND_DIR) && VITE_API_URL=$$(terraform -chdir=infra/terraform output -raw backend_url) pnpm dev
+
+
+# ---------- Deploys convenientes ----------
+# Lanza toda la cadena: build/tag/push de backend+celery y sube las réplicas
+deploy-all: check-images ecr-login tag-backend tag-celery push-backend push-celery aws-up
+	@echo "🎉 Deploy completo (backend=$(BACKEND_DESIRED) celery=$(CELERY_DESIRED), tag=$(TAG))"
+
+# Bootstrap completo desde cero: crea infra en 0/0 y luego deploy-all
+aws-bootstrap: aws-init deploy-all
+	@echo "🚀 Infra creada y servicios desplegados."
+
+# ---------- Prueba /api/network/plan ----------
+# Usa PLAN_FILE (por defecto: plan.json en el repo)
+PLAN_FILE ?= plan.json
+
+test-network-plan:
+	@URL=$$($(TF) output -raw backend_url); \
+	if [ -z "$$URL" ]; then echo "❌ backend_url vacío. Ejecuta 'make tf-outputs'."; exit 1; fi; \
+	if [ ! -f "$(PLAN_FILE)" ]; then echo "❌ No existe $(PLAN_FILE). Define PLAN_FILE=... o crea plan.json"; exit 1; fi; \
+	echo "🌐 Enviando plan: $(PLAN_FILE) -> $$URL/api/network/plan/"; \
+	curl -s -X POST $$URL/api/network/plan/ -H "Content-Type: application/json" -d @$(PLAN_FILE) | tee /tmp/np_task.json; \
+	T=$$(jq -r .task_id /tmp/np_task.json 2>/dev/null); \
+	if [ -z "$$T" ] || [ "$$T" = "null" ]; then echo "❌ No se obtuvo task_id. Respuesta arriba."; exit 1; fi; \
+	echo "⏳ Esperando resultado (task_id=$$T)…"; \
+	for i in $$(seq 1 30); do \
+	  sleep 2; R=$$(curl -s $$URL/api/tasks/status/$$T/); \
+	  echo "$$R" | jq .; \
+	  STATE=$$(echo "$$R" | jq -r .state); \
+	  if [ "$$STATE" = "SUCCESS" ] || [ "$$STATE" = "FAILURE" ]; then exit 0; fi; \
+	done; \
+	echo "⚠️ Timeout esperando la tarea $$T"; exit 1
+
+
+# =======================
+# Smoke test end-to-end
+# =======================
+# Uso:
+#   make smoke                      # N=3 y PLAN_FILE=plan.json por defecto
+#   make smoke N=10                 # cambia duración de la tarea demo
+#   make smoke PLAN_FILE=mi_plan.json
+#
+SMOKE_TIMEOUT ?= 60     # seg totales para esperar tareas Celery
+PLAN_FILE     ?= plan.json
+
+smoke:
+	@URL=$$($(TF) output -raw backend_url); \
+	if [ -z "$$URL" ]; then echo "❌ backend_url vacío. Ejecuta 'make tf-outputs'."; exit 1; fi; \
+	echo "🔎 Healthcheck: $$URL/healthz/"; \
+	H=$$(curl -fsS $$URL/healthz/ || true); \
+	echo "$$H" | jq . >/dev/null 2>&1 || { echo "❌ Healthz no es JSON o falló"; echo "$$H"; exit 1; }; \
+	STATUS=$$(echo "$$H" | jq -r .status); \
+	if [ "$$STATUS" != "ok" ]; then echo "❌ Healthz != ok"; echo "$$H"; exit 1; fi; \
+	echo "✅ Healthz OK"; \
+	\
+	N=$${N:-3}; \
+	echo "🚀 Disparando tarea Celery demo (n=$$N)…"; \
+	RUN=$$(curl -fsS -X POST $$URL/api/tasks/run/ -H "Content-Type: application/json" -d "{\"n\": $$N}" | tee /tmp/smoke_celery_task.json); \
+	TID=$$(echo "$$RUN" | jq -r .task_id 2>/dev/null); \
+	if [ -z "$$TID" ] || [ "$$TID" = "null" ]; then echo "❌ No se obtuvo task_id (celery)"; echo "$$RUN"; exit 1; fi; \
+	echo "⏳ Esperando Celery task $$TID (timeout $(SMOKE_TIMEOUT)s)…"; \
+	EL=0; \
+	while [ $$EL -lt $(SMOKE_TIMEOUT) ]; do \
+	  RES=$$(curl -fsS $$URL/api/tasks/status/$$TID/ || true); \
+	  STATE=$$(echo "$$RES" | jq -r .state 2>/dev/null); \
+	  if [ "$$STATE" = "SUCCESS" ]; then echo "$$RES" | jq .; echo "✅ Celery OK"; break; fi; \
+	  if [ "$$STATE" = "FAILURE" ]; then echo "$$RES" | jq .; echo "❌ Celery FAILURE"; exit 1; fi; \
+	  sleep 2; EL=$$((EL+2)); \
+	done; \
+	if [ $$EL -ge $(SMOKE_TIMEOUT) ]; then echo "⚠️  Timeout esperando Celery $$TID"; exit 1; fi; \
+	\
+	if [ ! -f "$(PLAN_FILE)" ]; then echo "❌ No existe $(PLAN_FILE). Define PLAN_FILE=... o crea plan.json"; exit 1; fi; \
+	echo "🌐 Enviando plan: $(PLAN_FILE) -> $$URL/api/network/plan/"; \
+	NP=$$(curl -fsS -X POST $$URL/api/network/plan/ -H "Content-Type: application/json" -d @$(PLAN_FILE) | tee /tmp/smoke_np_task.json); \
+	NPID=$$(echo "$$NP" | jq -r .task_id 2>/dev/null); \
+	if [ -z "$$NPID" ] || [ "$$NPID" = "null" ]; then echo "❌ No se obtuvo task_id (network_plan)"; echo "$$NP"; exit 1; fi; \
+	echo "⏳ Esperando NetworkPlan task $$NPID (timeout $(SMOKE_TIMEOUT)s)…"; \
+	EL=0; \
+	while [ $$EL -lt $(SMOKE_TIMEOUT) ]; do \
+	  RES=$$(curl -fsS $$URL/api/tasks/status/$$NPID/ || true); \
+	  STATE=$$(echo "$$RES" | jq -r .state 2>/dev/null); \
+	  if [ "$$STATE" = "SUCCESS" ]; then echo "$$RES" | jq .; echo "✅ NetworkPlan OK"; break; fi; \
+	  if [ "$$STATE" = "FAILURE" ]; then echo "$$RES" | jq .; echo "❌ NetworkPlan FAILURE"; exit 1; fi; \
+	  sleep 2; EL=$$((EL+2)); \
+	done; \
+	if [ $$EL -ge $(SMOKE_TIMEOUT) ]; then echo "⚠️  Timeout esperando NetworkPlan $$NPID"; exit 1; fi; \
+	echo "🎉 SMOKE PASS"
