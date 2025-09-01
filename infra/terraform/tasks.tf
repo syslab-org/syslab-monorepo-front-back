@@ -1,6 +1,21 @@
 #########################
 # Task Definitions
 #########################
+locals {
+  # DNS del ALB (recurso definido en alb.tf)
+  alb_dns = aws_lb.app.dns_name
+
+  # Mezcla la lista que ya pasas por var.allowed_hosts con el DNS del ALB
+  allowed_hosts_merged = distinct(concat(var.allowed_hosts, [local.alb_dns]))
+
+  # Para CSRF: agregamos http y https del ALB y lo mezclamos con lo que ya venga por var.csrf_trusted_origins
+  csrf_trusted_origins_merged = distinct(
+    concat(
+      var.csrf_trusted_origins,
+      ["http://${local.alb_dns}", "https://${local.alb_dns}"]
+    )
+  )
+}
 
 # Backend Task Definition
 resource "aws_ecs_task_definition" "backend" {
@@ -26,14 +41,23 @@ resource "aws_ecs_task_definition" "backend" {
       environment = [
         { name = "DJANGO_SETTINGS_MODULE", value = "teg.settings" },
         { name = "SECRET_KEY", value = var.secret_key },
-        { name = "DEBUG", value = "true" },
-        { name = "ALLOWED_HOSTS", value = "*" },
+        { name = "DEBUG", value = tostring(var.django_debug) },
+
+
+        { name = "ALLOWED_HOSTS", value = join(",", local.allowed_hosts_merged) },
+        { name = "CSRF_TRUSTED_ORIGINS", value = join(",", local.csrf_trusted_origins_merged) },
+
+        { name = "CORS_ALLOWED_ORIGINS", value = join(",", var.cors_allowed_origins) },
         { name = "REDEPLOY_AT", value = timestamp() },
+
+        # Redis/Celery
         { name = "CELERY_BROKER_URL", value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:${aws_elasticache_cluster.redis.port}/0" },
         { name = "CELERY_RESULT_BACKEND", value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:${aws_elasticache_cluster.redis.port}/0" },
-        { name = "CORS_ALLOWED_ORIGINS", value = "http://localhost:5173" }
-
+        { name = "REDIS_URL", value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:${aws_elasticache_cluster.redis.port}/0" }
       ]
+
+
+
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -70,17 +94,25 @@ resource "aws_ecs_task_definition" "celery" {
       name      = "celery"
       image     = "${aws_ecr_repository.celery.repository_url}:dev-latest"
       essential = true
-      command   = ["celery", "-A", "teg", "worker", "-E", "--loglevel=INFO", "--pool=solo"]
+      command   = ["celery", "-A", "teg.celery:app", "worker", "-E", "--loglevel=INFO", "--pool=solo"]
       environment = [
         { name = "DJANGO_SETTINGS_MODULE", value = "teg.settings" },
         { name = "SECRET_KEY", value = var.secret_key },
-        { name = "DEBUG", value = "true" },
-        { name = "ALLOWED_HOSTS", value = "*" },
+        { name = "DEBUG", value = tostring(var.django_debug) },
+
+        # coherencia (no imprescindible para el worker)
+        { name = "ALLOWED_HOSTS", value = join(",", local.allowed_hosts_merged) },
+        { name = "CSRF_TRUSTED_ORIGINS", value = join(",", local.csrf_trusted_origins_merged) },
+
+        { name = "CORS_ALLOWED_ORIGINS", value = join(",", var.cors_allowed_origins) },
+
+        # Redis
         { name = "CELERY_BROKER_URL", value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:${aws_elasticache_cluster.redis.port}/0" },
         { name = "CELERY_RESULT_BACKEND", value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:${aws_elasticache_cluster.redis.port}/0" },
-        { name = "CORS_ALLOWED_ORIGINS", value = "http://localhost:5173" }
-
+        { name = "REDIS_URL", value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:${aws_elasticache_cluster.redis.port}/0" }
       ]
+
+
       logConfiguration = {
         logDriver = "awslogs"
         options = {

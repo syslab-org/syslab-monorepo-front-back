@@ -2,18 +2,6 @@
 # ECS Services
 #########################
 
-variable "backend_desired_count" {
-  type        = number
-  default     = 1
-  description = "Réplicas del backend"
-}
-
-variable "celery_desired_count" {
-  type        = number
-  default     = 1
-  description = "Réplicas de celery (0 hasta tener Redis en AWS)"
-}
-
 # Backend service
 resource "aws_ecs_service" "backend" {
   name            = "${var.project}-${var.env}-svc-backend"
@@ -21,6 +9,8 @@ resource "aws_ecs_service" "backend" {
   task_definition = aws_ecs_task_definition.backend.arn
   desired_count   = var.backend_desired_count
   launch_type     = "FARGATE"
+
+  health_check_grace_period_seconds = 60
 
   network_configuration {
     subnets          = [for s in aws_subnet.public : s.id]
@@ -34,7 +24,7 @@ resource "aws_ecs_service" "backend" {
     container_port   = var.backend_container_port
   }
 
-  depends_on = [aws_lb_listener.http]
+  depends_on = [aws_lb_target_group.backend]
 
   tags = {
     Project = var.project
