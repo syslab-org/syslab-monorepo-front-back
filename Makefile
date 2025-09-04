@@ -47,6 +47,35 @@ ps:
 	$(COMPOSE) ps
 	$(COMPOSE) ps --services --filter "status=running"
 
+# --- ciclo rápido sin rebuild ---
+start:
+	$(COMPOSE) start
+
+stop:
+	$(COMPOSE) stop
+
+# Levanta (sin build) por si se cayeron pero existen
+up-nobuild:
+	$(COMPOSE) up -d
+
+# Re-crear contenedores existentes sin reconstruir imágenes
+recreate:
+	$(COMPOSE) up -d --force-recreate
+
+
+rm-stopped:       # opcional: limpia contenedores detenidos del proyecto
+	$(COMPOSE) rm -f || true
+
+ps-paused:
+	@echo "🔎 Contenedores pausados:"
+	@docker ps --filter status=paused --format "table {{.ID}}\t{{.Names}}\t{{.Status}}" || true
+
+unpause:
+	@echo "▶️  Reanudando contenedores pausados..."
+	@docker ps --filter status=paused -q | xargs -r docker unpause
+	@echo "✅ Listo."
+
+
 ps-healthy:
 	$(COMPOSE) ps --format '{{.Name}}\t{{.Status}}' | grep -i healthy || true
 
