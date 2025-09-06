@@ -1,69 +1,131 @@
-# ============================================================================
-# Dev stack (docker-compose) · Frontend/Backend/Celery/Flower/Redis
-# ============================================================================
+# =============================================================================
+# Makefile · tesis-monorepo
+# Runbooks organizados: Local, ECR, AWS+RDS, Smoke, Utilidades
+# =============================================================================
 
-# Variables de conveniencia
+# -------- Variables comunes --------
 COMPOSE       = docker compose -f tools/docker/compose.dev.yml
 SVC_FRONTEND  = frontend
 SVC_BACKEND   = backend
 SVC_CELERY    = celery
 SVC_FLOWER    = flower
 SVC_REDIS     = redis
+SVC_PG        = postgres
 
-.PHONY: help up down logs setup lint test restart restart-tesis ps ps-healthy \
-        build build-nc pull prune nuke \
-        sh-backend sh-frontend sh-celery sh-flower sh-redis \
-        logs-backend logs-frontend logs-celery logs-flower logs-redis \
-        migrate createsuperuser
+TF            = terraform -chdir=infra/terraform
+SMOKE_TIMEOUT ?= 60
+PLAN_FILE     ?= plan.json
 
+# -------- AWS/ECR (overrideables) --------
+AWS_REGION    ?= us-east-1
+AWS_PROFILE   ?= tesis
+TAG           ?= dev-latest
+
+AWS_ACCOUNT_ID := $(shell aws sts get-caller-identity --query Account --output text --profile $(AWS_PROFILE))
+ECR_REG        := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
+
+ECR_BACKEND    := $(ECR_REG)/tesis-dev-backend
+ECR_CELERY     := $(ECR_REG)/tesis-dev-celery
+
+LOCAL_BACKEND  := tesis-container-backend:latest
+LOCAL_CELERY   := tesis-container-celery:latest
+
+BACKEND_DOCKERFILE := tools/docker/backend.Dockerfile
+CELERY_DOCKERFILE  := tools/docker/celery.Dockerfile
+ifeq ("$(wildcard $(CELERY_DOCKERFILE))","")
+  CELERY_DOCKERFILE := $(BACKEND_DOCKERFILE)
+endif
+
+# Réplicas por defecto en ECS
+BACKEND_DESIRED ?= 1
+CELERY_DESIRED  ?= 1
+
+.PHONY: \
+  help \
+  ## Runbook A: Local
+  up down restart start stop up-nobuild recreate ps ps-healthy logs \
+  logs-backend logs-frontend logs-celery logs-flower logs-redis \
+  rm-stopped ps-paused unpause build build-nc pull prune nuke \
+  setup lint test migrate createsuperuser sh-backend sh-frontend sh-celery sh-flower sh-redis \
+  dbshell psql \
+  ## Runbook B: ECR
+  ecr-login check-images build-backend build-celery tag-backend tag-celery push-backend push-celery push \
+  ## Runbook C: AWS + RDS + ECS
+  aws-init aws-up aws-up-no-celery aws-redeploy aws-down aws-status tf-outputs echo-backend-url deploy-all aws-bootstrap \
+  ## Runbook D: Smoke
+  smoke smoke-local test-celery test-network-plan
+
+# =============================================================================
+# HELP
+# =============================================================================
 help:
-	@echo "Targets principales:"
-	@echo "  up / down / restart / restart-tesis / ps / ps-healthy / logs"
-	@echo "  setup / lint / test / migrate / createsuperuser"
-	@echo "  build / build-nc / pull / prune / nuke"
-	@echo "  sh-{backend,frontend,celery,flower,redis}, logs-*"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo " RUNBOOK A · DESARROLLO LOCAL"
+	@echo "  make up            # levanta dev stack (frontend, backend, celery, redis, postgres)"
+	@echo "  make migrate       # aplica migraciones (DB: Postgres local)"
+	@echo "  make smoke-local   # healthz + tarea Celery + /api/network/plan"
+	@echo "  make logs          # logs de todos los servicios"
 	@echo ""
-	@echo "Targets AWS/ECR/Terraform:"
-	@echo "  aws-init / push / aws-up / aws-up-no-celery / aws-redeploy / aws-down / aws-status"
-	@echo "  echo-backend-url / tf-outputs / test-celery / deploy-backend / deploy-celery / deploy-all"
+	@echo " RUNBOOK B · PUBLICAR IMÁGENES EN ECR"
+	@echo "  make push          # tag & push backend+celery al ECR (usa TAG=$(TAG))"
 	@echo ""
-	@echo "Targets Frontend dev:"
-	@echo "  frontend (VITE_API_URL=...) / frontend-aws"
+	@echo " RUNBOOK C · INFRA AWS + RDS + ECS"
+	@echo "  make aws-bootstrap # crea infra en 0/0 y luego deploy-all (sube réplicas)"
+	@echo "  make aws-redeploy  # push + apply (redeploy rápido)"
+	@echo "  make aws-down      # destruye infra"
+	@echo ""
+	@echo " RUNBOOK D · PRUEBAS (Smoke)"
+	@echo "  make smoke         # smoke contra ALB (AWS)"
+	@echo "  make smoke-local   # smoke contra localhost:8000"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-up:
+# =============================================================================
+# RUNBOOK A · DESARROLLO LOCAL (docker compose)
+# =============================================================================
+up:        ## Levanta dev stack (build si hace falta)
 	$(COMPOSE) up -d --build
 
-down:
+down:      ## Baja dev stack
 	$(COMPOSE) down
 
-restart:
+restart:   ## Reinicia dev stack (con build)
 	$(COMPOSE) down
 	$(COMPOSE) up -d --build
 
-# Igual que restart (por si quieres llamarlo así)
-restart-tesis: restart
+start:     ## Arranca contenedores existentes (sin build)
+	$(COMPOSE) start
 
-ps:
+stop:      ## Detiene contenedores (sin borrar)
+	$(COMPOSE) stop
+
+up-nobuild: ## Levanta sin reconstruir imágenes
+	$(COMPOSE) up -d
+
+recreate:  ## Re-crear contenedores sin rebuild
+	$(COMPOSE) up -d --force-recreate
+
+ps:        ## Lista servicios
 	$(COMPOSE) ps
 	$(COMPOSE) ps --services --filter "status=running"
 
-# --- ciclo rápido sin rebuild ---
-start:
-	$(COMPOSE) start
+ps-healthy: ## Servicios healthy
+	$(COMPOSE) ps --format '{{.Name}}\t{{.Status}}' | grep -i healthy || true
 
-stop:
-	$(COMPOSE) stop
+logs:      ## Logs de todo
+	$(COMPOSE) logs -f
 
-# Levanta (sin build) por si se cayeron pero existen
-up-nobuild:
-	$(COMPOSE) up -d
+logs-backend:
+	$(COMPOSE) logs -f $(SVC_BACKEND)
+logs-frontend:
+	$(COMPOSE) logs -f $(SVC_FRONTEND)
+logs-celery:
+	$(COMPOSE) logs -f $(SVC_CELERY)
+logs-flower:
+	$(COMPOSE) logs -f $(SVC_FLOWER)
+logs-redis:
+	$(COMPOSE) logs -f $(SVC_REDIS)
 
-# Re-crear contenedores existentes sin reconstruir imágenes
-recreate:
-	$(COMPOSE) up -d --force-recreate
-
-
-rm-stopped:       # opcional: limpia contenedores detenidos del proyecto
+rm-stopped: ## Limpia contenedores detenidos del proyecto
 	$(COMPOSE) rm -f || true
 
 ps-paused:
@@ -75,28 +137,6 @@ unpause:
 	@docker ps --filter status=paused -q | xargs -r docker unpause
 	@echo "✅ Listo."
 
-
-ps-healthy:
-	$(COMPOSE) ps --format '{{.Name}}\t{{.Status}}' | grep -i healthy || true
-
-logs:
-	$(COMPOSE) logs -f
-
-logs-backend:
-	$(COMPOSE) logs -f $(SVC_BACKEND)
-
-logs-frontend:
-	$(COMPOSE) logs -f $(SVC_FRONTEND)
-
-logs-celery:
-	$(COMPOSE) logs -f $(SVC_CELERY)
-
-logs-flower:
-	$(COMPOSE) logs -f $(SVC_FLOWER)
-
-logs-redis:
-	$(COMPOSE) logs -f $(SVC_REDIS)
-
 build:
 	$(COMPOSE) build
 
@@ -106,18 +146,15 @@ build-nc:
 pull:
 	$(COMPOSE) pull
 
-prune:
+prune:     ## Limpieza de builder/volúmenes no usados
 	docker builder prune -af || true
 	docker volume prune -f || true
 
-# 🔥 Dev-nuke: baja todo y borra volúmenes anclados a este compose
-nuke:
+nuke:      ## Baja todo y borra volúmenes del proyecto
 	$(COMPOSE) down -v --remove-orphans
 
-setup:
-	# Frontend deps (pnpm)
+setup:     ## Instala deps (frontend/backend) dentro de contenedores
 	$(COMPOSE) exec -T $(SVC_FRONTEND) pnpm install || true
-	# Backend deps
 	$(COMPOSE) exec -T $(SVC_BACKEND) pip install -r requirements.txt || true
 
 lint:
@@ -134,87 +171,41 @@ migrate:
 createsuperuser:
 	$(COMPOSE) exec $(SVC_BACKEND) bash -lc "python manage.py createsuperuser"
 
-sh-backend:
-	$(COMPOSE) exec $(SVC_BACKEND) bash
+sh-backend:  ; $(COMPOSE) exec $(SVC_BACKEND)  bash
+sh-frontend: ; $(COMPOSE) exec $(SVC_FRONTEND) sh
+sh-celery:   ; $(COMPOSE) exec $(SVC_CELERY)  bash
+sh-flower:   ; $(COMPOSE) exec $(SVC_FLOWER)  sh
+sh-redis:    ; $(COMPOSE) exec $(SVC_REDIS)   sh
 
-sh-frontend:
-	$(COMPOSE) exec $(SVC_FRONTEND) sh
+# ---- DB local helpers ----
+dbshell:    ## Django dbshell (usa psql dentro del backend)
+	$(COMPOSE) exec $(SVC_BACKEND) python manage.py dbshell
 
-sh-celery:
-	$(COMPOSE) exec $(SVC_CELERY) bash
+psql:       ## psql directo en el contenedor Postgres
+	$(COMPOSE) exec $(SVC_PG) psql -U teg -d teg
 
-sh-flower:
-	$(COMPOSE) exec $(SVC_FLOWER) sh
-
-sh-redis:
-	$(COMPOSE) exec $(SVC_REDIS) sh
-
-
-# ============================================================================
-# AWS / ECR / Terraform · Build / Push / Deploy a ECS Fargate
-# ============================================================================
-
-# --- Parámetros AWS (overrideables): make ... AWS_REGION=us-east-2 TAG=v1 ---
-AWS_REGION  ?= us-east-1
-AWS_PROFILE ?= tesis
-TAG         ?= dev-latest
-
-# --- Descubre tu AWS Account ID y arma la URL del registry ---
-AWS_ACCOUNT_ID := $(shell aws sts get-caller-identity --query Account --output text --profile $(AWS_PROFILE))
-ECR_REG        := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
-
-# --- Repositorios ECR (deben existir; Terraform los crea) ---
-ECR_BACKEND    := $(ECR_REG)/tesis-dev-backend
-ECR_CELERY     := $(ECR_REG)/tesis-dev-celery
-
-# --- Imágenes locales (las que construyes en dev/compose) ---
-LOCAL_BACKEND  := tesis-container-backend:latest
-LOCAL_CELERY   := tesis-container-celery:latest
-
-# --- Dockerfiles para build directo (si los usas) ---
-BACKEND_DOCKERFILE := tools/docker/backend.Dockerfile
-CELERY_DOCKERFILE  := tools/docker/celery.Dockerfile
-# Si no existe el de Celery, reutiliza el del backend
-ifeq ("$(wildcard $(CELERY_DOCKERFILE))","")
-  CELERY_DOCKERFILE := $(BACKEND_DOCKERFILE)
-endif
-
-# --- Terraform helper ---
-TF := terraform -chdir=infra/terraform
-
-# --- Réplicas por defecto al aplicar ---
-BACKEND_DESIRED ?= 1
-CELERY_DESIRED  ?= 1
-
-.PHONY: ecr-login check-images build-backend build-celery tag-backend tag-celery \
-        push-backend push-celery push \
-        aws-init aws-up aws-up-no-celery aws-redeploy aws-down aws-status \
-        echo-backend-url tf-outputs test-celery \
-        deploy-backend deploy-celery deploy-all
-
-# --------- Login en ECR ----------
+# =============================================================================
+# RUNBOOK B · PUBLICAR IMÁGENES EN ECR
+# =============================================================================
 ecr-login:
-	@echo "🔐 Login en ECR ($(AWS_ACCOUNT_ID)) región $(AWS_REGION) (perfil: $(AWS_PROFILE))"
+	@echo "🔐 ECR login: acct=$(AWS_ACCOUNT_ID) region=$(AWS_REGION) profile=$(AWS_PROFILE)"
 	aws ecr get-login-password --region $(AWS_REGION) --profile $(AWS_PROFILE) \
 	| docker login --username AWS --password-stdin $(ECR_REG)
 
-# --------- Builds locales (útiles si no usas compose para generar imágenes) ----------
 build-backend:
-	@echo "🧱 Build backend (Dockerfile)-> $(LOCAL_BACKEND)"
+	@echo "🧱 Build backend -> $(LOCAL_BACKEND)"
 	docker build -f $(BACKEND_DOCKERFILE) -t $(LOCAL_BACKEND) .
 
 build-celery:
-	@echo "🧱 Build celery (Dockerfile)-> $(LOCAL_CELERY)  (Dockerfile: $(CELERY_DOCKERFILE))"
+	@echo "🧱 Build celery  -> $(LOCAL_CELERY) (Dockerfile: $(CELERY_DOCKERFILE))"
 	docker build -f $(CELERY_DOCKERFILE) -t $(LOCAL_CELERY) .
 
-# --------- Verifica que existan las imágenes locales ----------
 check-images:
 	@echo "🔎 Verificando imágenes locales…"
-	@docker image inspect $(LOCAL_BACKEND) >/dev/null 2>&1 || (echo "❌ Falta $(LOCAL_BACKEND). Ejecuta 'make up' o 'make build' o 'make build-backend'."; exit 1)
-	@docker image inspect $(LOCAL_CELERY)  >/dev/null 2>&1 || (echo "❌ Falta $(LOCAL_CELERY). Ejecuta 'make up' o 'make build' o 'make build-celery'."; exit 1)
+	@docker image inspect $(LOCAL_BACKEND) >/dev/null 2>&1 || (echo "❌ Falta $(LOCAL_BACKEND). Ejecuta 'make up' o 'make build'."; exit 1)
+	@docker image inspect $(LOCAL_CELERY)  >/dev/null 2>&1 || (echo "❌ Falta $(LOCAL_CELERY). Ejecuta 'make up' o 'make build'."; exit 1)
 	@echo "✅ Ok."
 
-# --------- Tag + Push a ECR ----------
 tag-backend: check-images
 	@echo "🏷️  Tag backend -> $(ECR_BACKEND):$(TAG)"
 	docker tag $(LOCAL_BACKEND) $(ECR_BACKEND):$(TAG)
@@ -231,181 +222,120 @@ push-celery: ecr-login tag-celery
 	@echo "⬆️  Push celery  -> $(ECR_CELERY):$(TAG)"
 	docker push $(ECR_CELERY):$(TAG)
 
-# Push de ambas imágenes
 push: push-backend push-celery
-	@echo "🎉 Push completado. Etiqueta: $(TAG)"
+	@echo "🎉 Push completado. TAG=$(TAG)"
 
-# --------- Terraform: infra base y despliegue ----------
-# Crea/actualiza todo (ALB, VPC, SGs, Redis, ECR, ECS…) pero deja 0/0 tasks
+# =============================================================================
+# RUNBOOK C · AWS + RDS + ECS (Terraform)
+#   - aws-init       : crea/actualiza base (ALB, VPC, SGs, RDS, ECR, ECS) con 0/0
+#   - aws-up         : sube réplicas (backend/celery)
+#   - aws-up-no-celery: solo backend
+#   - aws-redeploy   : push + aws-up
+#   - aws-down       : destruye
+# =============================================================================
 aws-init:
 	$(TF) apply -auto-approve \
 	  -var="backend_desired_count=0" \
 	  -var="celery_desired_count=0"
 
-# Sube las réplicas (por defecto 1/1 — override: make aws-up BACKEND_DESIRED=2 CELERY_DESIRED=0)
 aws-up:
 	$(TF) apply -auto-approve \
 	  -var="backend_desired_count=$(BACKEND_DESIRED)" \
 	  -var="celery_desired_count=$(CELERY_DESIRED)"
 
-# Solo backend vivo
 aws-up-no-celery:
 	$(TF) apply -auto-approve \
 	  -var="backend_desired_count=$(BACKEND_DESIRED)" \
 	  -var="celery_desired_count=0"
 
-# Redeploy rápido: push + apply (ideal tras cambiar código)
 aws-redeploy: push aws-up
 
-# Destruye la infra creada por Terraform
 aws-down:
 	$(TF) destroy -auto-approve
 
 aws-status:
 	$(TF) state list || true
 
-# --------- Outputs & pruebas ----------
 echo-backend-url:
 	@echo "BACKEND_URL = $$($(TF) output -raw backend_url 2>/dev/null || echo '<no-output>')"
 
 tf-outputs:
 	@$(TF) output
 
-# Prueba de Celery usando la URL del ALB (requiere backend y celery vivos)
-# Uso: make test-celery N=3
+# Deploy “todo” (útil tras terraform init o cambios grandes)
+deploy-all: check-images ecr-login tag-backend tag-celery push-backend push-celery aws-up
+	@echo "🎉 Deploy completo -> backend=$(BACKEND_DESIRED) celery=$(CELERY_DESIRED) tag=$(TAG)"
+
+aws-bootstrap: aws-init deploy-all
+	@echo "🚀 Infra creada + servicios desplegados."
+
+# =============================================================================
+# RUNBOOK D · Smoke / pruebas
+# =============================================================================
+
+# Prueba rápida de la tarea demo de Celery vía ALB
 test-celery:
 	@URL=$$($(TF) output -raw backend_url); \
-	if [ -z "$$URL" ]; then echo "❌ backend_url vacío. Ejecuta 'make tf-outputs'."; exit 1; fi; \
+	[ -n "$$URL" ] || { echo "❌ backend_url vacío. Ejecuta 'make tf-outputs'."; exit 1; }; \
 	N=$${N:-3}; \
-	echo "🚀 Disparando tarea demo (n=$$N) contra $$URL"; \
-	curl -s -X POST $$URL/api/tasks/run/ -H "Content-Type: application/json" -d "{\"n\": $$N}" | tee /tmp/task.json; \
-	T=$$(jq -r .task_id /tmp/task.json); \
-	echo "⏳ Esperando resultado $${T} …"; \
+	echo "🚀 Demo Celery (n=$$N) -> $$URL"; \
+	curl -s -X POST $$URL/api/tasks/run/ -H "Content-Type: application/json" -d "{\"n\": $$N}" | tee /tmp/celery_task.json; \
+	T=$$(jq -r .task_id /tmp/celery_task.json); \
+	echo "⏳ Esperando $${T} …"; \
 	sleep 2; curl -s $$URL/api/tasks/status/$${T}/ | jq .
 
-# ============================================================================
-# Frontend dev
-# ============================================================================
-
-FRONTEND_DIR := apps/frontend
-VITE_API_URL ?= http://localhost:8000   # cambia cuando apuntes a AWS
-
-.PHONY: frontend frontend-aws
-
-frontend:
-	cd $(FRONTEND_DIR) && VITE_API_URL=$(VITE_API_URL) pnpm dev
-
-# Levanta el frontend apuntando al backend en AWS (ALB)
-frontend-aws:
-	cd $(FRONTEND_DIR) && VITE_API_URL=$$(terraform -chdir=infra/terraform output -raw backend_url) pnpm dev
-
-
-# ---------- Deploys convenientes ----------
-# Lanza toda la cadena: build/tag/push de backend+celery y sube las réplicas
-deploy-all: check-images ecr-login tag-backend tag-celery push-backend push-celery aws-up
-	@echo "🎉 Deploy completo (backend=$(BACKEND_DESIRED) celery=$(CELERY_DESIRED), tag=$(TAG))"
-
-# Bootstrap completo desde cero: crea infra en 0/0 y luego deploy-all
-aws-bootstrap: aws-init deploy-all
-	@echo "🚀 Infra creada y servicios desplegados."
-
-# ---------- Prueba /api/network/plan ----------
-# Usa PLAN_FILE (por defecto: plan.json en el repo)
-PLAN_FILE ?= plan.json
-
-test-network-plan:
-	@URL=$$($(TF) output -raw backend_url); \
-	if [ -z "$$URL" ]; then echo "❌ backend_url vacío. Ejecuta 'make tf-outputs'."; exit 1; fi; \
-	if [ ! -f "$(PLAN_FILE)" ]; then echo "❌ No existe $(PLAN_FILE). Define PLAN_FILE=... o crea plan.json"; exit 1; fi; \
-	echo "🌐 Enviando plan: $(PLAN_FILE) -> $$URL/api/network/plan/"; \
-	curl -s -X POST $$URL/api/network/plan/ -H "Content-Type: application/json" -d @$(PLAN_FILE) | tee /tmp/np_task.json; \
-	T=$$(jq -r .task_id /tmp/np_task.json 2>/dev/null); \
-	if [ -z "$$T" ] || [ "$$T" = "null" ]; then echo "❌ No se obtuvo task_id. Respuesta arriba."; exit 1; fi; \
-	echo "⏳ Esperando resultado (task_id=$$T)…"; \
-	for i in $$(seq 1 30); do \
-	  sleep 2; R=$$(curl -s $$URL/api/tasks/status/$$T/); \
-	  echo "$$R" | jq .; \
-	  STATE=$$(echo "$$R" | jq -r .state); \
-	  if [ "$$STATE" = "SUCCESS" ] || [ "$$STATE" = "FAILURE" ]; then exit 0; fi; \
-	done; \
-	echo "⚠️ Timeout esperando la tarea $$T"; exit 1
-
-
-# =======================
-# Smoke test end-to-end
-# =======================
-# Uso:
-#   make smoke                      # N=3 y PLAN_FILE=plan.json por defecto
-#   make smoke N=10                 # cambia duración de la tarea demo
-#   make smoke PLAN_FILE=mi_plan.json
-#
-SMOKE_TIMEOUT ?= 60     # seg totales para esperar tareas Celery
-PLAN_FILE     ?= plan.json
-
+# Smoke AWS (ALB): healthz + Celery demo + NetworkPlan
 smoke:
 	@URL=$$($(TF) output -raw backend_url); \
-	if [ -z "$$URL" ]; then echo "❌ backend_url vacío. Ejecuta 'make tf-outputs'."; exit 1; fi; \
+	[ -n "$$URL" ] || { echo "❌ backend_url vacío. Ejecuta 'make tf-outputs'."; exit 1; }; \
 	echo "🔎 Healthcheck: $$URL/healthz/"; \
 	H=$$(curl -fsS $$URL/healthz/ || true); \
 	echo "$$H" | jq . >/dev/null 2>&1 || { echo "❌ Healthz no es JSON o falló"; echo "$$H"; exit 1; }; \
-	STATUS=$$(echo "$$H" | jq -r .status); \
-	if [ "$$STATUS" != "ok" ]; then echo "❌ Healthz != ok"; echo "$$H"; exit 1; fi; \
+	[ "$$(echo "$$H" | jq -r .status)" = "ok" ] || { echo "❌ Healthz != ok"; echo "$$H"; exit 1; }; \
 	echo "✅ Healthz OK"; \
-	\
 	N=$${N:-3}; \
-	echo "🚀 Disparando tarea Celery demo (n=$$N)…"; \
+	echo "🚀 Celery demo (n=$$N)…"; \
 	RUN=$$(curl -fsS -X POST $$URL/api/tasks/run/ -H "Content-Type: application/json" -d "{\"n\": $$N}" | tee /tmp/smoke_celery_task.json); \
-	TID=$$(echo "$$RUN" | jq -r .task_id 2>/dev/null); \
-	if [ -z "$$TID" ] || [ "$$TID" = "null" ]; then echo "❌ No se obtuvo task_id (celery)"; echo "$$RUN"; exit 1; fi; \
-	echo "⏳ Esperando Celery task $$TID (timeout $(SMOKE_TIMEOUT)s)…"; \
-	EL=0; \
-	while [ $$EL -lt $(SMOKE_TIMEOUT) ]; do \
+	TID=$$(echo "$$RUN" | jq -r .task_id); \
+	[ -n "$$TID" ] || { echo "❌ Sin task_id (celery)"; echo "$$RUN"; exit 1; }; \
+	echo "⏳ Esperando Celery $$TID …"; \
+	EL=0; while [ $$EL -lt $(SMOKE_TIMEOUT) ]; do \
 	  RES=$$(curl -fsS $$URL/api/tasks/status/$$TID/ || true); \
-	  STATE=$$(echo "$$RES" | jq -r .state 2>/dev/null); \
-	  if [ "$$STATE" = "SUCCESS" ]; then echo "$$RES" | jq .; echo "✅ Celery OK"; break; fi; \
-	  if [ "$$STATE" = "FAILURE" ]; then echo "$$RES" | jq .; echo "❌ Celery FAILURE"; exit 1; fi; \
+	  STATE=$$(echo "$$RES" | jq -r .state); \
+	  [ "$$STATE" = "SUCCESS" ] && { echo "$$RES" | jq .; echo "✅ Celery OK"; break; }; \
+	  [ "$$STATE" = "FAILURE" ] && { echo "$$RES" | jq .; echo "❌ Celery FAILURE"; exit 1; }; \
 	  sleep 2; EL=$$((EL+2)); \
 	done; \
-	if [ $$EL -ge $(SMOKE_TIMEOUT) ]; then echo "⚠️  Timeout esperando Celery $$TID"; exit 1; fi; \
-	\
-	if [ ! -f "$(PLAN_FILE)" ]; then echo "❌ No existe $(PLAN_FILE). Define PLAN_FILE=... o crea plan.json"; exit 1; fi; \
-	echo "🌐 Enviando plan: $(PLAN_FILE) -> $$URL/api/network/plan/"; \
-	NP=$$(curl -fsS -X POST "$$URL/api/network/plan/" \
-					-H "Content-Type: application/json" \
-					--data-binary @"$(PLAN_FILE)"); \
+	[ $$EL -lt $(SMOKE_TIMEOUT) ] || { echo "⚠️ Timeout Celery"; exit 1; }; \
+	[ -f "$(PLAN_FILE)" ] || { echo "❌ Falta $(PLAN_FILE)"; exit 1; }; \
+	echo "🌐 Enviando plan: $(PLAN_FILE)"; \
+	NP=$$(curl -fsS -X POST "$$URL/api/network/plan/" -H "Content-Type: application/json" --data-binary @"$(PLAN_FILE)"); \
 	echo "$$NP" | tee /tmp/smoke_np_task.json >/dev/null; \
 	NPID=$$(echo "$$NP" | jq -r '.task_id // empty'); \
-	if [ -z "$$NPID" ]; then echo "❌ No se obtuvo task_id (network_plan)"; echo "$$NP"; exit 1; fi; \
-	echo "⏳ Esperando NetworkPlan task $$NPID (timeout $(SMOKE_TIMEOUT)s)…"; \
-	EL=0; \
-	while [ $$EL -lt $(SMOKE_TIMEOUT) ]; do \
-		RES=$$(curl -fsS "$$URL/api/tasks/status/$$NPID/" || true); \
-		STATE=$$(echo "$$RES" | jq -r .state 2>/dev/null); \
-		if [ "$$STATE" = "SUCCESS" ]; then echo "$$RES" | jq .; echo "✅ NetworkPlan OK"; break; fi; \
-		if [ "$$STATE" = "FAILURE" ]; then echo "$$RES" | jq .; echo "❌ NetworkPlan FAILURE"; exit 1; fi; \
-		sleep 2; EL=$$((EL+2)); \
+	[ -n "$$NPID" ] || { echo "❌ Sin task_id (network_plan)"; echo "$$NP"; exit 1; }; \
+	echo "⏳ Esperando NetworkPlan $$NPID …"; \
+	EL=0; while [ $$EL -lt $(SMOKE_TIMEOUT) ]; do \
+	  RES=$$(curl -fsS "$$URL/api/tasks/status/$$NPID/" || true); \
+	  STATE=$$(echo "$$RES" | jq -r .state); \
+	  [ "$$STATE" = "SUCCESS" ] && { echo "$$RES" | jq .; echo "✅ NetworkPlan OK"; break; }; \
+	  [ "$$STATE" = "FAILURE" ] && { echo "$$RES" | jq .; echo "❌ NetworkPlan FAILURE"; exit 1; }; \
+	  sleep 2; EL=$$((EL+2)); \
 	done; \
-	if [ $$EL -ge $(SMOKE_TIMEOUT) ]; then echo "⚠️  Timeout esperando NetworkPlan $$NPID"; exit 1; fi;
+	[ $$EL -lt $(SMOKE_TIMEOUT) ] || { echo "⚠️ Timeout NetworkPlan"; exit 1; }
 
-# ================
-# Smoke LOCAL
-# ================
-SMOKE_TIMEOUT ?= 60
-PLAN_FILE ?= plan.json
-
+# Smoke LOCAL (localhost:8000)
 smoke-local:
 	@URL=http://localhost:8000; \
 	echo "🔎 Healthcheck: $$URL/healthz/"; \
 	H=$$(curl -fsS $$URL/healthz/ || true); \
 	echo "$$H" | jq . >/dev/null 2>&1 || { echo "❌ Healthz no es JSON o falló"; echo "$$H"; exit 1; }; \
-	STATUS=$$(echo "$$H" | jq -r .status); \
-	[ "$$STATUS" = "ok" ] || { echo "❌ Healthz != ok"; echo "$$H"; exit 1; }; \
+	[ "$$(echo "$$H" | jq -r .status)" = "ok" ] || { echo "❌ Healthz != ok"; echo "$$H"; exit 1; }; \
 	echo "✅ Healthz OK"; \
 	N=$${N:-3}; \
-	echo "🚀 Disparando tarea Celery demo (n=$$N)…"; \
+	echo "🚀 Celery demo (n=$$N)…"; \
 	RUN=$$(curl -fsS -X POST $$URL/api/tasks/run/ -H "Content-Type: application/json" -d "{\"n\": $$N}" | tee /tmp/smoke_celery_task.json); \
 	TID=$$(echo "$$RUN" | jq -r .task_id); \
-	[ -n "$$TID" ] || { echo "❌ Sin task_id Celery"; echo "$$RUN"; exit 1; }; \
+	[ -n "$$TID" ] || { echo "❌ Sin task_id (celery)"; echo "$$RUN"; exit 1; }; \
 	echo "⏳ Esperando Celery $$TID …"; \
 	EL=0; while [ $$EL -lt $(SMOKE_TIMEOUT) ]; do \
 	  RES=$$(curl -fsS $$URL/api/tasks/status/$$TID/ || true); \
@@ -417,7 +347,7 @@ smoke-local:
 	[ $$EL -lt $(SMOKE_TIMEOUT) ] || { echo "⚠️ Timeout Celery"; exit 1; }; \
 	[ -f "$(PLAN_FILE)" ] || { echo "❌ Falta $(PLAN_FILE)"; exit 1; }; \
 	echo "🌐 Enviando plan local: $(PLAN_FILE)"; \
-	NP=$$(curl -fsS -X POST $$URL/api/network/plan/ -H "Content-Type: application/json" -d @$(PLAN_FILE) | tee /tmp/smoke_np_task.json); \
+	NP=$$(curl -fsS -X POST $$URL/api/network/plan/ -H "Content-Type: application/json" --data-binary @"$(PLAN_FILE)" | tee /tmp/smoke_np_task.json); \
 	NPID=$$(echo "$$NP" | jq -r .task_id); \
 	[ -n "$$NPID" ] || { echo "❌ Sin task_id (network_plan)"; echo "$$NP"; exit 1; }; \
 	echo "⏳ Esperando NetworkPlan $$NPID …"; \
@@ -430,3 +360,11 @@ smoke-local:
 	done; \
 	[ $$EL -lt $(SMOKE_TIMEOUT) ] || { echo "⚠️ Timeout NetworkPlan"; exit 1; }; \
 	echo "🎉 SMOKE LOCAL PASS"
+
+# Envío directo de un plan al ALB (útil para pruebas manuales)
+test-network-plan:
+	@URL=$$($(TF) output -raw backend_url); \
+	[ -n "$$URL" ] || { echo "❌ backend_url vacío. Ejecuta 'make tf-outputs'."; exit 1; }; \
+	[ -f "$(PLAN_FILE)" ] || { echo "❌ Falta $(PLAN_FILE)"; exit 1; }; \
+	echo "🌐 POST $(PLAN_FILE) -> $$URL/api/network/plan/"; \
+	curl -s -X POST "$$URL/api/network/plan/" -H "Content-Type: application/json" --data-binary @"$(PLAN_FILE)" | jq .
