@@ -30,12 +30,19 @@ services:
       - ../../.env
     environment:
       - DJANGO_SETTINGS_MODULE=teg.settings
-      # si quieres forzar, puedes añadir (no obligatorio si settings.py ya lo hace):
-      # - CELERY_BROKER_URL=redis://redis:6379/0
-      # - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      # 👉 fuerza Postgres local (host = nombre del servicio "postgres")
+      - DATABASE_URL=postgres://teg:teg@postgres:5432/teg
+      - DB_SSL_REQUIRE=false
+      # (opcional) para S3 si lo usas en local
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=us-east-1
     ports:
       - "8000:8000"
     depends_on:
+      # 👉 espera a que Postgres esté healthy antes de arrancar
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -60,7 +67,15 @@ services:
     environment:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      # 👉 igual que backend
+      - DATABASE_URL=postgres://teg:teg@postgres:5432/teg
+      - DB_SSL_REQUIRE=false
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=us-east-1
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
       backend:
@@ -91,6 +106,27 @@ services:
     networks:
       - appnet
 
+  # --- Postgres local (siempre encendido en dev) ---
+  postgres:
+    image: postgres:15
+    container_name: tesis-postgres
+    environment:
+      POSTGRES_DB: teg
+      POSTGRES_USER: teg
+      POSTGRES_PASSWORD: teg
+    ports:
+      - "5432:5432" # puedes quitar este mapeo si no te conectas desde fuera
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teg -d teg"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    networks:
+      - appnet
+
   redis:
     container_name: tesis-container-redis
     image: redis:7-alpine
@@ -106,6 +142,7 @@ services:
 
 volumes:
   frontend_node_modules:
+  pgdata:
 
 networks:
   appnet:

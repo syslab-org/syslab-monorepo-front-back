@@ -370,17 +370,63 @@ smoke:
 	\
 	if [ ! -f "$(PLAN_FILE)" ]; then echo "❌ No existe $(PLAN_FILE). Define PLAN_FILE=... o crea plan.json"; exit 1; fi; \
 	echo "🌐 Enviando plan: $(PLAN_FILE) -> $$URL/api/network/plan/"; \
-	NP=$$(curl -fsS -X POST $$URL/api/network/plan/ -H "Content-Type: application/json" -d @$(PLAN_FILE) | tee /tmp/smoke_np_task.json); \
-	NPID=$$(echo "$$NP" | jq -r .task_id 2>/dev/null); \
-	if [ -z "$$NPID" ] || [ "$$NPID" = "null" ]; then echo "❌ No se obtuvo task_id (network_plan)"; echo "$$NP"; exit 1; fi; \
+	NP=$$(curl -fsS -X POST "$$URL/api/network/plan/" \
+					-H "Content-Type: application/json" \
+					--data-binary @"$(PLAN_FILE)"); \
+	echo "$$NP" | tee /tmp/smoke_np_task.json >/dev/null; \
+	NPID=$$(echo "$$NP" | jq -r '.task_id // empty'); \
+	if [ -z "$$NPID" ]; then echo "❌ No se obtuvo task_id (network_plan)"; echo "$$NP"; exit 1; fi; \
 	echo "⏳ Esperando NetworkPlan task $$NPID (timeout $(SMOKE_TIMEOUT)s)…"; \
 	EL=0; \
 	while [ $$EL -lt $(SMOKE_TIMEOUT) ]; do \
-	  RES=$$(curl -fsS $$URL/api/tasks/status/$$NPID/ || true); \
-	  STATE=$$(echo "$$RES" | jq -r .state 2>/dev/null); \
-	  if [ "$$STATE" = "SUCCESS" ]; then echo "$$RES" | jq .; echo "✅ NetworkPlan OK"; break; fi; \
-	  if [ "$$STATE" = "FAILURE" ]; then echo "$$RES" | jq .; echo "❌ NetworkPlan FAILURE"; exit 1; fi; \
+		RES=$$(curl -fsS "$$URL/api/tasks/status/$$NPID/" || true); \
+		STATE=$$(echo "$$RES" | jq -r .state 2>/dev/null); \
+		if [ "$$STATE" = "SUCCESS" ]; then echo "$$RES" | jq .; echo "✅ NetworkPlan OK"; break; fi; \
+		if [ "$$STATE" = "FAILURE" ]; then echo "$$RES" | jq .; echo "❌ NetworkPlan FAILURE"; exit 1; fi; \
+		sleep 2; EL=$$((EL+2)); \
+	done; \
+	if [ $$EL -ge $(SMOKE_TIMEOUT) ]; then echo "⚠️  Timeout esperando NetworkPlan $$NPID"; exit 1; fi;
+
+# ================
+# Smoke LOCAL
+# ================
+SMOKE_TIMEOUT ?= 60
+PLAN_FILE ?= plan.json
+
+smoke-local:
+	@URL=http://localhost:8000; \
+	echo "🔎 Healthcheck: $$URL/healthz/"; \
+	H=$$(curl -fsS $$URL/healthz/ || true); \
+	echo "$$H" | jq . >/dev/null 2>&1 || { echo "❌ Healthz no es JSON o falló"; echo "$$H"; exit 1; }; \
+	STATUS=$$(echo "$$H" | jq -r .status); \
+	[ "$$STATUS" = "ok" ] || { echo "❌ Healthz != ok"; echo "$$H"; exit 1; }; \
+	echo "✅ Healthz OK"; \
+	N=$${N:-3}; \
+	echo "🚀 Disparando tarea Celery demo (n=$$N)…"; \
+	RUN=$$(curl -fsS -X POST $$URL/api/tasks/run/ -H "Content-Type: application/json" -d "{\"n\": $$N}" | tee /tmp/smoke_celery_task.json); \
+	TID=$$(echo "$$RUN" | jq -r .task_id); \
+	[ -n "$$TID" ] || { echo "❌ Sin task_id Celery"; echo "$$RUN"; exit 1; }; \
+	echo "⏳ Esperando Celery $$TID …"; \
+	EL=0; while [ $$EL -lt $(SMOKE_TIMEOUT) ]; do \
+	  RES=$$(curl -fsS $$URL/api/tasks/status/$$TID/ || true); \
+	  STATE=$$(echo "$$RES" | jq -r .state); \
+	  [ "$$STATE" = "SUCCESS" ] && { echo "$$RES" | jq .; echo "✅ Celery OK"; break; }; \
+	  [ "$$STATE" = "FAILURE" ] && { echo "$$RES" | jq .; echo "❌ Celery FAILURE"; exit 1; }; \
 	  sleep 2; EL=$$((EL+2)); \
 	done; \
-	if [ $$EL -ge $(SMOKE_TIMEOUT) ]; then echo "⚠️  Timeout esperando NetworkPlan $$NPID"; exit 1; fi; \
-	echo "🎉 SMOKE PASS"
+	[ $$EL -lt $(SMOKE_TIMEOUT) ] || { echo "⚠️ Timeout Celery"; exit 1; }; \
+	[ -f "$(PLAN_FILE)" ] || { echo "❌ Falta $(PLAN_FILE)"; exit 1; }; \
+	echo "🌐 Enviando plan local: $(PLAN_FILE)"; \
+	NP=$$(curl -fsS -X POST $$URL/api/network/plan/ -H "Content-Type: application/json" -d @$(PLAN_FILE) | tee /tmp/smoke_np_task.json); \
+	NPID=$$(echo "$$NP" | jq -r .task_id); \
+	[ -n "$$NPID" ] || { echo "❌ Sin task_id (network_plan)"; echo "$$NP"; exit 1; }; \
+	echo "⏳ Esperando NetworkPlan $$NPID …"; \
+	EL=0; while [ $$EL -lt $(SMOKE_TIMEOUT) ]; do \
+	  RES=$$(curl -fsS $$URL/api/tasks/status/$$NPID/ || true); \
+	  STATE=$$(echo "$$RES" | jq -r .state); \
+	  [ "$$STATE" = "SUCCESS" ] && { echo "$$RES" | jq .; echo "✅ NetworkPlan OK"; break; }; \
+	  [ "$$STATE" = "FAILURE" ] && { echo "$$RES" | jq .; echo "❌ NetworkPlan FAILURE"; exit 1; }; \
+	  sleep 2; EL=$$((EL+2)); \
+	done; \
+	[ $$EL -lt $(SMOKE_TIMEOUT) ] || { echo "⚠️ Timeout NetworkPlan"; exit 1; }; \
+	echo "🎉 SMOKE LOCAL PASS"
