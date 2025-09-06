@@ -1,0 +1,25 @@
+variable "name" {
+  type = string
+}
+
+variable "region" {
+  type = string
+}
+
+variable "vpc_cidr" {
+  type = string
+}
+
+variable "has_public" {
+  type = bool
+  default = false
+}
+
+variable "subnets" {
+  type = list(object({
+    name   = string
+    cidr   = string
+    az     = string
+    public = bool
+  }))
+}

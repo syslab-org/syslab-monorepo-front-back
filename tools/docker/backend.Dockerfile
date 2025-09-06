@@ -5,14 +5,26 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
   PYTHONUNBUFFERED=1
 
+# Dependencias del sistema (+ unzip para Terraform + psql para dbshell)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-  build-essential curl && \
-  rm -rf /var/lib/apt/lists/*
+  build-essential \
+  curl \
+  unzip \
+  ca-certificates \
+  postgresql-client \
+  && rm -rf /var/lib/apt/lists/*
+
+# ---------- Instalar Terraform ----------
+ENV TF_VERSION=1.9.5
+RUN curl -fsSL "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip" -o /tmp/terraform.zip \
+  && unzip /tmp/terraform.zip -d /usr/local/bin \
+  && rm /tmp/terraform.zip \
+  && terraform -version
 
 # deps python
 COPY apps/backend/requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-  pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip \
+  && pip install --no-cache-dir -r requirements.txt
 
 # código
 COPY apps/backend/ .
@@ -23,6 +35,5 @@ USER app
 
 EXPOSE 8000
 
-# Arranque sin esperar Redis (válido para dev y AWS)
 CMD python manage.py migrate && \
   gunicorn teg.wsgi:application --bind 0.0.0.0:8000 --workers=2
