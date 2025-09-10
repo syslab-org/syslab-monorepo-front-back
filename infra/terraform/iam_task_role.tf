@@ -1,3 +1,4 @@
+# /infra/terraform/iam_task_role.tf
 # Rol que asumen los contenedores (boto3 lo usará para firmar llamadas a S3)
 resource "aws_iam_role" "ecs_task_role" {
   name = "${var.project}-${var.env}-ecs-task-role"
@@ -16,6 +17,13 @@ resource "aws_iam_role" "ecs_task_role" {
     Env     = var.env
   }
 }
+
+# Permisos para ECS Exec (SSM Messages) en el TASK ROLE
+resource "aws_iam_role_policy_attachment" "ecs_task_role_ssm_core" {
+  role       = aws_iam_role.ecs_task_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 
 # Permiso mínimo: subir objetos al bucket de planes
 resource "aws_iam_role_policy" "ecs_task_s3_put" {
@@ -79,3 +87,39 @@ resource "aws_iam_role_policy_attachment" "ecs_task_role_tf_network_dev" {
   role       = aws_iam_role.ecs_task_role.name
   policy_arn = aws_iam_policy.ecs_tf_network_dev.arn
 }
+
+
+# Lee el secret desde un ARN externo si viene por variable
+resource "aws_iam_role_policy" "ecs_task_secrets_read_external" {
+  count = var.database_url_secret_arn != "" ? 1 : 0
+
+  name = "${var.project}-${var.env}-ecs-task-secrets-read"
+  role = aws_iam_role.ecs_task_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect   = "Allow",
+      Action   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
+      Resource = var.database_url_secret_arn
+    }]
+  })
+}
+
+# Lee el secret local creado por este stack (índice [0])
+resource "aws_iam_role_policy" "ecs_task_secrets_read_local" {
+  count = var.database_url_secret_arn == "" ? 1 : 0
+
+  name = "${var.project}-${var.env}-ecs-task-secrets-read"
+  role = aws_iam_role.ecs_task_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect   = "Allow",
+      Action   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"],
+      Resource = aws_secretsmanager_secret.db_url[0].arn
+    }]
+  })
+}
+

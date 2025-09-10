@@ -1,6 +1,17 @@
+# /infra/terraform/tasks.tf
 #########################
 # Task Definitions
 #########################
+
+# --- Variables opcionales nuevas (si no las tienes en variables.tf, añádelas allí) ---
+# variable "database_url" { type = string, default = "" }
+# variable "db_ssl_require" { type = bool, default = true }
+# variable "s3_plans_bucket" { type = string, default = "" }
+# variable "database_url_secret_arn" {
+#   description = "ARN del secret en Secrets Manager que contiene el DATABASE_URL (opcional, para RDS)"
+#   type        = string
+#   default     = ""
+# }
 
 locals {
   # DNS del ALB para AllowedHosts/CSRF
@@ -29,8 +40,19 @@ locals {
     ""
   )
 
-  # Bucket S3 opcional (vía variable; si está vacío, no se inyecta)
+  # Bucket S3 opcional
   s3_bucket = var.s3_plans_bucket != "" ? var.s3_plans_bucket : ""
+
+  # Región para boto3/SDK
+  aws_region = var.region
+
+  # Flags de DB
+  use_env_db_url    = var.database_url != ""                                      # usar DATABASE_URL directamente por env
+  use_secret_db_url = var.database_url == "" && var.database_url_secret_arn != "" # usar Secrets Manager
+
+  db_secret_arn = var.database_url_secret_arn != "" ? var.database_url_secret_arn : try(aws_secretsmanager_secret.db_url[0].arn, "")
+
+  td_db_secret_arn = var.database_url_secret_arn != "" ? var.database_url_secret_arn : try(aws_secretsmanager_secret.db_url[0].arn, "")
 }
 
 # =========================
@@ -58,7 +80,7 @@ resource "aws_ecs_task_definition" "backend" {
         }
       ]
 
-      # El CMD real lo pones en tu Dockerfile (migrate + gunicorn). Aquí solo pasamos envs.
+      # ENV comunes + condicionales
       environment = concat(
         [
           { name = "DJANGO_SETTINGS_MODULE", value = "teg.settings" },
@@ -69,25 +91,39 @@ resource "aws_ecs_task_definition" "backend" {
           { name = "CSRF_TRUSTED_ORIGINS", value = local.csrf_trusted_str },
           { name = "CORS_ALLOWED_ORIGINS", value = local.cors_origins_str },
 
+          { name = "AWS_DEFAULT_REGION", value = local.aws_region },
+
           # Útil para forzar un redeploy sin cambiar imagen
           { name = "REDEPLOY_AT", value = timestamp() }
         ],
+
         # Redis solo si está disponible
         local.redis_url != "" ? [
           { name = "REDIS_URL", value = local.redis_url },
           { name = "CELERY_BROKER_URL", value = local.redis_url },
           { name = "CELERY_RESULT_BACKEND", value = local.redis_url }
         ] : [],
-        # DB solo si se pasó database_url (dev vacío => SQLite)
-        var.database_url != "" ? [
+
+        # DB por variable de entorno (si la pasas en terraform.tfvars)
+        local.use_env_db_url ? [
           { name = "DATABASE_URL", value = var.database_url },
           { name = "DB_SSL_REQUIRE", value = tostring(var.db_ssl_require) }
         ] : [],
+
         # S3 solo si hay bucket
         local.s3_bucket != "" ? [
           { name = "S3_PLANS_BUCKET", value = local.s3_bucket }
         ] : []
       )
+
+      # DATABASE_URL desde Secrets Manager (si se define el ARN)
+      secrets = local.td_db_secret_arn != "" ? [
+        {
+          name      = "DATABASE_URL"
+          valueFrom = local.td_db_secret_arn
+        }
+      ] : []
+
 
       logConfiguration = {
         logDriver = "awslogs"
@@ -136,24 +172,40 @@ resource "aws_ecs_task_definition" "celery" {
           { name = "SECRET_KEY", value = var.secret_key },
           { name = "DEBUG", value = local.debug_str },
 
-          # No imprescindibles para worker, pero mantenemos coherencia
+          # Coherencia con backend
           { name = "ALLOWED_HOSTS", value = local.allowed_hosts_str },
           { name = "CSRF_TRUSTED_ORIGINS", value = local.csrf_trusted_str },
-          { name = "CORS_ALLOWED_ORIGINS", value = local.cors_origins_str }
+          { name = "CORS_ALLOWED_ORIGINS", value = local.cors_origins_str },
+
+          { name = "AWS_DEFAULT_REGION", value = local.aws_region }
         ],
+
+        # Redis si está disponible
         local.redis_url != "" ? [
           { name = "REDIS_URL", value = local.redis_url },
           { name = "CELERY_BROKER_URL", value = local.redis_url },
           { name = "CELERY_RESULT_BACKEND", value = local.redis_url }
         ] : [],
-        var.database_url != "" ? [
+
+        # DB por variable de entorno
+        local.use_env_db_url ? [
           { name = "DATABASE_URL", value = var.database_url },
           { name = "DB_SSL_REQUIRE", value = tostring(var.db_ssl_require) }
         ] : [],
+
+        # S3 solo si hay bucket
         local.s3_bucket != "" ? [
           { name = "S3_PLANS_BUCKET", value = local.s3_bucket }
         ] : []
       )
+
+      secrets = local.td_db_secret_arn != "" ? [
+        {
+          name      = "DATABASE_URL"
+          valueFrom = local.td_db_secret_arn
+        }
+      ] : []
+
 
       logConfiguration = {
         logDriver = "awslogs"

@@ -1,3 +1,4 @@
+# /infra/terraform/variables.tf
 #########################
 # Global settings
 #########################
@@ -145,3 +146,33 @@ variable "enable_terraform_apply_in_ecs" {
   default     = true # en dev: true; en prod podrías poner false
   description = "Si true, adjunta permisos EC2 (VPC/Subnets/Routes/IGW) al task role para que Terraform aplique cambios desde ECS."
 }
+
+# ============================================
+# DB vía AWS Secrets Manager (opcional)
+# ============================================
+variable "database_url_secret_arn" {
+  type        = string
+  default     = ""
+  description = "ARN del Secret en AWS Secrets Manager que contiene DATABASE_URL (si se define, ECS lo inyecta como secret)."
+}
+
+# ============================================
+# S3 (ya la tienes, solo la dejo aquí para referencia)
+# ============================================
+# variable "s3_plans_bucket" {
+#   type        = string
+#   default     = ""
+#   description = "Nombre del bucket S3 para almacenar planes (vacío = no usar S3)."
+# }
+
+# ============================================
+# (Opcional) Toggle para permisos de Terraform Apply desde ECS
+# ============================================
+# Ya tienes esta variable. Se usa para condicionar políticas IAM que permiten
+# a la task crear/gestionar VPC, subnets, etc. desde el contenedor.
+# Asegúrate de que tu iam_task_role.tf utilice este flag.
+# variable "enable_terraform_apply_in_ecs" {
+#   type        = bool
+#   default     = true
+#   description = "Si true, adjunta permisos EC2/VPC al task role para que Terraform aplique cambios desde ECS."
+# }
