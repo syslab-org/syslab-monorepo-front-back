@@ -42,18 +42,21 @@ CELERY_DESIRED  ?= 1
 
 .PHONY: \
   help \
-  ## Runbook A: Local
   up down restart start stop up-nobuild recreate ps ps-healthy logs \
   logs-backend logs-frontend logs-celery logs-flower logs-redis \
   rm-stopped ps-paused unpause build build-nc pull prune nuke \
   setup lint test migrate createsuperuser sh-backend sh-frontend sh-celery sh-flower sh-redis \
   dbshell psql \
-  ## Runbook B: ECR
   ecr-login check-images build-backend build-celery tag-backend tag-celery push-backend push-celery push \
-  ## Runbook C: AWS + RDS + ECS
   aws-init aws-up aws-up-no-celery aws-redeploy aws-down aws-status tf-outputs echo-backend-url deploy-all aws-bootstrap \
-  ## Runbook D: Smoke
-  smoke smoke-local test-celery test-network-plan
+  smoke smoke-local test-network-plan
+
+## Runbook A: Local
+## Runbook B: ECR
+## Runbook C: AWS + RDS + ECS
+## Runbook D: Smoke
+
+
 
 # =============================================================================
 # HELP
@@ -248,7 +251,7 @@ aws-up-no-celery:
 	  -var="backend_desired_count=$(BACKEND_DESIRED)" \
 	  -var="celery_desired_count=0"
 
-aws-redeploy: push aws-up
+# aws-redeploy: push aws-up
 
 aws-down:
 	$(TF) destroy -auto-approve
@@ -368,3 +371,38 @@ test-network-plan:
 	[ -f "$(PLAN_FILE)" ] || { echo "❌ Falta $(PLAN_FILE)"; exit 1; }; \
 	echo "🌐 POST $(PLAN_FILE) -> $$URL/api/network/plan/"; \
 	curl -s -X POST "$$URL/api/network/plan/" -H "Content-Type: application/json" --data-binary @"$(PLAN_FILE)" | jq .
+
+
+# ===== RDS / DB en AWS =====
+# Activa RDS con enable_rds=true; si no pasas el var, no crea nada.
+
+aws-db-bootstrap:
+	$(TF) apply -auto-approve \
+	  -var="enable_rds=true" \
+	  -var="backend_desired_count=0" \
+	  -var="celery_desired_count=0"
+
+aws-db-up:
+	$(TF) apply -auto-approve \
+	  -var="enable_rds=true" \
+	  -var="backend_desired_count=$(BACKEND_DESIRED)" \
+	  -var="celery_desired_count=$(CELERY_DESIRED)"
+
+aws-db-down:
+	# Si solo quieres bajar RDS, puedes 'targetear' recursos (úsalo con cuidado)
+	$(TF) destroy -auto-approve -target=aws_db_instance.this -target=aws_db_subnet_group.this -target=aws_security_group.rds -target=aws_secretsmanager_secret.db_url
+
+# Conviene que aws-redeploy ya asuma enable_rds=true cuando estés en esta fase:
+aws-redeploy: push
+	$(TF) apply -auto-approve \
+	  -var="backend_desired_count=$(BACKEND_DESIRED)" \
+	  -var="celery_desired_count=$(CELERY_DESIRED)"
+
+secret-db:
+	@read -p "DB URL (codificada): " DBU; \
+	aws secretsmanager put-secret-value \
+	  --secret-id arn:aws:secretsmanager:us-east-1:034739223309:secret:tesis-dev-database-url-lJJ50L \
+	  --secret-string $$DBU \
+	  --region us-east-1 --profile tesis; \
+	echo "Secret actualizado"
+	@echo "Puedes verificar con: aws secretsmanager get-secret-value --secret-id arn:aws:secretsmanager:us-east-1:034739223309:secret:tesis-dev-database-url-lJJ50L --region us-east-1 --profile tesis"

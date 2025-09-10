@@ -28,3 +28,7 @@ output "redis_endpoint" {
 output "plans_bucket" {
   value = aws_s3_bucket.plans.bucket
 }
+
+output "ecs_service_sg_id" {
+  value = aws_security_group.ecs_service.id
+}
