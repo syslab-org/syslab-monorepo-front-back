@@ -24,3 +24,11 @@ output "redis_endpoint" {
   description = "Endpoint Redis para Celery (host:port)"
   value       = "${aws_elasticache_cluster.redis.cache_nodes[0].address}:${aws_elasticache_cluster.redis.port}"
 }
+
+output "plans_bucket" {
+  value = aws_s3_bucket.plans.bucket
+}
+
+output "ecs_service_sg_id" {
+  value = aws_security_group.ecs_service.id
+}

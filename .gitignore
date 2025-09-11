@@ -28,6 +28,8 @@ staticfiles/
 crash.log
 terraform.tfvars
 *.tfplan
+infra/terraform/*.tfvars
+
 
 # VSCode / Devcontainer
 .vscode/
