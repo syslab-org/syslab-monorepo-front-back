@@ -128,9 +128,9 @@ resource "aws_ecs_task_definition" "backend" {
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          awslogs-group         = aws_cloudwatch_log_group.backend.name
-          awslogs-region        = var.region
-          awslogs-stream-prefix = "ecs"
+          "awslogs-group"         = aws_cloudwatch_log_group.backend.name
+          "awslogs-region"        = var.region
+          "awslogs-stream-prefix" = "ecs"
         }
       }
     }
@@ -210,9 +210,9 @@ resource "aws_ecs_task_definition" "celery" {
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          awslogs-group         = aws_cloudwatch_log_group.celery.name
-          awslogs-region        = var.region
-          awslogs-stream-prefix = "ecs"
+          "awslogs-group"         = aws_cloudwatch_log_group.celery.name
+          "awslogs-region"        = var.region
+          "awslogs-stream-prefix" = "ecs"
         }
       }
     }
