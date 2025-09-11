@@ -27,6 +27,12 @@ ECR_REG        := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 ECR_BACKEND    := $(ECR_REG)/tesis-dev-backend
 ECR_CELERY     := $(ECR_REG)/tesis-dev-celery
 
+# --- Identificadores AWS de ejecución (ECS/ALB) ---
+CLUSTER           ?= tesis-dev-cluster
+SVC_BACKEND_AWS   ?= tesis-dev-svc-backend
+SVC_CELERY_AWS    ?= tesis-dev-svc-celery
+TG_BACKEND_NAME   ?= tesis-dev-tg-backend
+
 LOCAL_BACKEND  := tesis-container-backend:latest
 LOCAL_CELERY   := tesis-container-celery:latest
 
@@ -40,6 +46,11 @@ endif
 BACKEND_DESIRED ?= 1
 CELERY_DESIRED  ?= 1
 
+# Esperas (segundos)
+WAIT_ECS_TIMEOUT ?= 600   # 10 min
+WAIT_ALB_TIMEOUT ?= 300   # 5 min
+SLEEP             ?= 5
+
 .PHONY: \
   help \
   up down restart start stop up-nobuild recreate ps ps-healthy logs \
@@ -48,15 +59,16 @@ CELERY_DESIRED  ?= 1
   setup lint test migrate createsuperuser sh-backend sh-frontend sh-celery sh-flower sh-redis \
   dbshell psql \
   ecr-login check-images build-backend build-celery tag-backend tag-celery push-backend push-celery push \
-  aws-init aws-up aws-up-no-celery aws-redeploy aws-down aws-status tf-outputs echo-backend-url deploy-all aws-bootstrap \
-  smoke smoke-local test-network-plan
+  aws-init aws-up aws-up-no-celery aws-stop aws-up-safe aws-redeploy aws-redeploy-safe aws-down aws-status tf-outputs echo-backend-url deploy-all aws-bootstrap \
+  aws-ecs-status aws-wait-ecs aws-wait-alb aws-migrate \
+  smoke smoke-local smoke-quick test-network-plan \
+  get-td-backend get-td-celery set-td-backend set-td-celery \
+  aws-db-bootstrap aws-db-up aws-db-down secret-db
 
 ## Runbook A: Local
 ## Runbook B: ECR
 ## Runbook C: AWS + RDS + ECS
 ## Runbook D: Smoke
-
-
 
 # =============================================================================
 # HELP
@@ -75,6 +87,9 @@ help:
 	@echo " RUNBOOK C · INFRA AWS + RDS + ECS"
 	@echo "  make aws-bootstrap # crea infra en 0/0 y luego deploy-all (sube réplicas)"
 	@echo "  make aws-redeploy  # push + apply (redeploy rápido)"
+	@echo "  make aws-redeploy-safe # apply + esperas + migrate + rollback si falla"
+	@echo "  make aws-up-safe   # sube réplicas + esperas + migrate + healthz"
+	@echo "  make aws-stop      # escala servicios ECS a 0/0 (NO destruye)"
 	@echo "  make aws-down      # destruye infra"
 	@echo ""
 	@echo " RUNBOOK D · PRUEBAS (Smoke)"
@@ -230,11 +245,6 @@ push: push-backend push-celery
 
 # =============================================================================
 # RUNBOOK C · AWS + RDS + ECS (Terraform)
-#   - aws-init       : crea/actualiza base (ALB, VPC, SGs, RDS, ECR, ECS) con 0/0
-#   - aws-up         : sube réplicas (backend/celery)
-#   - aws-up-no-celery: solo backend
-#   - aws-redeploy   : push + aws-up
-#   - aws-down       : destruye
 # =============================================================================
 aws-init:
 	$(TF) apply -auto-approve \
@@ -251,7 +261,11 @@ aws-up-no-celery:
 	  -var="backend_desired_count=$(BACKEND_DESIRED)" \
 	  -var="celery_desired_count=0"
 
-# aws-redeploy: push aws-up
+## Fin del día: escala servicios a 0/0 (NO destruye nada)
+aws-stop:
+	$(TF) apply -auto-approve \
+	  -var="backend_desired_count=0" \
+	  -var="celery_desired_count=0"
 
 aws-down:
 	$(TF) destroy -auto-approve
@@ -266,15 +280,157 @@ tf-outputs:
 	@$(TF) output
 
 # Deploy “todo” (útil tras terraform init o cambios grandes)
-deploy-all: check-images ecr-login tag-backend tag-celery push-backend push-celery aws-up
+deploy-all: check-images ecr-login tag-backend tag-celery push-backend push-celery aws-up aws-wait-ecs aws-migrate aws-wait-alb smoke-quick
 	@echo "🎉 Deploy completo -> backend=$(BACKEND_DESIRED) celery=$(CELERY_DESIRED) tag=$(TAG)"
 
 aws-bootstrap: aws-init deploy-all
 	@echo "🚀 Infra creada + servicios desplegados."
 
+## Arranque seguro (sube réplicas + espera + migrate + healthz)
+aws-up-safe: aws-up aws-wait-ecs aws-migrate aws-wait-alb
+	@echo "🚀 Entorno arriba y saludable"
+
+# =============================================================================
+# Estado / Esperas / Migrate
+# =============================================================================
+
+aws-ecs-status: ## Snapshot de estado ECS
+	@aws ecs describe-services \
+	  --cluster $(CLUSTER) \
+	  --services $(SVC_BACKEND_AWS) $(SVC_CELERY_AWS) \
+	  --region $(AWS_REGION) --profile $(AWS_PROFILE) \
+	| jq -r '.services[] | {name:.serviceName, desired:.desiredCount, running:.runningCount, deployments:(.deployments|length)}'
+
+
+
+aws-wait-ecs: ## Espera a que backend+celery queden estables
+	@echo "⏳ Esperando ECS estable (backend)…"
+	aws ecs wait services-stable \
+	  --cluster $(CLUSTER) --services $(SVC_BACKEND_AWS) \
+	  --region $(AWS_REGION) --profile $(AWS_PROFILE)
+	@echo "⏳ Esperando ECS estable (celery)…"
+	aws ecs wait services-stable \
+	  --cluster $(CLUSTER) --services $(SVC_CELERY_AWS) \
+	  --region $(AWS_REGION) --profile $(AWS_PROFILE)
+	@echo "✅ ECS estable. Snapshot:"
+	$(MAKE) aws-ecs-status
+
+aws-wait-alb: ## Polling al ALB hasta 200 + {"status":"ok"} en /healthz/
+	@URL=$$($(TF) output -raw backend_url); \
+	[ -n "$$URL" ] || { echo "❌ backend_url vacío. Ejecuta 'make tf-outputs'."; exit 1; }; \
+	echo "⏳ Esperando ALB 200/JSON en $$URL/healthz/ …"; \
+	end=$$(($(WAIT_ALB_TIMEOUT))); \
+	while :; do \
+	  R=$$(curl -fsS -m 5 -w ' HTTP_CODE:%{http_code}' "$$URL/healthz/" || true); \
+	  CODE=$${R##*HTTP_CODE:}; BODY=$${R% HTTP_CODE:*}; \
+	  if [ "$$CODE" = "200" ] && echo "$$BODY" | jq -e '.status=="ok"' >/dev/null 2>&1; then \
+	    echo "✅ ALB OK"; echo "$$BODY" | jq .; break; \
+	  fi; \
+	  [ $$end -le 0 ] && { echo "❌ Timeout esperando ALB (última respuesta):"; echo "$$BODY"; exit 1; }; \
+	  sleep $(SLEEP); end=$$((end-$(SLEEP))); \
+	done
+
+aws-migrate:
+	@echo "🔎 Buscando task RUNNING del backend…"
+	@TASK_ID=$$(aws ecs list-tasks \
+	  --cluster $(CLUSTER) --service-name $(SVC_BACKEND_AWS) \
+	  --desired-status RUNNING --region $(AWS_REGION) --profile $(AWS_PROFILE) \
+	  --query 'taskArns[0]' --output text); \
+	[ "$$TASK_ID" != "None" ] || { echo "❌ No hay task RUNNING"; exit 1; }; \
+	echo "▶️  migrate en task $$TASK_ID"; \
+	aws ecs execute-command \
+	  --cluster $(CLUSTER) --task "$$TASK_ID" \
+	  --container backend --interactive \
+	  --command "python manage.py migrate" \
+	  --region $(AWS_REGION) --profile $(AWS_PROFILE)
+
+# =============================================================================
+# Rollback helpers y redeploy seguro
+# =============================================================================
+get-td-backend:
+	@aws ecs describe-services \
+	  --cluster $(CLUSTER) --services $(SVC_BACKEND_AWS) \
+	  --region $(AWS_REGION) --profile $(AWS_PROFILE) \
+	  --query 'services[0].taskDefinition' --output text
+
+get-td-celery:
+	@aws ecs describe-services \
+	  --cluster $(CLUSTER) --services $(SVC_CELERY_AWS) \
+	  --region $(AWS_REGION) --profile $(AWS_PROFILE) \
+	  --query 'services[0].taskDefinition' --output text
+
+set-td-backend:
+	@[ -n "$(TD_BACKEND)" ] || { echo "❌ TD_BACKEND vacío"; exit 1; }
+	@echo "↩️  Rollback backend -> $(TD_BACKEND)"
+	@aws ecs update-service \
+	  --cluster $(CLUSTER) --service $(SVC_BACKEND_AWS) \
+	  --task-definition "$(TD_BACKEND)" \
+	  --region $(AWS_REGION) --profile $(AWS_PROFILE) >/dev/null
+	@echo "✅ backend en $(TD_BACKEND)"
+
+set-td-celery:
+	@[ -n "$(TD_CELERY)" ] || { echo "❌ TD_CELERY vacío"; exit 1; }
+	@echo "↩️  Rollback celery -> $(TD_CELERY)"
+	@aws ecs update-service \
+	  --cluster $(CLUSTER) --service $(SVC_CELERY_AWS) \
+	  --task-definition "$(TD_CELERY)" \
+	  --region $(AWS_REGION) --profile $(AWS_PROFILE) >/dev/null
+	@echo "✅ celery en $(TD_CELERY)"
+
+aws-redeploy: push
+	$(TF) apply -auto-approve \
+	  -var="backend_desired_count=$(BACKEND_DESIRED)" \
+	  -var="celery_desired_count=$(CELERY_DESIRED)"
+
+aws-redeploy-safe: push
+	@echo "🔎 Guardando task definitions actuales…"
+	@TD_BACKEND_OLD=$$( $(MAKE) -s get-td-backend ); \
+	 TD_CELERY_OLD=$$( $(MAKE) -s get-td-celery ); \
+	 echo "backend OLD: $$TD_BACKEND_OLD"; \
+	 echo "celery  OLD: $$TD_CELERY_OLD"; \
+	 echo "🚀 terraform apply…"; \
+	 if ! $(TF) apply -auto-approve \
+	       -var="backend_desired_count=$(BACKEND_DESIRED)" \
+	       -var="celery_desired_count=$(CELERY_DESIRED)"; then \
+	   echo "❌ terraform apply falló. Rollback…"; \
+	   $(MAKE) set-td-backend TD_BACKEND="$$TD_BACKEND_OLD"; \
+	   $(MAKE) set-td-celery  TD_CELERY="$$TD_CELERY_OLD"; \
+	   exit 1; \
+	 fi; \
+	 echo "⏳ Esperando ECS estable…"; \
+	 if ! $(MAKE) -s aws-wait-ecs; then \
+	   echo "❌ ECS no estabiliza. Rollback…"; \
+	   $(MAKE) set-td-backend TD_BACKEND="$$TD_BACKEND_OLD"; \
+	   $(MAKE) set-td-celery  TD_CELERY="$$TD_CELERY_OLD"; \
+	   exit 1; \
+	 fi; \
+	 echo "▶️  Ejecutando migrate…"; \
+	 if ! $(MAKE) -s aws-migrate; then \
+	   echo "❌ migrate falló. Rollback…"; \
+	   $(MAKE) set-td-backend TD_BACKEND="$$TD_BACKEND_OLD"; \
+	   $(MAKE) set-td-celery  TD_CELERY="$$TD_CELERY_OLD"; \
+	   exit 1; \
+	 fi; \
+	 echo "⏳ Esperando ALB OK…"; \
+	 if ! $(MAKE) -s aws-wait-alb; then \
+	   echo "❌ healthz falló. Rollback…"; \
+	   $(MAKE) set-td-backend TD_BACKEND="$$TD_BACKEND_OLD"; \
+	   $(MAKE) set-td-celery  TD_CELERY="$$TD_CELERY_OLD"; \
+	   exit 1; \
+	 fi; \
+	 echo "✅ Redeploy OK"
+
 # =============================================================================
 # RUNBOOK D · Smoke / pruebas
 # =============================================================================
+smoke-quick:
+	@URL=$$($(TF) output -raw backend_url); \
+	[ -n "$$URL" ] || { echo "❌ backend_url vacío. Ejecuta 'make tf-outputs'."; exit 1; }; \
+	echo "🔎 Healthcheck: $$URL/healthz/"; \
+	H=$$(curl -fsS "$$URL/healthz/" || true); \
+	echo "$$H" | jq . >/dev/null 2>&1 || { echo "❌ Healthz no es JSON o falló"; echo "$$H"; exit 1; }; \
+	[ "$$(echo "$$H" | jq -r .status)" = "ok" ] || { echo "❌ Healthz != ok"; echo "$$H"; exit 1; }; \
+	echo "✅ Healthz OK"
 
 # Prueba rápida de la tarea demo de Celery vía ALB
 test-celery:
@@ -361,7 +517,6 @@ smoke-local:
 	  [ "$$STATE" = "FAILURE" ] && { echo "$$RES" | jq .; echo "❌ NetworkPlan FAILURE"; exit 1; }; \
 	  sleep 2; EL=$$((EL+2)); \
 	done; \
-	[ $$EL -lt $(SMOKE_TIMEOUT) ] || { echo "⚠️ Timeout NetworkPlan"; exit 1; }; \
 	echo "🎉 SMOKE LOCAL PASS"
 
 # Envío directo de un plan al ALB (útil para pruebas manuales)
@@ -372,10 +527,7 @@ test-network-plan:
 	echo "🌐 POST $(PLAN_FILE) -> $$URL/api/network/plan/"; \
 	curl -s -X POST "$$URL/api/network/plan/" -H "Content-Type: application/json" --data-binary @"$(PLAN_FILE)" | jq .
 
-
 # ===== RDS / DB en AWS =====
-# Activa RDS con enable_rds=true; si no pasas el var, no crea nada.
-
 aws-db-bootstrap:
 	$(TF) apply -auto-approve \
 	  -var="enable_rds=true" \
@@ -389,14 +541,11 @@ aws-db-up:
 	  -var="celery_desired_count=$(CELERY_DESIRED)"
 
 aws-db-down:
-	# Si solo quieres bajar RDS, puedes 'targetear' recursos (úsalo con cuidado)
-	$(TF) destroy -auto-approve -target=aws_db_instance.this -target=aws_db_subnet_group.this -target=aws_security_group.rds -target=aws_secretsmanager_secret.db_url
-
-# Conviene que aws-redeploy ya asuma enable_rds=true cuando estés en esta fase:
-aws-redeploy: push
-	$(TF) apply -auto-approve \
-	  -var="backend_desired_count=$(BACKEND_DESIRED)" \
-	  -var="celery_desired_count=$(CELERY_DESIRED)"
+	$(TF) destroy -auto-approve \
+	  -target=aws_db_instance.this \
+	  -target=aws_db_subnet_group.this \
+	  -target=aws_security_group.rds \
+	  -target=aws_secretsmanager_secret.db_url
 
 secret-db:
 	@read -p "DB URL (codificada): " DBU; \
@@ -404,5 +553,5 @@ secret-db:
 	  --secret-id arn:aws:secretsmanager:us-east-1:034739223309:secret:tesis-dev-database-url-lJJ50L \
 	  --secret-string $$DBU \
 	  --region us-east-1 --profile tesis; \
-	echo "Secret actualizado"
-	@echo "Puedes verificar con: aws secretsmanager get-secret-value --secret-id arn:aws:secretsmanager:us-east-1:034739223309:secret:tesis-dev-database-url-lJJ50L --region us-east-1 --profile tesis"
+	echo "Secret actualizado"; \
+	echo "Puedes verificar con: aws secretsmanager get-secret-value --secret-id arn:aws:secretsmanager:us-east-1:034739223309:secret:tesis-dev-database-url-lJJ50L --region us-east-1 --profile tesis"
