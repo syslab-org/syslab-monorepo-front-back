@@ -1,16 +1,8 @@
 from django.contrib import admin
-from django.contrib import admin
-from .models import Component, Cloud, Network, NetworkComponent, Interface, Router, Switch, Workstation, RoutingTable
-# from .models import  User, Component, Cloud, Network, NetworkComponent, Interface, Router, Switch, Workstation, RoutingTable
+from .models import Plan
 
-
-# admin.site.register(User)
-admin.site.register(Component)
-admin.site.register(Cloud)
-admin.site.register(Network)
-admin.site.register(NetworkComponent)
-admin.site.register(Interface)
-admin.site.register(Router)
-admin.site.register(Switch)
-admin.site.register(Workstation)
-admin.site.register(RoutingTable)
+@admin.register(Plan)
+class PlanAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "status", "created_at")
+    list_filter = ("status", "created_at")
+    search_fields = ("id", "name")

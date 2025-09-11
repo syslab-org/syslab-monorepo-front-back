@@ -1,10 +1,12 @@
+# apps/backend/api/views.py
 import json
-from django.http import JsonResponse, HttpResponseBadRequest
+from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
 from celery.result import AsyncResult
 from .validators import validate_network_plan
 from .tasks import prueba_larga, process_network_plan
+from .models import Plan
 
 @csrf_exempt
 def ping(_request):
@@ -38,5 +40,15 @@ def network_plan_create(request):
         validate_network_plan(payload)
     except Exception as e:
         return JsonResponse({"ok": False, "error": str(e)}, status=400)
-    task = process_network_plan.delay(payload)
-    return JsonResponse({"ok": True, "task_id": task.id}, status=202)
+
+    plan = Plan.objects.create(
+        name=payload.get("name", ""),
+        payload=payload,
+        status=Plan.Status.PENDING,
+    )
+    # Pasa plan_id y payload
+    task = process_network_plan.delay(plan_id=str(plan.id), payload=payload)
+    plan.task_id = task.id
+    plan.save(update_fields=["task_id"])
+
+    return JsonResponse({"ok": True, "plan_id": str(plan.id), "task_id": task.id}, status=202)
