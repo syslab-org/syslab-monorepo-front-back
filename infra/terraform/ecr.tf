@@ -1,3 +1,4 @@
+#infra/terraform/ecr.tf
 resource "aws_ecr_repository" "backend" {
   name                 = "${var.project}-${var.env}-backend"
   image_tag_mutability = "MUTABLE"

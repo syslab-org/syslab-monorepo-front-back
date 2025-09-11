@@ -99,12 +99,34 @@ WSGI_APPLICATION = 'teg.wsgi.application'
 # =========================
 # Base de datos
 # =========================
-DATABASE_URL = config('DATABASE_URL', default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}")
+
+# Conexión persistente y SSL (útil en RDS); ajustables por env
+DB_CONN_MAX_AGE = int(os.getenv("DB_CONN_MAX_AGE", "600"))
+DB_SSL_REQUIRE = os.getenv("DB_SSL_REQUIRE", "").lower() in ("1", "true", "yes")
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# 1) Si viene DATABASE_URL, la usamos tal cual
+_database_url = os.getenv("DATABASE_URL", "").strip()
+
+# 2) Si no viene, pero USE_POSTGRES=1, armamos la URL a partir de POSTGRES_*
+if not _database_url and os.getenv("USE_POSTGRES", "0") in ("1", "true", "yes"):
+    DB_NAME = os.getenv("POSTGRES_DB", "teg")
+    DB_USER = os.getenv("POSTGRES_USER", "teg")
+    DB_PASS = os.getenv("POSTGRES_PASSWORD", "teg")
+    DB_HOST = os.getenv("POSTGRES_HOST", "postgres")
+    DB_PORT = os.getenv("POSTGRES_PORT", "5432")
+    _database_url = f"postgres://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+# 3) Fallback a SQLite para desarrollo
+if not _database_url:
+    _database_url = f"sqlite:///{BASE_DIR / 'db.sqlite3'}"
+
 DATABASES = {
-    'default': dj_database_url.parse(
-        DATABASE_URL,
-        conn_max_age=600,
-        ssl_require=DATABASE_URL.startswith(('postgres://', 'postgresql://')),
+    "default": dj_database_url.parse(
+        _database_url,
+        conn_max_age=DB_CONN_MAX_AGE,
+        ssl_require=DB_SSL_REQUIRE,
     )
 }
 
@@ -133,3 +155,6 @@ CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", REDIS_URL)
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
+
+
+S3_PLANS_BUCKET = os.environ.get("S3_PLANS_BUCKET", "")
