@@ -163,11 +163,16 @@ jobs:
         env:
           TF_IN_AUTOMATION: "1"
         run: |
-          set -e
+          set -o pipefail
           unset AWS_PROFILE
-          # imprime solo los errores si los hay
-          terraform apply -no-color -input=false plan.tfplan | tee /tmp/tf-apply.log
-          test ${PIPESTATUS[0]} -eq 0 || { echo "---- ERRORES DETECTADOS ----"; grep -nE '^Error:|^╷|^│|^╵' /tmp/tf-apply.log || true; exit 1; }
+          terraform apply -no-color -input=false plan.tfplan 2>&1 | tee /tmp/tf-apply.log
+          STATUS=${PIPESTATUS[0]}
+          if [ $STATUS -ne 0 ]; then
+            echo "::group::Últimas 200 líneas de terraform apply"
+            tail -n 200 /tmp/tf-apply.log || true
+            echo "::endgroup::"
+            exit $STATUS
+          fi
 
       - name: 🔎 Esperar ECS estable
         env:
