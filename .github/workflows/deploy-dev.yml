@@ -17,10 +17,10 @@ on:
       tag:
         description: "Tag extra de imagen (además de dev-latest)"
         required: true
-        default: "sha-latest" # <- default estático; el SHA real se calcula en el job
+        default: "sha-latest" # default estático; el SHA real se calcula en el job
 
 permissions:
-  id-token: write # OIDC
+  id-token: write
   contents: read
 
 concurrency:
@@ -42,39 +42,47 @@ jobs:
     steps:
       - name: ⬇️ Checkout
         uses: actions/checkout@v4
+
       - name: 🔎 Assert role-to-assume is present
         run: |
           echo "ROLE=[$ROLE]"
           test -n "$ROLE" || (echo "❌ Falta AWS_ROLE_TO_ASSUME (variable o secret)"; exit 1)
         env:
           ROLE: ${{ vars.AWS_ROLE_TO_ASSUME || secrets.AWS_ROLE_TO_ASSUME }}
+
       - name: 🔐 Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
           role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME || secrets.AWS_ROLE_TO_ASSUME || 'arn:aws:iam::034739223309:role/tesis-dev-github-deploy' }}
           role-session-name: gha-deploy-dev
+
       - name: 🕵️ Who am I?
         run: aws sts get-caller-identity
+
       - name: 🔎 ECR can describe?
         run: aws ecr describe-repositories --repository-names tesis-dev-backend
+
       - name: 🔎 ECS can describe service?
         run: aws ecs describe-services --cluster tesis-dev-cluster --services tesis-dev-svc-backend
+
       - name: 🔎 Terraform init (sin backend)
         working-directory: infra/terraform
         run: terraform init -backend=false -input=false
 
   deploy:
     runs-on: ubuntu-latest
-    # ❌ quita la línea 'needs: ...'
     steps:
       - name: ⬇️ Checkout
         uses: actions/checkout@v4
+
       - name: 🔐 Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
           role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME || secrets.AWS_ROLE_TO_ASSUME }}
+          role-session-name: gha-deploy-dev
+
       - name: 🔑 Login to ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
@@ -119,14 +127,28 @@ jobs:
 
       - name: 🛠️ Terraform Init
         working-directory: infra/terraform
-        run: terraform init -input=false -upgrade
+        env:
+          TF_VAR_aws_profile: "" # CI => vacío (no usar ~/.aws/credentials)
+          TF_VAR_aws_region: us-east-1
+        run: |
+          set -e
+          unset AWS_PROFILE
+          terraform init -input=false -upgrade \
+            -backend-config="bucket=tesis-dev-tfstate" \
+            -backend-config="key=infra/terraform.tfstate" \
+            -backend-config="region=us-east-1"
 
       - name: 🚀 Terraform Apply (ECS/ALB/RDS)
         working-directory: infra/terraform
         env:
           TF_VAR_backend_desired_count: ${{ env.BACKEND_DESIRED }}
           TF_VAR_celery_desired_count: ${{ env.CELERY_DESIRED }}
-        run: terraform apply -auto-approve
+          TF_VAR_aws_profile: "" # CI => vacío
+          TF_VAR_aws_region: us-east-1
+        run: |
+          set -e
+          unset AWS_PROFILE
+          terraform apply -auto-approve
 
       - name: 🔎 Esperar ECS estable
         env:

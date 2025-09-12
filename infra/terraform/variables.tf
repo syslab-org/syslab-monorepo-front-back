@@ -20,7 +20,7 @@ variable "region" {
 
 variable "aws_profile" {
   type    = string
-  default = "tesis"
+  default = ""
 }
 
 #########################
