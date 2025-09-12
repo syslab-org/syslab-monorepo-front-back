@@ -17,7 +17,7 @@ on:
       tag:
         description: "Tag extra de imagen (además de dev-latest)"
         required: true
-        default: "sha-${{ github.sha }}"
+        default: "sha-latest" # <- default estático; el SHA real se calcula en el job
 
 permissions:
   id-token: write # OIDC
@@ -37,6 +37,7 @@ env:
 
 jobs:
   sanity-check:
+    if: ${{ github.event_name == 'workflow_dispatch' }} # Solo en manual
     runs-on: ubuntu-latest
 
     steps:
@@ -64,6 +65,8 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
+    # Si lo ejecutas manual, corre después del sanity-check. En push, sanity-check no corre y deploy inicia directo.
+    needs: ${{ github.event_name == 'workflow_dispatch' && 'sanity-check' || '' }}
 
     steps:
       - name: ⬇️ Checkout
@@ -73,8 +76,6 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
-          # Puedes usar repo/organization "Variables" o un Secret.
-          # Si usas Variable de repo/org, accede con vars.AWS_ROLE_TO_ASSUME
           role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME || secrets.AWS_ROLE_TO_ASSUME }}
 
       - name: 🔑 Login to ECR
@@ -84,15 +85,17 @@ jobs:
       - name: 🧱 Build & Push backend
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          EXTRA_TAG: ${{ github.event.inputs.tag }}
+          EXTRA_TAG_INPUT: ${{ github.event.inputs.tag }}
+          EXTRA_TAG_SHA: ${{ format('sha-{0}', github.sha) }}
         run: |
           set -e
           ECR="$REGISTRY/${{ env.ECR_BACKEND_REPO }}"
           DOCKERFILE="tools/docker/backend.Dockerfile"
           docker build -f "$DOCKERFILE" -t tesis-container-backend:latest .
+          # Decide tag extra: input (si viene) o sha-{commit}
+          EXTRA_TAG="${EXTRA_TAG_INPUT:-$EXTRA_TAG_SHA}"
           # Tags
           docker tag tesis-container-backend:latest "$ECR:${{ env.FIXED_TAG }}"
-          [ -z "$EXTRA_TAG" ] && EXTRA_TAG="sha-${GITHUB_SHA}"
           docker tag tesis-container-backend:latest "$ECR:$EXTRA_TAG"
           # Push
           docker push "$ECR:${{ env.FIXED_TAG }}"
@@ -101,18 +104,17 @@ jobs:
       - name: 🧱 Build & Push celery
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          EXTRA_TAG: ${{ github.event.inputs.tag }}
+          EXTRA_TAG_INPUT: ${{ github.event.inputs.tag }}
+          EXTRA_TAG_SHA: ${{ format('sha-{0}', github.sha) }}
         run: |
           set -e
           ECR="$REGISTRY/${{ env.ECR_CELERY_REPO }}"
-          DOCKERFILE="tools/docker/celery.Dockerfile"
-          [ -f "$DOCKERFILE" ] || DOCKERFILE="tools/docker/backend.Dockerfile"
-          docker build -f "$DOCKERFILE" -t tesis-container-celery:latest .
-          # Tags
+          DOCKERfile="tools/docker/celery.Dockerfile"
+          [ -f "$DOCKERfile" ] || DOCKERfile="tools/docker/backend.Dockerfile"
+          docker build -f "$DOCKERfile" -t tesis-container-celery:latest .
+          EXTRA_TAG="${EXTRA_TAG_INPUT:-$EXTRA_TAG_SHA}"
           docker tag tesis-container-celery:latest "$ECR:${{ env.FIXED_TAG }}"
-          [ -z "$EXTRA_TAG" ] && EXTRA_TAG="sha-${GITHUB_SHA}"
           docker tag tesis-container-celery:latest "$ECR:$EXTRA_TAG"
-          # Push
           docker push "$ECR:${{ env.FIXED_TAG }}"
           docker push "$ECR:$EXTRA_TAG"
 
@@ -141,6 +143,9 @@ jobs:
           set -e
           aws ecs wait services-stable --cluster "$CLUSTER" --services "$SVC_BACKEND"
           aws ecs wait services-stable --cluster "$CLUSTER" --services "$SVC_CELERY"
+
+      - name: 📦 Instalar jq (para parseo JSON)
+        run: sudo apt-get update && sudo apt-get install -y jq
 
       - name: 🩺 Esperar ALB 200/JSON /healthz
         working-directory: infra/terraform
