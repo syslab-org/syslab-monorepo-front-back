@@ -128,8 +128,9 @@ jobs:
       - name: 🛠️ Terraform Init
         working-directory: infra/terraform
         env:
-          TF_VAR_aws_profile: "" # CI => vacío (no usar ~/.aws/credentials)
+          TF_VAR_aws_profile: ""
           TF_VAR_aws_region: us-east-1
+          TF_IN_AUTOMATION: "1"
         run: |
           set -e
           unset AWS_PROFILE
@@ -138,17 +139,35 @@ jobs:
             -backend-config="key=infra/terraform.tfstate" \
             -backend-config="region=us-east-1"
 
-      - name: 🚀 Terraform Apply (ECS/ALB/RDS)
+      - name: 📝 Terraform Plan (salva plan.tfplan)
         working-directory: infra/terraform
         env:
           TF_VAR_backend_desired_count: ${{ env.BACKEND_DESIRED }}
           TF_VAR_celery_desired_count: ${{ env.CELERY_DESIRED }}
-          TF_VAR_aws_profile: "" # CI => vacío
+          TF_VAR_aws_profile: ""
           TF_VAR_aws_region: us-east-1
+          TF_IN_AUTOMATION: "1"
         run: |
           set -e
           unset AWS_PROFILE
-          terraform apply -auto-approve
+          terraform plan -no-color -input=false -out=plan.tfplan
+
+      - name: 📤 Subir plan como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: infra/terraform/plan.tfplan
+
+      - name: 🚀 Terraform Apply (usa plan.tfplan)
+        working-directory: infra/terraform
+        env:
+          TF_IN_AUTOMATION: "1"
+        run: |
+          set -e
+          unset AWS_PROFILE
+          # imprime solo los errores si los hay
+          terraform apply -no-color -input=false plan.tfplan | tee /tmp/tf-apply.log
+          test ${PIPESTATUS[0]} -eq 0 || { echo "---- ERRORES DETECTADOS ----"; grep -nE '^Error:|^╷|^│|^╵' /tmp/tf-apply.log || true; exit 1; }
 
       - name: 🔎 Esperar ECS estable
         env:
