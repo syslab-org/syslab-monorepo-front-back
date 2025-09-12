@@ -42,11 +42,18 @@ jobs:
     steps:
       - name: ⬇️ Checkout
         uses: actions/checkout@v4
+      - name: 🔎 Assert role-to-assume is present
+        run: |
+          echo "ROLE=[$ROLE]"
+          test -n "$ROLE" || (echo "❌ Falta AWS_ROLE_TO_ASSUME (variable o secret)"; exit 1)
+        env:
+          ROLE: ${{ vars.AWS_ROLE_TO_ASSUME || secrets.AWS_ROLE_TO_ASSUME }}
       - name: 🔐 Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-region: us-east-1
-          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME || secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME || secrets.AWS_ROLE_TO_ASSUME || 'arn:aws:iam::034739223309:role/tesis-dev-github-deploy' }}
+          role-session-name: gha-deploy-dev
       - name: 🕵️ Who am I?
         run: aws sts get-caller-identity
       - name: 🔎 ECR can describe?
