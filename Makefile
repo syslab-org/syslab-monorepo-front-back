@@ -12,7 +12,7 @@ SVC_FLOWER    = flower
 SVC_REDIS     = redis
 SVC_PG        = postgres
 
-TF            = terraform -chdir=infra/terraform
+TF            = AWS_PROFILE=$(AWS_PROFILE) AWS_REGION=$(AWS_REGION) terraform -chdir=infra/terraform
 SMOKE_TIMEOUT ?= 60
 PLAN_FILE     ?= plan.json
 
