@@ -37,47 +37,37 @@ env:
 
 jobs:
   sanity-check:
-    if: ${{ github.event_name == 'workflow_dispatch' }} # Solo en manual
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
-
     steps:
       - name: ⬇️ Checkout
         uses: actions/checkout@v4
-
       - name: 🔐 Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: us-east-1
           role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME || secrets.AWS_ROLE_TO_ASSUME }}
-
       - name: 🕵️ Who am I?
         run: aws sts get-caller-identity
-
       - name: 🔎 ECR can describe?
         run: aws ecr describe-repositories --repository-names tesis-dev-backend
-
       - name: 🔎 ECS can describe service?
         run: aws ecs describe-services --cluster tesis-dev-cluster --services tesis-dev-svc-backend
-
       - name: 🔎 Terraform init (sin backend)
         working-directory: infra/terraform
         run: terraform init -backend=false -input=false
 
   deploy:
     runs-on: ubuntu-latest
-    # Si lo ejecutas manual, corre después del sanity-check. En push, sanity-check no corre y deploy inicia directo.
-    needs: ${{ github.event_name == 'workflow_dispatch' && 'sanity-check' || '' }}
-
+    # ❌ quita la línea 'needs: ...'
     steps:
       - name: ⬇️ Checkout
         uses: actions/checkout@v4
-
       - name: 🔐 Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
           role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME || secrets.AWS_ROLE_TO_ASSUME }}
-
       - name: 🔑 Login to ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
@@ -92,12 +82,9 @@ jobs:
           ECR="$REGISTRY/${{ env.ECR_BACKEND_REPO }}"
           DOCKERFILE="tools/docker/backend.Dockerfile"
           docker build -f "$DOCKERFILE" -t tesis-container-backend:latest .
-          # Decide tag extra: input (si viene) o sha-{commit}
           EXTRA_TAG="${EXTRA_TAG_INPUT:-$EXTRA_TAG_SHA}"
-          # Tags
           docker tag tesis-container-backend:latest "$ECR:${{ env.FIXED_TAG }}"
           docker tag tesis-container-backend:latest "$ECR:$EXTRA_TAG"
-          # Push
           docker push "$ECR:${{ env.FIXED_TAG }}"
           docker push "$ECR:$EXTRA_TAG"
 
@@ -109,9 +96,9 @@ jobs:
         run: |
           set -e
           ECR="$REGISTRY/${{ env.ECR_CELERY_REPO }}"
-          DOCKERfile="tools/docker/celery.Dockerfile"
-          [ -f "$DOCKERfile" ] || DOCKERfile="tools/docker/backend.Dockerfile"
-          docker build -f "$DOCKERfile" -t tesis-container-celery:latest .
+          DOCKERFILE="tools/docker/celery.Dockerfile"
+          [ -f "$DOCKERFILE" ] || DOCKERFILE="tools/docker/backend.Dockerfile"
+          docker build -f "$DOCKERFILE" -t tesis-container-celery:latest .
           EXTRA_TAG="${EXTRA_TAG_INPUT:-$EXTRA_TAG_SHA}"
           docker tag tesis-container-celery:latest "$ECR:${{ env.FIXED_TAG }}"
           docker tag tesis-container-celery:latest "$ECR:$EXTRA_TAG"
@@ -144,7 +131,7 @@ jobs:
           aws ecs wait services-stable --cluster "$CLUSTER" --services "$SVC_BACKEND"
           aws ecs wait services-stable --cluster "$CLUSTER" --services "$SVC_CELERY"
 
-      - name: 📦 Instalar jq (para parseo JSON)
+      - name: 📦 Instalar jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
       - name: 🩺 Esperar ALB 200/JSON /healthz
