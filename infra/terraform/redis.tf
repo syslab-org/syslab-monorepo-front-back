@@ -11,11 +11,17 @@ resource "aws_elasticache_subnet_group" "redis" {
   name       = "${var.project}-${var.env}-redis-subnets"
   subnet_ids = [for s in aws_subnet.public : s.id]
 
+  # ❗ Evita que Terraform intente cambiar subnets de un grupo que está en uso por el clúster
+  lifecycle {
+    ignore_changes = [subnet_ids]
+  }
+
   tags = {
     Project = var.project
     Env     = var.env
   }
 }
+
 
 # Redis (cluster mode disabled), 1 nodo para dev
 resource "aws_elasticache_cluster" "redis" {

@@ -14,6 +14,10 @@ resource "aws_lb" "app" {
     Project = var.project
     Env     = var.env
   }
+
+  lifecycle {
+    ignore_changes = [security_groups, subnets]
+  }
 }
 
 resource "aws_lb_target_group" "backend" {
@@ -37,6 +41,10 @@ resource "aws_lb_target_group" "backend" {
   tags = {
     Project = var.project
     Env     = var.env
+  }
+
+  lifecycle {
+    ignore_changes = [vpc_id, target_type, protocol, port, health_check]
   }
 }
 # HTTPS listener (solo si hay certificado)
