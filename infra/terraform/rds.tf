@@ -37,8 +37,14 @@ resource "aws_security_group_rule" "rds_ingress_from_ecs" {
 
 # Subnet group para RDS (para dev usamos subnets públicas)
 resource "aws_db_subnet_group" "rds" {
-  name       = "${var.project}-${var.env}-rds-subnets"
-  subnet_ids = [for s in aws_subnet.public : s.id]
+  name        = "${var.project}-${var.env}-rds-subnets"
+  description = "RDS subnets (dev)"
+  subnet_ids  = [for s in aws_subnet.public : s.id]
+
+  # ❗ Evita que Terraform intente cambiar las subnets de un grupo ya existente/en uso
+  lifecycle {
+    ignore_changes = [subnet_ids]
+  }
 
   tags = {
     Name    = "${var.project}-${var.env}-rds-subnets"
@@ -46,6 +52,7 @@ resource "aws_db_subnet_group" "rds" {
     Env     = var.env
   }
 }
+
 
 # Password aleatorio para RDS (sin / @ " ' ni espacios)
 resource "random_password" "rds_master_password" {
@@ -99,6 +106,10 @@ output "rds_endpoint" {
   value = aws_db_instance.rds.address
 }
 
+output "rds_master_password" {
+  value     = random_password.rds_master_password.result
+  sensitive = true
+}
 
 variable "allow_rds_from_my_ip" {
   type    = bool
