@@ -240,3 +240,93 @@ Terraform define:
 - Logs:
   Backend → CloudWatch /ecs/tesis/dev/backend
   Celery → CloudWatch /ecs/tesis/dev/celery
+
+# Despliegue en AWS con Terraform, ECS y ALB
+
+Este proyecto utiliza **Terraform** para provisionar la infraestructura en AWS y **Docker/ECS** para desplegar los servicios del backend y Celery. A continuación se detalla el flujo de despliegue y validación.
+
+## Flujo de Despliegue
+
+1. **Construcción y Push de Imágenes**
+
+   - Se construyeron las imágenes Docker del backend y Celery.
+   - Cada imagen fue enviada a su respectivo **ECR (Elastic Container Registry)**.
+   - Ejemplo de push exitoso:
+     ```
+     docker push 034739223309.dkr.ecr.us-east-1.amazonaws.com/tesis-dev-backend:dev-latest
+     docker push 034739223309.dkr.ecr.us-east-1.amazonaws.com/tesis-dev-celery:dev-latest
+     ```
+
+2. **Creación de Secretos**
+
+   - Se creó un secreto en **AWS Secrets Manager** con la URL de conexión a la base de datos Postgres en RDS.
+   - El secreto se inyecta automáticamente a las tareas de ECS para que Django pueda conectarse a la base de datos.
+   - Ejemplo del secreto generado:
+     ```
+     arn:aws:secretsmanager:us-east-1:034739223309:secret:tesis-dev-database-url-1JJ50L
+     ```
+
+3. **Provisionamiento con Terraform**
+
+   - Se aplicaron los módulos de Terraform (`make tf-apply`), lo que creó/actualizó:
+     - **ECS Cluster** (`tesis-dev-cluster`)
+     - **Servicios ECS** (`tesis-dev-svc-backend`, `tesis-dev-svc-celery`)
+     - **RDS (Postgres)** con endpoint privado
+     - **Redis (ElastiCache)**
+     - **ALB (Application Load Balancer)** con DNS público
+   - Terraform devolvió como `outputs` las URLs y ARNs clave (ECR, RDS, Redis, ALB, Secret ARN).
+
+4. **Esperando Estabilidad de ECS**
+
+   - Se verificó que los servicios de ECS estuvieran en estado `running`:
+     ```
+     make aws-wait-ecs
+     ```
+     Resultado:
+     ```json
+     {
+       "name": "tesis-dev-svc-backend",
+       "desired": 1,
+       "running": 1,
+       "deployments": 1
+     }
+     ```
+
+5. **Chequeo del ALB**
+
+   - Se esperó a que el ALB respondiera con código `200 OK` en el endpoint `/healthz`:
+     ```
+     make aws-wait-alb
+     ```
+   - El balanceador quedó disponible en:
+     ```
+     http://tesis-dev-alb-1295731637.us-east-1.elb.amazonaws.com
+     ```
+
+6. **Smoke Tests**
+   - Se ejecutaron pruebas rápidas de salud:
+     ```
+     make smoke-quick
+     ```
+   - Respuesta exitosa:
+     ```json
+     {
+       "status": "ok",
+       "marker": "v3"
+     }
+     ```
+
+## Resultado
+
+✅ Con estos pasos:
+
+- El backend y Celery quedaron desplegados en ECS.
+- La base de datos RDS y Redis están accesibles desde los contenedores.
+- El ALB expone el backend públicamente y responde correctamente.
+- Se confirmó que el despliegue es funcional mediante healthchecks y smoke tests.
+
+## Próximos pasos
+
+- Realizar **pruebas funcionales** contra endpoints del backend.
+- Monitorear logs en **CloudWatch** y métricas en ECS/RDS.
+- Integrar el **frontend** apuntando al `backend_url` del ALB.
