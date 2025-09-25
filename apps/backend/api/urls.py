@@ -5,7 +5,7 @@ from .views import run_prueba, task_status, network_plan_create
 from .views_plans import PlanViewSet
 
 router = DefaultRouter()
-router.register(r"network/plans", PlanViewSet, basename="plan")
+router.register(r"network/plans", PlanViewSet, basename='network-plans')
 
 urlpatterns = [
      # Celery demo + crear plan
