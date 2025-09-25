@@ -30,6 +30,7 @@ services:
       - ../../.env
     environment:
       - DJANGO_SETTINGS_MODULE=teg.settings
+      - DEBUG=true
       # 👉 fuerza Postgres local (host = nombre del servicio "postgres")
       - DATABASE_URL=postgres://teg:teg@postgres:5432/teg
       - DB_SSL_REQUIRE=false
@@ -48,7 +49,7 @@ services:
     networks:
       - appnet
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/healthz || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/healthz/ || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 10

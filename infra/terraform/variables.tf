@@ -89,7 +89,7 @@ variable "django_debug" {
 
 variable "allowed_hosts" {
   type        = list(string)
-  default     = ["*"] # en prod: ["api.mi-dominio.com"]
+  default     = ["*", "tesis-dev-alb-1295731637.us-east-1.elb.amazonaws.com"] # en prod: ["api.mi-dominio.com"]
   description = "Lista de hosts permitidos por Django (ALLOWED_HOSTS)"
 }
 
@@ -101,7 +101,7 @@ variable "cors_allowed_origins" {
 
 variable "csrf_trusted_origins" {
   type        = list(string)
-  default     = []
+  default     = ["http://localhost:5173"]
   description = "Orígenes confiables para CSRF (https://... del ALB o dominio)"
 }
 variable "acm_certificate_arn" {
