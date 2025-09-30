@@ -54,10 +54,11 @@ def tf_init(workdir: str):
     return _run([TERRAFORM_BIN, "init", "-input=false"], workdir)
 
 def tf_plan(workdir: str):
-    return _run([TERRAFORM_BIN, "plan", "-input=false", "-no-color", "-out", "plan.out"], workdir)
+    return _run([TERRAFORM_BIN, "plan", "-input=false", "-refresh=false", "-no-color", "-out", "plan.out"], workdir)
 
 def tf_apply(workdir: str):
     return _run([TERRAFORM_BIN, "apply", "-input=false", "-no-color", "plan.out"], workdir)
+
 
 def tf_destroy(workdir: str):
     return _run([TERRAFORM_BIN, "destroy", "-auto-approve", "-input=false", "-no-color"], workdir)
