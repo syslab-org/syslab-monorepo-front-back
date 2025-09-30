@@ -126,6 +126,7 @@ const useDeployNetwork = ({ nodes, edges }) => {
   const [successMessage, setSuccessMessage] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const { setLoadingFlow } = useContext(LoadingFlowContext);
+  const [simulateOnly, setSimulateOnly] = useState(true);
 
   const processJsonToCloud = () => {
 
@@ -223,7 +224,7 @@ const useDeployNetwork = ({ nodes, edges }) => {
 
     try {
       // 1) Adaptamos al esquema que el backend espera hoy
-      const legacyPlan = toLegacyPlan(transformedData, { simulateOnly: true });
+      const legacyPlan = toLegacyPlan(transformedData, { simulateOnly });
 
       // 2) Creamos el plan vía backend (devuelve { ok, plan_id, task_id } con 202)
       const res = await api.createPlan(legacyPlan);
@@ -268,6 +269,8 @@ const useDeployNetwork = ({ nodes, edges }) => {
     transformedData,
     planName,
     setPlanName,
+    simulateOnly,
+    setSimulateOnly,
     successMessage,
     errorMessage,
     processJsonToCloud,

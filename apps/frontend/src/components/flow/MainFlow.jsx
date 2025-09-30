@@ -65,6 +65,7 @@ import { useContext } from "react";
 import { LoadingFlowContext } from "../../contexts/LoadingFlowContext";
 import { NetworkProvider } from "../../contexts/NetworkNodesContext";
 import { db } from "../../firebase/firebaseConfig";
+import ConfirmDeployDialog from "./ConfirmDeployDialog";
 import useDeployNetwork from "./flow-hooks/useDeployNetwork";
 import useHandleDrop from "./flow-hooks/useHandleDrop";
 import useRestrictMovement from "./flow-hooks/useRestrictMovement";
@@ -292,6 +293,10 @@ function MainFlow() {
   const {
     showConfirmation,
     transformedData,
+    planName,
+    setPlanName,
+    simulateOnly,
+    setSimulateOnly,
     processJsonToCloud,
     handleCancelDeploy,
     handleConfirmDeploy,
@@ -585,6 +590,18 @@ function MainFlow() {
               </Panel>
 
             </ReactFlow>
+
+            <ConfirmDeployDialog
+              open={showConfirmation}
+              onClose={handleCancelDeploy}
+              onConfirm={handleConfirmDeploy}
+              planName={planName}
+              setPlanName={setPlanName}
+              simulateOnly={simulateOnly}
+              setSimulateOnly={setSimulateOnly}
+              transformedData={transformedData}
+            />
+
           </Card>
         </Grid>
         <RoutePreviewPanel
@@ -744,7 +761,7 @@ function MainFlow() {
 
         {/* Modal to confirm deploy */}
 
-        <Modal
+        {/* <Modal
           open={showConfirmation}
           onClose={handleCancelDeploy}
           aria-labelledby="parent-modal-title"
@@ -794,7 +811,7 @@ function MainFlow() {
 
           </Box>
 
-        </Modal>
+        </Modal> */}
 
         <Modal
           open={routesPreviewOpen}
