@@ -30,15 +30,24 @@ export const api = {
   runPrueba: (n = 5) => jsonFetch("/api/tasks/run/", { method: "POST", body: JSON.stringify({ n }) }),
   taskStatus: (taskId) => jsonFetch(`/api/tasks/status/${taskId}/`),
 
-  // plans
-  listPlans: () => jsonFetch('/api/network/plans/'),
+  // plans (⚠️ solo paths)
+  listPlans: () => jsonFetch(`/api/network/plans/`),
   getPlan: (id) => jsonFetch(`/api/network/plans/${id}/`),
   getPlanPayload: (id) => jsonFetch(`/api/network/plans/${id}/payload/`),
 
-  //crar plan
-  createPlan: (plan) =>
-    jsonFetch("/api/network/plan/", {
+  // crear plan con el endpoint rápido existente
+  createPlan(plan) {
+    return jsonFetch(`/api/network/plan/`, {
       method: "POST",
       body: typeof plan === "string" ? plan : JSON.stringify(plan),
-    })
+    });
+  },
+
+  // acción deploy del ViewSet
+  deployPlan(id) {
+    return jsonFetch(`/api/network/plans/${id}/deploy/`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  },
 };

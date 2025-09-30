@@ -1,151 +1,157 @@
-xCrear siempre una subnet
-crear router a nivel de subnet (será una tabla )
------ ip origen | ip destino |  
-crear instancias a nivel subred
-
-data = {
-            "vpcs": [
-                {
-                    "name"       : "main",
-                    "cidr_block" : "10.0.0.0/16",maximo 255 cada elemento por punto - despues del slash solo puede ser multiplos de 2
-                    "internet_gateway": true,  // Agregamos el Internet Gateway
-                    "nat_gateway": {
-                    "enabled": false,      // Si tienes subredes privadas, pon esto como true
-                    "public_subnet": "main-public-1",  // Subred pública que contendrá el NAT Gateway
-                    "elastic_ip": "eip-123456789"  // Dirección IP elástica para el NAT Gateway
-                                    },
-                    "subnets": [
-                        {
-                            "name"       : "main-public-1", no pueden contener espacios, ni caracterdes especiales
-                            "cidr_block" : "10.0.1.0/24", maximo 255 cada elemento por punto - despues del slash solo puede ser multiplos de 2, clase a /8,b /16, c /24 cual es el rango que tiene
-                            "availabilityZone"       : "us-east-2a", lo mismo que name, solo guion.
-                            "public_ip"  : "true",        siempre es true.[quitar del formulario]                   
-                            "instances": [
-                                {   
-                                    "id"           : "<string>",    - lo generamos nosotros mismos, mismas validaciones de name.
-                                    "ami"          : "ami-0a2bf868f9c25cd7e", [select - crear lista] (debe estar creado en interfaz admin)
-                                    "instance_type": "t2.micro", [select - crear lista] (debe estar creado en interfaz admin)* [revisar los valores que se pueden asignar.]
-                                    "ip_address"   : "10.0.1.100",maximo 255 cada elemento por punto
-                                    "name"         : "example",no pueden contener espacios, ni caracterdes especiales
-                                    "ssh_access"   : "true"  -        siempre es true.[quitar del formulario]                  
-                                },
-                                {   
-                                    "id"           : "<string>",    
-                                    "ami"          : "ami-0a2bf868f9c25cd7e",
-                                    "instance_type": "t2.micro",
-                                    "ip_address"   : "10.0.1.101",
-                                    "name"         : "example2",
-                                    "ssh_access"   : "<boolean>"                          
-                                }
-                            ]
-                        }
-                    ]
-                },
-                {
-                    "name"       : "main2",
-                    "cidr_block" : "10.0.0.0/16",
-                    "subnets": [
-                        {
-                            "name"       : "main-public-1",
-                            "cidr_block" : "10.0.1.0/24",
-                            "availabilityZone"       : "us-east-2a",
-                            "public_ip"  : "true",                           
-                            "instances": [
-                                {   
-                                    "id"           : "<string>",    
-                                    "ami"          : "ami-0a2bf868f9c25cd7e",
-                                    "instance_type": "t2.micro",
-                                    "ip_address"   : "10.0.1.100",
-                                    "name"         : "example",
-                                    "ssh_access"   : "<boolean>"                          
-                                },
-                                {   
-                                    "id"           : "<string>",    
-                                    "ami"          : "ami-0a2bf868f9c25cd7e",
-                                    "instance_type": "t2.micro",
-                                    "ip_address"   : "10.0.1.101",
-                                    "name"         : "example2",
-                                    "ssh_access"   : "<boolean>"                          
-                                }
-                            ]
-                        }
-                    ]
-                }
-
-            ]    
+Ejemplo v2 – VLAN + 2 VPCs (A y B) + Router R1
+{
+  "cloud": "aws",
+  "vlan": {
+    "name": "vlan-lab-mr",
+    "cidr_block": "10.0.0.0/12",
+    "region": "us-east-1"
+  },
+  "vpcs": [
+    {
+      "id": "vpc-a",
+      "name": "VPC-A",
+      "region": "us-east-1",
+      "cidr_block": "10.0.0.0/20",
+      "internet_gateway": true,
+      "nat_gateway": { "enabled": false, "public_subnet": "", "elastic_ip": "" },
+      "route_tables": [
+        {
+          "name": "main",
+          "routes": [
+            { "name": "rt-local", "dest_cidr": "10.0.0.0/20", "target": "local", "via_router_id": null },
+            { "name": "rt-to-b", "dest_cidr": "10.0.16.0/20", "target": "router", "via_router_id": "r1" }
+          ]
         }
+      ],
+      "subnets": [
+        { "name": "subnet-a-public-a1",  "cidr_block": "10.0.0.0/24",  "availability_zone": "us-east-1a", "subnet_type": "public",  "route_table": "main", "instances": [] },
+        { "name": "subnet-a-private-a1", "cidr_block": "10.0.1.0/24",  "availability_zone": "us-east-1a", "subnet_type": "private", "route_table": "main", "instances": [] }
+      ]
+    },
+    {
+      "id": "vpc-b",
+      "name": "VPC-B",
+      "region": "us-east-1",
+      "cidr_block": "10.0.16.0/20",
+      "internet_gateway": true,
+      "nat_gateway": { "enabled": false, "public_subnet": "", "elastic_ip": "" },
+      "route_tables": [
+        {
+          "name": "main",
+          "routes": [
+            { "name": "rt-local", "dest_cidr": "10.0.16.0/20", "target": "local", "via_router_id": null },
+            { "name": "rt-to-a", "dest_cidr": "10.0.0.0/20",  "target": "router", "via_router_id": "r1" }
+          ]
+        }
+      ],
+      "subnets": [
+        { "name": "subnet-b-public-a1",  "cidr_block": "10.0.16.0/24", "availability_zone": "us-east-1a", "subnet_type": "public",  "route_table": "main", "instances": [] },
+        { "name": "subnet-b-private-a1", "cidr_block": "10.0.17.0/24", "availability_zone": "us-east-1a", "subnet_type": "private", "route_table": "main", "instances": [] }
+      ]
+    }
+  ],
+  "routers": [
+    {
+      "id": "r1",
+      "links": [{ "vpc_id": "vpc-a" }, { "vpc_id": "vpc-b" }]
+    }
+  ]
+}
 
-
-
-
-        [24-02-25, 10:11:08 am] Frankelys: Lo tengo, ya te lo paso
-[24-02-25, 10:11:24 am] Frankelys: Para las subredes
-[24-02-25, 10:11:25 am] Frankelys: "subnets": [
-      {
-        "name": "subnet1",
-        "cidr_block": "10.0.1.0/24",
-        "availability_zone": "us-west-2a",
-        "route_table": "public"
-      },
-      {
-        "name": "subnet2",
-        "cidr_block": "10.0.2.0/24",
-        "availability_zone": "us-west-2b",
-        "route_table": "private"
-      },
-      {
-        "name": "subnet3",
-        "cidr_block": "10.0.3.0/24",
-        "availability_zone": "us-west-2c",
-        "route_table": "private"
-      }
-    ]
-[24-02-25, 10:11:39 am] Frankelys: Se va a agregar esa entrada de route_table
-[24-02-25, 10:15:09 am] Frankelys: Adicionalmente, dentro del json de la vpc voy a necesitar algo como esto:
+Ejemplo v2 – VLAN + 4 VPCs (A, B, C, D) + Routers R1 y R2
 
 {
-"subnets": [
-      {
-        "name": "subnet1",
-        "cidr_block": "10.0.1.0/24",
-        "availability_zone": "us-west-2a",
-        "route_table": "public"
-      },
-      {
-        "name": "subnet2",
-        "cidr_block": "10.0.2.0/24",
-        "availability_zone": "us-west-2b",
-        "route_table": "private"
-      },
-      {
-        "name": "subnet3",
-        "cidr_block": "10.0.3.0/24",
-        "availability_zone": "us-west-2c",
-        "route_table": "private"
-      }
-    ],
-"route_tables": [
-      {
-        "name": "public",
-        "routes": [
-          {
-            "destination_cidr_block": "0.0.0.0/0",
-            "gateway": "internet_gateway"
-          }
-        ]
-      },
-      {
-        "name": "private",
-        "routes": [
-          {
-            "destination_cidr_block": "10.0.3.0/24",
-            "target_subnet": "subnet3"
-          },
-          {
-            "destination_cidr_block": "10.0.2.0/24",
-            "target_subnet": "subnet2"
-          }
-        ]
-      }
-    ]
+  "cloud": "aws",
+  "vlan": {
+    "name": "vlan-lab-mr",
+    "cidr_block": "10.0.0.0/12",
+    "region": "us-east-1"
+  },
+  "vpcs": [
+    {
+      "id": "vpc-a",
+      "name": "VPC-A",
+      "region": "us-east-1",
+      "cidr_block": "10.0.0.0/20",
+      "internet_gateway": true,
+      "nat_gateway": { "enabled": false, "public_subnet": "", "elastic_ip": "" },
+      "route_tables": [
+        { "name": "main",
+          "routes": [
+            { "name": "rt-local", "dest_cidr": "10.0.0.0/20", "target": "local",  "via_router_id": null },
+            { "name": "rt-to-b",  "dest_cidr": "10.0.16.0/20","target": "router", "via_router_id": "r1" }
+          ]
+        }
+      ],
+      "subnets": [
+        { "name": "subnet-a-public-a1",  "cidr_block": "10.0.0.0/24", "availability_zone": "us-east-1a", "subnet_type": "public",  "route_table": "main", "instances": [] },
+        { "name": "subnet-a-private-a1", "cidr_block": "10.0.1.0/24", "availability_zone": "us-east-1b", "subnet_type": "private", "route_table": "main", "instances": [] }
+      ]
+    },
+    {
+      "id": "vpc-b",
+      "name": "VPC-B",
+      "region": "us-east-1",
+      "cidr_block": "10.0.16.0/20",
+      "internet_gateway": true,
+      "nat_gateway": { "enabled": false, "public_subnet": "", "elastic_ip": "" },
+      "route_tables": [
+        { "name": "main",
+          "routes": [
+            { "name": "rt-local", "dest_cidr": "10.0.16.0/20","target": "local",  "via_router_id": null },
+            { "name": "rt-to-a",  "dest_cidr": "10.0.0.0/20", "target": "router", "via_router_id": "r1" }
+          ]
+        }
+      ],
+      "subnets": [
+        { "name": "subnet-b-public-a1",  "cidr_block": "10.0.16.0/24", "availability_zone": "us-east-1a", "subnet_type": "public",  "route_table": "main", "instances": [] },
+        { "name": "subnet-b-private-a1", "cidr_block": "10.0.17.0/24", "availability_zone": "us-east-1b", "subnet_type": "private", "route_table": "main", "instances": [] }
+      ]
+    },
+    {
+      "id": "vpc-c",
+      "name": "VPC-C",
+      "region": "us-east-1",
+      "cidr_block": "10.1.0.0/20",
+      "internet_gateway": true,
+      "nat_gateway": { "enabled": false, "public_subnet": "", "elastic_ip": "" },
+      "route_tables": [
+        { "name": "main",
+          "routes": [
+            { "name": "rt-local",  "dest_cidr": "10.1.0.0/20",  "target": "local",  "via_router_id": null },
+            { "name": "rt-to-d",   "dest_cidr": "10.1.16.0/20", "target": "router", "via_router_id": "r2" },
+            { "name": "rt-to-a-x", "dest_cidr": "10.0.0.0/20",  "target": "router", "via_router_id": "r2" }  // ← INVÁLIDA (no transita a R1)
+          ]
+        }
+      ],
+      "subnets": [
+        { "name": "subnet-c-public-a1",  "cidr_block": "10.1.0.0/24", "availability_zone": "us-east-1a", "subnet_type": "public",  "route_table": "main", "instances": [] },
+        { "name": "subnet-c-private-a1", "cidr_block": "10.1.1.0/24", "availability_zone": "us-east-1b", "subnet_type": "private", "route_table": "main", "instances": [] }
+      ]
+    },
+    {
+      "id": "vpc-d",
+      "name": "VPC-D",
+      "region": "us-east-1",
+      "cidr_block": "10.1.16.0/20",
+      "internet_gateway": true,
+      "nat_gateway": { "enabled": false, "public_subnet": "", "elastic_ip": "" },
+      "route_tables": [
+        { "name": "main",
+          "routes": [
+            { "name": "rt-local", "dest_cidr": "10.1.16.0/20", "target": "local",  "via_router_id": null },
+            { "name": "rt-to-c",  "dest_cidr": "10.1.0.0/20",  "target": "router", "via_router_id": "r2" }
+          ]
+        }
+      ],
+      "subnets": [
+        { "name": "subnet-d-public-a1",  "cidr_block": "10.1.16.0/24", "availability_zone": "us-east-1a", "subnet_type": "public",  "route_table": "main", "instances": [] },
+        { "name": "subnet-d-private-a1", "cidr_block": "10.1.17.0/24", "availability_zone": "us-east-1b", "subnet_type": "private", "route_table": "main", "instances": [] }
+      ]
+    }
+  ],
+  "routers": [
+    { "id": "r1", "links": [{ "vpc_id": "vpc-a" }, { "vpc_id": "vpc-b" }] },
+    { "id": "r2", "links": [{ "vpc_id": "vpc-c" }, { "vpc_id": "vpc-d" }] }
+  ]
 }
