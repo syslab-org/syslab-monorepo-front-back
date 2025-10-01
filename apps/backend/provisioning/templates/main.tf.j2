@@ -8,18 +8,33 @@ terraform {
   }
 }
 
+{# --- Detectar simulate_only con fallback seguro --- #}
+{% set sim = true %}
+{% if simulate_only is defined %}
+  {% set sim = simulate_only %}
+{% elif payload is defined and payload.simulate_only is defined %}
+  {% set sim = payload.simulate_only %}
+{% endif %}
+
+{% if sim %}
+# ---- MODO SIMULACIÓN ----
 provider "aws" {
-  region = var.region
-  # Permiten 'terraform plan' sin credenciales/IMDS
+  region                      = var.region
   skip_credentials_validation = true
   skip_metadata_api_check     = true
   skip_region_validation      = true
   skip_requesting_account_id  = true
-  access_key = "DUMMY"
-  secret_key = "DUMMY"
-  # Si usas S3 en el plan, a veces ayuda:
-  # s3_force_path_style = true
+  access_key                  = "DUMMY"
+  secret_key                  = "DUMMY"
 }
+{% else %}
+# ---- MODO REAL (IAM Role/credenciales del entorno) ----
+provider "aws" {
+  region = var.region
+}
+{% endif %}
+
+
 
 resource "aws_vpc" "this" {
   cidr_block = var.vpc_cidr
@@ -33,18 +48,17 @@ locals {
 }
 
 resource "aws_subnet" "this" {
-  for_each                  = { for s in local.subnets : s.name => s }
-  vpc_id                    = aws_vpc.this.id
-  cidr_block                = each.value.cidr
-  availability_zone         = each.value.az
-  map_public_ip_on_launch   = each.value.public
+  for_each                = { for s in local.subnets : s.name => s }
+  vpc_id                  = aws_vpc.this.id
+  cidr_block              = each.value.cidr
+  availability_zone       = each.value.az
+  map_public_ip_on_launch = each.value.public
   tags = {
     Name = each.key
   }
 }
 
-# Ejemplo de recursos condicionales en Terraform (sin Jinja):
-# Solo se crean si hay al menos una subnet pública
+# Sólo se crea IGW si existe al menos una subnet pública
 resource "aws_internet_gateway" "igw" {
   count = var.has_public ? 1 : 0
   vpc_id = aws_vpc.this.id
