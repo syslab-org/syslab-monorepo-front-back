@@ -1,0 +1,12 @@
+{
+  "name": "vpc-sbx",
+  "region": "us-east-1",
+  "simulate_only": false,
+  "vpc": { "cidr": "10.123.0.0/24", "name": "vpc-sbx" },
+  "subnets": [
+    { "name": "a-public", "cidr": "10.123.0.0/28", "az": "us-east-1a", "public": true }
+  ],
+  "routes": [
+    { "from_subnet": "a-public", "to": "0.0.0.0/0", "via": "igw" }
+  ]
+}

@@ -34,10 +34,13 @@ services:
       # 👉 fuerza Postgres local (host = nombre del servicio "postgres")
       - DATABASE_URL=postgres://teg:teg@postgres:5432/teg
       - DB_SSL_REQUIRE=false
-      # (opcional) para S3 si lo usas en local
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+        # 🔒 No heredar credenciales del host en DEV
+      - AWS_ACCESS_KEY_ID=
+      - AWS_SECRET_ACCESS_KEY=
+      - AWS_SESSION_TOKEN=
       - AWS_DEFAULT_REGION=us-east-1
+      # 🚫 Bloquea apply real en local (tu tasks.py lo respeta)
+      - ALLOW_LOCAL_APPLY=0
     ports:
       - "8000:8000"
     depends_on:
@@ -59,7 +62,7 @@ services:
     container_name: tesis-container-celery
     build:
       context: ../..
-      dockerfile: tools/docker/backend.Dockerfile
+      dockerfile: tools/docker/celery.Dockerfile
     command: bash -lc "celery -A teg worker -E --loglevel=INFO --pool=solo"
     volumes:
       - ../../apps/backend:/app
@@ -68,12 +71,13 @@ services:
     environment:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      # 👉 igual que backend
       - DATABASE_URL=postgres://teg:teg@postgres:5432/teg
       - DB_SSL_REQUIRE=false
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_ACCESS_KEY_ID=
+      - AWS_SECRET_ACCESS_KEY=
+      - AWS_SESSION_TOKEN=
       - AWS_DEFAULT_REGION=us-east-1
+      - ALLOW_LOCAL_APPLY=0
     depends_on:
       postgres:
         condition: service_healthy

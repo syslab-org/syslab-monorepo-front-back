@@ -76,7 +76,11 @@ def process_network_plan(self, plan_id=None, payload=None):
     has_static_creds = bool(
         os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY")
     )
-    creds_ok_for_apply = running_in_ecs or has_static_creds
+    # Solo permitimos apply real si estamos en ECS.
+    # Si realmente quieres permitirlo en local, debes exportar ALLOW_LOCAL_APPLY=1 explícitamente.
+    ALLOW_LOCAL = os.getenv("ALLOW_LOCAL_APPLY") == "1"
+    creds_ok_for_apply = running_in_ecs or (ALLOW_LOCAL and has_static_creds)
+
 
     try:
         # 1) Crear/actualizar Plan y ponerlo RUNNING
