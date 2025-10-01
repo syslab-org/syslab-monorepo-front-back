@@ -1,32 +1,53 @@
-const BASE_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "";
+// apps/frontend/src/lib/api.js
+// NO pongas "/" antes de BASE_URL; quita barras finales de BASE_URL
+const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/+$/, '');
 
-async function jsonFetch(url, options = {}) {
+async function jsonFetch(path, options = {}) {
+  // `path` debe EMPEZAR con "/" y NUNCA con "http"
+  const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
   const res = await fetch(url, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     ...options,
   });
-  // Django devuelve HTML en 404/500 con DEBUG=True; manejamos feliz/sad path:
-  const contentType = res.headers.get("content-type") || "";
-  const isJSON = contentType.includes("application/json");
+
+  const ct = res.headers.get('content-type') || "";
+  const isJSON = ct.includes('application/json');
+
+  const body = isJSON ? await res.json().catch(() => ({})) : await res.text();
+
   if (!res.ok) {
-    const body = isJSON ? await res.json().catch(() => ({})) : await res.text();
-    const msg = isJSON ? JSON.stringify(body) : body?.slice(0, 300);
-    throw new Error(`HTTP ${res.status} ${res.statusText} - ${msg || ""}`);
+    const msg = isJSON ? JSON.stringify(body) : String(body).slice(0, 300);
+    throw new Error(`HTTP ${res.status} ${res.statusText} - ${msg}`);
   }
-  return isJSON ? res.json() : res.text();
+  return body;
 }
 
 export const api = {
-  health() {
-    return jsonFetch(`${BASE_URL}/healthz`);
-  },
-  runPrueba(n = 5) {
-    return jsonFetch(`${BASE_URL}/api/tasks/prueba`, {
+  // health
+  health: () => jsonFetch('/healthz/'),
+
+  // celery demo
+  runPrueba: (n = 5) => jsonFetch("/api/tasks/run/", { method: "POST", body: JSON.stringify({ n }) }),
+  taskStatus: (taskId) => jsonFetch(`/api/tasks/status/${taskId}/`),
+
+  // plans (⚠️ solo paths)
+  listPlans: () => jsonFetch(`/api/network/plans/`),
+  getPlan: (id) => jsonFetch(`/api/network/plans/${id}/`),
+  getPlanPayload: (id) => jsonFetch(`/api/network/plans/${id}/payload/`),
+
+  // crear plan con el endpoint rápido existente
+  createPlan(plan) {
+    return jsonFetch(`/api/network/plan/`, {
       method: "POST",
-      body: JSON.stringify({ n }),
+      body: typeof plan === "string" ? plan : JSON.stringify(plan),
     });
   },
-  taskStatus(taskId) {
-    return jsonFetch(`${BASE_URL}/api/tasks/${taskId}`);
+
+  // acción deploy del ViewSet
+  deployPlan(id) {
+    return jsonFetch(`/api/network/plans/${id}/deploy/`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
   },
 };

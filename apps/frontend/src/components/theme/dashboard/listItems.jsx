@@ -1,41 +1,42 @@
-import * as React from 'react';
+// #apps/frontend/src/components/theme/dashboard/listItems.jsx
+import { CloudQueue, ViewStreamOutlined } from '@mui/icons-material';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import BarChartIcon from '@mui/icons-material/BarChart';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import LayersIcon from '@mui/icons-material/Layers';
+import PeopleIcon from '@mui/icons-material/People';
+import SettingsSuggestIcon from '@mui/icons-material/SettingsSuggest';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import ListSubheader from '@mui/material/ListSubheader';
-import DashboardIcon from '@mui/icons-material/Dashboard';
-import PeopleIcon from '@mui/icons-material/People';
-import BarChartIcon from '@mui/icons-material/BarChart';
-import LayersIcon from '@mui/icons-material/Layers';
-import SettingsSuggestIcon from '@mui/icons-material/SettingsSuggest';
-import AssignmentIcon from '@mui/icons-material/Assignment';
-import { CloudQueue } from '@mui/icons-material';
-import { ViewStreamOutlined } from '@mui/icons-material';
-import { useAuth } from '../../../contexts/AuthContext';
+import * as React from 'react';
+import { NavLink } from 'react-router-dom';
 import { USER_ROL_STUDENT, USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER } from '../../../constants';
+import { useAuth } from '../../../contexts/AuthContext';
 
 export const MainListItems = () => {
   const { user } = useAuth()
   return (
 
     <React.Fragment>
-      <ListItemButton variant='whiteStyle'>
+      <ListItemButton variant='whiteStyle' component={NavLink} to="/">
         <ListItemIcon variant='whiteStyle'>
           <DashboardIcon />
         </ListItemIcon>
         <ListItemText primary="Dashboard" />
       </ListItemButton>
-      <ListItemButton variant='whiteStyle' component="a" href="/admin/vpcs">
+      <ListItemButton variant='whiteStyle' component={NavLink} to="/admin/vpcs">
         <ListItemIcon variant='whiteStyle'>
           <CloudQueue />
         </ListItemIcon>
         <ListItemText primary="Virtual Private Cloud" />
       </ListItemButton>
-      <ListItemButton variant='whiteStyle'>
+      <ListItemButton variant='whiteStyle' component={NavLink} to="/admin/plans">
         <ListItemIcon variant='whiteStyle'>
           <PeopleIcon />
         </ListItemIcon>
-        <ListItemText primary="Customers" />
+        <ListItemText primary="Planes de red" />
       </ListItemButton>
       <ListItemButton variant='whiteStyle'>
         <ListItemIcon variant='whiteStyle'>
@@ -60,13 +61,13 @@ export const SecondaryListItems = () => {
 
   return (
     <React.Fragment >
-      <ListSubheader  component="div" inset sx={{backgroundColor:'#233044',color:'#ffffff'}}>
+      <ListSubheader component="div" inset sx={{ backgroundColor: '#233044', color: '#ffffff' }}>
         Settings
       </ListSubheader>
 
 
       {(user.role === USER_ROL_SUPER_ADMIN) && (
-        <ListItemButton variant='whiteStyle'  component="a" href="/admin/settings/amilist">
+        <ListItemButton variant='whiteStyle' component={NavLink} to="/admin/settings/amilist">
           <ListItemIcon variant='whiteStyle'>
             <ViewStreamOutlined />
           </ListItemIcon>
@@ -74,7 +75,7 @@ export const SecondaryListItems = () => {
         </ListItemButton>)}
 
       {(user.role === USER_ROL_SUPER_ADMIN || user.role === USER_ROL_TEACHER) && (
-        <ListItemButton variant='whiteStyle' component="a" href="/admin/settings/usersmanagement">
+        <ListItemButton variant='whiteStyle' component={NavLink} to="/admin/settings/usersmanagement">
           <ListItemIcon variant='whiteStyle'  >
             <AssignmentIcon />
           </ListItemIcon>
@@ -83,9 +84,9 @@ export const SecondaryListItems = () => {
       )}
 
       {(user.role === USER_ROL_STUDENT) && (
-        <ListItemButton variant='whiteStyle' component="a" href="/admin/settings/general">
+        <ListItemButton variant='whiteStyle' component={NavLink} to="/admin/settings/general">
           <ListItemIcon variant='whiteStyle'>
-            <SettingsSuggestIcon  />
+            <SettingsSuggestIcon />
           </ListItemIcon>
           <ListItemText primary="General Settings" />
         </ListItemButton>
