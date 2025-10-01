@@ -4,6 +4,7 @@ import os
 import json
 from django.utils import timezone
 from django.db import transaction
+import pathlib
 
 from .models import Plan
 from provisioning.terraform_runner import (
@@ -43,21 +44,39 @@ def process_network_plan(self, plan_id=None, payload=None):
     Ejecuta el ciclo Terraform para un plan:
       - terraform init
       - terraform plan
-      - terraform apply (solo si simulate_only == False)
+      - terraform apply (solo si simulate_only == False y hay credenciales válidas)
 
     Devuelve logs completos (éxito y error) para que el front pueda mostrarlos.
     """
     workdir = None
-    full_log = ""      # acumulamos todo lo que ejecutamos
+    full_log = ""
     plan = None
 
-    # Normaliza 'payload'
+    # --- Normaliza payload ---
     if isinstance(payload, str):
         try:
             payload = json.loads(payload or "{}")
         except Exception:
             payload = {}
     payload = payload or {}
+
+    # --- Flag de simulación (true por defecto) ---
+    simulate_only = bool(payload.get("simulate_only", True))
+
+    # --- Detección de entorno/credenciales para proteger apply en local ---
+    # Consideramos "entorno con credenciales" si:
+    #   - estamos en ECS (role de tarea disponible vía IMDS), o
+    #   - existen AWS_ACCESS_KEY_ID y AWS_SECRET_ACCESS_KEY
+    running_in_ecs = bool(
+        os.getenv("ECS_TASK_DEFINITION")
+        or os.getenv("ECS_CONTAINER_METADATA_URI")
+        or os.getenv("ECS_CONTAINER_METADATA_URI_V4")
+        or os.getenv("AWS_EXECUTION_ENV")
+    )
+    has_static_creds = bool(
+        os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY")
+    )
+    creds_ok_for_apply = running_in_ecs or has_static_creds
 
     try:
         # 1) Crear/actualizar Plan y ponerlo RUNNING
@@ -85,9 +104,19 @@ def process_network_plan(self, plan_id=None, payload=None):
             plan.updated_at = timezone.now()
             plan.save(update_fields=["status", "task_id", "payload", "updated_at"])
 
-        # 2) Render de directorio Terraform
+        # 2) Render de directorio Terraform (el template ya usa simulate_only desde payload)
         workdir = render_tf_dir(plan.payload)
-        full_log += f"workdir={workdir}\n\n"
+
+        # --- Autodiagnóstico: dump de main.tf generado ---
+        try:
+            preview = "".join((pathlib.Path(workdir) / "main.tf").read_text().splitlines(True)[:30])
+            full_log += f"\n--- main.tf (primeras líneas) ---\n{preview}\n-------------------------------\n"
+        except Exception:
+            pass
+
+        full_log += f"workdir={workdir}\n"
+        full_log += f"simulate_only={simulate_only}\n"
+        full_log += f"running_in_ecs={running_in_ecs} has_static_creds={has_static_creds}\n\n"
 
         # 3) terraform init
         rc, out = tf_init(workdir)
@@ -102,12 +131,25 @@ def process_network_plan(self, plan_id=None, payload=None):
             raise RuntimeError("terraform plan failed")
 
         # 5) terraform apply si corresponde
-        do_apply = not bool(plan.payload.get("simulate_only", True))
+        do_apply = not simulate_only
+        applied = False
+
         if do_apply:
+            if not creds_ok_for_apply:
+                # Protegemos entornos sin credenciales (e.g. Docker Compose local)
+                msg = (
+                    "Terraform apply BLOQUEADO: no se detectaron credenciales AWS "
+                    "(IAM Task Role en ECS o variables AWS_ACCESS_KEY_ID/SECRET_ACCESS_KEY). "
+                    "Ejecuta en ECS o configura credenciales; usa simulate_only=true en local."
+                )
+                full_log += f"\n[SEGURIDAD] {msg}\n"
+                raise RuntimeError(msg)
+
             rc, out = tf_apply(workdir)
             full_log += f"\n$ terraform apply\n{out}\n"
             if rc != 0:
                 raise RuntimeError("terraform apply failed")
+            applied = True
 
         # 6) Guardar logs (best-effort) y marcar SUCCESS
         s3_key = f"plans/{plan.id}.log"
@@ -119,11 +161,10 @@ def process_network_plan(self, plan_id=None, payload=None):
         plan.updated_at = timezone.now()
         plan.save(update_fields=["status", "s3_key", "error", "updated_at"])
 
-        # 👉 devolvemos también el log en éxito
         return {
             "ok": True,
             "plan_id": str(plan.id),
-            "applied": do_apply,
+            "applied": applied,
             "s3_key": (s3_key if S3_BUCKET else ""),
             "log": full_log,
         }
