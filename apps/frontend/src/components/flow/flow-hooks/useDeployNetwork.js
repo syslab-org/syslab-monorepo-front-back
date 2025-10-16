@@ -4,10 +4,10 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../contexts/AuthContext";
 import { LoadingFlowContext } from "../../../contexts/LoadingFlowContext";
 import { api } from "../../../lib/api";
+import useCidrBlockVPCStore from '../store/cidrBlocksIp';
 import { buildRoutingPreview } from "../utils/buildRoutingPreview";
-import { TYPE_VPC_NODE } from "../utils/constants";
+import { TYPE_ROUTER_NODE, TYPE_VPC_NODE } from "../utils/constants";
 import { groupInstancesBySubnet, groupSubnetsByVpc, validateTopology } from "../utils/topologyValidation";
-
 
 // arriba del archivo
 function normalizeAz(region, az) {
@@ -116,6 +116,70 @@ function toLegacyPlan(flowPayload, { simulateOnly = true } = {}) {
 
 
 
+function buildLinksFromEdges(nodes, edges) {
+  const idToType = new Map(nodes.map(n => [n.id, n.type]));
+  const idToNode = new Map(nodes.map(n => [n.id, n]));
+  // router -> set(vpcIds)
+  const routerToVpcs = new Map();
+
+  edges.forEach(e => {
+    const sType = idToType.get(e.source);
+    const tType = idToType.get(e.target);
+    const isVpcRouter =
+      (sType === TYPE_VPC_NODE && tType === TYPE_ROUTER_NODE) ||
+      (sType === TYPE_ROUTER_NODE && tType === TYPE_VPC_NODE);
+    if (!isVpcRouter) return;
+
+    const routerId = (sType === TYPE_ROUTER_NODE) ? e.source : e.target;
+    const vpcId = (sType === TYPE_VPC_NODE) ? e.source : e.target;
+    if (!routerToVpcs.has(routerId)) routerToVpcs.set(routerId, new Set());
+    routerToVpcs.get(routerId).add(vpcId);
+  });
+
+  const links = [];
+  for (const [routerId, vpcSet] of routerToVpcs.entries()) {
+    const vpcs = Array.from(vpcSet);
+    if (vpcs.length < 2) continue;
+
+    // todas las combinaciones (A,B)
+    for (let i = 0; i < vpcs.length; i++) {
+      for (let j = i + 1; j < vpcs.length; j++) {
+        const a = vpcs[i];
+        const b = vpcs[j];
+
+        const routerNode = idToNode.get(routerId);
+        const routeTable = Array.isArray(routerNode?.data?.routeTable)
+          ? routerNode.data.routeTable
+          : [];
+
+        // si guardaste reglas por VPC origen, puedes adjuntarlas:
+        const routes_a_to_b = routeTable
+          .filter(r => r.sourceVpcId === a && r.destVpcId === b)
+          .map(r => ({ dest_cidr: r.destCidr }));
+        const routes_b_to_a = routeTable
+          .filter(r => r.sourceVpcId === b && r.destVpcId === a)
+          .map(r => ({ dest_cidr: r.destCidr }));
+
+        links.push({
+          type: "peering",
+          via_router_id: routerId,
+          vpc_a_id: a,
+          vpc_b_id: b,
+          // opcional, solo si quieres llevar rutas declarativas por dirección:
+          routes: {
+            a_to_b: routes_a_to_b,
+            b_to_a: routes_b_to_a
+          }
+        });
+      }
+    }
+  }
+  return links;
+}
+
+
+
+
 const useDeployNetwork = ({ nodes, edges }) => {
 
   const { user } = useAuth();
@@ -127,6 +191,9 @@ const useDeployNetwork = ({ nodes, edges }) => {
   const [errorMessage, setErrorMessage] = useState(null);
   const { setLoadingFlow } = useContext(LoadingFlowContext);
   const [simulateOnly, setSimulateOnly] = useState(true);
+  const { vlanName, vlanRegion, cidrBlockVPC, prefixLength } = useCidrBlockVPCStore(
+    s => [s.vlanName, s.vlanRegion, s.cidrBlockVPC, s.prefixLength]
+  );
 
   const processJsonToCloud = () => {
 
@@ -150,12 +217,9 @@ const useDeployNetwork = ({ nodes, edges }) => {
 
     // 3) VPCs del canvas
     const vpcNodes = nodes.filter(n => n.type === TYPE_VPC_NODE);
-    if (vpcNodes.length === 0) {
-      setErrorMessage("No hay VPC en el canvas.");
-      return;
-    }
+    if (!vpcNodes.length) { setErrorMessage("No hay VPC en el canvas."); return; }
 
-    // 4) Payload final: una VPC por nodo VPC
+
     const vpcsPayload = vpcNodes.map(vpcNode => {
       const name = vpcNode.data?.vpcName || vpcNode.data?.title || vpcNode.id;
       const region = vpcNode.data?.region || "us-east-1";
@@ -208,10 +272,37 @@ const useDeployNetwork = ({ nodes, edges }) => {
       };
     });
 
-    // 5) Confirmación
-    const defaultName = vpcsPayload[0]?.name || `plan-${Date.now()}`;
-    setPlanName(defaultName);
-    setTransformedData({ cloud: "aws", vpcs: vpcsPayload });
+    /// 4) links (peering lógico router<->vpc)
+
+    const linksFromEdges = buildLinksFromEdges(nodes, edges);
+
+    // 5) datos de la VLAN master (nombre, región, CIDR maestro)
+    const firstVpcCidr = vpcsPayload[0]?.cidr_block || "";
+    const masterCidr = (cidrBlockVPC && prefixLength)
+      ? `${cidrBlockVPC}/${prefixLength}`
+      : firstVpcCidr;
+
+    const vlanNameFinal = vlanName || vpcsPayload[0]?.name || `VLAN-${Date.now()}`;
+    const vlanRegionFinal = vlanRegion || vpcsPayload[0]?.region || "us-east-1";
+
+    const planDefaultName = vpcsPayload[0]?.name || `plan-${Date.now()}`;
+    setPlanName(planDefaultName);
+
+    setTransformedData({
+      name: planDefaultName,
+      cloud: "aws",
+      vlan: {
+        name: vlanNameFinal,
+        region: vlanRegionFinal,
+        master_cidr: masterCidr
+      },
+      vpcs: vpcsPayload,
+      links: linksFromEdges
+    });
+
+
+    console.log("processJsonToCloud - transformedData:", { cloud: "aws", vpcs: vpcsPayload });
+
     setShowConfirmation(true);
   };
 
@@ -223,24 +314,22 @@ const useDeployNetwork = ({ nodes, edges }) => {
     console.log("handleConfirmDeploy - transformedData:", transformedData);
 
     try {
-      // 1) Adaptamos al esquema que el backend espera hoy
-      const legacyPlan = toLegacyPlan(transformedData, { simulateOnly });
+      console.log("payload a backend:", { ...transformedData, name: planName, simulate_only: simulateOnly })
+      if (!simulateOnly) {
+        const txt = window.prompt('Para confirmar escribe: DEPLOY');
+        if (txt !== 'DEPLOY') {
+          setLoadingFlow(false);
+          setErrorMessage('Deploy cancelado por el usuario.');
+          return;
+        }
+      }
 
-      // 2) Creamos el plan vía backend (devuelve { ok, plan_id, task_id } con 202)
-      const res = await api.createPlan(legacyPlan);
-      // // 1) Crear Plan en Django
-      // const payload = { name: planName || `plan-${Date.now()}`, payload: transformedData };
-      // const created = await api.createPlan(payload);
-      // const planId = created.plan_id || created.id;
+      const res = await api.createPlan({
+        name: planName || "plan-" + Date.now(),
+        ...transformedData,
+        simulate_only: simulateOnly
+      });
 
-
-      // 2) (Opcional) Disparar deploy inmediato:
-      // const dep = await api.deployPlan(planId);
-      // setSuccessMessage(`Plan creado y deploy iniciado. task_id=${dep.task_id}`);
-
-
-      // const url_api = user.settings.general.url_api_aws;
-      // await axios.post(url_api, transformedData);
 
       // 2') Alternativa: solo redirigir al detalle y desde allí el usuario clicka "Deploy"
       setLoadingFlow(false);

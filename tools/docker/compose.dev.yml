@@ -1,3 +1,4 @@
+# tools/docker/compose.dev.yml
 name: tesis-container
 
 services:
@@ -11,6 +12,7 @@ services:
       - frontend_node_modules:/app/node_modules
     environment:
       - VITE_API_URL=http://localhost:8000
+      - VITE_ALLOW_REAL_APPLY=1 # 🚫 Bloquea apply real en local (tu frontend lo respeta )
     ports:
       - "5173:5173"
     depends_on:
@@ -35,12 +37,12 @@ services:
       - DATABASE_URL=postgres://teg:teg@postgres:5432/teg
       - DB_SSL_REQUIRE=false
         # 🔒 No heredar credenciales del host en DEV
-      - AWS_ACCESS_KEY_ID=
-      - AWS_SECRET_ACCESS_KEY=
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_SESSION_TOKEN=
-      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
       # 🚫 Bloquea apply real en local (tu tasks.py lo respeta)
-      - ALLOW_LOCAL_APPLY=0
+      - ALLOW_LOCAL_APPLY=${ALLOW_LOCAL_APPLY}
     ports:
       - "8000:8000"
     depends_on:
@@ -73,11 +75,11 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - DATABASE_URL=postgres://teg:teg@postgres:5432/teg
       - DB_SSL_REQUIRE=false
-      - AWS_ACCESS_KEY_ID=
-      - AWS_SECRET_ACCESS_KEY=
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_SESSION_TOKEN=
-      - AWS_DEFAULT_REGION=us-east-1
-      - ALLOW_LOCAL_APPLY=0
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
+      - ALLOW_LOCAL_APPLY=${ALLOW_LOCAL_APPLY}
     depends_on:
       postgres:
         condition: service_healthy
