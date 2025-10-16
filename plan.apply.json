@@ -1,0 +1,71 @@
+{
+  "cloud": "aws",
+  "vlan": {
+    "name": "lab-xyz",
+    "region": "us-east-1",
+    "master_cidr": "10.0.0.0/16"
+  },
+  "vpcs": [
+    {
+      "id": "vpc-a",
+      "name": "VPC-A",
+      "cidr_block": "10.0.0.0/20",
+      "region": "us-east-1",
+      "internet_gateway": true,
+      "subnets": [
+        {
+          "name": "subnet-a-public-a1",
+          "cidr_block": "10.0.0.0/24",
+          "availability_zone": "us-east-1a",
+          "subnet_type": "public"
+        },
+        {
+          "name": "subnet-a-private-a1",
+          "cidr_block": "10.0.1.0/24",
+          "availability_zone": "us-east-1a",
+          "subnet_type": "private"
+        }
+      ],
+      "route_tables": [
+        {
+          "name": "main",
+          "routes": [{ "dest_cidr": "0.0.0.0/0", "target": "igw" }]
+        }
+      ]
+    },
+    {
+      "id": "vpc-b",
+      "name": "VPC-B",
+      "cidr_block": "10.0.16.0/20",
+      "region": "us-east-1",
+      "internet_gateway": false,
+      "subnets": [
+        {
+          "name": "subnet-b-private-a1",
+          "cidr_block": "10.0.17.0/24",
+          "availability_zone": "us-east-1a",
+          "subnet_type": "private"
+        }
+      ],
+      "route_tables": [{ "name": "main", "routes": [] }]
+    },
+    {
+      "id": "vpc-c",
+      "name": "VPC-C",
+      "cidr_block": "10.0.32.0/20",
+      "region": "us-east-1",
+      "internet_gateway": false,
+      "subnets": [
+        {
+          "name": "subnet-c-private-a1",
+          "cidr_block": "10.0.33.0/24",
+          "availability_zone": "us-east-1a",
+          "subnet_type": "private"
+        }
+      ],
+      "route_tables": [{ "name": "main", "routes": [] }]
+    }
+  ],
+  "links": [{ "type": "peering", "from_vpc": "vpc-a", "to_vpc": "vpc-b" }],
+  "simulate_only": true
+}

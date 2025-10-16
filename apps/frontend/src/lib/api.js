@@ -4,6 +4,8 @@ const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').repla
 
 async function jsonFetch(path, options = {}) {
   // `path` debe EMPEZAR con "/" y NUNCA con "http"
+  console.log(options);
+
   const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
   const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
