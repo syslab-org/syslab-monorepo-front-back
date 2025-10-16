@@ -4,6 +4,8 @@ const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').repla
 
 async function jsonFetch(path, options = {}) {
   // `path` debe EMPEZAR con "/" y NUNCA con "http"
+  console.log(options);
+
   const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
   const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
@@ -30,15 +32,24 @@ export const api = {
   runPrueba: (n = 5) => jsonFetch("/api/tasks/run/", { method: "POST", body: JSON.stringify({ n }) }),
   taskStatus: (taskId) => jsonFetch(`/api/tasks/status/${taskId}/`),
 
-  // plans
-  listPlans: () => jsonFetch('/api/network/plans/'),
+  // plans (⚠️ solo paths)
+  listPlans: () => jsonFetch(`/api/network/plans/`),
   getPlan: (id) => jsonFetch(`/api/network/plans/${id}/`),
   getPlanPayload: (id) => jsonFetch(`/api/network/plans/${id}/payload/`),
 
-  //crar plan
-  createPlan: (plan) =>
-    jsonFetch("/api/network/plan/", {
+  // crear plan con el endpoint rápido existente
+  createPlan(plan) {
+    return jsonFetch(`/api/network/plan/`, {
       method: "POST",
       body: typeof plan === "string" ? plan : JSON.stringify(plan),
-    })
+    });
+  },
+
+  // acción deploy del ViewSet
+  deployPlan(id) {
+    return jsonFetch(`/api/network/plans/${id}/deploy/`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  },
 };

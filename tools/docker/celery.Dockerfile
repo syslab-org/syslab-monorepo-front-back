@@ -1,26 +1,22 @@
 # tools/docker/celery.Dockerfile
-FROM python:3.11-slim
+FROM base-tf AS runtime
 
 WORKDIR /app
-ENV PYTHONDONTWRITEBYTECODE=1 \
-  PYTHONUNBUFFERED=1
 
-# paquetes base mínimos
-RUN apt-get update && apt-get install -y --no-install-recommends \
-  build-essential curl && \
-  rm -rf /var/lib/apt/lists/*
-
-# deps python
+# Instalar deps Python
 COPY apps/backend/requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-  pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip \
+  && pip install --no-cache-dir -r requirements.txt
 
-# código (reutilizamos el mismo repo que el backend)
+# Copiar el mismo código del backend (reutilizamos el proyecto)
 COPY apps/backend/ .
 
-# usuario no root
+# Usuario no root
 RUN useradd -m -u 10001 app && chown -R app:app /app
 USER app
 
-# Arranque del worker de Celery
+# Arranque del worker Celery
+# -E: enviar eventos (para Flower)
+# --pool=solo: más estable en Fargate y entornos limitados
+# --concurrency=2: ajusta según necesidad
 CMD celery -A teg worker -E --loglevel=INFO --pool=solo --concurrency=2

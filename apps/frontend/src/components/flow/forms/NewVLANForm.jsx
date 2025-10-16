@@ -1,8 +1,9 @@
-import { useFormValidationSchema } from './validations/useFormValidations';
-import { CLOUD_AWS_LABEL, CLOUD_AWS_VALUE, VLAN_FORM } from '../utils/constants';
-import { useForm } from 'react-hook-form';
-import { Button, FormControl, InputLabel, MenuItem, Select, TextField } from '@mui/material';
+// apps/frontend/src/components/flow/forms/NewVLANForm.jsx
 import { yupResolver } from '@hookform/resolvers/yup';
+import { Button, FormControl, InputLabel, MenuItem, Select, TextField } from '@mui/material';
+import { useForm } from 'react-hook-form';
+import { CLOUD_AWS_LABEL, CLOUD_AWS_VALUE, VLAN_FORM } from '../utils/constants';
+import { useFormValidationSchema } from './validations/useFormValidations';
 
 
 // eslint-disable-next-line react/prop-types
@@ -22,7 +23,7 @@ const NewVLANForm = ({ onSave }) => {
   const onSubmit = (data) => {
     const [base, prefix] = data.cidrBlock.split('/');
     console.log("OnSubmit  newVLAN data:", data);
-    
+
     onSave({
       cloudProvider: data.cloudProvider,
       vpcName: data.vlanName,//TODO: borrar en el futuro.

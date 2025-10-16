@@ -1,7 +1,7 @@
 # apps/backend/api/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import run_prueba, task_status, network_plan_create
+from .views import run_prueba, task_status, network_plan_create, deploy_plan
 from .views_plans import PlanViewSet
 
 router = DefaultRouter()
@@ -12,6 +12,7 @@ urlpatterns = [
     path("tasks/run/", run_prueba, name="run_prueba"),
     path("tasks/status/<str:task_id>/", task_status, name="task_status"),
     path("network/plan/", network_plan_create, name="network_plan"),  # POST (crear + Celery)
+    path("network/plans/<uuid:plan_id>/deploy/", deploy_plan, name="deploy-plan"),
 
    # Listado/detalle/payload de planes
     path("", include(router.urls)),  # ← añade las rutas del ViewSet
