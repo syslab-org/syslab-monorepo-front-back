@@ -1,44 +1,169 @@
+# apps/backend/provisioning/templates/main.tf.j2
 terraform {
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
+    aws = { source = "hashicorp/aws", version = "~> 5.0" }
   }
 }
+
+{# Detectar simulate_only de forma segura #}
+{% set sim = payload.simulate_only if payload is defined and payload.simulate_only is defined
+            else simulate_only|default(true) %}
+
+# -------- Provider (usa región de VLAN o de la 1ª VPC) ------
+{# --- región base: VLAN.region o la de la 1ª VPC o default --- #}
+{% set raw_region =
+  (vlan.region if vlan and vlan.region
+   else (vpcs[0].region if vpcs else "us-east-1"))
+%}
+
+{# Si viene con letra de AZ al final (…-1a), corta la última letra #}
+{% set norm_region =
+  (raw_region|string).rstrip('abcdef')
+%}
 
 provider "aws" {
-  region = var.region
+  region = {{ norm_region | tojson }}
+  {% if sim %}
+  # modo simulación: evita chequear credenciales / metadata
+  skip_credentials_validation = true
+  skip_metadata_api_check     = true
+  skip_region_validation      = true
+  skip_requesting_account_id  = true
+  access_key                  = "DUMMY"
+  secret_key                  = "DUMMY"
+  {% endif %}
 }
 
-resource "aws_vpc" "this" {
-  cidr_block = var.vpc_cidr
-  tags = {
-    Name = var.name
-  }
-}
-
+# -------- Datos del plan en locals (desde el payload) ------------------------
 locals {
-  subnets = var.subnets
+  vpcs  = {{ (vpcs or []) | tojson }}
+  links = {{ (links or []) | tojson }}
+}
+
+# -------- VPCs ---------------------------------------------------------------
+resource "aws_vpc" "vpc" {
+  for_each = { for v in local.vpcs : v.id => v }
+  cidr_block = each.value.cidr_block
+  tags = { Name = each.value.name }
+}
+
+# Subnets por VPC
+
+
+# Truco: hacer un "flatten" para subnets (una key única por subnet)
+locals {
+  all_subnets = flatten([
+    for v in local.vpcs : [
+      for sn in coalesce(v.subnets, []) : {
+        key  = "${v.id}:${sn.name}"
+        vpc  = v.id
+        data = sn
+      }
+    ]
+  ])
+  subnet_map = { for s in local.all_subnets : s.key => s }
 }
 
 resource "aws_subnet" "this" {
-  for_each                  = { for s in local.subnets : s.name => s }
-  vpc_id                    = aws_vpc.this.id
-  cidr_block                = each.value.cidr
-  availability_zone         = each.value.az
-  map_public_ip_on_launch   = each.value.public
-  tags = {
-    Name = each.key
+  for_each                = local.subnet_map
+  vpc_id                  = aws_vpc.vpc[each.value.vpc].id
+  cidr_block              = each.value.data.cidr_block
+  availability_zone       = each.value.data.availability_zone
+  map_public_ip_on_launch = try(each.value.data.public_ip, false)
+  tags = { Name = each.value.data.name }
+}
+
+# IGW solo si la VPC tiene al menos una subnet pública
+locals {
+  vpc_has_public = {
+    for v in local.vpcs :
+    v.id => length([
+      for sn in coalesce(v.subnets, []) :
+      sn if lower(try(sn.subnet_type, "")) == "public"
+    ]) > 0
   }
 }
 
-# Ejemplo de recursos condicionales en Terraform (sin Jinja):
-# Solo se crean si hay al menos una subnet pública
 resource "aws_internet_gateway" "igw" {
-  count = var.has_public ? 1 : 0
-  vpc_id = aws_vpc.this.id
-  tags = {
-    Name = "${var.name}-igw"
+  for_each = {
+    for v in local.vpcs : v.id => v if local.vpc_has_public[v.id]
   }
+  vpc_id = aws_vpc.vpc[each.key].id
+  tags = { Name = "${each.value.name}-igw" }
+}
+
+# Route table principal por VPC
+resource "aws_route_table" "rt_main" {
+  for_each = { for v in local.vpcs : v.id => v }
+  vpc_id = aws_vpc.vpc[each.key].id
+  tags = { Name = "${each.value.name}-rt" }
+}
+
+# Asociaciones de subnets a la route table principal
+resource "aws_route_table_association" "assoc" {
+  for_each = {
+    for s in local.all_subnets : s.key => s
+  }
+  subnet_id      = aws_subnet.this[each.key].id
+  route_table_id = aws_route_table.rt_main[each.value.vpc].id
+}
+
+# Ruta 0.0.0.0/0 a IGW desde la PRIMERA subnet pública de cada VPC (demo)
+resource "aws_route" "igw_default" {
+  for_each = {
+    for v in local.vpcs : v.id => {
+      vpc_id = v.id
+      has_public = local.vpc_has_public[v.id]
+    } if local.vpc_has_public[v.id]
+  }
+  route_table_id         = aws_route_table.rt_main[each.value.vpc_id].id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.igw[each.value.vpc_id].id
+}
+
+# ----------------- Peering entre VPCs y rutas entre ellas --------------------
+
+# Hacemos un mapa rápido id->objeto vpc para lookups
+locals {
+  vpc_by_id = { for v in local.vpcs : v.id => v }
+}
+
+# Peering (solo type=='peering')
+locals {
+  peering_links = [
+    for l in local.links :
+    l if try(l.type, "") == "peering"
+  ]
+}
+
+resource "aws_vpc_peering_connection" "peer" {
+  for_each = {
+    for l in local.peering_links :
+    "${l.vpc_a_id}--${l.vpc_b_id}" => l
+  }
+  vpc_id        = aws_vpc.vpc[each.value.vpc_a_id].id
+  peer_vpc_id   = aws_vpc.vpc[each.value.vpc_b_id].id
+  auto_accept   = true
+  tags = { Name = "peer-${each.value.vpc_a_id}-${each.value.vpc_b_id}" }
+}
+
+# Rutas desde A hacia CIDR de B y viceversa
+resource "aws_route" "peer_a_to_b" {
+  for_each = {
+    for l in local.peering_links :
+    "a-${l.vpc_a_id}-${l.vpc_b_id}" => l
+  }
+  route_table_id         = aws_route_table.rt_main[each.value.vpc_a_id].id
+  destination_cidr_block = local.vpc_by_id[each.value.vpc_b_id].cidr_block
+  vpc_peering_connection_id = aws_vpc_peering_connection.peer["${each.value.vpc_a_id}--${each.value.vpc_b_id}"].id
+}
+
+resource "aws_route" "peer_b_to_a" {
+  for_each = {
+    for l in local.peering_links :
+    "b-${l.vpc_a_id}-${l.vpc_b_id}" => l
+  }
+  route_table_id         = aws_route_table.rt_main[each.value.vpc_b_id].id
+  destination_cidr_block = local.vpc_by_id[each.value.vpc_a_id].cidr_block
+  vpc_peering_connection_id = aws_vpc_peering_connection.peer["${each.value.vpc_a_id}--${each.value.vpc_b_id}"].id
 }

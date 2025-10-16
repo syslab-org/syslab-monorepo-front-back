@@ -1,11 +1,11 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable react/prop-types */
-import { Button, FormControl, InputLabel, MenuItem, Select, TextField } from "@mui/material";
-import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
-import { useFormValidationSchema } from "./validations/useFormValidations";
-import { CLOUD_AWS_LABEL, CLOUD_AWS_VALUE, VPC_CHILD_FORM, VPC_FORM } from "../utils/constants";
+import { Button, FormControl, InputLabel, MenuItem, Select, TextField } from "@mui/material";
 import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { CLOUD_AWS_LABEL, CLOUD_AWS_VALUE, VPC_CHILD_FORM } from "../utils/constants";
+import { useFormValidationSchema } from "./validations/useFormValidations";
 
 // eslint-disable-next-line react/prop-types
 const VPCNodeForm = ({
@@ -15,7 +15,7 @@ const VPCNodeForm = ({
   deleteNode,
   vlanCidr, // <-- NUEVO: "10.0.0.0/16"
   siblingVpcCidrs = [], // <-- NUEVO: ["10.0.1.0/24", "10.0.2.0/24", ...]
-  defaultRegion = "us-east-1" // opcional si luego quieres agregar región aquí
+  defaultRegion = "us-east-1a" // opcional si luego quieres agregar región aquí
 }) => {
 
   const validationSchema = useFormValidationSchema(
@@ -116,7 +116,7 @@ const VPCNodeForm = ({
           label="Region"
           defaultValue={defaultRegion}
         >
-          <MenuItem value="us-east-1">US East (N. Virginia)</MenuItem>
+          <MenuItem value="us-east-1a">US East (N. Virginia)</MenuItem>
           <MenuItem value="us-west-1">US West (N. California)</MenuItem>
           <MenuItem value="us-west-2">US West (Oregon)</MenuItem>
         </Select>
