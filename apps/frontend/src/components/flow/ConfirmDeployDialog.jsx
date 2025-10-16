@@ -10,7 +10,8 @@ import {
   FormControlLabel,
   Stack,
   Switch,
-  TextField
+  TextField,
+  Typography
 } from "@mui/material";
 
 export default function ConfirmDeployDialog({
@@ -23,6 +24,9 @@ export default function ConfirmDeployDialog({
   setSimulateOnly,
   transformedData
 }) {
+  // feature flag (frontend): habilita el apply real
+  const allowRealApply = import.meta.env.VITE_ALLOW_REAL_APPLY === "1";
+
   // datos rápidos del payload (por si quieres mostrar algo breve)
   const vpcs = Array.isArray(transformedData?.vpcs) ? transformedData.vpcs : [];
   const vpc = vpcs[0] || null;
@@ -41,15 +45,37 @@ export default function ConfirmDeployDialog({
             placeholder="p.ej. VPC-A"
           />
 
+          {/* Toggle principal: cuando está ON hacemos apply real (simulateOnly=false) */}
           <FormControlLabel
             control={
               <Switch
-                checked={simulateOnly}
-                onChange={(e) => setSimulateOnly(e.target.checked)}
+                disabled={!allowRealApply}
+                checked={!simulateOnly}
+                onChange={(e) => setSimulateOnly(!e.target.checked ? true : false)}
               />
             }
-            label="Simular solamente (solo terraform plan, sin aplicar cambios)"
+            label={
+              allowRealApply
+                ? "Apply real (Terraform apply)"
+                : "Apply real (bloqueado por entorno)"
+            }
           />
+
+          {/* Avisos contextuales */}
+          {!allowRealApply && (
+            <Typography variant="body2" color="text.secondary">
+              Para habilitar el apply real en este entorno, define{" "}
+              <code>VITE_ALLOW_REAL_APPLY=1</code> en el frontend.
+            </Typography>
+          )}
+
+          {!simulateOnly && (
+            <Typography variant="body2" sx={{ color: "#b45309" }}>
+              ⚠️ Esto creará/modificará recursos en AWS. Asegúrate de tener
+              credenciales/role válidos. Tu backend ya bloquea apply si no hay
+              IAM Role o si <code>ALLOW_LOCAL_APPLY</code> es 0.
+            </Typography>
+          )}
 
           {vpc && (
             <Box sx={{ mt: 1 }}>
@@ -58,7 +84,10 @@ export default function ConfirmDeployDialog({
                 <Chip size="small" label={`VPC: ${vpc.name || "(sin nombre)"}`} />
                 {vpc.cidr_block && <Chip size="small" label={`CIDR: ${vpc.cidr_block}`} />}
                 {vpc.region && <Chip size="small" label={`Región/AZ: ${vpc.region}`} />}
-                <Chip size="small" label={`Subnets: ${Array.isArray(vpc.subnets) ? vpc.subnets.length : 0}`} />
+                <Chip
+                  size="small"
+                  label={`Subnets: ${Array.isArray(vpc.subnets) ? vpc.subnets.length : 0}`}
+                />
               </Stack>
             </Box>
           )}

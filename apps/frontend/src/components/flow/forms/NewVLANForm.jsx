@@ -1,3 +1,4 @@
+// apps/frontend/src/components/flow/forms/NewVLANForm.jsx
 import { yupResolver } from '@hookform/resolvers/yup';
 import { Button, FormControl, InputLabel, MenuItem, Select, TextField } from '@mui/material';
 import { useForm } from 'react-hook-form';
@@ -81,7 +82,7 @@ const NewVLANForm = ({ onSave }) => {
           label="Region"
           defaultValue="us-east-1"
         >
-          <MenuItem value="us-east-1a">US East (N. Virginia)</MenuItem>
+          <MenuItem value="us-east-1">US East (N. Virginia)</MenuItem>
           <MenuItem value="us-west-2">US West (Oregon)</MenuItem>
           <MenuItem value="eu-west-1">EU (Ireland)</MenuItem>
         </Select>

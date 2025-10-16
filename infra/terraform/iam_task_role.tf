@@ -81,8 +81,31 @@ data "aws_iam_policy_document" "ecs_tf_network_dev" {
       "ec2:DescribeVpcAttribute",
       "ec2:DescribeAccountAttributes",
 
+      "ec2:CreateVpcPeeringConnection",
+      "ec2:AcceptVpcPeeringConnection",
+      "ec2:DeleteVpcPeeringConnection",
+      "ec2:DescribeVpcPeeringConnections",
+
+
+
       # útil si luego usas prefix lists (no estorba)
-      "ec2:GetManagedPrefixListEntries"
+      "ec2:GetManagedPrefixListEntries",
+
+      #NAT Gateway + Elastic IP (no usado aquí, pero puede ser útil)
+      "ec2:AllocateAddress",
+      "ec2:ReleaseAddress",
+      "ec2:CreateNatGateway",
+      "ec2:DeleteNatGateway",
+      "ec2:DescribeNatGateways",
+
+      #Opciones de peering (DNS-resolution entre VPCs)
+      "ec2:ModifyVpcPeeringConnectionOptions",
+      #Lecturas extra que TF/plan suele consultar (harmless y evitan warnings)
+      "ec2:DescribeNetworkInterfaces",
+      "ec2:DescribeSecurityGroups",
+      "ec2:DescribeSecurityGroupRules",
+
+
     ]
     resources = ["*"]
   }
