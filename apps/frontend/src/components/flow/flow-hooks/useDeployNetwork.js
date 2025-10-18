@@ -12,11 +12,10 @@ import { groupInstancesBySubnet, groupSubnetsByVpc, validateTopology } from "../
 // arriba del archivo
 function normalizeAz(region, az) {
   // si está OK (e.g. us-east-1a), la aceptamos
-  const ok = /^(af|ap|ca|eu|il|me|sa|us)-(central|north|south|southeast|east|west|northeast|south-2|east-2|west-2|gov-[a-z]+|\w+)-\d+[a-f]$/.test(az || "");
-  if (ok) return az;
-
-  // fixes comunes
-  let s = (az || "").toLowerCase();
+  const val = (az || "").trim();
+  const ok = /^(af|ap|ca|eu|il|me|sa|us)-(central|north|south|southeast|east|west|northeast|south-2|east-2|west-2|gov-[a-z]+|\w+)-\d+[a-f]$/.test(val);
+  if (ok) return val;
+  let s = val.toLowerCase();
   s = s.replace("us-eas-", "us-east-");   // us-eas-1a -> us-east-1a
   s = s.replace(/-a1\b/, "-1a");          // us-east-a1 -> us-east-1a
   s = s.replace(/-b1\b/, "-1b");
@@ -152,13 +151,32 @@ function buildLinksFromEdges(nodes, edges) {
           ? routerNode.data.routeTable
           : [];
 
+        //helper para obtener el CIDR de cada VPC (para defaults)
+        const vpcA = idToNode.get(a);
+        const vpcB = idToNode.get(b);
+        const cidrA = vpcA?.data?.cidrBlock && vpcA?.data?.prefixLength
+          ? `${vpcA.data.cidrBlock}/${vpcA.data.prefixLength}`
+          : (vpcA?.data?.cidr || vpcA?.data?.cidr_block || "");
+        const cidrB = vpcB?.data?.cidrBlock && vpcB?.data?.prefixLength
+          ? `${vpcB.data.cidrBlock}/${vpcB.data.prefixLength}`
+          : (vpcB?.data?.cidr || vpcB?.data?.cidr_block || "");
+
+
         // si guardaste reglas por VPC origen, puedes adjuntarlas:
-        const routes_a_to_b = routeTable
+
+        let routes_a_to_b = routeTable
           .filter(r => r.sourceVpcId === a && r.destVpcId === b)
-          .map(r => ({ dest_cidr: r.destCidr }));
-        const routes_b_to_a = routeTable
+          .map(r => ({ dest_cidr: r.destCidr, target: "peering" }));
+        let routes_b_to_a = routeTable
           .filter(r => r.sourceVpcId === b && r.destVpcId === a)
-          .map(r => ({ dest_cidr: r.destCidr }));
+          .map(r => ({ dest_cidr: r.destCidr, target: "peering" }));
+
+        if (!routes_a_to_b.length && cidrB) {
+          routes_a_to_b = [{ dest_cidr: cidrB, target: "peering" }];
+        }
+        if (!routes_b_to_a.length && cidrA) {
+          routes_b_to_a = [{ dest_cidr: cidrA, target: "peering" }];
+        }
 
         links.push({
           type: "peering",
@@ -249,7 +267,7 @@ const useDeployNetwork = ({ nodes, edges }) => {
           name: sn.data?.subnetName || `subnet-${sn.id}`,
           cidr_block: sn.data?.cidrBlock,
           availability_zone: az,
-          public_ip: sn.data?.publicIp,
+          map_public_ip_on_launch: (sn.data?.subnetType || "").toLowerCase() === "public",
           subnet_type: sn.data?.subnetType,
           route_table: "main",
           instances
