@@ -1,6 +1,6 @@
 // src/components/flow/forms/validations/useFormValidations.js
-import * as yup from 'yup';
 import { Netmask } from 'netmask';
+import * as yup from 'yup';
 import {
   TYPE_COMPUTER_NODE,
   TYPE_INSTANCE_NODE,
@@ -13,6 +13,7 @@ import {
   VPC_FORM,
 } from '../../utils/constants';
 import { isCidrInVpcRange, overlapsAny } from '../../utils/networkUtils';
+import { INSTANCE_TYPE_OPTIONS } from '../options/instanceTypes';
 
 // IPv4 estricta: 0-255 en cada octeto
 const ipRegex =
@@ -55,20 +56,20 @@ export const useFormValidationSchema = (
             .required('VLAN Name is required'),
           cidrBlock: validateCidr
             ? yup
-                .string()
-                .required('CIDR Block is required')
-                .matches(cidrRegex, 'CIDR Block must be in format 192.168.0.0/24')
-                .test('is-valid-cidr', 'CIDR block is invalid', (value) => isCidrValid(value))
-                .test(
-                  'prefix-range',
-                  'CIDR should leave room for subnets (e.g. /16 to /24)',
-                  (value) => {
-                    if (!value) return false;
-                    const [, p] = value.split('/');
-                    const prefix = Number(p);
-                    return prefix >= 8 && prefix <= 28; // tu política
-                  }
-                )
+              .string()
+              .required('CIDR Block is required')
+              .matches(cidrRegex, 'CIDR Block must be in format 192.168.0.0/24')
+              .test('is-valid-cidr', 'CIDR block is invalid', (value) => isCidrValid(value))
+              .test(
+                'prefix-range',
+                'CIDR should leave room for subnets (e.g. /16 to /24)',
+                (value) => {
+                  if (!value) return false;
+                  const [, p] = value.split('/');
+                  const prefix = Number(p);
+                  return prefix >= 8 && prefix <= 28; // tu política
+                }
+              )
             : yup.string().required('CIDR Block is required'),
           cloudProvider: yup
             .string()
@@ -170,25 +171,41 @@ export const useFormValidationSchema = (
         .required();
 
     /* ------------------------ Instancia (dentro de Subnet) ------------------------ */
+
+
+
     case TYPE_COMPUTER_NODE:
     case TYPE_PRINTER_NODE:
     case TYPE_SERVER_NODE:
-    case TYPE_INSTANCE_NODE:
+    case TYPE_INSTANCE_NODE: {
+      const emptyToUndef = (v) =>
+        v === null || v === undefined || String(v).trim() === "" ? undefined : v;
+
       return yup
         .object({
-          ami: yup.string().required('AMI is required'),
-          instanceType: yup.string().required('Instance type is required'),
+          // AMI opcional (si viene vacío, no falla)
+          ami: yup.string().transform(emptyToUndef).notRequired(),
+
+          // Tipo obligatorio, restringido a la lista válida
+          instanceType: yup
+            .string()
+            .oneOf(INSTANCE_TYPE_OPTIONS.map(o => o.value), 'Invalid instance type')
+            .required('Instance type is required'),
+
+          // IP opcional; si el usuario la escribe, se valida formato, rango y duplicados
           ipAddress: yup
             .string()
-            .required('IP Address is required')
-            .matches(ipRegex, 'IP Address must be a valid IP (0-255 in each segment)')
+            .transform(emptyToUndef)
+            .notRequired()
+            .test('ip-format', 'IP Address must be a valid IP (0-255 in each segment)', function (value) {
+              if (!value) return true;                // vacío => ok
+              return ipRegex.test(value);
+            })
             .test('is-subnet', function (value) {
-              // OJO: aquí debes pasar cidrBlockVPC = CIDR DE LA SUBNET
               if (!value || !cidrBlockVPC) return true;
               try {
                 const block = new Netmask(cidrBlockVPC);
-                const isValid = block.contains(value);
-                if (!isValid) {
+                if (!block.contains(value)) {
                   return this.createError({
                     message: `The IP address ${value} is not within the subnet range ${cidrBlockVPC}`,
                   });
@@ -202,10 +219,15 @@ export const useFormValidationSchema = (
               if (!value || !context.existingIps) return true;
               return !context.existingIps.includes(value.trim());
             }),
+
+          // Nombre obligatorio
           name: yup.string().required('Name is required'),
-          sshAccess: yup.string().required('SSH Access is required'),
+
+          // SSH opcional (si lo dejas vacío no marca error)
+          sshAccess: yup.string().transform(emptyToUndef).notRequired(),
         })
         .required();
+    }
 
     /* ------------------------ Router ------------------------ */
     case TYPE_ROUTER_NODE:
@@ -217,6 +239,5 @@ export const useFormValidationSchema = (
         .required();
 
     default:
-      return yup.object().shape({});
   }
 };

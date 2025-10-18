@@ -65,60 +65,143 @@ locals {
 }
 
 resource "aws_subnet" "this" {
-  for_each                = local.subnet_map
+  for_each                = { for s in local.all_subnets : s.key => s }
   vpc_id                  = aws_vpc.vpc[each.value.vpc].id
   cidr_block              = each.value.data.cidr_block
   availability_zone       = each.value.data.availability_zone
-  map_public_ip_on_launch = try(each.value.data.public_ip, false)
+  map_public_ip_on_launch = try(each.value.data.map_public_ip_on_launch, false)
   tags = { Name = each.value.data.name }
 }
 
-# IGW solo si la VPC tiene al menos una subnet pública
+# ======== INSTANCIAS (opcional según 'instances' en el payload) ========
+
+# Mapa: subnet_key -> lista de instancias
 locals {
-  vpc_has_public = {
-    for v in local.vpcs :
-    v.id => length([
-      for sn in coalesce(v.subnets, []) :
-      sn if lower(try(sn.subnet_type, "")) == "public"
-    ]) > 0
+  instances_by_subnet = {
+    for s in local.all_subnets :
+    s.key => coalesce(s.data.instances, [])
+  }
+
+  # Flatten a items con referencia a subnet y VPC
+  all_instances = flatten([
+    for s in local.all_subnets : [
+      for inst in local.instances_by_subnet[s.key] : {
+        subnet_key    = s.key
+        vpc_id_key    = s.vpc
+        name          = try(inst.name, "vm-${s.key}")
+        instance_type = try(inst.instance_type, "t3.micro")
+        ami           = try(inst.ami, "resolve:al2023")
+        ssh_access    = try(inst.ssh_access, false)
+      }
+    ]
+  ])
+
+  inst_map = { for i in local.all_instances : "${i.vpc_id_key}:${i.name}" => i }
+}
+
+# AMI Amazon Linux 2023 (última versión desde SSM)
+data "aws_ssm_parameter" "al2023_ami" {
+  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64"
+}
+
+# Security Group para instancias por VPC
+resource "aws_security_group" "vm_sg" {
+  for_each    = { for v in local.vpcs : v.id => v }
+  name        = "sg-${each.value.name}-vm"
+  description = "SG para VMs en ${each.value.name}"
+  vpc_id      = aws_vpc.vpc[each.key].id
+
+  # Permitir ICMP desde otras VPCs del plan (para prueba de ping)
+  dynamic "ingress" {
+    for_each = local.vpcs
+    content {
+      description = "ICMP desde ${ingress.value.name}"
+      from_port   = -1
+      to_port     = -1
+      protocol    = "icmp"
+      cidr_blocks = [ingress.value.cidr_block]
+    }
+  }
+
+  # Permitir todo el tráfico saliente
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "sg-${each.value.name}-vm"
   }
 }
 
+# Crear las instancias
+resource "aws_instance" "vm" {
+  for_each = local.inst_map
+
+  ami           = each.value.ami == "resolve:al2023" ? data.aws_ssm_parameter.al2023_ami.value : each.value.ami
+  instance_type = each.value.instance_type
+  subnet_id     = aws_subnet.this[each.value.subnet_key].id
+  associate_public_ip_address = true
+
+  vpc_security_group_ids = [
+    aws_security_group.vm_sg[each.value.vpc_id_key].id
+  ]
+
+  tags = {
+    Name = each.value.name
+  }
+}
+
+
+# === IGW sólo si la VPC lo requiere (flag explícito o rutas con target "igw") ===
+
+# ¿Esta VPC necesita IGW?
+locals {
+  vpc_needs_igw = {
+    for v in local.vpcs :
+    v.id => (
+      # 1 Flag explícito desde el canvas/payload
+      try(v.internet_gateway, false)
+      # 2 Alguna ruta en cualquiera de sus route tables apunta a "igw"
+      || try(anytrue([
+        for rt in coalesce(v.route_tables, []) :
+          anytrue([for r in coalesce(rt.routes, []) : lower(try(r.target, "")) == "igw"])
+      ]), false)
+    )
+  }
+}
+
+# IGW sólo si la VPC lo necesita
 resource "aws_internet_gateway" "igw" {
   for_each = {
-    for v in local.vpcs : v.id => v if local.vpc_has_public[v.id]
+    for v in local.vpcs : v.id => v if local.vpc_needs_igw[v.id]
   }
   vpc_id = aws_vpc.vpc[each.key].id
-  tags = { Name = "${each.value.name}-igw" }
+  tags   = { Name = "${each.value.name}-igw" }
 }
 
-# Route table principal por VPC
+# Route table principal por VPC (ya lo tienes arriba, lo conservo tal cual)
 resource "aws_route_table" "rt_main" {
   for_each = { for v in local.vpcs : v.id => v }
-  vpc_id = aws_vpc.vpc[each.key].id
-  tags = { Name = "${each.value.name}-rt" }
+  vpc_id   = aws_vpc.vpc[each.key].id
+  tags     = { Name = "${each.value.name}-rt" }
 }
 
-# Asociaciones de subnets a la route table principal
+# Asociaciones (lo que ya tienes, sin cambios)
 resource "aws_route_table_association" "assoc" {
-  for_each = {
-    for s in local.all_subnets : s.key => s
-  }
+  for_each = { for s in local.all_subnets : s.key => s }
   subnet_id      = aws_subnet.this[each.key].id
   route_table_id = aws_route_table.rt_main[each.value.vpc].id
 }
 
-# Ruta 0.0.0.0/0 a IGW desde la PRIMERA subnet pública de cada VPC (demo)
+# Ruta 0.0.0.0/0 a IGW (sólo si existe IGW)
 resource "aws_route" "igw_default" {
-  for_each = {
-    for v in local.vpcs : v.id => {
-      vpc_id = v.id
-      has_public = local.vpc_has_public[v.id]
-    } if local.vpc_has_public[v.id]
-  }
-  route_table_id         = aws_route_table.rt_main[each.value.vpc_id].id
+  for_each = aws_internet_gateway.igw
+  route_table_id         = aws_route_table.rt_main[each.key].id
   destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.igw[each.value.vpc_id].id
+  gateway_id             = aws_internet_gateway.igw[each.key].id
 }
 
 # ----------------- Peering entre VPCs y rutas entre ellas --------------------

@@ -9,25 +9,26 @@ import { buildRoutingPreview } from "../utils/buildRoutingPreview";
 import { TYPE_ROUTER_NODE, TYPE_VPC_NODE } from "../utils/constants";
 import { groupInstancesBySubnet, groupSubnetsByVpc, validateTopology } from "../utils/topologyValidation";
 
-// arriba del archivo
 function normalizeAz(region, az) {
-  // si está OK (e.g. us-east-1a), la aceptamos
-  const val = (az || "").trim();
-  const ok = /^(af|ap|ca|eu|il|me|sa|us)-(central|north|south|southeast|east|west|northeast|south-2|east-2|west-2|gov-[a-z]+|\w+)-\d+[a-f]$/.test(val);
-  if (ok) return val;
-  let s = val.toLowerCase();
-  s = s.replace("us-eas-", "us-east-");   // us-eas-1a -> us-east-1a
-  s = s.replace(/-a1\b/, "-1a");          // us-east-a1 -> us-east-1a
-  s = s.replace(/-b1\b/, "-1b");
-  s = s.replace(/-c1\b/, "-1c");
-  s = s.replace(/-d1\b/, "-1d");
-  s = s.replace(/-e1\b/, "-1e");
-  // última defensa: si sigue mal, forzamos región+’a’
-  if (!/^\w+-\w+-\d+[a-f]$/.test(s)) {
-    // region tipo "us-east-1" -> "us-east-1a"
-    s = `${region}a`;
-  }
-  return s;
+  const OK = /^(af|ap|ca|eu|il|me|sa|us)-(central|north|south|southeast|east|west|northeast|south-2|east-2|west-2|gov-[a-z]+|\w+)-\d+[a-f]$/i;
+  if (OK.test(az || "")) return az;            // ya es una AZ válida
+
+  let r = (region || "us-east-1").toLowerCase();
+  // si venía con letra (us-east-1a), quítasela
+  r = r.replace(/([a-f])$/i, "");
+
+  let s = (az || "").toLowerCase();
+  s = s.replace("us-eas-", "us-east-");        // fixes comunes
+  s = s.replace(/-a1\b/, "-1a")
+    .replace(/-b1\b/, "-1b")
+    .replace(/-c1\b/, "-1c")
+    .replace(/-d1\b/, "-1d")
+    .replace(/-e1\b/, "-1e");
+
+  if (OK.test(s)) return s;                    // quedó válido
+
+  // fallback: región sin letra + 'a'
+  return `${r}a`;
 }
 
 
@@ -256,11 +257,15 @@ const useDeployNetwork = ({ nodes, edges }) => {
         const az = normalizeAz(region, sn.data?.availabilityZone);
         const instances = groupInstancesBySubnet(nodes, sn.id).map(inst => ({
           id: inst.id,
-          ami: inst.data?.ami || "ami-default",
-          instance_type: inst.data?.instanceType,
-          ip_address: inst.data?.ipAddress,
-          name: inst.data?.name,
-          ssh_access: inst.data?.sshAccess
+          name: inst.data?.name || `vm-${sn.id}`,
+
+          ami: inst.data?.ami ?? undefined,
+          // Por si el formulario deja vacío, default razonable
+          instance_type: inst.data?.instanceType || "t3.micro",
+          // El template no usa ip_address aún (puedes dejarlo para futuro)
+          ip_address: inst.data?.ipAddress || undefined,
+          // Para, en el futuro, abrir SSH condicionalmente (ahora no bloquea nada)
+          ssh_access: !!inst.data?.sshAccess || undefined,
         }));
 
         return {
