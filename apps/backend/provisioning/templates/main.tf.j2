@@ -10,16 +10,11 @@ terraform {
             else simulate_only|default(true) %}
 
 # -------- Provider (usa región de VLAN o de la 1ª VPC) ------
-{# --- región base: VLAN.region o la de la 1ª VPC o default --- #}
 {% set raw_region =
   (vlan.region if vlan and vlan.region
    else (vpcs[0].region if vpcs else "us-east-1"))
 %}
-
-{# Si viene con letra de AZ al final (…-1a), corta la última letra #}
-{% set norm_region =
-  (raw_region|string).rstrip('abcdef')
-%}
+{% set norm_region = (raw_region|string).rstrip('abcdef') %}
 
 provider "aws" {
   region = {{ norm_region | tojson }}
@@ -36,8 +31,8 @@ provider "aws" {
 
 # -------- Datos del plan en locals (desde el payload) ------------------------
 locals {
-  vpcs  = {{ (vpcs or []) | tojson }}
-  links = {{ (links or []) | tojson }}
+  vpcs  = {{ (payload.vpcs  if payload and payload.vpcs  else []) | tojson }}
+  links = {{ (payload.links if payload and payload.links else []) | tojson }}
 }
 
 # -------- VPCs ---------------------------------------------------------------
@@ -61,6 +56,23 @@ locals {
     ]
   ])
   subnet_map = { for s in local.all_subnets : s.key => s }
+}
+
+# ¿Alguna instancia de la VPC quiere SSH?
+locals {
+  vpc_has_ssh = {
+    for v in local.vpcs : v.id => anytrue([
+      for sn in coalesce(v.subnets, []) : anytrue([
+        for inst in coalesce(sn.instances, []) :
+        length(trimspace(try(inst.ssh_access, ""))) > 0
+      ])
+    ])
+  }
+
+  # CIDR permitido para SSH por VPC (si viene desde el canvas)
+  vpc_ssh_cidr = {
+    for v in local.vpcs : v.id => coalesce(try(v.allowed_ssh_cidr, ""), "")
+  }
 }
 
 resource "aws_subnet" "this" {
@@ -126,13 +138,16 @@ resource "aws_security_group" "vm_sg" {
   description = "Security group for VMs in ${each.value.name}"
   vpc_id      = aws_vpc.vpc[each.key].id
 
-  # SSH abierto (demo) — ajusta según necesites
-  ingress {
-    description = "Allow SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+  # SSH sólo si hay instancias que lo pidan y diste un CIDR
+  dynamic "ingress" {
+    for_each = (local.vpc_has_ssh[each.key] && length(trimspace(local.vpc_ssh_cidr[each.key])) > 0) ? [1] : []
+    content {
+      description = "SSH desde ${local.vpc_ssh_cidr[each.key]}"
+      from_port   = 22
+      to_port     = 22
+      protocol    = "tcp"
+      cidr_blocks = [local.vpc_ssh_cidr[each.key]]
+    }
   }
 
   # ICMP entre VPCs del plan (para ping de pruebas)

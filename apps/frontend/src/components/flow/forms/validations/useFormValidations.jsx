@@ -124,7 +124,14 @@ export const useFormValidationSchema = (
             }),
           region: yup.string().required('Region is required'),
           // Opcionales para despliegue:
-          internetGateway: yup.boolean(),
+          internetGateway: yup.boolean().default(false),
+          allowedSshCidr: yup
+            .string()
+            .trim()
+            .nullable()
+            .transform(v => (v === '' ? null : v))
+            .matches(/^((\d{1,3}\.){3}\d{1,3}\/(3[0-2]|[12]?\d))$/, 'CIDR inválido (ej: 203.0.113.5/32)')
+            .optional(),
           enableNatGateway: yup.boolean(),
           natPublicSubnetId: yup.string().when('enableNatGateway', {
             is: true,
@@ -144,7 +151,15 @@ export const useFormValidationSchema = (
     case TYPE_SUBNETWORK_NODE:
       return yup
         .object({
-          subnetName: yup.string().required('Name is required'),
+          subnetName: yup
+            .string()
+            .required('Name is required')
+            .test('unique-name', 'Subnet name already exists in this VPC', function (value) {
+              const names = (context?.existingSubnetNames || []).map(s => (s || '').trim().toLowerCase());
+              if (!value) return false;
+              const me = value.trim().toLowerCase();
+              return !names.includes(me) || (context?.currentName && me === context.currentName.toLowerCase());
+            }),
           cidrBlock: yup
             .string()
             .required('CIDR Block is required')
@@ -157,7 +172,6 @@ export const useFormValidationSchema = (
                 return isCidrInVpcRange(fullVpcCidr, value);
               }
             )
-            // ✅ overlaps reales entre subnets hermanas
             .test('no-overlap', 'CIDR overlaps with another subnet in this VPC', function (value) {
               if (!value) return false;
               const val = value.trim();
@@ -165,8 +179,13 @@ export const useFormValidationSchema = (
               return !overlapsAny(val, sibs.filter((c) => c !== val));
             }),
           availabilityZone: yup.string().required('Zone is required'),
-          route_table: yup.string().oneOf(['public', 'private'], 'Invalid Route Table Type'),
           subnetType: yup.string().oneOf(['public', 'private']).required('Subnet Type is required'),
+          map_public_ip_on_launch: yup
+            .boolean()
+            .test('public-ip-for-public', 'Public subnets must auto-assign public IPv4', function (v) {
+              const t = this.parent?.subnetType;
+              return t === 'public' ? v === true : true;
+            }),
         })
         .required();
 
@@ -195,13 +214,17 @@ export const useFormValidationSchema = (
           // IP opcional; si el usuario la escribe, se valida formato, rango y duplicados
           ipAddress: yup
             .string()
-            .transform(emptyToUndef)
+            .transform((v) => {
+              if (!v) return undefined;
+              const s = String(v).trim().toLowerCase();
+              return s === "auto" ? undefined : s;
+            })
             .notRequired()
-            .test('ip-format', 'IP Address must be a valid IP (0-255 in each segment)', function (value) {
-              if (!value) return true;                // vacío => ok
+            .test("ip-format", "IP Address must be a valid IP (0-255 in each segment)", function (value) {
+              if (!value) return true; // vacío o "auto" => permitido
               return ipRegex.test(value);
             })
-            .test('is-subnet', function (value) {
+            .test("is-subnet", function (value) {
               if (!value || !cidrBlockVPC) return true;
               try {
                 const block = new Netmask(cidrBlockVPC);
@@ -212,10 +235,10 @@ export const useFormValidationSchema = (
                 }
                 return true;
               } catch {
-                return this.createError({ message: 'Invalid subnet format' });
+                return this.createError({ message: "Invalid subnet format" });
               }
             })
-            .test('not-duplicate', 'This IP address is already used in this subnet', function (value) {
+            .test("not-duplicate", "This IP address is already used in this subnet", function (value) {
               if (!value || !context.existingIps) return true;
               return !context.existingIps.includes(value.trim());
             }),

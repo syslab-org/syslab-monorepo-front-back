@@ -9,21 +9,20 @@ import { useFormValidationSchema } from "./validations/useFormValidations";
 
 // eslint-disable-next-line react/prop-types
 const VPCNodeForm = ({
-  // eslint-disable-next-line react/prop-types
   nodeData,
   onSave,
   deleteNode,
-  vlanCidr, // <-- NUEVO: "10.0.0.0/16"
-  siblingVpcCidrs = [], // <-- NUEVO: ["10.0.1.0/24", "10.0.2.0/24", ...]
-  defaultRegion = "us-east-1a" // opcional si luego quieres agregar región aquí
+  vlanCidr,               // "10.0.0.0/16"
+  siblingVpcCidrs = [],   // ["10.0.1.0/24", ...]
+  defaultRegion = "us-east-1a"
 }) => {
 
   const validationSchema = useFormValidationSchema(
     VPC_CHILD_FORM,
-    null, // cidrBlockVPC NO se usa en este form
     null,
-    { vlanCidr, siblingVpcCidrs },// <-- clave para validaciones
-    true // activa validación CIDR
+    null,
+    { vlanCidr, siblingVpcCidrs },
+    true
   );
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm({
@@ -32,21 +31,13 @@ const VPCNodeForm = ({
       cloudProvider: nodeData.cloudProvider || CLOUD_AWS_VALUE,
       vpcName: nodeData.vpcName || "",
       region: nodeData.region || defaultRegion,
-      // si ya tienes separado base+prefix se vuelve a juntar para el input
       cidrBlock:
         nodeData.cidrBlock && nodeData.prefixLength
           ? `${nodeData.cidrBlock}/${nodeData.prefixLength}`
           : "",
+      internetGateway: nodeData.internetGateway ?? false,
+      allowedSshCidr: nodeData.allowedSshCidr || "",   // 👈 NUEVO
     }
-  });
-
-  console.log("VPCNodeForm defaultValues:", {
-    cloudProvider: nodeData.cloudProvider || CLOUD_AWS_VALUE,
-    vpcName: nodeData.vpcName || "",
-    cidrBlock:
-      nodeData.cidrBlock && nodeData.prefixLength
-        ? `${nodeData.cidrBlock}/${nodeData.prefixLength}`
-        : "",
   });
 
   useEffect(() => {
@@ -58,19 +49,18 @@ const VPCNodeForm = ({
         nodeData.cidrBlock && nodeData.prefixLength
           ? `${nodeData.cidrBlock}/${nodeData.prefixLength}`
           : "",
+      internetGateway: nodeData.internetGateway ?? false,
+      allowedSshCidr: nodeData.allowedSshCidr || "",
     });
   }, [nodeData, reset, defaultRegion]);
 
-
   const onSubmit = (data) => {
     const [base, prefix] = data.cidrBlock.split("/");
-    console.log("OnSubmit  vpcNode data:", data);
-
     onSave({
       ...data,
       cidrBlock: base,
-      prefixLength: Number(prefix)
-      // opcional: region: defaultRegion
+      prefixLength: Number(prefix),
+      // region: defaultRegion (si quieres forzarlo)
     });
   };
 
@@ -103,7 +93,7 @@ const VPCNodeForm = ({
         {...register("cidrBlock")}
         error={!!errors.cidrBlock}
         helperText={errors.cidrBlock?.message}
-        placeholder="10.0.1.0/24"
+        placeholder="10.10.0.0/20"
         fullWidth
         margin="normal"
       />
@@ -122,6 +112,32 @@ const VPCNodeForm = ({
         </Select>
         {errors.region && <p>{errors.region.message}</p>}
       </FormControl>
+
+      <FormControl fullWidth margin="normal">
+        <InputLabel id="igw-label">Internet Gateway</InputLabel>
+        <Select
+          labelId="igw-label"
+          label="Internet Gateway"
+          {...register("internetGateway")}
+          defaultValue={nodeData.internetGateway ?? false}
+        >
+          <MenuItem value={true}>Enabled</MenuItem>
+          <MenuItem value={false}>Disabled</MenuItem>
+        </Select>
+        {errors.internetGateway && (
+          <p style={{ color: "red", marginTop: 4 }}>{errors.internetGateway.message}</p>
+        )}
+      </FormControl>
+
+      <TextField
+        label="Allowed SSH CIDR (opcional)"
+        {...register("allowedSshCidr")}
+        error={!!errors.allowedSshCidr}
+        helperText={errors.allowedSshCidr?.message || 'Ej: 203.0.113.5/32 (tu IP pública)'}
+        placeholder="203.0.113.5/32"
+        fullWidth
+        margin="normal"
+      />
 
       <Button type="submit" variant="contained" color="primary">
         Registrar Configuración

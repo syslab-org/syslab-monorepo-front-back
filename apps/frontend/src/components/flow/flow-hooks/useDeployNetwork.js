@@ -252,27 +252,30 @@ const useDeployNetwork = ({ nodes, edges }) => {
         target: r.target,                 // "local" o "router-..."
         via_router_id: r.via_router_id || null
       }));
-
       const subnetsOfVpc = groupSubnetsByVpc(nodes, vpcNode.id).map(sn => {
         const az = normalizeAz(region, sn.data?.availabilityZone);
-        const instances = groupInstancesBySubnet(nodes, sn.id).map(inst => ({
-          id: inst.id,
-          name: inst.data?.name || `vm-${sn.id}`,
+        const isPublic = (sn.data?.subnetType || "").toLowerCase() === "public";
 
-          ami: inst.data?.ami ?? undefined,
-          // Por si el formulario deja vacío, default razonable
-          instance_type: inst.data?.instanceType || "t3.micro",
-          // El template no usa ip_address aún (puedes dejarlo para futuro)
-          ip_address: inst.data?.ipAddress || undefined,
-          // Para, en el futuro, abrir SSH condicionalmente (ahora no bloquea nada)
-          ssh_access: !!inst.data?.sshAccess || undefined,
-        }));
+        const instances = groupInstancesBySubnet(nodes, sn.id).map(inst => {
+          const keypair = (inst.data?.sshAccess || "").trim();  // <- string, no boolean
+          const ipRaw = (inst.data?.ipAddress || "").trim();
+
+          return {
+            id: inst.id,
+            name: inst.data?.name || `vm-${sn.id}`,
+            ami: inst.data?.ami || undefined,                   // opcional
+            instance_type: inst.data?.instanceType || "t2.micro",
+            ip_address: (inst.data?.ipAddress || "").trim() || undefined,              // opcional
+            ssh_access: (inst.data?.sshAccess || "").trim() || undefined,                  // <- string o undefined
+            associate_public_ip: isPublic,                      // <- sólo públicas
+          };
+        });
 
         return {
           name: sn.data?.subnetName || `subnet-${sn.id}`,
           cidr_block: sn.data?.cidrBlock,
           availability_zone: az,
-          map_public_ip_on_launch: (sn.data?.subnetType || "").toLowerCase() === "public",
+          map_public_ip_on_launch: isPublic,
           subnet_type: sn.data?.subnetType,
           route_table: "main",
           instances
@@ -291,7 +294,8 @@ const useDeployNetwork = ({ nodes, edges }) => {
           elastic_ip: vpcNode.data?.natGatewayElasticIp || ""
         },
         route_tables: [{ name: "main", routes: mainRoutes }],
-        subnets: subnetsOfVpc
+        subnets: subnetsOfVpc,
+        allowed_ssh_cidr: vpcNode.data?.allowedSshCidr || ""
       };
     });
 
