@@ -75,11 +75,12 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - DATABASE_URL=postgres://teg:teg@postgres:5432/teg
       - DB_SSL_REQUIRE=false
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_SESSION_TOKEN=
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
-      - ALLOW_LOCAL_APPLY=${ALLOW_LOCAL_APPLY}
+      # - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      # - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      # - AWS_SESSION_TOKEN=
+      # - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
+      # - ALLOW_LOCAL_APPLY=${ALLOW_LOCAL_APPLY}
+      - KEEP_TF_DIRS=1 # Evita que celery borre los directorios temporales de terraform
     depends_on:
       postgres:
         condition: service_healthy

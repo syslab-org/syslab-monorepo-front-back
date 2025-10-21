@@ -9,26 +9,26 @@ import { buildRoutingPreview } from "../utils/buildRoutingPreview";
 import { TYPE_ROUTER_NODE, TYPE_VPC_NODE } from "../utils/constants";
 import { groupInstancesBySubnet, groupSubnetsByVpc, validateTopology } from "../utils/topologyValidation";
 
-// arriba del archivo
 function normalizeAz(region, az) {
-  // si está OK (e.g. us-east-1a), la aceptamos
-  const ok = /^(af|ap|ca|eu|il|me|sa|us)-(central|north|south|southeast|east|west|northeast|south-2|east-2|west-2|gov-[a-z]+|\w+)-\d+[a-f]$/.test(az || "");
-  if (ok) return az;
+  const OK = /^(af|ap|ca|eu|il|me|sa|us)-(central|north|south|southeast|east|west|northeast|south-2|east-2|west-2|gov-[a-z]+|\w+)-\d+[a-f]$/i;
+  if (OK.test(az || "")) return az;            // ya es una AZ válida
 
-  // fixes comunes
+  let r = (region || "us-east-1").toLowerCase();
+  // si venía con letra (us-east-1a), quítasela
+  r = r.replace(/([a-f])$/i, "");
+
   let s = (az || "").toLowerCase();
-  s = s.replace("us-eas-", "us-east-");   // us-eas-1a -> us-east-1a
-  s = s.replace(/-a1\b/, "-1a");          // us-east-a1 -> us-east-1a
-  s = s.replace(/-b1\b/, "-1b");
-  s = s.replace(/-c1\b/, "-1c");
-  s = s.replace(/-d1\b/, "-1d");
-  s = s.replace(/-e1\b/, "-1e");
-  // última defensa: si sigue mal, forzamos región+’a’
-  if (!/^\w+-\w+-\d+[a-f]$/.test(s)) {
-    // region tipo "us-east-1" -> "us-east-1a"
-    s = `${region}a`;
-  }
-  return s;
+  s = s.replace("us-eas-", "us-east-");        // fixes comunes
+  s = s.replace(/-a1\b/, "-1a")
+    .replace(/-b1\b/, "-1b")
+    .replace(/-c1\b/, "-1c")
+    .replace(/-d1\b/, "-1d")
+    .replace(/-e1\b/, "-1e");
+
+  if (OK.test(s)) return s;                    // quedó válido
+
+  // fallback: región sin letra + 'a'
+  return `${r}a`;
 }
 
 
@@ -152,13 +152,32 @@ function buildLinksFromEdges(nodes, edges) {
           ? routerNode.data.routeTable
           : [];
 
+        //helper para obtener el CIDR de cada VPC (para defaults)
+        const vpcA = idToNode.get(a);
+        const vpcB = idToNode.get(b);
+        const cidrA = vpcA?.data?.cidrBlock && vpcA?.data?.prefixLength
+          ? `${vpcA.data.cidrBlock}/${vpcA.data.prefixLength}`
+          : (vpcA?.data?.cidr || vpcA?.data?.cidr_block || "");
+        const cidrB = vpcB?.data?.cidrBlock && vpcB?.data?.prefixLength
+          ? `${vpcB.data.cidrBlock}/${vpcB.data.prefixLength}`
+          : (vpcB?.data?.cidr || vpcB?.data?.cidr_block || "");
+
+
         // si guardaste reglas por VPC origen, puedes adjuntarlas:
-        const routes_a_to_b = routeTable
+
+        let routes_a_to_b = routeTable
           .filter(r => r.sourceVpcId === a && r.destVpcId === b)
-          .map(r => ({ dest_cidr: r.destCidr }));
-        const routes_b_to_a = routeTable
+          .map(r => ({ dest_cidr: r.destCidr, target: "peering" }));
+        let routes_b_to_a = routeTable
           .filter(r => r.sourceVpcId === b && r.destVpcId === a)
-          .map(r => ({ dest_cidr: r.destCidr }));
+          .map(r => ({ dest_cidr: r.destCidr, target: "peering" }));
+
+        if (!routes_a_to_b.length && cidrB) {
+          routes_a_to_b = [{ dest_cidr: cidrB, target: "peering" }];
+        }
+        if (!routes_b_to_a.length && cidrA) {
+          routes_b_to_a = [{ dest_cidr: cidrA, target: "peering" }];
+        }
 
         links.push({
           type: "peering",
@@ -233,23 +252,30 @@ const useDeployNetwork = ({ nodes, edges }) => {
         target: r.target,                 // "local" o "router-..."
         via_router_id: r.via_router_id || null
       }));
-
       const subnetsOfVpc = groupSubnetsByVpc(nodes, vpcNode.id).map(sn => {
         const az = normalizeAz(region, sn.data?.availabilityZone);
-        const instances = groupInstancesBySubnet(nodes, sn.id).map(inst => ({
-          id: inst.id,
-          ami: inst.data?.ami || "ami-default",
-          instance_type: inst.data?.instanceType,
-          ip_address: inst.data?.ipAddress,
-          name: inst.data?.name,
-          ssh_access: inst.data?.sshAccess
-        }));
+        const isPublic = (sn.data?.subnetType || "").toLowerCase() === "public";
+
+        const instances = groupInstancesBySubnet(nodes, sn.id).map(inst => {
+          const keypair = (inst.data?.sshAccess || "").trim();  // <- string, no boolean
+          const ipRaw = (inst.data?.ipAddress || "").trim();
+
+          return {
+            id: inst.id,
+            name: inst.data?.name || `vm-${sn.id}`,
+            ami: inst.data?.ami || undefined,                   // opcional
+            instance_type: inst.data?.instanceType || "t2.micro",
+            ip_address: (inst.data?.ipAddress || "").trim() || undefined,              // opcional
+            ssh_access: (inst.data?.sshAccess || "").trim() || undefined,                  // <- string o undefined
+            associate_public_ip: isPublic,                      // <- sólo públicas
+          };
+        });
 
         return {
           name: sn.data?.subnetName || `subnet-${sn.id}`,
           cidr_block: sn.data?.cidrBlock,
           availability_zone: az,
-          public_ip: sn.data?.publicIp,
+          map_public_ip_on_launch: isPublic,
           subnet_type: sn.data?.subnetType,
           route_table: "main",
           instances
@@ -268,7 +294,8 @@ const useDeployNetwork = ({ nodes, edges }) => {
           elastic_ip: vpcNode.data?.natGatewayElasticIp || ""
         },
         route_tables: [{ name: "main", routes: mainRoutes }],
-        subnets: subnetsOfVpc
+        subnets: subnetsOfVpc,
+        allowed_ssh_cidr: vpcNode.data?.allowedSshCidr || ""
       };
     });
 
