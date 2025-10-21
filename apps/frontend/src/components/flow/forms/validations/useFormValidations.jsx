@@ -1,6 +1,6 @@
 // src/components/flow/forms/validations/useFormValidations.js
-import * as yup from 'yup';
 import { Netmask } from 'netmask';
+import * as yup from 'yup';
 import {
   TYPE_COMPUTER_NODE,
   TYPE_INSTANCE_NODE,
@@ -13,6 +13,7 @@ import {
   VPC_FORM,
 } from '../../utils/constants';
 import { isCidrInVpcRange, overlapsAny } from '../../utils/networkUtils';
+import { INSTANCE_TYPE_OPTIONS } from '../options/instanceTypes';
 
 // IPv4 estricta: 0-255 en cada octeto
 const ipRegex =
@@ -55,20 +56,20 @@ export const useFormValidationSchema = (
             .required('VLAN Name is required'),
           cidrBlock: validateCidr
             ? yup
-                .string()
-                .required('CIDR Block is required')
-                .matches(cidrRegex, 'CIDR Block must be in format 192.168.0.0/24')
-                .test('is-valid-cidr', 'CIDR block is invalid', (value) => isCidrValid(value))
-                .test(
-                  'prefix-range',
-                  'CIDR should leave room for subnets (e.g. /16 to /24)',
-                  (value) => {
-                    if (!value) return false;
-                    const [, p] = value.split('/');
-                    const prefix = Number(p);
-                    return prefix >= 8 && prefix <= 28; // tu política
-                  }
-                )
+              .string()
+              .required('CIDR Block is required')
+              .matches(cidrRegex, 'CIDR Block must be in format 192.168.0.0/24')
+              .test('is-valid-cidr', 'CIDR block is invalid', (value) => isCidrValid(value))
+              .test(
+                'prefix-range',
+                'CIDR should leave room for subnets (e.g. /16 to /24)',
+                (value) => {
+                  if (!value) return false;
+                  const [, p] = value.split('/');
+                  const prefix = Number(p);
+                  return prefix >= 8 && prefix <= 28; // tu política
+                }
+              )
             : yup.string().required('CIDR Block is required'),
           cloudProvider: yup
             .string()
@@ -123,7 +124,14 @@ export const useFormValidationSchema = (
             }),
           region: yup.string().required('Region is required'),
           // Opcionales para despliegue:
-          internetGateway: yup.boolean(),
+          internetGateway: yup.boolean().default(false),
+          allowedSshCidr: yup
+            .string()
+            .trim()
+            .nullable()
+            .transform(v => (v === '' ? null : v))
+            .matches(/^((\d{1,3}\.){3}\d{1,3}\/(3[0-2]|[12]?\d))$/, 'CIDR inválido (ej: 203.0.113.5/32)')
+            .optional(),
           enableNatGateway: yup.boolean(),
           natPublicSubnetId: yup.string().when('enableNatGateway', {
             is: true,
@@ -143,7 +151,15 @@ export const useFormValidationSchema = (
     case TYPE_SUBNETWORK_NODE:
       return yup
         .object({
-          subnetName: yup.string().required('Name is required'),
+          subnetName: yup
+            .string()
+            .required('Name is required')
+            .test('unique-name', 'Subnet name already exists in this VPC', function (value) {
+              const names = (context?.existingSubnetNames || []).map(s => (s || '').trim().toLowerCase());
+              if (!value) return false;
+              const me = value.trim().toLowerCase();
+              return !names.includes(me) || (context?.currentName && me === context.currentName.toLowerCase());
+            }),
           cidrBlock: yup
             .string()
             .required('CIDR Block is required')
@@ -156,7 +172,6 @@ export const useFormValidationSchema = (
                 return isCidrInVpcRange(fullVpcCidr, value);
               }
             )
-            // ✅ overlaps reales entre subnets hermanas
             .test('no-overlap', 'CIDR overlaps with another subnet in this VPC', function (value) {
               if (!value) return false;
               const val = value.trim();
@@ -164,48 +179,78 @@ export const useFormValidationSchema = (
               return !overlapsAny(val, sibs.filter((c) => c !== val));
             }),
           availabilityZone: yup.string().required('Zone is required'),
-          route_table: yup.string().oneOf(['public', 'private'], 'Invalid Route Table Type'),
           subnetType: yup.string().oneOf(['public', 'private']).required('Subnet Type is required'),
+          map_public_ip_on_launch: yup
+            .boolean()
+            .test('public-ip-for-public', 'Public subnets must auto-assign public IPv4', function (v) {
+              const t = this.parent?.subnetType;
+              return t === 'public' ? v === true : true;
+            }),
         })
         .required();
 
     /* ------------------------ Instancia (dentro de Subnet) ------------------------ */
+
+
+
     case TYPE_COMPUTER_NODE:
     case TYPE_PRINTER_NODE:
     case TYPE_SERVER_NODE:
-    case TYPE_INSTANCE_NODE:
+    case TYPE_INSTANCE_NODE: {
+      const emptyToUndef = (v) =>
+        v === null || v === undefined || String(v).trim() === "" ? undefined : v;
+
       return yup
         .object({
-          ami: yup.string().required('AMI is required'),
-          instanceType: yup.string().required('Instance type is required'),
+          // AMI opcional (si viene vacío, no falla)
+          ami: yup.string().transform(emptyToUndef).notRequired(),
+
+          // Tipo obligatorio, restringido a la lista válida
+          instanceType: yup
+            .string()
+            .oneOf(INSTANCE_TYPE_OPTIONS.map(o => o.value), 'Invalid instance type')
+            .required('Instance type is required'),
+
+          // IP opcional; si el usuario la escribe, se valida formato, rango y duplicados
           ipAddress: yup
             .string()
-            .required('IP Address is required')
-            .matches(ipRegex, 'IP Address must be a valid IP (0-255 in each segment)')
-            .test('is-subnet', function (value) {
-              // OJO: aquí debes pasar cidrBlockVPC = CIDR DE LA SUBNET
+            .transform((v) => {
+              if (!v) return undefined;
+              const s = String(v).trim().toLowerCase();
+              return s === "auto" ? undefined : s;
+            })
+            .notRequired()
+            .test("ip-format", "IP Address must be a valid IP (0-255 in each segment)", function (value) {
+              if (!value) return true; // vacío o "auto" => permitido
+              return ipRegex.test(value);
+            })
+            .test("is-subnet", function (value) {
               if (!value || !cidrBlockVPC) return true;
               try {
                 const block = new Netmask(cidrBlockVPC);
-                const isValid = block.contains(value);
-                if (!isValid) {
+                if (!block.contains(value)) {
                   return this.createError({
                     message: `The IP address ${value} is not within the subnet range ${cidrBlockVPC}`,
                   });
                 }
                 return true;
               } catch {
-                return this.createError({ message: 'Invalid subnet format' });
+                return this.createError({ message: "Invalid subnet format" });
               }
             })
-            .test('not-duplicate', 'This IP address is already used in this subnet', function (value) {
+            .test("not-duplicate", "This IP address is already used in this subnet", function (value) {
               if (!value || !context.existingIps) return true;
               return !context.existingIps.includes(value.trim());
             }),
+
+          // Nombre obligatorio
           name: yup.string().required('Name is required'),
-          sshAccess: yup.string().required('SSH Access is required'),
+
+          // SSH opcional (si lo dejas vacío no marca error)
+          sshAccess: yup.string().transform(emptyToUndef).notRequired(),
         })
         .required();
+    }
 
     /* ------------------------ Router ------------------------ */
     case TYPE_ROUTER_NODE:
@@ -217,6 +262,5 @@ export const useFormValidationSchema = (
         .required();
 
     default:
-      return yup.object().shape({});
   }
 };

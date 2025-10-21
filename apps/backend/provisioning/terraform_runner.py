@@ -12,18 +12,18 @@ def _run(cmd, cwd):
     return p.returncode, out
 
 def render_tf_dir(plan: dict) -> str:
-    """
-    Renderiza un directorio temporal con main.tf, variables.tf y terraform.tfvars.json a partir del plan.
-    Retorna la ruta del directorio generado.
-    """
     plan = plan or {}
-    tmpdir = tempfile.mkdtemp(prefix="tf-plan-")
+    tmpdir = tempfile.mkdtemp(prefix="tf-multi-")
     tmp = Path(tmpdir)
 
-    # Flag robusto: por defecto simulación
+    # dump del payload para inspección
+    try:
+        (tmp / "_received_plan.json").write_text(json.dumps(plan, indent=2, ensure_ascii=False))
+    except Exception:
+        pass
+
     simulate_only = bool(plan.get("simulate_only", True))
 
-    # Entorno Jinja
     env = Environment(
         loader=FileSystemLoader(str(TEMPLATES_DIR)),
         autoescape=False,
@@ -31,43 +31,20 @@ def render_tf_dir(plan: dict) -> str:
         lstrip_blocks=True,
     )
 
-    # main.tf -> aquí sí pasamos el flag y el plan completo por si el template lo usa
     main_tpl = env.get_template("main.tf.j2")
     mainRendered = main_tpl.render(
         simulate_only=simulate_only,
-        payload=plan,   # por si el template quiere leer algo más
+        payload=plan,
     )
     (tmp / "main.tf").write_text(mainRendered)
 
-    # variables.tf -> no inyectamos var.*, dejamos que el .tf use var.region, etc.
+    # variables.tf (aunque el main no lo use directamente)
     var_tpl = env.get_template("variables.tf.j2")
-    variablesRendered = var_tpl.render()
-    (tmp / "variables.tf").write_text(variablesRendered)
+    (tmp / "variables.tf").write_text(var_tpl.render())
 
-    # terraform.tfvars.json derivados
-    subnets = plan.get("subnets", [])
-    has_public = any(bool(s.get("public")) for s in subnets)
-
-    tfvars = {
-        "name": plan.get("name", "tesis"),
-        "region": plan.get("region", "us-east-1"),
-        "vpc_cidr": plan.get("vpc", {}).get("cidr", "10.0.0.0/16"),
-        "has_public": has_public,
-        "subnets": [
-            {
-                "name": s["name"],
-                "cidr": s["cidr"],
-                "az": s["az"],
-                "public": bool(s.get("public", False)),
-            }
-            for s in subnets
-        ],
-    }
-    (tmp / "terraform.tfvars.json").write_text(json.dumps(tfvars, indent=2))
-
-    # (Opcional) preview para diagnósticos rápidos
+    # preview (primeras 200 líneas)
     try:
-        preview = "".join((tmp / "main.tf").read_text().splitlines(True)[:30])
+        preview = "".join((tmp / "main.tf").read_text().splitlines(True)[:200])
         (tmp / "_main_preview.txt").write_text(preview)
     except Exception:
         pass
@@ -78,7 +55,6 @@ def tf_init(workdir: str):
     return _run([TERRAFORM_BIN, "init", "-input=false", "-no-color"], workdir)
 
 def tf_plan(workdir: str):
-    # -refresh=false para evitar llamadas innecesarias; -out guarda el plan para apply
     return _run([TERRAFORM_BIN, "plan", "-input=false", "-refresh=false", "-no-color", "-out", "plan.out"], workdir)
 
 def tf_apply(workdir: str):
@@ -89,6 +65,8 @@ def tf_destroy(workdir: str):
 
 def cleanup(workdir: str):
     try:
+        if os.getenv("KEEP_TF_DIRS", "0") == "1":
+            return
         shutil.rmtree(workdir, ignore_errors=True)
     except Exception:
         pass
