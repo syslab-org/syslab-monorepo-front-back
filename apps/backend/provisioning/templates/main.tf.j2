@@ -1,31 +1,26 @@
 # apps/backend/provisioning/templates/main.tf.j2
 terraform {
-  required_providers {
-    aws = { source = "hashicorp/aws", version = "~> 5.0" }
-  }
+  required_providers { aws = { source = "hashicorp/aws", version = "~> 5.0" } }
 }
 
-{# Detectar simulate_only de forma segura #}
+{# Bind seguro #}
 {% set sim = payload.simulate_only if payload is defined and payload.simulate_only is defined
             else simulate_only|default(true) %}
 
-# -------- Provider (usa región de VLAN o de la 1ª VPC) ------
-{% set raw_region =
-  (vlan.region if vlan and vlan.region
-   else (vpcs[0].region if vpcs else "us-east-1"))
-%}
-{% set norm_region = (raw_region|string).rstrip('abcdef') %}
+{# Región: usa VLAN.region o 1ª VPC.region; si viene con AZ (us-east-1a) cortamos la letra final #}
+{% set raw_region = (payload.vlan.region if payload and payload.vlan and payload.vlan.region
+                     else (payload.vpcs[0].region if payload and payload.vpcs else "us-east-1")) %}
+{% set norm_region = (raw_region[:-1] if raw_region and (raw_region|string)[-1].isalpha() else raw_region) %}
 
 provider "aws" {
   region = {{ norm_region | tojson }}
   {% if sim %}
-  # modo simulación: evita chequear credenciales / metadata
   skip_credentials_validation = true
   skip_metadata_api_check     = true
   skip_region_validation      = true
   skip_requesting_account_id  = true
-  access_key                  = "DUMMY"
-  secret_key                  = "DUMMY"
+  access_key = "DUMMY"
+  secret_key = "DUMMY"
   {% endif %}
 }
 
@@ -37,14 +32,12 @@ locals {
 
 # -------- VPCs ---------------------------------------------------------------
 resource "aws_vpc" "vpc" {
-  for_each  = { for v in local.vpcs : v.id => v }
+  for_each   = { for v in local.vpcs : v.id => v }
   cidr_block = each.value.cidr_block
   tags       = { Name = each.value.name }
 }
 
-# Subnets por VPC
-
-# Truco: hacer un "flatten" para subnets (una key única por subnet)
+# Subnets (flatten)
 locals {
   all_subnets = flatten([
     for v in local.vpcs : [
@@ -58,7 +51,7 @@ locals {
   subnet_map = { for s in local.all_subnets : s.key => s }
 }
 
-# ¿Alguna instancia de la VPC quiere SSH?
+# SSH flags por VPC
 locals {
   vpc_has_ssh = {
     for v in local.vpcs : v.id => anytrue([
@@ -68,11 +61,7 @@ locals {
       ])
     ])
   }
-
-  # CIDR permitido para SSH por VPC (si viene desde el canvas)
-  vpc_ssh_cidr = {
-    for v in local.vpcs : v.id => coalesce(try(v.allowed_ssh_cidr, ""), "")
-  }
+  vpc_ssh_cidr = { for v in local.vpcs : v.id => coalesce(try(v.allowed_ssh_cidr, ""), "") }
 }
 
 resource "aws_subnet" "this" {
@@ -84,65 +73,48 @@ resource "aws_subnet" "this" {
   tags = { Name = each.value.data.name }
 }
 
-# ======== INSTANCIAS (opcional según 'instances' en el payload) ========
-
-# Mapa: subnet_key -> lista de instancias
+# Instancias (solo en deploy real; en sim se renderiza pero no se usa AMI)
 locals {
-  instances_by_subnet = {
-    for s in local.all_subnets :
-    s.key => coalesce(s.data.instances, [])
-  }
-
-  # Flatten a items con referencia a subnet y VPC
+  instances_by_subnet = { for s in local.all_subnets : s.key => coalesce(s.data.instances, []) }
   all_instances = flatten([
     for s in local.all_subnets : [
       for inst in local.instances_by_subnet[s.key] : {
-        subnet_key    = s.key
-        vpc_id_key    = s.vpc
-        name          = try(inst.name, "vm-${s.key}")
-        instance_type = try(inst.instance_type, "t2.micro")
-        ami           = try(inst.ami, null)                # null => usar default si aplica
-        ssh_access    = try(inst.ssh_access, null)         # null => sin keypair
-        ip_address    = try(inst.ip_address, null)         # null => IP privada auto
+        subnet_key          = s.key
+        vpc_id_key          = s.vpc
+        name                = try(inst.name, "vm-${s.key}")
+        instance_type       = try(inst.instance_type, "t2.micro")
+        ami                 = try(inst.ami, null)
+        ssh_access          = try(inst.ssh_access, null)
+        ip_address          = try(inst.ip_address, null)
         associate_public_ip = try(inst.associate_public_ip, true)
       }
     ]
   ])
-
   inst_map = { for i in local.all_instances : "${i.vpc_id_key}:${i.name}" => i }
 }
 
-{# --- AMI por defecto solo en despliegue real (evita error en simulación) --- #}
 {% if not sim %}
 data "aws_ssm_parameter" "al2023_ami" {
   name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64"
 }
-locals {
-  default_ami_id = data.aws_ssm_parameter.al2023_ami.value
-}
-{% endif %}
+locals { default_ami_id = data.aws_ssm_parameter.al2023_ami.value }
 
-{# --- Security Group para instancias (solo en deploy real) --- #}
-{% if not sim %}
+# === SG para VMs (formato multilinea, sin ';') ===
 resource "aws_security_group" "vm_sg" {
-  for_each    = {
+  for_each = {
     for v in local.vpcs : v.id => v
-    if length([
-      for sn in coalesce(v.subnets, []) :
-      sn if length(coalesce(sn.instances, [])) > 0
-    ]) > 0
+    if length([for sn in coalesce(v.subnets, []) : sn if length(coalesce(sn.instances, [])) > 0]) > 0
   }
 
-  # IMPORTANTE: el nombre no puede empezar por 'sg-'
   name        = "${each.value.name}-vm-sg"
   description = "Security group for VMs in ${each.value.name}"
   vpc_id      = aws_vpc.vpc[each.key].id
 
-  # SSH sólo si hay instancias que lo pidan y diste un CIDR
+  # SSH solo si hay instancias que lo pidan y diste CIDR
   dynamic "ingress" {
     for_each = (local.vpc_has_ssh[each.key] && length(trimspace(local.vpc_ssh_cidr[each.key])) > 0) ? [1] : []
     content {
-      description = "SSH desde ${local.vpc_ssh_cidr[each.key]}"
+      description = "SSH"
       from_port   = 22
       to_port     = 22
       protocol    = "tcp"
@@ -150,11 +122,11 @@ resource "aws_security_group" "vm_sg" {
     }
   }
 
-  # ICMP entre VPCs del plan (para ping de pruebas)
+  # ICMP entre VPCs del plan (para ping)
   dynamic "ingress" {
     for_each = local.vpcs
     content {
-      description = "ICMP from ${ingress.value.name}"
+      description = "ICMP"
       from_port   = -1
       to_port     = -1
       protocol    = "icmp"
@@ -171,116 +143,73 @@ resource "aws_security_group" "vm_sg" {
 
   tags = { Name = "${each.value.name}-vm-sg" }
 }
-{% endif %}
 
-{# --- Crear instancias (solo en deploy real) --- #}
-{% if not sim %}
 resource "aws_instance" "vm" {
   for_each = local.inst_map
 
-  ami           = coalesce(each.value.ami, local.default_ami_id)
-  instance_type = each.value.instance_type
-  subnet_id     = aws_subnet.this[each.value.subnet_key].id
-
+  ami                         = coalesce(each.value.ami, local.default_ami_id)
+  instance_type               = each.value.instance_type
+  subnet_id                   = aws_subnet.this[each.value.subnet_key].id
   associate_public_ip_address = each.value.associate_public_ip
   private_ip                  = each.value.ip_address
   key_name                    = each.value.ssh_access
-
-  vpc_security_group_ids = [aws_security_group.vm_sg[each.value.vpc_id_key].id]
+  vpc_security_group_ids      = [aws_security_group.vm_sg[each.value.vpc_id_key].id]
 
   tags = { Name = each.value.name }
 }
 {% endif %}
 
-# === IGW sólo si la VPC lo requiere (flag explícito o rutas con target "igw") ===
-
-# ¿Esta VPC necesita IGW?
+# IGW si la VPC lo requiere
 locals {
   vpc_needs_igw = {
-    for v in local.vpcs :
-    v.id => (
-      try(v.internet_gateway, false)
-      || try(anytrue([
-        for rt in coalesce(v.route_tables, []) :
-          anytrue([for r in coalesce(rt.routes, []) : lower(try(r.target, "")) == "igw"])
+    for v in local.vpcs : v.id => (
+      try(v.internet_gateway, false) ||
+      try(anytrue([ for rt in coalesce(v.route_tables, []) :
+        anytrue([ for r in coalesce(rt.routes, []) : lower(try(r.target, "")) == "igw" ])
       ]), false)
     )
   }
 }
-
-# IGW sólo si la VPC lo necesita
 resource "aws_internet_gateway" "igw" {
-  for_each = {
-    for v in local.vpcs : v.id => v if local.vpc_needs_igw[v.id]
-  }
-  vpc_id = aws_vpc.vpc[each.key].id
-  tags   = { Name = "${each.value.name}-igw" }
+  for_each = { for v in local.vpcs : v.id => v if local.vpc_needs_igw[v.id] }
+  vpc_id   = aws_vpc.vpc[each.key].id
+  tags     = { Name = "${each.value.name}-igw" }
 }
-
-# Route table principal por VPC
 resource "aws_route_table" "rt_main" {
   for_each = { for v in local.vpcs : v.id => v }
   vpc_id   = aws_vpc.vpc[each.key].id
   tags     = { Name = "${each.value.name}-rt" }
 }
-
-# Asociaciones de subnets a la route table principal
 resource "aws_route_table_association" "assoc" {
   for_each      = { for s in local.all_subnets : s.key => s }
   subnet_id      = aws_subnet.this[each.key].id
   route_table_id = aws_route_table.rt_main[each.value.vpc].id
 }
-
-# Ruta 0.0.0.0/0 a IGW (sólo si existe IGW)
 resource "aws_route" "igw_default" {
-  for_each                = aws_internet_gateway.igw
-  route_table_id          = aws_route_table.rt_main[each.key].id
-  destination_cidr_block  = "0.0.0.0/0"
-  gateway_id              = aws_internet_gateway.igw[each.key].id
+  for_each               = aws_internet_gateway.igw
+  route_table_id         = aws_route_table.rt_main[each.key].id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.igw[each.key].id
 }
 
-# ----------------- Peering entre VPCs y rutas entre ellas --------------------
-
-# Hacemos un mapa rápido id->objeto vpc para lookups
-locals {
-  vpc_by_id = { for v in local.vpcs : v.id => v }
-}
-
-# Peering (solo type=='peering')
-locals {
-  peering_links = [
-    for l in local.links :
-    l if try(l.type, "") == "peering"
-  ]
-}
-
+# Peering
+locals { vpc_by_id = { for v in local.vpcs : v.id => v } }
+locals { peering_links = [ for l in local.links : l if try(l.type, "") == "peering" ] }
 resource "aws_vpc_peering_connection" "peer" {
-  for_each = {
-    for l in local.peering_links :
-    "${l.vpc_a_id}--${l.vpc_b_id}" => l
-  }
+  for_each    = { for l in local.peering_links : "${l.vpc_a_id}--${l.vpc_b_id}" => l }
   vpc_id      = aws_vpc.vpc[each.value.vpc_a_id].id
   peer_vpc_id = aws_vpc.vpc[each.value.vpc_b_id].id
   auto_accept = true
   tags        = { Name = "peer-${each.value.vpc_a_id}-${each.value.vpc_b_id}" }
 }
-
-# Rutas desde A hacia CIDR de B y viceversa
 resource "aws_route" "peer_a_to_b" {
-  for_each = {
-    for l in local.peering_links :
-    "a-${l.vpc_a_id}-${l.vpc_b_id}" => l
-  }
+  for_each = { for l in local.peering_links : "a-${l.vpc_a_id}-${l.vpc_b_id}" => l }
   route_table_id            = aws_route_table.rt_main[each.value.vpc_a_id].id
   destination_cidr_block    = local.vpc_by_id[each.value.vpc_b_id].cidr_block
   vpc_peering_connection_id = aws_vpc_peering_connection.peer["${each.value.vpc_a_id}--${each.value.vpc_b_id}"].id
 }
-
 resource "aws_route" "peer_b_to_a" {
-  for_each = {
-    for l in local.peering_links :
-    "b-${l.vpc_a_id}-${l.vpc_b_id}" => l
-  }
+  for_each = { for l in local.peering_links : "b-${l.vpc_a_id}-${l.vpc_b_id}" => l }
   route_table_id            = aws_route_table.rt_main[each.value.vpc_b_id].id
   destination_cidr_block    = local.vpc_by_id[each.value.vpc_a_id].cidr_block
   vpc_peering_connection_id = aws_vpc_peering_connection.peer["${each.value.vpc_a_id}--${each.value.vpc_b_id}"].id
