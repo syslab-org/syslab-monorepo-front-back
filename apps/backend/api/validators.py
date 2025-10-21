@@ -1,30 +1,52 @@
 # apps/backend/api/validators.py
-def validate_network_plan(payload: dict):
-    required_top = ["name", "region", "vpc", "subnets"]
-    for k in required_top:
-        if k not in payload:
-            raise ValueError(f"Falta clave requerida: {k}")
+from .serializers import MultiPlanSerializer
 
-    vpc = payload["vpc"]
-    if "cidr" not in vpc:
-        raise ValueError("vpc.cidr requerido")
+def _req(d, key, typ=None, where=""):
+    if key not in d:
+        raise ValueError(f"Falta clave requerida{f' en {where}' if where else ''}: {key}")
+    if typ and not isinstance(d[key], typ):
+        raise ValueError(f"Clave '{key}' debe ser de tipo {typ.__name__}")
+    return d[key]
 
-    subnets = payload["subnets"]
-    if not isinstance(subnets, list) or not subnets:
-        raise ValueError("subnets debe ser lista no vacía")
-    names = set()
-    for s in subnets:
-        for k in ["name", "cidr", "az", "public"]:
-            if k not in s:
-                raise ValueError(f"subnet.{k} requerido en {s}")
-        if s["name"] in names:
-            raise ValueError(f"Nombre de subnet duplicado: {s['name']}")
-        names.add(s["name"])
+def validate_network_plan(payload: dict) -> dict:
+    """
+    Valida el payload multi-VPC del front con DRF serializers.
+    - Exige 'name' (para el Plan).
+    - Valida estructura (vlan/vpcs/links).
+    - Normaliza región de VPCs heredando de vlan.region si alguna viene vacía.
+    Devuelve el payload saneado (serializer.validated_data + name).
+    Lanza ValueError con mensaje claro si falla.
+    """
+    if not isinstance(payload, dict):
+        raise ValueError("Payload inválido: debe ser un objeto JSON.")
 
-    # Opcional: validar routes
-    for r in payload.get("routes", []):
-        for k in ["from_subnet", "to", "via"]:
-            if k not in r:
-                raise ValueError(f"route.{k} requerido en {r}")
+    # 1) nombre del plan
+    name = (payload.get("name") or "").strip()
+    if not name:
+        raise ValueError("Falta clave requerida: name")
 
-    return True
+    # 2) validación estructural
+    ser = MultiPlanSerializer(data=payload)
+    if not ser.is_valid():
+        # construimos mensaje amigable
+        errs = []
+        for k, v in ser.errors.items():
+            errs.append(f"{k}: {v}")
+        msg = "; ".join(errs) or "Payload inválido"
+        raise ValueError(msg)
+
+    data = ser.validated_data
+
+    # 3) region por defecto: hereda de vlan.region si alguna vpc no trae
+    vlan_region = (data.get("vlan") or {}).get("region")
+    if vlan_region:
+        for v in data.get("vpcs", []):
+            if not v.get("region"):
+                v["region"] = vlan_region
+
+    # 4) master_cidr puede ser vacío (no lo apretamos aquí)
+
+    # 5) devolvemos saneado + name
+    data_out = dict(data)
+    data_out["name"] = name
+    return data_out

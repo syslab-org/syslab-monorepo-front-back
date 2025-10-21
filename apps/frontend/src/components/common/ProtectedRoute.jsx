@@ -1,3 +1,4 @@
+// apps/frontend/src/components/common/ProtectedRoute.jsx
 /* eslint-disable react/prop-types */
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
@@ -6,8 +7,8 @@ import { useAuth } from "../../contexts/AuthContext";
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, roleUser } = useAuth();
   const location = useLocation();
-  
-  
+
+
 
   // Verificar si el usuario no está autenticado
   if (!user) {

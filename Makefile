@@ -12,7 +12,7 @@ SVC_FLOWER    = flower
 SVC_REDIS     = redis
 SVC_PG        = postgres
 
-TF            = terraform -chdir=infra/terraform
+TF            = AWS_PROFILE=$(AWS_PROFILE) AWS_REGION=$(AWS_REGION) terraform -chdir=infra/terraform
 SMOKE_TIMEOUT ?= 60
 PLAN_FILE     ?= plan.json
 
@@ -509,7 +509,6 @@ smoke-local:
 	NP=$$(curl -fsS -X POST $$URL/api/network/plan/ -H "Content-Type: application/json" --data-binary @"$(PLAN_FILE)" | tee /tmp/smoke_np_task.json); \
 	NPID=$$(echo "$$NP" | jq -r .task_id); \
 	[ -n "$$NPID" ] || { echo "❌ Sin task_id (network_plan)"; echo "$$NP"; exit 1; }; \
-	echo "⏳ Esperando NetworkPlan $$NPID …"; \
 	EL=0; while [ $$EL -lt $(SMOKE_TIMEOUT) ]; do \
 	  RES=$$(curl -fsS $$URL/api/tasks/status/$$NPID/ || true); \
 	  STATE=$$(echo "$$RES" | jq -r .state); \
@@ -542,16 +541,19 @@ aws-db-up:
 
 aws-db-down:
 	$(TF) destroy -auto-approve \
-	  -target=aws_db_instance.this \
-	  -target=aws_db_subnet_group.this \
+	  -target=aws_db_instance.rds \
+	  -target=aws_db_subnet_group.rds \
 	  -target=aws_security_group.rds \
-	  -target=aws_secretsmanager_secret.db_url
+	  -target=aws_secretsmanager_secret.database_url
 
 secret-db:
-	@read -p "DB URL (codificada): " DBU; \
+	@DBU="$$(read -p 'DB URL (codificada): ' v; echo $$v)"; \
+	ARN=$$($(TF) output -raw database_url_secret_arn); \
+	[ -n "$$ARN" ] || { echo "❌ database_url_secret_arn vacío"; exit 1; }; \
+	echo "🔐 Actualizando secret $$ARN"; \
 	aws secretsmanager put-secret-value \
-	  --secret-id arn:aws:secretsmanager:us-east-1:034739223309:secret:tesis-dev-database-url-lJJ50L \
-	  --secret-string $$DBU \
-	  --region us-east-1 --profile tesis; \
-	echo "Secret actualizado"; \
-	echo "Puedes verificar con: aws secretsmanager get-secret-value --secret-id arn:aws:secretsmanager:us-east-1:034739223309:secret:tesis-dev-database-url-lJJ50L --region us-east-1 --profile tesis"
+	  --secret-id "$$ARN" \
+	  --secret-string "$$DBU" \
+	  --region $(AWS_REGION) --profile $(AWS_PROFILE); \
+	echo "✅ Secret actualizado."
+

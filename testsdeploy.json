@@ -1,0 +1,103 @@
+{
+  "cloud": "aws",
+  "vpcs": [
+    {
+      "id": "bozoj04e",
+      "name": "VPC-A",
+      "region": "us-east-1a",
+      "cidr_block": "10.0.0.0/20",
+      "internet_gateway": false,
+      "nat_gateway": {
+        "enabled": false,
+        "public_subnet": "",
+        "elastic_ip": ""
+      },
+      "route_tables": [
+        {
+          "name": "main",
+          "routes": [
+            {
+              "name": "rt-1",
+              "dest_cidr": "10.0.0.0/20",
+              "target": "local",
+              "via_router_id": null
+            },
+            {
+              "name": "rt-2",
+              "dest_cidr": "10.0.16.0/20",
+              "target": "router-p8jizrku",
+              "via_router_id": "p8jizrku"
+            }
+          ]
+        }
+      ],
+      "subnets": [
+        {
+          "name": "subnet-a-public-a1",
+          "cidr_block": "10.0.0.0/24",
+          "availability_zone": "us-east-1a",
+          "subnet_type": "public",
+          "route_table": "main",
+          "instances": []
+        },
+        {
+          "name": "subnet-a-private-a1",
+          "cidr_block": "10.0.1.0/24",
+          "availability_zone": "us-east-1a",
+          "subnet_type": "private",
+          "route_table": "main",
+          "instances": []
+        }
+      ]
+    },
+    {
+      "id": "guwo1nrf",
+      "name": "VPC-B",
+      "region": "us-east-1a",
+      "cidr_block": "10.0.16.0/20",
+      "internet_gateway": false,
+      "nat_gateway": {
+        "enabled": false,
+        "public_subnet": "",
+        "elastic_ip": ""
+      },
+      "route_tables": [
+        {
+          "name": "main",
+          "routes": [
+            {
+              "name": "rt-1",
+              "dest_cidr": "10.0.16.0/20",
+              "target": "local",
+              "via_router_id": null
+            },
+            {
+              "name": "rt-2",
+              "dest_cidr": "10.0.0.0/20",
+              "target": "router-p8jizrku",
+              "via_router_id": "p8jizrku"
+            }
+          ]
+        }
+      ],
+      "subnets": [
+        {
+          "name": "subnet-b-public-a1",
+          "cidr_block": "10.0.16.0/24",
+          "availability_zone": "us-east-1a",
+          "subnet_type": "public",
+          "route_table": "main",
+          "instances": []
+        },
+        {
+          "name": "subnet-b-private-a1",
+          "cidr_block": "10.0.17.0/24",
+          "availability_zone": "us-east-1a",
+          "subnet_type": "private",
+          "route_table": "main",
+          "instances": []
+        }
+      ]
+    }
+  ]
+}
