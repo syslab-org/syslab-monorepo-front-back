@@ -1,6 +1,6 @@
+# apps/backend/api/tasks.py
 from celery import shared_task
-import os, tempfile, subprocess, json, pathlib
-from django.conf import settings
+import os, tempfile, subprocess, json, pathlib, glob
 from django.utils import timezone
 from django.db import transaction
 from jinja2 import Environment, FileSystemLoader
@@ -8,17 +8,14 @@ from pathlib import Path
 from .models import Plan
 from provisioning.terraform_runner import cleanup  # solo usamos cleanup aquí
 
-
 # === CONFIGURACIONES GLOBALES ===
 TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "provisioning" / "templates"
 S3_BUCKET = os.getenv("S3_PLANS_BUCKET", "")
-
 
 # === FUNCIONES AUXILIARES ===
 def run(cmd, cwd):
     """Ejecuta un comando y captura stdout/stderr sin levantar excepción."""
     return subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, check=False)
-
 
 def _maybe_upload_to_s3(key: str, content: str):
     """Sube logs a S3 si está configurado."""
@@ -30,14 +27,12 @@ def _maybe_upload_to_s3(key: str, content: str):
     except Exception:
         pass
 
-
 # === TAREAS CELERY ===
 @shared_task(name="api.tasks.prueba_larga")
 def prueba_larga(n: int = 3):
     import time
     time.sleep(1)
     return {"ok": True, "n": n}
-
 
 @shared_task(bind=True)
 def process_network_plan(self, plan_id: str, payload: dict):
@@ -210,3 +205,48 @@ def process_network_plan(self, plan_id: str, payload: dict):
                 full_log += f"[debug] KEEP_TF_DIRS activo, conservando {workdir}\n"
             else:
                 cleanup(workdir)
+
+@shared_task(bind=True)
+def destroy_last_deploy(self, plan_id: str | None = None):
+    """
+    Destruye el último despliegue local de Terraform (el /tmp/tf-multi-* más reciente).
+    Usa las credenciales actuales del contenedor. Solo para DEV (state local).
+    """
+    full_log = ""
+    workdir = None
+    try:
+        dirs = sorted(glob.glob("/tmp/tf-multi-*"))
+        if not dirs:
+            raise RuntimeError("No hay directorios /tmp/tf-multi-* para destruir (¿KEEP_TF_DIRS=1?)")
+        workdir = dirs[-1]
+        full_log += f"[destroy] workdir={workdir}\n"
+
+        # init silencioso por si falta el .terraform
+        p_init = subprocess.run(
+            ["terraform", "init", "-input=false", "-no-color"],
+            cwd=workdir, text=True, capture_output=True, check=False
+        )
+        full_log += f"$ terraform init\n{p_init.stdout}\n{p_init.stderr}\n"
+
+        p = subprocess.run(
+            ["terraform", "destroy", "-auto-approve", "-no-color"],
+            cwd=workdir, text=True, capture_output=True, check=False
+        )
+        full_log += f"$ terraform destroy\n{p.stdout}\n{p.stderr}\n"
+        if p.returncode != 0:
+            raise RuntimeError("terraform destroy failed")
+
+        # marcar plan si nos pasaron id (opcional)
+        if plan_id:
+            try:
+                plan = Plan.objects.get(id=plan_id)
+                plan.status = Plan.Status.SUCCESS  # o DESTROYED si agregas ese estado
+                plan.error = ""
+                plan.updated_at = timezone.now()
+                plan.save(update_fields=["status", "error", "updated_at"])
+            except Exception:
+                pass
+
+        return {"ok": True, "log": full_log, "workdir": workdir}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "log": full_log, "workdir": workdir}

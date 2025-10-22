@@ -5,7 +5,7 @@ from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
 from celery.result import AsyncResult
 from .validators import validate_network_plan
-from .tasks import prueba_larga, process_network_plan
+from .tasks import prueba_larga, process_network_plan, destroy_last_deploy
 from .models import Plan
 
 @csrf_exempt
@@ -46,36 +46,27 @@ def network_plan_create(request):
         payload=payload,
         status=Plan.Status.PENDING,
     )
-    # Pasa plan_id y payload
     task = process_network_plan.delay(plan_id=str(plan.id), payload=payload)
     plan.task_id = task.id
     plan.save(update_fields=["task_id"])
-
     return JsonResponse({"ok": True, "plan_id": str(plan.id), "task_id": task.id}, status=202)
 
 @csrf_exempt
 @require_POST
 def deploy_plan(request, plan_id):
-    """
-    Re-ejecuta el plan existente (dispara Celery con el payload ya guardado).
-    Devuelve 202 + task_id.
-    """
     try:
         plan = Plan.objects.get(id=plan_id)
     except Plan.DoesNotExist:
         return JsonResponse({"ok": False, "error": "Plan not found"}, status=404)
 
-    # (Opcional pero recomendado) Validar nuevamente el payload guardado
     try:
         validate_network_plan(plan.payload)
     except Exception as e:
-        # Marca el plan en FAILURE si el payload ya no es válido
         plan.status = Plan.Status.FAILURE
         plan.error = str(e)
         plan.save(update_fields=["status", "error"])
         return JsonResponse({"ok": False, "error": str(e)}, status=400)
 
-    # Reset de estado y disparo de Celery
     plan.status = Plan.Status.RUNNING
     plan.error = ""
     plan.save(update_fields=["status", "error"])
@@ -83,8 +74,16 @@ def deploy_plan(request, plan_id):
     task = process_network_plan.delay(plan_id=str(plan.id), payload=plan.payload)
     plan.task_id = task.id
     plan.save(update_fields=["task_id"])
+    return JsonResponse({"ok": True, "plan_id": str(plan.id), "task_id": task.id}, status=202)
 
-    return JsonResponse(
-        {"ok": True, "plan_id": str(plan.id), "task_id": task.id},
-        status=202,
-    )
+# --- NUEVO: destroy ---
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework import status
+
+@api_view(["POST"])
+@permission_classes([AllowAny])  # ajusta permisos según tu auth
+def destroy_plan(request, plan_id=None):
+    task = destroy_last_deploy.delay(plan_id)
+    return Response({"task_id": task.id}, status=status.HTTP_202_ACCEPTED)
