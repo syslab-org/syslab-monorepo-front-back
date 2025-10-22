@@ -557,3 +557,22 @@ secret-db:
 	  --region $(AWS_REGION) --profile $(AWS_PROFILE); \
 	echo "✅ Secret actualizado."
 
+
+DC := docker compose -f tools/docker/compose.dev.yml
+
+# make tf-destroy DIR=/tmp/tf-multi-xxxxx
+tf-destroy:
+	$(DC) exec celery bash -lc 'set -e; cd "$(DIR)"; \
+	export AWS_DEFAULT_REGION=$${AWS_DEFAULT_REGION:-us-east-1}; \
+	terraform init -input=false -no-color >/dev/null; \
+	terraform destroy -auto-approve -no-color'
+
+# make tf-destroy-last
+tf-destroy-last:
+	$(DC) exec celery bash -lc '\
+	set -e; DIR=$$(ls -1td /tmp/tf-multi-* 2>/dev/null | head -1); \
+	test -n "$$DIR" && test -d "$$DIR" || { echo "No hay /tmp/tf-multi-*"; exit 1; } ; \
+	echo "[destroy] $$DIR"; cd "$$DIR"; \
+	export AWS_DEFAULT_REGION=$${AWS_DEFAULT_REGION:-us-east-1}; \
+	terraform init -input=false -no-color >/dev/null; \
+	terraform destroy -auto-approve -no-color'
