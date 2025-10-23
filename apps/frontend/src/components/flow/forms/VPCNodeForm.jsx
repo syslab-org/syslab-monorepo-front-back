@@ -1,22 +1,20 @@
-/* eslint-disable no-unused-vars */
-/* eslint-disable react/prop-types */
+// apps/frontend/src/components/flow/forms/VPCNodeForm.jsx
 import { yupResolver } from "@hookform/resolvers/yup";
-import { Button, FormControl, InputLabel, MenuItem, Select, TextField } from "@mui/material";
+import { Button, FormControl, FormControlLabel, FormHelperText, InputLabel, MenuItem, Select, Switch, TextField } from "@mui/material";
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { CLOUD_AWS_LABEL, CLOUD_AWS_VALUE, VPC_CHILD_FORM } from "../utils/constants";
 import { useFormValidationSchema } from "./validations/useFormValidations";
 
-// eslint-disable-next-line react/prop-types
 const VPCNodeForm = ({
   nodeData,
   onSave,
   deleteNode,
   vlanCidr,               // "10.0.0.0/16"
   siblingVpcCidrs = [],   // ["10.0.1.0/24", ...]
-  defaultRegion = "us-east-1a"
+  defaultRegion = "us-east-1", // ← región (no AZ)
+  publicSubnetNames = [], // nombres de subnets públicas en esta VPC
 }) => {
-
   const validationSchema = useFormValidationSchema(
     VPC_CHILD_FORM,
     null,
@@ -25,18 +23,21 @@ const VPCNodeForm = ({
     true
   );
 
-  const { register, handleSubmit, formState: { errors }, reset } = useForm({
+  const { register, handleSubmit, formState: { errors }, reset, setError, watch, control } = useForm({
     resolver: yupResolver(validationSchema),
     defaultValues: {
       cloudProvider: nodeData.cloudProvider || CLOUD_AWS_VALUE,
       vpcName: nodeData.vpcName || "",
-      region: nodeData.region || defaultRegion,
+      region: nodeData.region || defaultRegion, // ej: "us-east-1"
       cidrBlock:
         nodeData.cidrBlock && nodeData.prefixLength
           ? `${nodeData.cidrBlock}/${nodeData.prefixLength}`
           : "",
       internetGateway: nodeData.internetGateway ?? false,
-      allowedSshCidr: nodeData.allowedSshCidr || "",   // 👈 NUEVO
+      allowedSshCidr: nodeData.allowedSshCidr || "",
+      enableNatGateway: nodeData.enableNatGateway ?? false,
+      natGatewayPublicSubnet: nodeData.natGatewayPublicSubnet || "",
+      natGatewayElasticIp: nodeData.natGatewayElasticIp || "",
     }
   });
 
@@ -51,17 +52,39 @@ const VPCNodeForm = ({
           : "",
       internetGateway: nodeData.internetGateway ?? false,
       allowedSshCidr: nodeData.allowedSshCidr || "",
+      enableNatGateway: nodeData.enableNatGateway ?? false,
+      natGatewayPublicSubnet: nodeData.natGatewayPublicSubnet || "",
+      natGatewayElasticIp: nodeData.natGatewayElasticIp || "",
+
     });
   }, [nodeData, reset, defaultRegion]);
 
   const onSubmit = (data) => {
     const [base, prefix] = data.cidrBlock.split("/");
-    onSave({
-      ...data,
+
+    const payload = {
+      // existentes
+      vpcName: data.vpcName,
+      region: data.region,
       cidrBlock: base,
       prefixLength: Number(prefix),
-      // region: defaultRegion (si quieres forzarlo)
-    });
+      internetGateway: data.internetGateway,
+      allowedSshCidr: data.allowedSshCidr || "",
+
+      // NAT (camelCase para el builder)
+      enableNatGateway: !!data.enableNatGateway,
+      natGatewayPublicSubnet: data.natGatewayPublicSubnet || "",
+      natGatewayElasticIp: (data.natGatewayElasticIp || "").trim(),
+
+      // (opcional) snake_case directo, por si lo quieres usar más adelante:
+      nat_gateway: {
+        enabled: !!data.enableNatGateway,
+        public_subnet: data.natGatewayPublicSubnet || "",
+        elastic_ip: (data.natGatewayElasticIp || "").trim(),
+      },
+    };
+
+    onSave(payload);
   };
 
   return (
@@ -93,7 +116,7 @@ const VPCNodeForm = ({
         {...register("cidrBlock")}
         error={!!errors.cidrBlock}
         helperText={errors.cidrBlock?.message}
-        placeholder="10.10.0.0/20"
+        placeholder="10.30.0.0/20"
         fullWidth
         margin="normal"
       />
@@ -106,9 +129,9 @@ const VPCNodeForm = ({
           label="Region"
           defaultValue={defaultRegion}
         >
-          <MenuItem value="us-east-1a">US East (N. Virginia)</MenuItem>
-          <MenuItem value="us-west-1">US West (N. California)</MenuItem>
+          <MenuItem value="us-east-1">US East (N. Virginia)</MenuItem>
           <MenuItem value="us-west-2">US West (Oregon)</MenuItem>
+          <MenuItem value="eu-west-1">EU (Ireland)</MenuItem>
         </Select>
         {errors.region && <p>{errors.region.message}</p>}
       </FormControl>
@@ -128,6 +151,54 @@ const VPCNodeForm = ({
           <p style={{ color: "red", marginTop: 4 }}>{errors.internetGateway.message}</p>
         )}
       </FormControl>
+
+      {/* ---- NAT Gateway ---- */}
+      <FormControlLabel
+        control={
+          <Controller
+            name="enableNatGateway"
+            control={control}
+            render={({ field }) => (
+              <Switch
+                checked={!!field.value}
+                onChange={(e) => field.onChange(e.target.checked)}
+              />
+            )}
+          />
+        }
+        label="Enable NAT Gateway"
+      />
+
+      <FormControl fullWidth margin="normal" disabled={!watch("enableNatGateway")}>
+        <InputLabel id="nat-subnet-label">Public Subnet for NAT</InputLabel>
+        <Select
+          labelId="nat-subnet-label"
+          label="Public Subnet for NAT"
+          {...register("natGatewayPublicSubnet")}
+          defaultValue={nodeData.natGatewayPublicSubnet || ""}
+        >
+          <MenuItem value="">
+            <em>Selecciona una subnet pública</em>
+          </MenuItem>
+          {publicSubnetNames.map(name => (
+            <MenuItem key={name} value={name}>{name}</MenuItem>
+          ))}
+        </Select>
+        {!publicSubnetNames.length && (
+          <FormHelperText>
+            Crea primero una Subnet pública en este VPC para alojar el NAT.
+          </FormHelperText>
+        )}
+      </FormControl>
+
+      <TextField
+        label="Elastic IP (opcional)"
+        {...register("natGatewayElasticIp")}
+        placeholder="(auto)"
+        fullWidth
+        margin="normal"
+        disabled={!watch("enableNatGateway")}
+      />
 
       <TextField
         label="Allowed SSH CIDR (opcional)"
