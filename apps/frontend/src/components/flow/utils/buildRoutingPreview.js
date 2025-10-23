@@ -1,150 +1,126 @@
-// src/components/flow/utils/buildRoutingPreview.js
-import {
-  TYPE_VPC_NODE,
-  TYPE_ROUTER_NODE,
-} from "../utils/constants";
-
-// Utilidad simple para saber si un CIDR A pertenece (o es igual) a CIDR B.
-// Aquí comparamos por prefijo textual; para algo más estricto puedes
-// usar 'netmask' o 'ip-cidr' si lo necesitas.
-const cidrEqual = (a, b) => (a || "").trim() === (b || "").trim();
+// apps/frontend/src/components/flow/utils/buildRoutingPreview.js
+import { TYPE_ROUTER_NODE, TYPE_SUBNETWORK_NODE, TYPE_VPC_NODE } from "./constants";
 
 /**
- * Construye un "preview" de rutas VPC↔VPC para TODOS los routers del canvas.
- * Reglas clave:
- *  - Cada VPC siempre tiene ruta local a su propio CIDR.
- *  - Para cada router, SOLO se generan rutas entre VPCs conectadas a ESE router.
- *  - No hay transitividad: un router NUNCA “hace puente” hacia VPCs colgando de otro router.
- *  - Los destinos toman lo que esté definido en el RouterNodeForm (destCidr).
- *
- * Devuelve:
- * {
- *   vpcs: [{
- *     id, name, region, cidr,
- *     connectedRouters: [routerIds...],
- *     main_route_table: [{ dest_cidr, target, via_router_id }]
- *   }],
- *   warnings: [strings...]
- * }
+ * Genera la tabla de rutas principal ("main") por VPC
+ * con soporte para:
+ *  - rutas locales
+ *  - Internet Gateway
+ *  - NAT Gateway
+ *  - rutas entre VPCs conectadas por router
  */
 export function buildRoutingPreview(nodes, edges) {
-  const idToNode = new Map(nodes.map(n => [n.id, n]));
-  const vpcNodes   = nodes.filter(n => n.type === TYPE_VPC_NODE);
-  const routerNodes= nodes.filter(n => n.type === TYPE_ROUTER_NODE);
-
-  // vpcInfo: id -> {id, name, region, cidr}
-  const vpcInfo = new Map(
-    vpcNodes.map(v => {
-      const name   = v.data?.vpcName || v.data?.title || v.id;
-      const region = v.data?.region || "us-east-1";
-      const cidr   = (v.data?.cidrBlock && v.data?.prefixLength)
-          ? `${v.data.cidrBlock}/${v.data.prefixLength}`
-          : null;
-      return [v.id, { id: v.id, name, region, cidr }];
-    })
-  );
-
-  // routerConnections: routerId -> Set<VPC ids>
-  const routerConnections = new Map();
-  edges.forEach(e => {
-    const s = idToNode.get(e.source);
-    const t = idToNode.get(e.target);
-    if (!s || !t) return;
-    const isVpcRouter =
-      (s.type === TYPE_VPC_NODE && t.type === TYPE_ROUTER_NODE) ||
-      (s.type === TYPE_ROUTER_NODE && t.type === TYPE_VPC_NODE);
-    if (!isVpcRouter) return;
-
-    const routerId = (s.type === TYPE_ROUTER_NODE ? s.id : t.id);
-    const vpcId    = (s.type === TYPE_VPC_NODE   ? s.id : t.id);
-    if (!routerConnections.has(routerId)) routerConnections.set(routerId, new Set());
-    routerConnections.get(routerId).add(vpcId);
-  });
-
-  // Para cada VPC, lista de routers conectados
-  const vpcToRouters = new Map();
-  for (const [rid, set] of routerConnections.entries()) {
-    for (const vid of set) {
-      if (!vpcToRouters.has(vid)) vpcToRouters.set(vid, new Set());
-      vpcToRouters.get(vid).add(rid);
-    }
+  if (!Array.isArray(nodes) || !nodes.length) {
+    return { vpcs: [] };
   }
 
-  // warnings acumulados
-  const warnings = [];
+  // --- Indexar nodos por tipo ---
+  const vpcs = nodes.filter((n) => n.type === TYPE_VPC_NODE);
+  const routers = nodes.filter((n) => n.type === TYPE_ROUTER_NODE);
+  const subnets = nodes.filter((n) => n.type === TYPE_SUBNETWORK_NODE);
 
-  // Rutas por VPC (unión de lo que digan TODOS los routers DIRECTAMENTE conectados)
-  const vpcRouteMap = new Map(); // vpcId -> [{dest_cidr, target, via_router_id}]
-  for (const v of vpcNodes) {
-    const info = vpcInfo.get(v.id);
-    const routes = [];
+  // --- Map de conexiones Router <-> VPC ---
+  const routerLinks = {};
+  edges.forEach((e) => {
+    const source = nodes.find((n) => n.id === e.source);
+    const target = nodes.find((n) => n.id === e.target);
+    if (!source || !target) return;
 
-    // Local
-    if (info?.cidr) {
-      routes.push({ dest_cidr: info.cidr, target: "local" });
-    } else {
-      warnings.push(`VPC ${info?.name || v.id} no tiene CIDR.`);
+    // Solo consideramos conexiones Router <-> VPC
+    if (
+      (source.type === TYPE_ROUTER_NODE && target.type === TYPE_VPC_NODE) ||
+      (target.type === TYPE_ROUTER_NODE && source.type === TYPE_VPC_NODE)
+    ) {
+      const routerId =
+        source.type === TYPE_ROUTER_NODE ? source.id : target.id;
+      const vpcId = source.type === TYPE_VPC_NODE ? source.id : target.id;
+      if (!routerLinks[routerId]) routerLinks[routerId] = new Set();
+      routerLinks[routerId].add(vpcId);
+    }
+  });
+
+  // --- Construcción de rutas por VPC ---
+  const vpcPreviews = vpcs.map((vpc) => {
+    const vpcId = vpc.id;
+    const vpcName = vpc.data?.vpcName || vpc.id;
+    const region = vpc.data?.region || "us-east-1";
+    const cidr =
+      vpc.data?.cidrBlock && vpc.data?.prefixLength
+        ? `${vpc.data.cidrBlock}/${vpc.data.prefixLength}`
+        : vpc.data?.cidr || "0.0.0.0/16";
+
+    const igw = !!vpc.data?.internetGateway;
+    const nat = !!vpc.data?.enableNatGateway;
+    const publicSubnetName = vpc.data?.natGatewayPublicSubnet || "";
+
+    // Subnets dentro de esta VPC
+    const vpcSubnets = subnets.filter((s) => s.parentNode === vpcId);
+    const privateSubnets = vpcSubnets.filter(
+      (s) => (s.data?.subnetType || "").toLowerCase() === "private"
+    );
+
+    // --- Rutas base ---
+    const routes = [
+      {
+        dest_cidr: cidr,
+        target: "local",
+        via_router_id: null,
+      },
+    ];
+
+    // --- Internet Gateway (salida pública) ---
+    if (igw) {
+      routes.push({
+        dest_cidr: "0.0.0.0/0",
+        target: "igw",
+        via_router_id: null,
+      });
     }
 
-    // Por cada router conectado a ESTA VPC, toma sus routeTable
-    const rids = Array.from(vpcToRouters.get(v.id) || []);
-    rids.forEach(rid => {
-      const routerNode = idToNode.get(rid);
-      const rTable = Array.isArray(routerNode?.data?.routeTable) ? routerNode.data.routeTable : [];
+    // --- NAT Gateway (para subredes privadas) ---
+    if (nat && privateSubnets.length > 0) {
+      privateSubnets.forEach((subnet) => {
+        routes.push({
+          dest_cidr: subnet.data?.cidrBlock || "",
+          target: "nat-gw",
+          via_router_id: null,
+        });
+      });
+    }
 
-      rTable.forEach(entry => {
-        // Solo las rutas donde sourceVpcId sea ESTA VPC
-        if (entry.sourceVpcId !== v.id) return;
+    // --- Peering entre VPCs conectadas por router ---
+    const connectedRouters = Object.entries(routerLinks)
+      .filter(([_, vpcSet]) => vpcSet.has(vpcId))
+      .map(([routerId, vpcSet]) => ({ routerId, vpcSet }));
 
-        const destCidr = (entry.destCidr || "").trim();
-        if (!destCidr) {
-          warnings.push(`Router ${rid}: ruta sin destCidr (source=${v.id}).`);
-          return;
-        }
+    connectedRouters.forEach(({ routerId, vpcSet }) => {
+      vpcSet.forEach((otherVpcId) => {
+        if (otherVpcId === vpcId) return;
+        const otherVpc = vpcs.find((v) => v.id === otherVpcId);
+        if (!otherVpc) return;
 
-        // validación ligera: si especificaron destVpcId, debe estar colgada del mismo router
-        if (entry.destVpcId) {
-          const set = routerConnections.get(rid) || new Set();
-          if (!set.has(entry.destVpcId)) {
-            warnings.push(`Router ${rid}: destino ${entry.destVpcId} no está conectado a este router (source=${v.id}).`);
-            return;
-          }
-        }
-
-        // Si hay destVpcId y conocemos el CIDR de esa VPC, alerta si no coincide
-        if (entry.destVpcId) {
-          const destVpc = vpcInfo.get(entry.destVpcId);
-          if (destVpc?.cidr && !cidrEqual(destVpc.cidr, destCidr)) {
-            warnings.push(`Router ${rid}: destCIDR (${destCidr}) difiere del CIDR de ${destVpc.name} (${destVpc.cidr}).`);
-          }
-        }
+        const otherCidr =
+          otherVpc.data?.cidrBlock && otherVpc.data?.prefixLength
+            ? `${otherVpc.data.cidrBlock}/${otherVpc.data.prefixLength}`
+            : otherVpc.data?.cidr || "";
 
         routes.push({
-          dest_cidr: destCidr,
-          target: `router-${rid}`,
-          via_router_id: rid,
+          dest_cidr: otherCidr,
+          target: "peering",
+          via_router_id: routerId,
         });
       });
     });
 
-    vpcRouteMap.set(v.id, routes);
-  }
+    return {
+      id: vpcId,
+      name: vpcName,
+      region,
+      cidr,
+      connectedRouters: connectedRouters.map((r) => r.routerId),
+      main_route_table: routes,
+    };
+  });
 
-  // Construir payload preview
-  const preview = {
-    vpcs: vpcNodes.map(v => {
-      const info = vpcInfo.get(v.id);
-      return {
-        id: v.id,
-        name: info?.name,
-        region: info?.region,
-        cidr: info?.cidr,
-        connectedRouters: Array.from(vpcToRouters.get(v.id) || []),
-        main_route_table: vpcRouteMap.get(v.id) || [],
-      };
-    }),
-    warnings,
-  };
-
-  return preview;
+  return { vpcs: vpcPreviews };
 }

@@ -204,26 +204,57 @@ function MainFlow() {
   }
 
   const saveNodeData = (data) => {
-    console.log();
+    console.log("saveNodeData - data recibido:", data);
 
+    // 🧩 Normaliza nombres si el nodo es una VPC
+    let normalized = { ...data };
+    if (selectedNode?.type === TYPE_VPC_NODE) {
+      normalized = {
+        ...data,
+        // Nombres posibles
+        vpcName: data.vpcName || data.name || data.title,
+        // CIDR (acepta camelCase o snake_case)
+        cidrBlock: data.cidrBlock || data.cidr_block,
+        prefixLength: data.prefixLength ?? data.prefix_length,
+        // Booleans correctos
+        internetGateway: data.internetGateway ?? data.internet_gateway,
+        enableNatGateway:
+          data.enableNatGateway ??
+          (data.nat_gateway && data.nat_gateway.enabled),
+        // Mantén objetos si vienen anidados
+        nat_gateway: data.nat_gateway,
+        allowedSshCidr: data.allowedSshCidr || data.allowed_ssh_cidr,
+        // Genera el título visible
+        title: data.vpcName || data.name || "VPC",
+      };
+
+      // Si vino CIDR completo (ej: 10.0.0.0/16), sepáralo
+      if (typeof normalized.cidrBlock === "string" && normalized.cidrBlock.includes("/")) {
+        const [base, pref] = normalized.cidrBlock.split("/");
+        normalized.cidrBlock = base.trim();
+        normalized.prefixLength = Number(pref);
+      }
+    }
+
+    // 🔹 Mezcla en el nodo correspondiente
     setNodes((nds) =>
       nds.map((node) => {
-        if (node.id === selectedNode.id) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              ...data
-            }
-          }
-        }
-        return node
-      })
-    )
+        if (node.id !== selectedNode.id) return node;
 
-    onSaveFlow()
-    closeModal()
-  }
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            ...normalized,
+          },
+        };
+      })
+    );
+
+    // 🔸 Guarda y cierra modal
+    onSaveFlow();
+    closeModal();
+  };
 
   const deleteNodeInstance = () => {
 
@@ -652,9 +683,16 @@ function MainFlow() {
             {selectedNode && selectedNode.type === TYPE_SUBNETWORK_NODE && (() => {
               //VPC-hija padre de la Subnet seleccionada
               const parentVpcNode = nodes.find(n => n.id === selectedNode.parentId);
-              const parentVpcCidr = parentVpcNode?.data
-                ? `${parentVpcNode.data.cidrBlock}/${parentVpcNode.data.prefixLength}`
-                : "";
+
+              const parentVpcData = parentVpcNode?.data || {};
+              const hasParentCidr =
+                typeof parentVpcData.cidrBlock === 'string' &&
+                String(parentVpcData.prefixLength || '') !== '' &&
+                /^\d+$/.test(String(parentVpcData.prefixLength))
+
+              const parentVpcCidr = hasParentCidr
+                ? `${parentVpcData.cidrBlock}/${parentVpcData.prefixLength}`
+                : ""; // sin padre válido, no mostramos "undefined/.."
 
               // CIDRs de subredes hermanas (misma VPC) excluyendo la actual
               const siblingSubnetCidrsInSameVpc = nodes
@@ -727,31 +765,39 @@ function MainFlow() {
 
             {/* If node type is VPC, show VPCNodeForm */}
             {selectedNode && selectedNode.type === TYPE_VPC_NODE && (() => {
-
-              //1) VLAN CIDR maestro desde store
               const vlanCidr = (cidrBlockVPC && prefixLength)
                 ? `${cidrBlockVPC}/${prefixLength}`
                 : "";
-              //2) CIDRs de otras VPC-hija (excluye la seleccionada)
+
               const siblingVpcCidrs = nodes
                 .filter(n => n.type === TYPE_VPC_NODE && n.id !== selectedNode.id)
                 .map(n => {
                   const base = n.data?.cidrBlock;
                   const pref = n.data?.prefixLength;
                   return base && pref ? `${base}/${pref}` : null;
-                }).filter(Boolean);
+                })
+                .filter(Boolean);
+
+              // 👇 NUEVO: nombres de subnets públicas dentro de esta VPC
+              const publicSubnetNames = nodes
+                .filter(n =>
+                  n.type === TYPE_SUBNETWORK_NODE &&
+                  n.parentId === selectedNode.id &&
+                  String(n.data?.subnetType || "").toLowerCase() === "public"
+                )
+                .map(n => n.data?.subnetName)
+                .filter(Boolean);
 
               return (
                 <VPCNodeForm
                   nodeData={selectedNode.data}
                   onSave={saveNodeData}
                   deleteNode={deleteNodeInstance}
-                  vlanCidr={vlanCidr}                 // <-- pasa VLAN CIDR
-                  siblingVpcCidrs={siblingVpcCidrs}   // <-- pasa lista de VPC CIDRs hermanas
+                  vlanCidr={vlanCidr}
+                  siblingVpcCidrs={siblingVpcCidrs}
+                  publicSubnetNames={publicSubnetNames}
                 />
-
-              )
-
+              );
             })()}
 
 
