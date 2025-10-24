@@ -69,29 +69,14 @@ function buildLinksFromEdges(nodes, edges) {
         const a = vpcs[i];
         const b = vpcs[j];
 
-        const idToNodeGet = (id) => idToNode.get(id);
-        const vpcA = idToNodeGet(a);
-        const vpcB = idToNodeGet(b);
-        const cidrA =
-          vpcA?.data?.cidrBlock && vpcA?.data?.prefixLength
-            ? `${vpcA.data.cidrBlock}/${vpcA.data.prefixLength}`
-            : vpcA?.data?.cidr ||
-            vpcA?.data?.cidr_block ||
-            "";
-        const cidrB =
-          vpcB?.data?.cidrBlock && vpcB?.data?.prefixLength
-            ? `${vpcB.data.cidrBlock}/${vpcB.data.prefixLength}`
-            : vpcB?.data?.cidr ||
-            vpcB?.data?.cidr_block ||
-            "";
+        const vpcA = idToNode.get(a);
+        const vpcB = idToNode.get(b);
 
         links.push({
           type: "peering",
           via_router_id: routerId,
           vpc_a_id: a,
           vpc_b_id: b,
-          // (opcional) aquí podrías llevar reglas declarativas a futuro:
-          // routes: { a_to_b: [...], b_to_a: [...] }
         });
       }
     }
@@ -129,12 +114,10 @@ const useDeployNetwork = ({ nodes, edges }) => {
       return;
     }
     if (warnings.length) {
-      console.warn(
-        "Advertencias (no bloquean):\n" + warnings.join("\n")
-      );
+      console.warn("Advertencias (no bloquean):\n" + warnings.join("\n"));
     }
 
-    // 2) Preview de ruteo (para construir route_tables por VPC)
+    // 2) Preview de ruteo (para detectar intenciones como NAT/IGW)
     const preview = buildRoutingPreview(nodes, edges);
 
     // 3) VPCs del canvas
@@ -153,50 +136,37 @@ const useDeployNetwork = ({ nodes, edges }) => {
           ? `${vpcNode.data.cidrBlock}/${vpcNode.data.prefixLength}`
           : null;
 
-      const pv = preview.vpcs.find((p) => p.id === vpcNode.id);
-      const mainRoutes = (pv?.main_route_table || []).map((r, i) => ({
-        name: `rt-${i + 1}`,
-        dest_cidr: r.dest_cidr,
-        target: r.target, // "local" | "igw" | "nat" | "router-..." (peering)
-        via_router_id: r.via_router_id || null,
-      }));
-
-      // Subnets e instancias agrupadas
-      const subnetsOfVpc = groupSubnetsByVpc(nodes, vpcNode.id).map((sn) => {
+      // --- subnets & instances
+      const subnetsRaw = groupSubnetsByVpc(nodes, vpcNode.id).map((sn) => {
         const az = normalizeAz(region, sn.data?.availabilityZone);
         const isPublic =
           (sn.data?.subnetType || "").toLowerCase() === "public";
 
-        const instances = groupInstancesBySubnet(nodes, sn.id).map(
-          (inst) => {
-            const name = inst.data?.name || `vm-${sn.id}`;
-            const ami =
-              (inst.data?.ami || "").trim() || undefined;
-            const instanceType =
-              inst.data?.instanceType || "t2.micro";
-            const ip =
-              (inst.data?.ipAddress || "").trim() || undefined;
-            const keypair =
-              (inst.data?.sshAccess || "").trim() || undefined;
+        const instances = groupInstancesBySubnet(nodes, sn.id).map((inst) => {
+          const name = inst.data?.name || `vm-${sn.id}`;
+          const ami = (inst.data?.ami || "").trim() || undefined;
+          const instanceType = inst.data?.instanceType || "t2.micro";
+          const ip = (inst.data?.ipAddress || "").trim() || undefined;
+          const keypair = (inst.data?.sshAccess || "").trim() || undefined;
 
-            // ⬇️ CAMBIO: si en el nodo de instancia viene associate_public_ip (boolean),
-            // lo respetamos; si no, heredamos de si la subnet es pública.
-            const associatePublic =
-              typeof inst.data?.associate_public_ip === "boolean"
-                ? inst.data.associate_public_ip
-                : isPublic;
+          const associatePublic =
+            typeof inst.data?.associate_public_ip === "boolean"
+              ? inst.data.associate_public_ip
+              : isPublic;
 
-            return {
-              id: inst.id,
-              name,
-              ami,
-              instance_type: instanceType,
-              ip_address: ip,
-              ssh_access: keypair,
-              associate_public_ip: associatePublic,
-            };
-          }
-        );
+          return {
+            id: inst.id,
+            name,
+            ami,
+            instance_type: instanceType,
+            ip_address: ip,
+            ssh_access: keypair,
+            associate_public_ip: associatePublic,
+          };
+        });
+
+        // asignamos RT por tipo
+        const routeTableName = isPublic ? "public" : "private";
 
         return {
           name: sn.data?.subnetName || `subnet-${sn.id}`,
@@ -204,10 +174,72 @@ const useDeployNetwork = ({ nodes, edges }) => {
           availability_zone: az,
           map_public_ip_on_launch: isPublic,
           subnet_type: sn.data?.subnetType,
-          route_table: "main",
+          route_table: routeTableName,
           instances,
         };
       });
+
+      const hasPublic = subnetsRaw.some(
+        (s) => (s.subnet_type || "").toLowerCase() === "public"
+      );
+      const hasPrivate = subnetsRaw.some(
+        (s) => (s.subnet_type || "").toLowerCase() === "private"
+      );
+
+      // --- interpretar preview: si había alguna ruta marcada como NAT/IGW en "main",
+      //     la normalizamos y la mapeamos a las RT adecuadas.
+      const pv = preview.vpcs.find((p) => p.id === vpcNode.id);
+      const previewRoutes = (pv?.main_route_table || []).map((r) => {
+        const t = String(r.target || "").toLowerCase();
+        const isNat =
+          t === "nat" || t === "nat-gw" || t === "natgateway";
+        const isIgw = t === "igw" || t === "internet-gateway";
+        return {
+          dest_cidr: isNat ? "0.0.0.0/0" : r.dest_cidr,
+          target: isNat ? "nat" : isIgw ? "igw" : r.target,
+          via_router_id: r.via_router_id || null,
+        };
+      });
+
+      // rutas para la tabla pública: si el preview sugiere IGW, la añadimos; si no, añadimos la default por defecto
+      const publicRoutes = [];
+      const hasIgwInPreview = previewRoutes.some(
+        (r) => String(r.target).toLowerCase() === "igw"
+      );
+      if (hasPublic) {
+        if (hasIgwInPreview) {
+          // usa la del preview (asegurada como 0.0.0.0/0 → igw)
+          publicRoutes.push({
+            name: "igw-default",
+            dest_cidr: "0.0.0.0/0",
+            target: "igw",
+          });
+        } else {
+          // default sensata por si acaso
+          publicRoutes.push({
+            name: "igw-default",
+            dest_cidr: "0.0.0.0/0",
+            target: "igw",
+          });
+        }
+      }
+
+      // tabla privada sin default explícita (el template añade 0.0.0.0/0 → NAT si enabled)
+      const privateRoutes = [];
+
+      const routeTables = [];
+      if (hasPublic) {
+        routeTables.push({ name: "public", routes: publicRoutes });
+      }
+      if (hasPrivate) {
+        routeTables.push({ name: "private", routes: privateRoutes });
+      }
+      // fallback: si por algún motivo no detectamos subnets, crea una "main" vacía
+      if (!routeTables.length) {
+        routeTables.push({ name: "main", routes: [] });
+        // y reasigna cualquier subnet sin tipo a "main"
+        subnetsRaw.forEach((s) => (s.route_table = "main"));
+      }
 
       return {
         id: vpcNode.id,
@@ -218,10 +250,10 @@ const useDeployNetwork = ({ nodes, edges }) => {
         nat_gateway: {
           enabled: !!vpcNode.data?.enableNatGateway,
           public_subnet: vpcNode.data?.natGatewayPublicSubnet || "",
-          elastic_ip: vpcNode.data?.natGatewayElasticIp || "",
+          elastic_ip: (vpcNode.data?.natGatewayElasticIp || "").trim(),
         },
-        route_tables: [{ name: "main", routes: mainRoutes }],
-        subnets: subnetsOfVpc,
+        route_tables: routeTables,
+        subnets: subnetsRaw,
         allowed_ssh_cidr: vpcNode.data?.allowedSshCidr || "",
       };
     });
@@ -275,7 +307,7 @@ const useDeployNetwork = ({ nodes, edges }) => {
 
     try {
       if (!simulateOnly) {
-        const txt = window.prompt('Para confirmar escribe: DEPLOY');
+        const txt = window.prompt("Para confirmar escribe: DEPLOY");
         if (txt !== "DEPLOY") {
           setLoadingFlow(false);
           setErrorMessage("Deploy cancelado por el usuario.");
