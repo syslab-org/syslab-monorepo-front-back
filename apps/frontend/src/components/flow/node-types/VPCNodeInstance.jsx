@@ -1,43 +1,55 @@
 // src/components/flow/node-types/VPCNodeInstance.jsx
+import { Handle, NodeResizer, Position } from "@xyflow/react";
 import { memo } from 'react';
-import { Handle, Position, NodeResizer } from "@xyflow/react";
-import NodeChrome from './NodeChrome';
 import '../styles/packet-tracer.css';
+import NodeChrome from './NodeChrome';
 
-// eslint-disable-next-line react/prop-types
 function VPCNodeInstance({ data = {}, isConnectable }) {
-    const name = data.vpcName || data.title || 'VPC';
-    const cidr = (data.cidrBlock && data.prefixLength) ? `${data.cidrBlock}/${data.prefixLength}` : 'CIDR n/a';
-    const region = data.region || 'region n/a';
+  // nombre: prioriza vpcName, si no usa name, luego title
+  const name =
+    data.vpcName ||
+    data.name ||
+    data.title ||
+    'VPC';
 
-    return (
-        // Wrapper: el tamaño real del nodo lo controla React Flow; este DIV ocupa ese tamaño.
-        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-            {/* Resizer (minimos sugeridos). El borde aparece al seleccionar el nodo. */}
-            <NodeResizer minWidth={520} minHeight={220} />
+  // región
+  const region = data.region || 'region n/a';
 
-            {/* Chrome estilo Packet Tracer. pt-fill hace que ocupe 100% del wrapper */}
-            <div className="pt-fill">
-                <NodeChrome
-                    type="vpc"
-                    title={name}
-                    subtitle={`${cidr} • ${region}`}
-                    status="up"
-                    // No pases pt-size--vpc si quieres tamaño totalmente libre; con NodeResizer ya basta.
-                    rightArea={<span className="pt-badge">AWS</span>}
-                >
-                    <div className="pt-badges">
-                        <span className="pt-badge">IGW {data?.internetGateway ? 'ON' : 'OFF'}</span>
-                        <span className="pt-badge">NAT {data?.enableNatGateway ? 'ON' : 'OFF'}</span>
-                    </div>
-                </NodeChrome>
-            </div>
+  // CIDR: acepta camelCase y snake_case
+  const cidrBase = data.cidrBlock || data.cidr_block;
+  const cidrPref = data.prefixLength ?? data.prefix_length;
+  const cidr = (cidrBase && (cidrPref || cidrPref === 0))
+    ? `${cidrBase}/${cidrPref}`
+    : 'CIDR n/a';
 
-            {/* Puertos superior e inferior (útil para VPC ↔ Router y Subnet ↔ VPC) */}
-            <Handle type="source" position={Position.Top} className="pt-handle" isConnectable={isConnectable} />
-            {/* <Handle type="target" position={Position.Bottom} className="pt-handle" isConnectable={isConnectable} /> */}
-        </div>
-    );
+  // Flags IGW / NAT (acepta ambos formatos)
+  const igwOn = !!(data.internetGateway ?? data.internet_gateway);
+  const natEnabled =
+    !!(data.enableNatGateway ??
+      (data.nat_gateway && data.nat_gateway.enabled));
+
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <NodeResizer minWidth={520} minHeight={220} />
+
+      <div className="pt-fill">
+        <NodeChrome
+          type="vpc"
+          title={name}
+          subtitle={`${cidr} • ${region}`}
+          status="up"
+          rightArea={<span className="pt-badge">AWS</span>}
+        >
+          <div className="pt-badges">
+            <span className="pt-badge">IGW {igwOn ? 'ON' : 'OFF'}</span>
+            <span className="pt-badge">NAT {natEnabled ? 'ON' : 'OFF'}</span>
+          </div>
+        </NodeChrome>
+      </div>
+
+      <Handle type="source" position={Position.Top} className="pt-handle" isConnectable={isConnectable} />
+    </div>
+  );
 }
 
 export default memo(VPCNodeInstance);
