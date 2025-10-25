@@ -1,9 +1,14 @@
-/* eslint-disable react/prop-types */
-import { useEffect, useMemo, useState } from "react";
+import CloseIcon from "@mui/icons-material/Close";
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import LanIcon from "@mui/icons-material/Lan";
+import PublicIcon from "@mui/icons-material/Public";
+import RouteIcon from "@mui/icons-material/Route";
 import {
   Accordion,
-  AccordionSummary,
   AccordionDetails,
+  AccordionSummary,
+  Alert,
   Box,
   Button,
   Chip,
@@ -11,16 +16,14 @@ import {
   IconButton,
   Modal,
   Stack,
-  Typography,
   Table,
+  TableBody,
+  TableCell,
   TableHead,
   TableRow,
-  TableCell,
-  TableBody,
-  Alert,
+  Typography
 } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import { useEffect, useMemo, useState } from "react";
 
 import { buildRoutingPreview } from "../utils/buildRoutingPreview";
 import { validateTopology } from "../utils/topologyValidation";
@@ -39,6 +42,63 @@ const style = {
   overflow: "hidden",
 };
 
+/**
+ * Devuelve el estilo visual para cada tipo de target (ruta)
+ */
+const routeChip = (target) => {
+  switch (target) {
+    case "local":
+      return (
+        <Chip
+          icon={<LanIcon />}
+          label="local"
+          color="success"
+          size="small"
+          sx={{ fontWeight: 600 }}
+        />
+      );
+    case "igw":
+      return (
+        <Chip
+          icon={<PublicIcon />}
+          label="Internet Gateway"
+          color="info"
+          size="small"
+          sx={{ fontWeight: 600 }}
+        />
+      );
+    case "nat-gw":
+      return (
+        <Chip
+          icon={<CloudUploadIcon />}
+          label="NAT Gateway"
+          color="warning"
+          size="small"
+          sx={{ fontWeight: 600 }}
+        />
+      );
+    case "peering":
+      return (
+        <Chip
+          icon={<RouteIcon />}
+          label="Peering"
+          color="secondary"
+          size="small"
+          sx={{ fontWeight: 600 }}
+        />
+      );
+    default:
+      return (
+        <Chip
+          label={target || "unknown"}
+          color="default"
+          size="small"
+          sx={{ fontWeight: 600 }}
+        />
+      );
+  }
+};
+
 export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
   const [errors, setErrors] = useState([]);
   const [warnings, setWarnings] = useState([]);
@@ -46,13 +106,12 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
 
   const preview = useMemo(() => buildRoutingPreview(nodes, edges), [nodes, edges]);
 
-  // Valida automáticamente al abrir
   useEffect(() => {
     if (!open) return;
     const { errors: e, warnings: w } = validateTopology(nodes, edges);
     setErrors(e);
     setWarnings(w);
-    setValidated(false); // hasta que el usuario toque el botón
+    setValidated(false);
   }, [open, nodes, edges]);
 
   const runValidation = () => {
@@ -75,7 +134,7 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
         </Stack>
 
         <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
-          Muestra la tabla de rutas “main” que resultará por cada VPC, incluyendo rutas locales y via router.
+          Visualiza las tablas de rutas “main” generadas para cada VPC, incluyendo rutas locales, NAT, IGW y peering entre routers.
         </Typography>
 
         <Stack direction="row" gap={1} sx={{ mb: 1 }}>
@@ -89,8 +148,8 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
         <Box sx={{ maxHeight: "64vh", overflowY: "auto", pr: 1 }}>
           {validated && errors.length === 0 && (
             <Alert severity="success" sx={{ mb: 1.5 }}>
-              ✅ Todo en orden para el deploy (no se detectaron errores).
-              {warnings.length > 0 && " Hay advertencias no bloqueantes abajo."}
+              ✅ Todo en orden para el deploy. No se detectaron errores.
+              {warnings.length > 0 && " Hay advertencias no bloqueantes."}
             </Alert>
           )}
 
@@ -148,8 +207,12 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
                     {(vpc.main_route_table || []).map((r, i) => (
                       <TableRow key={i}>
                         <TableCell><Typography variant="body2">{r.dest_cidr}</Typography></TableCell>
-                        <TableCell>{r.target === "local" ? <Chip size="small" color="success" label="local" /> : <Chip size="small" color="info" label={r.target} />}</TableCell>
-                        <TableCell><Typography variant="body2">{r.via_router_id || "—"}</Typography></TableCell>
+                        <TableCell>{routeChip(r.target)}</TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ color: r.via_router_id ? "text.primary" : "text.disabled" }}>
+                            {r.via_router_id || "—"}
+                          </Typography>
+                        </TableCell>
                       </TableRow>
                     ))}
                     {(!vpc.main_route_table || vpc.main_route_table.length === 0) && (

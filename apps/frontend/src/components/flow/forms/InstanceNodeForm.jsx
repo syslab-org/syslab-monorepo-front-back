@@ -1,23 +1,39 @@
 // apps/frontend/src/components/flow/forms/InstanceNodeForm.jsx
 import { yupResolver } from '@hookform/resolvers/yup';
-import { Button, FormControl, InputLabel, MenuItem, Select, TextField } from "@mui/material";
+import {
+  Button,
+  FormControl,
+  FormHelperText,
+  InputLabel,
+  MenuItem,
+  Select,
+  TextField
+} from "@mui/material";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { TYPE_INSTANCE_NODE } from "../utils/constants";
 import { INSTANCE_TYPE_OPTIONS } from './options/instanceTypes';
 import { useFormValidationSchema } from './validations/useFormValidations';
 
-// Extract form logic and UI rendering from instance node form
+/**
+ * Props:
+ *  - nodeData
+ *  - onSave(payloadSnakeCase)   // ← enviamos snake_case para TF
+ *  - deleteNode
+ *  - parentSubnetCidr           // p.ej. "10.10.0.0/24" (valida IPs)
+ *  - siblingIpsInSameSubnet     // evita duplicados
+ *  - amiList
+ *  - defaultAssociatePublicIp   // boolean (opcional). Si omites, por defecto true
+ */
 const InstanceNodeForm = ({
-  nodeData,
+  nodeData = {},
   onSave,
   deleteNode,
-  parentSubnetCidr,            // <-- NUEVO (CIDR completo de la SUBNET)
-  siblingIpsInSameSubnet = [], // <-- NUEVO
-  amiList = []
-
+  parentSubnetCidr,
+  siblingIpsInSameSubnet = [],
+  amiList = [],
+  defaultAssociatePublicIp = true,
 }) => {
-
   const validationSchema = useFormValidationSchema(
     TYPE_INSTANCE_NODE,
     parentSubnetCidr,
@@ -26,7 +42,14 @@ const InstanceNodeForm = ({
     false
   );
 
-  const { register, handleSubmit, formState: { errors }, reset, watch } = useForm({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+    watch,
+    control,
+  } = useForm({
     resolver: yupResolver(validationSchema),
     defaultValues: {
       name: nodeData.name || "",
@@ -34,8 +57,13 @@ const InstanceNodeForm = ({
       ami: nodeData.ami || "",
       instanceType: nodeData.instanceType || "t2.micro",
       sshAccess: nodeData.sshAccess || "",
+      // UI: permitir al usuario forzar/quitar IP pública
+      associatePublicIp:
+        typeof nodeData.associatePublicIp === "boolean"
+          ? nodeData.associatePublicIp
+          : defaultAssociatePublicIp,
     }
-  })
+  });
 
   useEffect(() => {
     reset({
@@ -44,28 +72,44 @@ const InstanceNodeForm = ({
       ami: nodeData.ami || "",
       instanceType: nodeData.instanceType || "t2.micro",
       sshAccess: nodeData.sshAccess || "",
+      associatePublicIp:
+        typeof nodeData.associatePublicIp === "boolean"
+          ? nodeData.associatePublicIp
+          : defaultAssociatePublicIp,
     });
-  }, [nodeData, reset]);
+  }, [nodeData, reset, defaultAssociatePublicIp]);
 
   const onSubmit = (data) => {
-    // normalizaciones
     const ipRaw = (data.ipAddress || '').trim();
     const amiRaw = (data.ami || '').trim();
     const sshRaw = (data.sshAccess || '').trim();
+    const type = (data.instanceType || 't2.micro').trim();
+    const name = (data.name || '').trim();
 
-    const payload = {
-      name: (data.name || '').trim(),
-      instanceType: (data.instanceType || '').trim(),
-      // si IP está vacía o 'auto' => undefined (AWS la asigna)
-      ipAddress: !ipRaw || ipRaw.toLowerCase() === 'auto' ? undefined : ipRaw,
-      // si AMI vacío => undefined (backend usa default)
+    const ip = !ipRaw || ipRaw.toLowerCase() === 'auto' ? undefined : ipRaw;
+
+    onSave({
+      // meta
+      type: "instance",
+
+      // nombres
+      name,
+
+      // AMI
       ami: amiRaw || undefined,
-      // si SSH vacío => undefined (sin keypair)
-      sshAccess: sshRaw || undefined,
-    };
 
-    console.log('OnSubmit instanceNode normalized payload:', payload);
-    onSave(payload);
+      // tipo (camel & snake)
+      instanceType: type,
+      instance_type: type,
+
+      // IP (camel & snake)
+      ipAddress: ip,
+      ip_address: ip,
+
+      // SSH (camel & snake)
+      sshAccess: sshRaw || undefined,
+      ssh_access: sshRaw || undefined,
+    });
   };
 
   return (
@@ -83,16 +127,13 @@ const InstanceNodeForm = ({
         label={`private IP (inside ${parentSubnetCidr || 'subnet'})`}
         {...register("ipAddress")}
         error={!!errors.ipAddress}
-        helperText={
-          errors.ipAddress?.message ||
-          `Deja vacío o escribe "auto" para asignación automática`
-        }
+        helperText={errors.ipAddress?.message || `Deja vacío o escribe "auto" para asignación automática`}
         placeholder="10.10.0.10  •  o escribe: auto"
         fullWidth
         margin="normal"
       />
 
-      <FormControl fullWidth margin="normal">
+      <FormControl fullWidth margin="normal" error={!!errors.ami}>
         <InputLabel id="ami-label">AMI</InputLabel>
         <Select
           labelId="ami-label"
@@ -105,17 +146,15 @@ const InstanceNodeForm = ({
             <em>Usar AMI por defecto</em>
           </MenuItem>
           {amiList.map((a) => (
-            <MenuItem key={a.id} value={a.code || a.id}>
+            <MenuItem key={a.id || a.code} value={a.code || a.id}>
               {a.name || a.id}
             </MenuItem>
           ))}
         </Select>
+        {errors.ami && <FormHelperText>{errors.ami.message}</FormHelperText>}
       </FormControl>
-      {errors.ami && <p>{errors.ami.message}</p>}
 
-
-
-      <FormControl fullWidth margin="normal">
+      <FormControl fullWidth margin="normal" error={!!errors.instanceType}>
         <InputLabel id="instance-type-label">Instance Type</InputLabel>
         <Select
           labelId="instance-type-label"
@@ -128,18 +167,16 @@ const InstanceNodeForm = ({
           ))}
         </Select>
         {errors.instanceType && (
-          <p style={{ color: 'red', marginTop: 4 }}>{errors.instanceType.message}</p>
+          <FormHelperText>{errors.instanceType.message}</FormHelperText>
         )}
       </FormControl>
 
-      {/* 💡 OPCIONAL — Mensaje pedagógico si se elige tipo t4g.* */}
+      {/* Mensaje didáctico si se elige t4g.* */}
       {watch("instanceType")?.startsWith("t4g") && (
         <p style={{ fontSize: 13, marginTop: 6, color: '#666' }}>
-          💡 Nota: Los tipos <b>t4g.*</b> usan procesadores ARM (Graviton).
-          Asegúrate de seleccionar una AMI compatible con arquitectura <b>ARM64</b>.
+          💡 Los tipos <b>t4g.*</b> usan ARM (Graviton). Asegúrate de elegir una AMI <b>ARM64</b>.
         </p>
       )}
-
 
       <TextField
         label="SSH Access (KeyPair)"
@@ -151,13 +188,15 @@ const InstanceNodeForm = ({
         margin="normal"
       />
 
-      <Button type="submit" variant="contained" color="primary">
-        Registrar Configuración
-      </Button>
-      <Button onClick={deleteNode} sx={{ ml: 1 }}>
-        Delete Node
-      </Button>
 
+      <div style={{ marginTop: 12 }}>
+        <Button type="submit" variant="contained" color="primary">
+          Registrar Configuración
+        </Button>
+        <Button onClick={deleteNode} sx={{ ml: 1 }}>
+          Delete Node
+        </Button>
+      </div>
     </form>
   );
 };
