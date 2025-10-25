@@ -37,6 +37,9 @@ locals {
 
   # Routers tipo TGW (Transit Gateway)
   tgw_routers = [for r in local.routers : r if try(lower(r.type), "") == "tgw"]
+
+  # Mapa rápido por ID
+  vpc_by_id = { for v in local.vpcs : v.id => v }
 }
 
 # -------- VPCs ---------------------------------------------------------------
@@ -57,6 +60,7 @@ locals {
       }
     ]
   ])
+
   subnet_map = { for s in local.all_subnets : s.key => s }
 
   # Mapa de subnets por VPC y nombre (para resolver attachments por nombre)
@@ -179,7 +183,7 @@ resource "aws_eip" "nat_eip" {
 }
 
 resource "aws_nat_gateway" "nat" {
-  for_each = { for v in local.vpcs : v.id => v if local.vpc_nat_enabled[v.id] }
+  for_each      = { for v in local.vpcs : v.id => v if local.vpc_nat_enabled[v.id] }
   subnet_id     = aws_subnet.this["${each.key}:${local.vpc_nat_pub_subnet[each.key]}"].id
   allocation_id = aws_eip.nat_eip[each.key].id
   tags          = { Name = "${each.value.name}-nat" }
@@ -202,6 +206,14 @@ locals {
       }
     ]
   ])
+
+  # Para asociaciones robustas (por si no existe "main")
+  rt_any_by_vpc = {
+    for v in local.vpcs :
+    v.id => try([for rt in coalesce(v.route_tables, []) : "${v.id}:${rt.name}"][0], null)
+  }
+
+  vpc_has_rt = { for v in local.vpcs : v.id => length(coalesce(v.route_tables, [])) > 0 }
 }
 
 resource "aws_route_table" "rt_named" {
@@ -210,14 +222,17 @@ resource "aws_route_table" "rt_named" {
   tags     = { Name = "${each.value.vpc_name}-${each.value.rt_name}" }
 }
 
-# Asociación de subnets a su RT (si la subnet no trae nombre, usa "main")
+# Asociación de subnets a su RT (solo si la VPC tiene RTs definidos)
 resource "aws_route_table_association" "assoc" {
-  for_each = { for s in local.all_subnets : s.key => s }
+  for_each = {
+    for s in local.all_subnets : s.key => s
+    if local.vpc_has_rt[s.vpc]
+  }
 
   subnet_id = aws_subnet.this[each.key].id
   route_table_id = coalesce(
-    try(aws_route_table.rt_named["${each.value.vpc}:${try(each.value.data.route_table, "main")}"].id, null),
-    aws_route_table.rt_named["${each.value.vpc}:main"].id
+    try(aws_route_table.rt_named["${each.value.vpc}:${each.value.data.route_table}"].id, null),
+    try(aws_route_table.rt_named[local.rt_any_by_vpc[each.value.vpc]].id, null)
   )
 }
 
@@ -225,15 +240,12 @@ resource "aws_route_table_association" "assoc" {
 # RUTAS EXPLÍCITAS (sin 'local')
 # =========================
 
-# Solo permitimos targets que requieren un ID de recurso;
-# 'local' (o vacío) se excluye porque es implícito en AWS.
 locals {
   routes_flat = flatten([
     for v in local.vpcs : [
       for rt in coalesce(v.route_tables, []) : [
         for r in coalesce(rt.routes, []) : [
           for tgt in [lower(try(r.target, ""))] :
-          # filtrar: no 'local' ni vacío
           (contains(["", "local"], tgt) ? null : {
             key        = "${v.id}:${rt.name}:${r.name}"
             vpc_id     = v.id
@@ -278,6 +290,8 @@ resource "aws_route" "rt_named_routes" {
 # =========================
 # NAT default auto-routes (privadas)
 # =========================
+
+# ¿Algún RT ya trae 0.0.0.0/0 explícito? (igw o nat)
 locals {
   explicit_default_in_rt = {
     for rt in local.route_tables_flat :
@@ -289,44 +303,49 @@ locals {
   }
 }
 
+# Conjunto de nombres de RT declarados por VPC (datos 100% conocidos en plan)
 locals {
-  private_subnet_rt = flatten([
+  rt_names_by_vpc = {
+    for v in local.vpcs :
+    v.id => toset([for rt in coalesce(v.route_tables, []) : rt.name])
+  }
+}
+
+# Candidatos por cada subnet (sin usar attributes de recursos)
+locals {
+  nat_default_candidates = flatten([
     for s in local.all_subnets : [
       {
         vpc_id    = s.vpc
         is_public = try(s.data.map_public_ip_on_launch, false)
         rt_name   = try(s.data.route_table, null)
-        rt_id     = coalesce(
-          try(aws_route_table.rt_named["${s.vpc}:${try(s.data.route_table, "")}"].id, null),
-          aws_route_table.rt_named["${s.vpc}:main"].id
-        )
       }
     ]
   ])
 }
 
+# ⚠ FIX DE PLAN: for_each solo con datos del payload (no rt_id).
 resource "aws_route" "nat_default_auto" {
   for_each = {
-    for x in local.private_subnet_rt :
-    "${x.vpc_id}:${coalesce(x.rt_name, "__main__")}" => x
+    for x in local.nat_default_candidates :
+    "${x.vpc_id}:${coalesce(x.rt_name, "__none__")}" => x
     if (
       !x.is_public &&
       local.vpc_nat_enabled[x.vpc_id] &&
-      (
-        x.rt_name == null ||
-        !lookup(local.explicit_default_in_rt, "${x.vpc_id}:${x.rt_name}", false)
-      )
+      x.rt_name != null &&
+      contains(local.rt_names_by_vpc[x.vpc_id], x.rt_name) &&
+      !lookup(local.explicit_default_in_rt, "${x.vpc_id}:${x.rt_name}", false)
     )
   }
 
-  route_table_id         = each.value.rt_id
+  route_table_id         = aws_route_table.rt_named["${each.value.vpc_id}:${each.value.rt_name}"].id
   destination_cidr_block = "0.0.0.0/0"
   nat_gateway_id         = aws_nat_gateway.nat[each.value.vpc_id].id
   depends_on             = [aws_nat_gateway.nat]
 }
 
 # =========================
-# TGW + PEERING (igual que antes)
+# TGW + PEERING
 # =========================
 resource "aws_ec2_transit_gateway" "tgw" {
   count       = length(local.tgw_routers) > 0 ? 1 : 0
@@ -345,8 +364,27 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "tgw_attach" {
   tags = { Name = "tgw-attach-${each.value.vpc_id}" }
 }
 
-locals { vpc_by_id = { for v in local.vpcs : v.id => v } }
-locals { peering_links = [for l in local.links : l if try(lower(l.type), "") == "peering"] }
+locals {
+  peering_links = [for l in local.links : l if try(lower(l.type), "") == "peering"]
+
+  # PARES (A->B) Y (B->A) PARA TODAS LAS ROUTE TABLES DECLARADAS
+  peer_a_pairs = flatten([
+    for l in local.peering_links : [
+      for rt in coalesce(local.vpc_by_id[l.vpc_a_id].route_tables, []) : {
+        l  = l
+        rt = rt
+      }
+    ]
+  ])
+  peer_b_pairs = flatten([
+    for l in local.peering_links : [
+      for rt in coalesce(local.vpc_by_id[l.vpc_b_id].route_tables, []) : {
+        l  = l
+        rt = rt
+      }
+    ]
+  ])
+}
 
 resource "aws_vpc_peering_connection" "peer" {
   for_each    = { for l in local.peering_links : "${l.vpc_a_id}--${l.vpc_b_id}" => l }
@@ -356,16 +394,25 @@ resource "aws_vpc_peering_connection" "peer" {
   tags        = { Name = "peer-${each.value.vpc_a_id}-${each.value.vpc_b_id}" }
 }
 
+# Rutas de peering en TODAS las RT declaradas de cada VPC
 resource "aws_route" "peer_a_to_b" {
-  for_each = { for l in local.peering_links : "a-${l.vpc_a_id}-${l.vpc_b_id}" => l }
-  route_table_id            = aws_route_table.rt_named["${each.value.vpc_a_id}:main"].id
-  destination_cidr_block    = local.vpc_by_id[each.value.vpc_b_id].cidr_block
-  vpc_peering_connection_id = aws_vpc_peering_connection.peer["${each.value.vpc_a_id}--${each.value.vpc_b_id}"].id
+  for_each = {
+    for x in local.peer_a_pairs :
+    "a-${x.l.vpc_a_id}-${x.l.vpc_b_id}:${x.rt.name}" => x
+  }
+
+  route_table_id            = aws_route_table.rt_named["${each.value.l.vpc_a_id}:${each.value.rt.name}"].id
+  destination_cidr_block    = local.vpc_by_id[each.value.l.vpc_b_id].cidr_block
+  vpc_peering_connection_id = aws_vpc_peering_connection.peer["${each.value.l.vpc_a_id}--${each.value.l.vpc_b_id}"].id
 }
 
 resource "aws_route" "peer_b_to_a" {
-  for_each = { for l in local.peering_links : "b-${l.vpc_a_id}-${l.vpc_b_id}" => l }
-  route_table_id            = aws_route_table.rt_named["${each.value.vpc_b_id}:main"].id
-  destination_cidr_block    = local.vpc_by_id[each.value.vpc_a_id].cidr_block
-  vpc_peering_connection_id = aws_vpc_peering_connection.peer["${each.value.vpc_a_id}--${each.value.vpc_b_id}"].id
+  for_each = {
+    for x in local.peer_b_pairs :
+    "b-${x.l.vpc_a_id}-${x.l.vpc_b_id}:${x.rt.name}" => x
+  }
+
+  route_table_id            = aws_route_table.rt_named["${each.value.l.vpc_b_id}:${each.value.rt.name}"].id
+  destination_cidr_block    = local.vpc_by_id[each.value.l.vpc_a_id].cidr_block
+  vpc_peering_connection_id = aws_vpc_peering_connection.peer["${each.value.l.vpc_a_id}--${each.value.l.vpc_b_id}"].id
 }
