@@ -7,12 +7,38 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   FormControlLabel,
   Stack,
   Switch,
   TextField,
-  Typography
+  Typography,
 } from "@mui/material";
+import DeployConfirmationRoutes from "./panels/DeployConfirmationRoutes";
+
+/**
+ * Exporta el plan actual (transformedData) a un archivo JSON descargable.
+ */
+function exportPlanToJson(transformedData, planName = "plan-export") {
+  try {
+    const blob = new Blob([JSON.stringify(transformedData, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const fileName = `${planName.replace(/\s+/g, "_")}_${new Date()
+      .toISOString()
+      .slice(0, 19)
+      .replace(/[:T]/g, "-")}.json`;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Error exportando el plan:", error);
+    alert("No se pudo exportar el plan. Revisa la consola.");
+  }
+}
 
 export default function ConfirmDeployDialog({
   open,
@@ -22,36 +48,59 @@ export default function ConfirmDeployDialog({
   setPlanName,
   simulateOnly,
   setSimulateOnly,
-  transformedData
+  transformedData,
 }) {
-  // feature flag (frontend): habilita el apply real
   const allowRealApply = import.meta.env.VITE_ALLOW_REAL_APPLY === "1";
 
-  // datos rápidos del payload (por si quieres mostrar algo breve)
+  // Normalización segura
   const vpcs = Array.isArray(transformedData?.vpcs) ? transformedData.vpcs : [];
-  const vpc = vpcs[0] || null;
+  const links = Array.isArray(transformedData?.links) ? transformedData.links : [];
+  const vlan = transformedData?.vlan || {};
+
+  // Totales del plan
+  const totalVpcs = vpcs.length;
+  const totalSubnets = vpcs.reduce(
+    (acc, vpc) => acc + (vpc.subnets?.length || 0),
+    0
+  );
+  const totalInstances = vpcs.reduce(
+    (acc, vpc) =>
+      acc +
+      (vpc.subnets?.reduce(
+        (a, sn) => a + (sn.instances?.length || 0),
+        0
+      ) || 0),
+    0
+  );
+  const totalNat = vpcs.filter((v) => v.nat_gateway?.enabled).length;
+  const totalIgw = vpcs.filter((v) => v.internet_gateway).length;
+  const totalRouters = links.reduce((acc, l) => {
+    const id = l.via_router_id;
+    return id ? acc.add(id) : acc;
+  }, new Set()).size;
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>Confirmar despliegue</DialogTitle>
 
       <DialogContent dividers>
         <Stack spacing={2}>
+          {/* ---- Nombre del plan ---- */}
           <TextField
             fullWidth
             label="Nombre del Plan"
             value={planName}
             onChange={(e) => setPlanName(e.target.value)}
-            placeholder="p.ej. VPC-A"
+            placeholder="p.ej. red-principal"
           />
 
-          {/* Toggle principal: cuando está ON hacemos apply real (simulateOnly=false) */}
+          {/* ---- Toggle Simulación / Apply ---- */}
           <FormControlLabel
             control={
               <Switch
                 disabled={!allowRealApply}
                 checked={!simulateOnly}
-                onChange={(e) => setSimulateOnly(!e.target.checked ? true : false)}
+                onChange={(e) => setSimulateOnly(!e.target.checked)}
               />
             }
             label={
@@ -61,35 +110,132 @@ export default function ConfirmDeployDialog({
             }
           />
 
-          {/* Avisos contextuales */}
+          {/* ---- Mensajes contextuales ---- */}
           {!allowRealApply && (
             <Typography variant="body2" color="text.secondary">
-              Para habilitar el apply real en este entorno, define{" "}
-              <code>VITE_ALLOW_REAL_APPLY=1</code> en el frontend.
+              Para habilitar el apply real, define{" "}
+              <code>VITE_ALLOW_REAL_APPLY=1</code> en el entorno del frontend.
             </Typography>
           )}
 
           {!simulateOnly && (
             <Typography variant="body2" sx={{ color: "#b45309" }}>
-              ⚠️ Esto creará/modificará recursos en AWS. Asegúrate de tener
-              credenciales/role válidos. Tu backend ya bloquea apply si no hay
-              IAM Role o si <code>ALLOW_LOCAL_APPLY</code> es 0.
+              ⚠️ Esto ejecutará un <b>Terraform apply</b> real en AWS.
+              Asegúrate de tener credenciales IAM válidas.
             </Typography>
           )}
 
-          {vpc && (
+          {/* ---- Resumen global ---- */}
+          <Divider sx={{ my: 1.5 }} />
+          <Typography variant="h6">Resumen general del plan</Typography>
+          <Stack direction="row" flexWrap="wrap" gap={1.2} sx={{ mt: 1 }}>
+            <Chip
+              size="small"
+              color="primary"
+              label={`Cloud: ${transformedData?.cloud || "aws"}`}
+            />
+            <Chip size="small" label={`VLAN: ${vlan?.name || "no definida"}`} />
+            {vlan?.region && <Chip size="small" label={`Región: ${vlan.region}`} />}
+            {vlan?.master_cidr && (
+              <Chip size="small" label={`CIDR maestro: ${vlan.master_cidr}`} />
+            )}
+            <Chip size="small" label={`VPCs: ${totalVpcs}`} />
+            <Chip size="small" label={`Subnets: ${totalSubnets}`} />
+            <Chip size="small" label={`Instancias: ${totalInstances}`} />
+            <Chip size="small" label={`Routers: ${totalRouters}`} />
+            <Chip
+              size="small"
+              color={totalIgw ? "info" : "default"}
+              label={`Internet Gateways: ${totalIgw}`}
+            />
+            <Chip
+              size="small"
+              color={totalNat ? "warning" : "default"}
+              label={`NAT Gateways: ${totalNat}`}
+            />
+          </Stack>
+
+          {/* ---- Botón de exportar plan ---- */}
+          {transformedData && (
             <Box sx={{ mt: 1 }}>
-              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                <Chip size="small" label={`Cloud: ${transformedData?.cloud || "aws"}`} />
-                <Chip size="small" label={`VPC: ${vpc.name || "(sin nombre)"}`} />
-                {vpc.cidr_block && <Chip size="small" label={`CIDR: ${vpc.cidr_block}`} />}
-                {vpc.region && <Chip size="small" label={`Región/AZ: ${vpc.region}`} />}
-                <Chip
-                  size="small"
-                  label={`Subnets: ${Array.isArray(vpc.subnets) ? vpc.subnets.length : 0}`}
-                />
-              </Stack>
+              <Button
+                variant="outlined"
+                color="secondary"
+                onClick={() => exportPlanToJson(transformedData, planName)}
+              >
+                Exportar plan a JSON
+              </Button>
+              <Typography variant="caption" sx={{ ml: 1, color: "text.secondary" }}>
+                Guarda una copia local del plan antes de ejecutar el deploy.
+              </Typography>
             </Box>
+          )}
+
+          {/* ---- Detalle por VPC ---- */}
+          {vpcs.length > 0 && (
+            <>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="h6">Detalle por VPC</Typography>
+
+              {vpcs.map((vpc) => (
+                <Box key={vpc.id} sx={{ mt: 1.5 }}>
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    spacing={1}
+                    flexWrap="wrap"
+                    sx={{ mb: 0.5 }}
+                  >
+                    <Typography variant="subtitle1">
+                      {vpc.name || "(sin nombre)"}
+                    </Typography>
+                    {vpc.cidr_block && (
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={`CIDR: ${vpc.cidr_block}`}
+                      />
+                    )}
+                    {vpc.region && (
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={`Región: ${vpc.region}`}
+                      />
+                    )}
+                    {vpc.internet_gateway && (
+                      <Chip size="small" color="info" label="IGW habilitado" />
+                    )}
+                    {vpc.nat_gateway?.enabled && (
+                      <Chip size="small" color="warning" label="NAT habilitado" />
+                    )}
+                    <Chip
+                      size="small"
+                      label={`Subnets: ${vpc.subnets?.length || 0}`}
+                    />
+                    <Chip
+                      size="small"
+                      label={`Instancias: ${vpc.subnets?.reduce(
+                        (a, sn) => a + (sn.instances?.length || 0),
+                        0
+                      ) || 0
+                        }`}
+                    />
+                  </Stack>
+                </Box>
+              ))}
+
+              {/* ---- Tablas de rutas ---- */}
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                Tablas de rutas generadas
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                Revisa las rutas locales, NAT, Internet Gateway y peering antes
+                de confirmar el despliegue.
+              </Typography>
+              <DeployConfirmationRoutes vpcs={vpcs} />
+            </>
           )}
         </Stack>
       </DialogContent>

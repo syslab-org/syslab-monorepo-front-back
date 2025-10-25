@@ -1,0 +1,180 @@
+📘 Capítulo: Desarrollo del Sistema de Generación de Redes Virtuales Inteligentes con Terraform y Django
+
+1. Introducción
+
+El desarrollo presentado corresponde al módulo backend y frontend del sistema de simulación y despliegue de redes virtuales (VPCs), cuyo objetivo es permitir a los usuarios diseñar y desplegar redes AWS completas de forma visual mediante un canvas interactivo.
+
+Cada elemento del canvas (VPC, subred, router, instancia, enlace, etc.) se traduce en una estructura JSON que describe la topología.
+Esa estructura es luego interpretada por el backend, que genera automáticamente código Terraform, lo ejecuta en un entorno controlado y despliega la infraestructura real en AWS.
+
+⸻
+
+2. Objetivo general del sistema
+
+Desarrollar una plataforma educativa y experimental que:
+	•	Permita crear, editar y visualizar redes virtuales complejas a través de una interfaz gráfica.
+	•	Genere y aplique configuraciones Terraform de manera automatizada desde un backend Python/Django.
+	•	Permita realizar pruebas seguras, con simulaciones o despliegues reales, bajo un entorno de control.
+
+⸻
+
+3. Arquitectura general del sistema
+
+La arquitectura se compone de tres capas principales:
+
+3.1 Frontend (React + Canvas)
+	•	Implementado con React y React Flow.
+	•	Permite crear nodos (VPCs, subnets, routers, instancias) y enlaces entre ellos.
+	•	Cada nodo guarda su configuración (CIDR, región, tipo, etc.).
+	•	Al presionar “Deploy”, el sistema:
+	•	Convierte la topología en un JSON estructurado.
+	•	Envía ese JSON al backend para su procesamiento.
+
+3.2 Backend (Django + Celery + Terraform)
+	•	Django maneja la API REST y la base de datos de planes (“plans”).
+	•	Cada Plan representa un despliegue o simulación.
+	•	Al recibir el JSON, se ejecuta una tarea Celery (process_network_plan) que:
+	1.	Renderiza el archivo main.tf.j2 con la plantilla de Terraform.
+	2.	Crea un directorio temporal (/tmp/tf-multi-*) y guarda los archivos generados.
+	3.	Ejecuta los comandos terraform init, terraform plan y terraform apply (si es un despliegue real).
+	4.	Registra logs completos y estados en la base de datos y/o S3.
+
+3.3 Capa de infraestructura (Terraform + AWS)
+	•	Terraform es el motor declarativo que interpreta la plantilla generada (main.tf).
+	•	Se crean recursos como:
+	•	VPCs, Subnets, Internet Gateways (IGW), NAT Gateways, Route Tables, Instances (EC2), Transit Gateways (TGW) y VPC Peering Connections.
+	•	Los recursos se destruyen mediante un proceso automatizado con un botón “Destroy” desde la interfaz.
+
+⸻
+
+4. Principales hitos técnicos alcanzados
+
+Hito	Descripción	Estado
+1. Deploy Simulado (simulate_only=true)	Permite ejecutar Terraform sin aplicar cambios en AWS. Ideal para pruebas de validación y visualización.	✅ Completado
+2. Deploy real (simulate_only=false)	Permite ejecutar terraform apply con credenciales IAM reales. Se validan las variables de entorno y seguridad.	✅ Completado
+3. Destroy Plan desde UI	Se implementó un botón que llama un endpoint Django para ejecutar terraform destroy sobre el plan existente.	✅ Completado
+4. Formulario de VPC y Subnets con validación CIDR	Los formularios del canvas validan rangos IP válidos y aseguran coherencia entre VPC y subredes.	✅ Completado
+5. main.tf.j2 modular e inteligente (opción B)	La plantilla Terraform ahora interpreta dinámicamente el JSON del canvas, adaptándose a cualquier combinación de VPCs, subnets, routers o enlaces.	✅ Completado
+6. NAT Gateway + IGW automáticos	El sistema detecta si una VPC requiere acceso a internet y genera automáticamente los recursos necesarios.	✅ Completado
+7. Transit Gateway y enlaces tipo tgw-attach	Se añadió soporte para routers lógicos (TGW) que permiten conectar múltiples VPCs en topologías complejas.	✅ Completado
+8. Persistencia y logging avanzado	Cada ejecución almacena los logs, el estado del plan y su relación con el usuario, permitiendo auditoría y análisis posterior.	✅ Completado
+
+
+⸻
+
+5. Descripción funcional actual
+
+5.1 Desde el punto de vista del usuario
+	1.	El usuario abre el canvas y diseña una red:
+	•	Crea una o varias VPCs.
+	•	Dentro de ellas, define subnets (públicas o privadas).
+	•	Puede agregar routers (TGW) y definir conexiones (peering o attach).
+	•	Añade instancias dentro de las subnets, configurando IPs, llaves SSH, etc.
+	2.	Presiona “Deploy”:
+	•	El frontend genera un JSON con toda la topología.
+	•	Ese JSON se envía al backend (endpoint /api/network/plan/).
+	•	Se crea un registro Plan en la base de datos y una tarea Celery asíncrona se encarga de ejecutar Terraform.
+	3.	Desde el panel “Plans” puede:
+	•	Ver el estado (PENDING, RUNNING, SUCCESS, FAILURE).
+	•	Ver logs detallados de la ejecución de Terraform.
+	•	Re-lanzar el plan (deploy real o simulado).
+	•	Destruir la infraestructura desplegada (botón “Destroy”).
+
+⸻
+
+6. Estructura y flujo de datos
+
+6.1 Estructura JSON base enviada desde el canvas
+
+{
+  "name": "Test Network",
+  "simulate_only": false,
+  "vpcs": [
+    {
+      "id": "vpcA",
+      "name": "VPC-A",
+      "region": "us-east-1a",
+      "cidr_block": "10.10.0.0/16",
+      "internet_gateway": true,
+      "nat_gateway": { "enabled": true, "public_subnet": "pub-a1" },
+      "route_tables": [
+        { "name": "public",  "routes": [{ "target": "igw", "dest_cidr": "0.0.0.0/0" }] },
+        { "name": "private", "routes": [{ "target": "nat", "dest_cidr": "0.0.0.0/0" }] }
+      ],
+      "subnets": [
+        { "name": "pub-a1", "cidr_block": "10.10.1.0/24", "map_public_ip_on_launch": true, "route_table": "public" },
+        { "name": "priv-a1", "cidr_block": "10.10.2.0/24", "map_public_ip_on_launch": false, "route_table": "private" }
+      ]
+    }
+  ],
+  "routers": [{ "id": "core", "type": "tgw", "name": "Core-TGW" }],
+  "links": [
+    { "type": "tgw-attach", "router_id": "core", "vpc_id": "vpcA", "subnet_names": ["priv-a1"] }
+  ]
+}
+
+6.2 Ejecución Terraform paso a paso
+	1.	Django recibe el JSON → Renderiza main.tf.j2.
+	2.	Se crea un directorio temporal con:
+
+main.tf
+plan.out
+_received_plan.json
+_main_preview.txt
+
+
+	3.	Se ejecutan los comandos:
+
+terraform init
+terraform plan
+terraform apply (si simulate_only=false)
+
+
+	4.	Los logs se guardan en la base de datos y/o en S3.
+
+⸻
+
+7. Principios de diseño aplicados
+	•	Desacoplamiento:
+La lógica de infraestructura (Terraform) está completamente separada del backend de control (Django).
+	•	Escalabilidad:
+El uso de Celery + Redis permite ejecutar múltiples despliegues en paralelo sin bloquear el servidor principal.
+	•	Extensibilidad:
+La plantilla main.tf.j2 es dinámica: interpreta cualquier estructura JSON que cumpla la forma esperada, permitiendo que el canvas evolucione (añadir nuevos tipos de nodos o relaciones).
+	•	Reproducibilidad:
+Cada despliegue genera archivos temporales reproducibles y logs auditables, lo que permite volver a ejecutar el mismo plan o destruirlo completamente.
+	•	Seguridad:
+Los despliegues reales (simulate_only=false) solo se permiten cuando hay credenciales IAM configuradas o se ejecuta dentro de un entorno autorizado (ECS/Render).
+
+⸻
+
+8. Resultados alcanzados
+
+El sistema actualmente permite:
+	•	Simular y desplegar topologías multi-VPC completas.
+	•	Crear recursos AWS con un solo click desde el canvas.
+	•	Desplegar o destruir infraestructuras reproducibles.
+	•	Generar código Terraform automáticamente sin escribirlo manualmente.
+	•	Educar sobre redes en la nube mostrando cómo se traduce una topología visual a infraestructura real.
+
+⸻
+
+9. Próximos hitos
+
+Hito próximo	Descripción
+1. Persistencia de estados Terraform en S3	Para compartir y reanudar despliegues entre sesiones.
+2. Añadir validaciones visuales en el canvas	Detectar errores en tiempo real (CIDR solapados, enlaces inválidos, etc.).
+3. Agregar roles y permisos por tipo de usuario (admin, profesor, estudiante)	Controlar qué usuarios pueden desplegar o solo simular.
+4. Monitoreo de recursos desplegados (EC2, VPC, TGW, etc.)	Integrar con AWS SDK para visualizar estado en tiempo real.
+5. Exportación de código Terraform standalone	Permitir descargar los archivos .tf generados para estudio o auditoría.
+
+
+⸻
+
+10. Conclusión del estado actual
+
+A este punto, el sistema ha evolucionado de un prototipo de simulación a una plataforma funcional de despliegue de redes en AWS.
+La arquitectura modular, el uso de plantillas dinámicas y la integración de Celery permiten una automatización total del ciclo de vida de infraestructura.
+
+Además, la estructura es escalable y educativa: cada paso del despliegue es visible, registrable y explicable, lo que hace que este proyecto no solo tenga un valor técnico, sino también didáctico y científico, al conectar la programación visual con la infraestructura como código (IaC).
+

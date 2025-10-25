@@ -1,4 +1,4 @@
-/* eslint-disable react/prop-types */
+// apps/frontend/src/components/flow/forms/SubNetworkNodeForm.jsx
 import { yupResolver } from '@hookform/resolvers/yup';
 import {
   Button,
@@ -11,7 +11,7 @@ import {
   Select,
   TextField,
 } from "@mui/material";
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Controller, useForm } from "react-hook-form";
 import { TYPE_SUBNETWORK_NODE } from "../utils/constants";
 import { useFormValidationSchema } from './validations/useFormValidations';
@@ -31,8 +31,12 @@ const SubNetworkNodeForm = ({
   region = "us-east-1",
 }) => {
   // Descomponer CIDR de la VPC para el schema
-  const [vpcBase, vpcPrefixStr] = (parentVpcCidr || "").split("/");
-  const vpcPrefix = vpcPrefixStr ? Number(vpcPrefixStr) : null;
+  let vpcBase = null, vpcPrefix = null;
+  if (/^\d+\.\d+\.\d+\.\d+\/\d+$/.test(parentVpcCidr || '')) {
+    const [b, p] = parentVpcCidr.split('/');
+    vpcBase = b;
+    vpcPrefix = Number(p);
+  }
 
   const validationSchema = useFormValidationSchema(
     TYPE_SUBNETWORK_NODE,
@@ -45,6 +49,12 @@ const SubNetworkNodeForm = ({
   const incomingSubnetType = typeof nodeData.subnetType === "string"
     ? nodeData.subnetType.toLowerCase()
     : "public";
+
+  // Opciones de AZ derivadas de region (us-east-1 → us-east-1a..f)
+  const azOptions = useMemo(() => {
+    const base = (region || "us-east-1").replace(/[a-z]$/i, ""); // si te llega us-east-1a
+    return ["a", "b", "c", "d", "e", "f"].map(sfx => `${base}${sfx}`);
+  }, [region]);
 
   const {
     register,
@@ -59,7 +69,7 @@ const SubNetworkNodeForm = ({
     defaultValues: {
       subnetName: nodeData.subnetName || "",
       cidrBlock: nodeData.cidrBlock || "",
-      availabilityZone: nodeData.availabilityZone || "",
+      availabilityZone: nodeData.availabilityZone || (azOptions[0] || `${region}a`),
       subnetType: incomingSubnetType,
       // por defecto, públicas con IP pública; privadas sin ella
       map_public_ip_on_launch:
@@ -78,22 +88,41 @@ const SubNetworkNodeForm = ({
     reset({
       subnetName: nodeData.subnetName || "",
       cidrBlock: nodeData.cidrBlock || "",
-      availabilityZone: nodeData.availabilityZone || "",
+      availabilityZone: nodeData.availabilityZone || (azOptions[0] || `${region}a`),
       subnetType: incomingSubnetType,
       map_public_ip_on_launch:
         nodeData.map_public_ip_on_launch ?? (incomingSubnetType === "public"),
     });
-  }, [nodeData, reset]);
+  }, [nodeData, reset, azOptions, region, incomingSubnetType]);
 
   const onSubmit = (data) => {
+    const name = data.subnetName.trim();
+    const cidr = data.cidrBlock.trim();
+    const az = (data.availabilityZone || `${region}a`).trim();
+    const type = String(data.subnetType || "public").toLowerCase();
+    const mapPublic = !!data.map_public_ip_on_launch;
+
+    // ✅ Guardamos camelCase (lo que renderiza el canvas y usa el builder)
+    // ✅ y snake_case (lo que espera Terraform al transformar el payload)
     onSave({
-      subnetName: data.subnetName.trim(),
-      cidrBlock: data.cidrBlock.trim(),
-      availabilityZone: (data.availabilityZone || `${region}a`).trim(),
-      subnetType: String(data.subnetType || "public").toLowerCase(),
-      map_public_ip_on_launch: !!data.map_public_ip_on_launch,
-      // la RT es siempre "main" a nivel de backend/TF
+      // meta
+      type: TYPE_SUBNETWORK_NODE,
       route_table: "main",
+
+      // nombres y CIDR
+      subnetName: name,
+      name,                         // por si algún nodo usa `data.name`
+      cidrBlock: cidr,
+      cidr_block: cidr,
+
+      // AZ
+      availabilityZone: az,
+      availability_zone: az,
+
+      // tipo / flags
+      subnetType: type,
+      subnet_type: type,
+      map_public_ip_on_launch: mapPublic,
     });
   };
 
@@ -118,15 +147,28 @@ const SubNetworkNodeForm = ({
         margin="normal"
       />
 
-      <TextField
-        label="Availability Zone"
-        {...register("availabilityZone")}
-        error={!!errors.availabilityZone}
-        helperText={errors.availabilityZone?.message || "Ej: us-east-1a"}
-        placeholder={`${region}a`}
-        fullWidth
-        margin="normal"
-      />
+      <FormControl fullWidth margin="normal" error={!!errors.availabilityZone}>
+        <InputLabel id="az-label">Availability Zone</InputLabel>
+        <Controller
+          name="availabilityZone"
+          control={control}
+          render={({ field }) => (
+            <Select
+              labelId="az-label"
+              label="Availability Zone"
+              {...field}
+              value={field.value || (azOptions[0] || `${region}a`)}
+            >
+              {azOptions.map(az => (
+                <MenuItem key={az} value={az}>{az}</MenuItem>
+              ))}
+            </Select>
+          )}
+        />
+        {errors.availabilityZone && (
+          <FormHelperText>{errors.availabilityZone.message}</FormHelperText>
+        )}
+      </FormControl>
 
       <FormControl fullWidth margin="normal" error={!!errors.subnetType}>
         <InputLabel id="subnet-type-label">Subnet Type</InputLabel>
