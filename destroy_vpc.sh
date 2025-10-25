@@ -1,22 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage:
-#   ./destroy_vpcs.sh --prefix VPC-             # destruye todas las VPC con tag Name que empieza por "VPC-"
-#   ./destroy_vpcs.sh --vpc-id vpc-0123456789   # destruye una VPC específica
-#   ./destroy_vpcs.sh --prefix lab- --region us-east-1 --dry-run
+# destroy_vpcs.sh — Limpieza completa de VPCs creadas por el plan (A y B, peering, NAT, IGW, RTs, subnets...)
 #
-# Requisitos: AWS CLI v2 y credenciales válidas para la región objetivo.
+# Ejemplos:
+#   ./destroy_vpcs.sh --prefix VPC-             # destruye todas las VPC cuyo tag Name empieza por "VPC-"
+#   ./destroy_vpcs.sh --vpc-id vpc-0123456789   # destruye una VPC específica
+#   REGION=us-east-1 ./destroy_vpcs.sh --prefix VPC- --dry-run
+#
+# Nota: En DRY RUN no se borra nada, solo se listan y muestran pasos.
 
 REGION="${REGION:-us-east-1}"
 DRY_RUN=0
 VPC_ID=""
 PREFIX=""
 
-log() { printf "%b\n" "$*"; }
-ok()  { log "✅ $*"; }
-warn(){ log "⚠️  $*"; }
-err() { log "❌ $*" >&2; }
+log()  { printf "%b\n" "$*"; }
+ok()   { log "✅ $*"; }
+warn() { log "⚠️  $*"; }
+err()  { log "❌ $*" >&2; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -26,7 +28,7 @@ while [[ $# -gt 0 ]]; do
     --dry-run) DRY_RUN=1; shift;;
     -h|--help)
       cat <<EOF
-destroy_vpcs.sh --region <aws-region> [--vpc-id vpc-xxx | --prefix NAME-] [--dry-run]
+Uso: destroy_vpcs.sh --region <aws-region> [--vpc-id vpc-xxx | --prefix NAME-] [--dry-run]
 EOF
       exit 0;;
     *) err "Arg desconocido: $1"; exit 1;;
@@ -40,20 +42,59 @@ fi
 
 aws_ec2() { aws ec2 --region "$REGION" "$@"; }
 
-# --- helpers ---------------------------------------------------------------
+# ---------- Helpers -----------
 
-# Lista VPCs a limpiar
 list_vpcs() {
   if [[ -n "$VPC_ID" ]]; then
     aws_ec2 describe-vpcs --vpc-ids "$VPC_ID" \
-      --query 'Vpcs[].{VpcId:VpcId,Name:Tags[?Key==`Name`]|[0].Value}' --output json
+      --query 'Vpcs[].{VpcId:VpcId,Name:Tags[?Key==`Name`]|[0].Value,Cidr:CidrBlock}' --output json
   else
-    # Trae todas y filtra por prefijo en bash (portable)
     aws_ec2 describe-vpcs \
-      --query 'Vpcs[].{VpcId:VpcId,Name:Tags[?Key==`Name`]|[0].Value}' --output json | \
-      jq --arg p "$PREFIX" '[ .[] | select(.Name|tostring|startswith($p)) ]'
+      --query 'Vpcs[].{VpcId:VpcId,Name:Tags[?Key==`Name`]|[0].Value,Cidr:CidrBlock}' --output json | \
+      jq --arg p "$PREFIX" '[ .[] | select((.Name|tostring) | startswith($p)) ]'
   fi
 }
+
+delete_routes_pointing_to() {
+  local vpc_id="$1"
+  local dest_cidr="$2"
+  [[ -z "$dest_cidr" || "$dest_cidr" == "None" ]] && return 0
+  local rts
+  rts=$(aws_ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc_id" \
+        --query 'RouteTables[].RouteTableId' --output text || true)
+  for rt in $rts; do
+    if [[ "$DRY_RUN" -eq 0 ]]; then
+      aws_ec2 delete-route --route-table-id "$rt" --destination-cidr-block "$dest_cidr" >/dev/null 2>&1 || true
+    fi
+  done
+}
+
+delete_default_routes_any() {
+  local vpc_id="$1"
+  local rts
+  rts=$(aws_ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc_id" \
+        --query 'RouteTables[].RouteTableId' --output text || true)
+  for rt in $rts; do
+    if [[ "$DRY_RUN" -eq 0 ]]; then
+      aws_ec2 delete-route --route-table-id "$rt" --destination-cidr-block 0.0.0.0/0 >/dev/null 2>&1 || true
+      aws_ec2 delete-route --route-table-id "$rt" --destination-ipv6-cidr-block ::/0 >/dev/null 2>&1 || true
+    fi
+  done
+}
+
+wait_nat_deleted() {
+  local vpc_id="$1"
+  # Espera a que no queden NATs en estado != deleted (máx ~3 min)
+  for _ in {1..36}; do
+    local left
+    left=$(aws_ec2 describe-nat-gateways --filter "Name=vpc-id,Values=$vpc_id" \
+             --query 'NatGateways[?State!=`deleted`].NatGatewayId' --output text || true)
+    [[ -z "${left// /}" ]] && break
+    sleep 5
+  done
+}
+
+# ---------- Borrado por VPC -----------
 
 delete_vpc() {
   local vpc_id="$1"
@@ -66,6 +107,36 @@ delete_vpc() {
 
   if [[ "$DRY_RUN" -eq 1 ]]; then
     warn "[dry-run] Solo listado / no se borra nada"
+  fi
+
+  # CIDR de la VPC
+  local my_cidr
+  my_cidr=$(aws_ec2 describe-vpcs --vpc-ids "$vpc_id" --query 'Vpcs[0].CidrBlock' --output text 2>/dev/null || echo "")
+
+  # 0) Rutas de peering (primero borrar rutas, luego el peering)
+  #    Para rutas necesitamos conocer la otra VPC y su CIDR.
+  local peers
+  peers=$(aws_ec2 describe-vpc-peering-connections \
+    --query "VpcPeeringConnections[?RequesterVpcInfo.VpcId=='$vpc_id' || AccepterVpcInfo.VpcId=='$vpc_id'].[VpcPeeringConnectionId,RequesterVpcInfo.VpcId,AccepterVpcInfo.VpcId]" \
+    --output text || true)
+
+  if [[ -n "${peers// /}" ]]; then
+    while read -r pcx req acc; do
+      [[ -z "$pcx" ]] && continue
+      local other_vpc="$req"
+      [[ "$req" == "$vpc_id" ]] && other_vpc="$acc"
+      local other_cidr
+      other_cidr=$(aws_ec2 describe-vpcs --vpc-ids "$other_vpc" --query 'Vpcs[0].CidrBlock' --output text 2>/dev/null || echo "")
+      # Borra rutas hacia la otra VPC en TODAS las tablas de esta VPC
+      delete_routes_pointing_to "$vpc_id" "$other_cidr"
+      # Y viceversa: si luego limpiamos la otra VPC, también lo hará allí.
+      if [[ "$DRY_RUN" -eq 0 ]]; then
+        aws_ec2 delete-vpc-peering-connection --vpc-peering-connection-id "$pcx" >/dev/null || true
+      fi
+      ok "Peering eliminado: $pcx"
+    done <<< "$peers"
+  else
+    ok "No hay peering para esta VPC"
   fi
 
   # 1) Instancias EC2
@@ -83,131 +154,119 @@ delete_vpc() {
     ok "No hay instancias EC2"
   fi
 
-  # 2) NAT Gateways (y esperar a deleted)
-  local nat_ids
-  nat_ids=$(aws_ec2 describe-nat-gateways --filter "Name=vpc-id,Values=$vpc_id" \
-            --query 'NatGateways[].NatGatewayId' --output text || true)
+  # 2) Quitar rutas por defecto (0.0.0.0/0 y ::/0) para desbloquear IGW/NAT/RTs
+  delete_default_routes_any "$vpc_id"
+  ok "Rutas por defecto eliminadas (0.0.0.0/0, ::/0)"
+
+  # 3) NAT Gateways (y esperar a deleted). Guarda AllocationIds para liberar EIPs.
+  local nat_info
+  nat_info=$(aws_ec2 describe-nat-gateways --filter "Name=vpc-id,Values=$vpc_id" \
+              --query 'NatGateways[].{Id:NatGatewayId,Alloc:NatGatewayAddresses[0].AllocationId}' --output json || echo "[]")
+  local nat_ids alloc_ids
+  nat_ids=$(jq -r '.[].Id' <<<"$nat_info" | xargs || true)
+  alloc_ids=$(jq -r '.[].Alloc' <<<"$nat_info" | xargs || true)
+
   if [[ -n "${nat_ids// /}" ]]; then
     for nat in $nat_ids; do
       if [[ "$DRY_RUN" -eq 0 ]]; then
         aws_ec2 delete-nat-gateway --nat-gateway-id "$nat" >/dev/null || true
       fi
-      ok "NAT eliminado: $nat (puede tardar ~1-2 min en borrarse)"
+      ok "NAT eliminado: $nat (puede tardar ~1-2 min)"
     done
-    # Espera best-effort a que queden en deleted
-    if [[ "$DRY_RUN" -eq 0 ]]; then
-      for _ in {1..30}; do
-        left=$(aws_ec2 describe-nat-gateways --filter "Name=vpc-id,Values=$vpc_id" \
-                 --query 'NatGateways[?State!=`deleted`].NatGatewayId' --output text || true)
-        [[ -z "${left// /}" ]] && break
-        sleep 5
-      done
-    fi
+    [[ "$DRY_RUN" -eq 0 ]] && wait_nat_deleted "$vpc_id"
   else
     ok "No hay NAT Gateways"
   fi
 
-  # 3) Elastic IPs no asociadas (de esta VPC, best-effort)
-  local eips
-  eips=$(aws_ec2 describe-addresses --query 'Addresses[].AllocationId' --output text || true)
-  if [[ -n "${eips// /}" ]]; then
-    for eip in $eips; do
-      if [[ "$DRY_RUN" -eq 0 ]]; then
-        aws_ec2 release-address --allocation-id "$eip" >/dev/null || true
-      fi
-    done
-    ok "Elastic IPs liberadas (best-effort)"
-  fi
-
-  # 4) Peering que referencien a la VPC
-  local peers
-  peers=$(aws_ec2 describe-vpc-peering-connections \
-            --query "VpcPeeringConnections[?RequesterVpcInfo.VpcId=='$vpc_id' || AccepterVpcInfo.VpcId=='$vpc_id'].VpcPeeringConnectionId" \
-            --output text || true)
-  if [[ -n "${peers// /}" ]]; then
-    for pcx in $peers; do
-      [[ "$DRY_RUN" -eq 0 ]] && aws_ec2 delete-vpc-peering-connection --vpc-peering-connection-id "$pcx" >/dev/null || true
-      ok "Peering eliminado: $pcx"
+  # 4) Elastic IPs: libera las asociadas a NAT (AllocationId conocidos) y las etiquetadas *-nat-eip
+  if [[ -n "${alloc_ids// /}" && "$DRY_RUN" -eq 0 ]]; then
+    for a in $alloc_ids; do
+      aws_ec2 release-address --allocation-id "$a" >/dev/null 2>&1 || true
     done
   fi
-
-  # 5) TGW attachments (si hubiera)
-  local tgw_att
-  tgw_att=$(aws ec2 describe-transit-gateway-vpc-attachments --region "$REGION" \
-              --query "TransitGatewayVpcAttachments[?VpcId=='$vpc_id'].TransitGatewayVpcAttachmentId" \
-              --output text || true)
-  if [[ -n "${tgw_att// /}" ]]; then
-    for att in $tgw_att; do
-      [[ "$DRY_RUN" -eq 0 ]] && aws ec2 delete-transit-gateway-vpc-attachment --region "$REGION" --transit-gateway-vpc-attachment-id "$att" >/dev/null || true
-      ok "TGW attachment eliminado: $att"
+  # best-effort por tag
+  local tagged_eips
+  tagged_eips=$(aws_ec2 describe-addresses --filters "Name=tag:Name,Values=*-nat-eip" \
+                 --query 'Addresses[].AllocationId' --output text || true)
+  if [[ -n "${tagged_eips// /}" && "$DRY_RUN" -eq 0 ]]; then
+    for a in $tagged_eips; do
+      aws_ec2 release-address --allocation-id "$a" >/dev/null 2>&1 || true
     done
   fi
+  ok "Elastic IPs liberadas (si había)"
 
-  # 6) Desasociar y borrar route tables NO main
+  # 5) Internet Gateways (detach + delete)
+  local igw_ids
+  igw_ids=$(aws_ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$vpc_id" \
+             --query 'InternetGateways[].InternetGatewayId' --output text || true)
+  for igw in $igw_ids; do
+    [[ "$DRY_RUN" -eq 0 ]] && aws_ec2 detach-internet-gateway --internet-gateway-id "$igw" --vpc-id "$vpc_id" >/dev/null || true
+    [[ "$DRY_RUN" -eq 0 ]] && aws_ec2 delete-internet-gateway --internet-gateway-id "$igw" >/dev/null || true
+    ok "Internet Gateway eliminado: $igw"
+  done
+  [[ -z "${igw_ids// /}" ]] && ok "No hay IGW"
+
+  # 6) Route Tables NO main (desasociar y borrar)
   local rt_ids
   rt_ids=$(aws_ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc_id" \
-             --query "RouteTables[?Associations[?Main!=\`true\`]].RouteTableId" --output text || true)
+            --query 'RouteTables[?Associations[?Main!=`true`]].RouteTableId' --output text || true)
   for rt in $rt_ids; do
-    # desasociar
     local assoc_ids
     assoc_ids=$(aws_ec2 describe-route-tables --route-table-ids "$rt" \
-                   --query 'RouteTables[].Associations[].RouteTableAssociationId' --output text || true)
+                  --query 'RouteTables[].Associations[].RouteTableAssociationId' --output text || true)
     for a in $assoc_ids; do
-      [[ "$DRY_RUN" -eq 0 ]] && aws_ec2 disassociate-route-table --association-id "$a" >/dev/null || true
+      [[ "$DRY_RUN" -eq 0 ]] && aws_ec2 disassociate-route-table --association-id "$a" >/dev/null 2>&1 || true
     done
-    # borrar
-    [[ "$DRY_RUN" -eq 0 ]] && aws_ec2 delete-route-table --route-table-id "$rt" >/dev/null || true
+    [[ "$DRY_RUN" -eq 0 ]] && aws_ec2 delete-route-table --route-table-id "$rt" >/dev/null 2>&1 || true
     ok "Route table eliminada: $rt"
   done
+  [[ -z "${rt_ids// /}" ]] && ok "No hay RTs no-main para borrar"
 
   # 7) Security Groups (no default)
   local sgs
   sgs=$(aws_ec2 describe-security-groups --filters "Name=vpc-id,Values=$vpc_id" \
-          --query "SecurityGroups[?GroupName!='default'].GroupId" --output text || true)
+         --query "SecurityGroups[?GroupName!='default'].GroupId" --output text || true)
   for sg in $sgs; do
-    [[ "$DRY_RUN" -eq 0 ]] && aws_ec2 delete-security-group --group-id "$sg" >/dev/null || true
+    [[ "$DRY_RUN" -eq 0 ]] && aws_ec2 delete-security-group --group-id "$sg" >/dev/null 2>&1 || true
     ok "Security Group eliminado: $sg"
   done
+  [[ -z "${sgs// /}" ]] && ok "No hay SGs extra"
 
   # 8) Subnets
-  local subnet_ids
-  subnet_ids=$(aws_ec2 describe-subnets --filters "Name=vpc-id,Values=$vpc_id" \
-                 --query 'Subnets[].SubnetId' --output text || true)
-  for sn in $subnet_ids; do
-    [[ "$DRY_RUN" -eq 0 ]] && aws_ec2 delete-subnet --subnet-id "$sn" >/dev/null || true
+  local subnets
+  subnets=$(aws_ec2 describe-subnets --filters "Name=vpc-id,Values=$vpc_id" \
+             --query 'Subnets[].SubnetId' --output text || true)
+  for sn in $subnets; do
+    [[ "$DRY_RUN" -eq 0 ]] && aws_ec2 delete-subnet --subnet-id "$sn" >/dev/null 2>&1 || true
     ok "Subnet eliminada: $sn"
   done
+  [[ -z "${subnets// /}" ]] && ok "No hay subnets"
 
-  # 9) Internet Gateway (detach + delete)
-  local igw_id
-  igw_id=$(aws_ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$vpc_id" \
-             --query 'InternetGateways[].InternetGatewayId' --output text || true)
-  if [[ -n "${igw_id// /}" ]]; then
-    [[ "$DRY_RUN" -eq 0 ]] && aws_ec2 detach-internet-gateway --internet-gateway-id "$igw_id" --vpc-id "$vpc_id" >/dev/null || true
-    [[ "$DRY_RUN" -eq 0 ]] && aws_ec2 delete-internet-gateway --internet-gateway-id "$igw_id" >/dev/null || true
-    ok "Internet Gateway eliminado: $igw_id"
-  fi
-
-  # 10) VPC
+  # 9) VPC
   if [[ "$DRY_RUN" -eq 0 ]]; then
-    aws_ec2 delete-vpc --vpc-id "$vpc_id" >/dev/null || true
+    aws_ec2 delete-vpc --vpc-id "$vpc_id" >/dev/null 2>&1 || true
   fi
   ok "Limpieza completa de ${name:-$vpc_id}"
 }
 
-# --- run --------------------------------------------------------------------
+# ---------- Run -----------
+
 VPCS_JSON=$(list_vpcs)
 COUNT=$(jq 'length' <<<"$VPCS_JSON")
 if [[ "$COUNT" -eq 0 ]]; then
-  ok "No se encontraron VPCs para eliminar."
+  ok "No se encontraron VPCs para eliminar (region=$REGION)."
   exit 0
 fi
 
 log "Se eliminarán $COUNT VPC(s) en $REGION:"
-jq -r '.[] | " - \(.VpcId) \(.Name)"' <<<"$VPCS_JSON"
+jq -r '.[] | " - \(.VpcId) \(.Name)  (\(.Cidr))"' <<<"$VPCS_JSON"
 
+# Consejo: si usaste peering entre 2 VPC, es indiferente el orden porque
+# este script borra primero rutas y la conexión de peering por cada VPC.
 for row in $(jq -c '.[]' <<<"$VPCS_JSON"); do
   vid=$(jq -r '.VpcId' <<<"$row")
   vnm=$(jq -r '.Name // empty' <<<"$row")
   delete_vpc "$vid" "$vnm"
 done
+
+ok "✅ Proceso finalizado."
