@@ -1,9 +1,11 @@
 // apps/frontend/src/components/flow/flow-hooks/useDeployNetwork.js
 import { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { RouterPolicy } from "../../../config/networking";
 import { useAuth } from "../../../contexts/AuthContext";
 import { LoadingFlowContext } from "../../../contexts/LoadingFlowContext";
 import { api } from "../../../lib/api";
+import { decideRouterMode } from "../../../utils/decideRouterMode";
 import useCidrBlockVPCStore from "../store/cidrBlocksIp";
 import { buildRoutingPreview } from "../utils/buildRoutingPreview";
 import { TYPE_ROUTER_NODE, TYPE_VPC_NODE } from "../utils/constants";
@@ -39,12 +41,16 @@ function normalizeAz(region, az) {
   return `${r}a`;
 }
 
-/** Construye links lógicos (router<->vpc => peering entre las VPCs conectadas) */
+/** Helper para usar el MISMO nombre de subnet en payload y en TGW */
+const resolveSubnetName = (sn) => sn?.data?.subnetName || `subnet-${sn.id}`;
+
+/** Construye links lógicos (router<->vpc => peering o TGW entre las VPCs conectadas) */
 function buildLinksFromEdges(nodes, edges) {
   const idToType = new Map(nodes.map((n) => [n.id, n.type]));
   const idToNode = new Map(nodes.map((n) => [n.id, n]));
   const routerToVpcs = new Map(); // router -> set(vpcIds)
 
+  // --- Paso 1: identificar qué VPCs están conectadas a cada router ---
   edges.forEach((e) => {
     const sType = idToType.get(e.source);
     const tType = idToType.get(e.target);
@@ -59,29 +65,62 @@ function buildLinksFromEdges(nodes, edges) {
     routerToVpcs.get(routerId).add(vpcId);
   });
 
+  // --- Paso 2: construir links según el modo (peering o tgw) ---
   const links = [];
+  const routers = [];
+
   for (const [routerId, vpcSet] of routerToVpcs.entries()) {
     const vpcs = Array.from(vpcSet);
-    if (vpcs.length < 2) continue;
+    if (vpcs.length < 2) continue; // nada que conectar
 
-    for (let i = 0; i < vpcs.length; i++) {
-      for (let j = i + 1; j < vpcs.length; j++) {
-        const a = vpcs[i];
-        const b = vpcs[j];
+    const routerNode = idToNode.get(routerId);
+    const routerData = routerNode?.data || {};
+    const router = {
+      id: routerId,
+      name: routerData.name || routerNode.id,
+      connectedVpcIds: vpcs,
+      mode: routerData.mode || RouterPolicy.defaultMode,
+      allowCrossVpcPing: !!routerData.allowCrossVpcPing,
+    };
 
-        const vpcA = idToNode.get(a);
-        const vpcB = idToNode.get(b);
+    const mode = decideRouterMode(router);
+
+    if (mode === "tgw") {
+      // Declaramos el router lógico TGW
+      routers.push({
+        id: router.id,
+        name: router.name,
+        type: "tgw",
+      });
+
+      // Adjuntamos cada VPC con las SUBNETS REALES del canvas
+      vpcs.forEach((vpcId) => {
+        const subnetsForVpc = groupSubnetsByVpc(nodes, vpcId);
+        const subnetNames = subnetsForVpc.map(resolveSubnetName);
 
         links.push({
-          type: "peering",
-          via_router_id: routerId,
-          vpc_a_id: a,
-          vpc_b_id: b,
+          type: "tgw-attach",
+          router_id: router.id,
+          vpc_id: vpcId,
+          subnet_names: subnetNames,
         });
+      });
+    } else {
+      // Peering normal entre cada par de VPCs
+      for (let i = 0; i < vpcs.length; i++) {
+        for (let j = i + 1; j < vpcs.length; j++) {
+          links.push({
+            type: "peering",
+            via_router_id: router.id,
+            vpc_a_id: vpcs[i],
+            vpc_b_id: vpcs[j],
+          });
+        }
       }
     }
   }
-  return links;
+
+  return { links, routers };
 }
 
 const useDeployNetwork = ({ nodes, edges }) => {
@@ -169,7 +208,7 @@ const useDeployNetwork = ({ nodes, edges }) => {
         const routeTableName = isPublic ? "public" : "private";
 
         return {
-          name: sn.data?.subnetName || `subnet-${sn.id}`,
+          name: resolveSubnetName(sn),
           cidr_block: sn.data?.cidrBlock,
           availability_zone: az,
           map_public_ip_on_launch: isPublic,
@@ -208,14 +247,12 @@ const useDeployNetwork = ({ nodes, edges }) => {
       );
       if (hasPublic) {
         if (hasIgwInPreview) {
-          // usa la del preview (asegurada como 0.0.0.0/0 → igw)
           publicRoutes.push({
             name: "igw-default",
             dest_cidr: "0.0.0.0/0",
             target: "igw",
           });
         } else {
-          // default sensata por si acaso
           publicRoutes.push({
             name: "igw-default",
             dest_cidr: "0.0.0.0/0",
@@ -237,7 +274,6 @@ const useDeployNetwork = ({ nodes, edges }) => {
       // fallback: si por algún motivo no detectamos subnets, crea una "main" vacía
       if (!routeTables.length) {
         routeTables.push({ name: "main", routes: [] });
-        // y reasigna cualquier subnet sin tipo a "main"
         subnetsRaw.forEach((s) => (s.route_table = "main"));
       }
 
@@ -258,8 +294,8 @@ const useDeployNetwork = ({ nodes, edges }) => {
       };
     });
 
-    // 4) Links a partir de edges (peering lógico)
-    const linksFromEdges = buildLinksFromEdges(nodes, edges);
+    // 4) Links y routers a partir de edges (peering o TGW)
+    const { links, routers } = buildLinksFromEdges(nodes, edges);
 
     // 5) Datos de la VLAN master
     const firstVpcCidr = vpcsPayload[0]?.cidr_block || "";
@@ -277,17 +313,23 @@ const useDeployNetwork = ({ nodes, edges }) => {
       vpcsPayload[0]?.name || `plan-${Date.now()}`;
     setPlanName(planDefaultName);
 
+    // ⚠️ Importante: calcularlo desde los nodos ROUTER del canvas, no desde el array `routers`
+    const allowCrossVpcPing = nodes
+      .filter((n) => n.type === TYPE_ROUTER_NODE)
+      .some((n) => n.data?.allowCrossVpcPing === true);
+
     const built = {
       name: planDefaultName,
       cloud: "aws",
       vlan: {
         name: vlanNameFinal,
         region: vlanRegionFinal,
-        master_cidr: masterCidr, // (informativo para UI)
+        master_cidr: masterCidr,
       },
       vpcs: vpcsPayload,
-      links: linksFromEdges,
-      // routers: [] // (cuando agregues TGW)
+      links,
+      routers, // solo se pobla si hubo TGW
+      allow_cross_vpc_ping: allowCrossVpcPing,
     };
 
     setTransformedData(built);
@@ -333,6 +375,7 @@ const useDeployNetwork = ({ nodes, edges }) => {
   };
 
   const handleCancelDeploy = () => {
+
     setShowConfirmation(false);
     setTransformedData(null);
   };
