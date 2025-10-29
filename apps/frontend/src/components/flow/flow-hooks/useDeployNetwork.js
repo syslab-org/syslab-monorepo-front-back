@@ -313,10 +313,19 @@ const useDeployNetwork = ({ nodes, edges }) => {
       vpcsPayload[0]?.name || `plan-${Date.now()}`;
     setPlanName(planDefaultName);
 
-    // ⚠️ Importante: calcularlo desde los nodos ROUTER del canvas, no desde el array `routers`
-    const allowCrossVpcPing = nodes
+    // --- NUEVO BLOQUE: cálculo robusto del flag de ping inter-VPC ---
+    const anyLinks = links.length > 0;
+
+    // ¿Algún router lo forzó explícitamente?
+    const someRouterForcesPing = nodes
       .filter((n) => n.type === TYPE_ROUTER_NODE)
       .some((n) => n.data?.allowCrossVpcPing === true);
+
+    // Regla:
+    // - Si algún router lo fuerza => true
+    // - Si hay enlaces y nadie dijo nada => true (default amigable)
+    // - Si no hay enlaces => false
+    const allowCrossVpcPing = someRouterForcesPing || anyLinks;
 
     const built = {
       name: planDefaultName,
@@ -329,7 +338,8 @@ const useDeployNetwork = ({ nodes, edges }) => {
       vpcs: vpcsPayload,
       links,
       routers, // solo se pobla si hubo TGW
-      allow_cross_vpc_ping: allowCrossVpcPing,
+      // Enviar solo si es true; si fuera false, lo omitimos para dejar el default del backend.
+      ...(allowCrossVpcPing ? { allow_cross_vpc_ping: true } : {}),
     };
 
     setTransformedData(built);
@@ -375,7 +385,6 @@ const useDeployNetwork = ({ nodes, edges }) => {
   };
 
   const handleCancelDeploy = () => {
-
     setShowConfirmation(false);
     setTransformedData(null);
   };

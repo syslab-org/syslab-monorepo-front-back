@@ -37,8 +37,16 @@ locals {
   # Routers tipo TGW (Transit Gateway)
   tgw_routers = [for r in local.routers : r if try(lower(r.type), "") == "tgw"]
 
-  # ¿Se permite ICMP entre VPCs conectadas? (true/false literal desde el payload)
-  allow_cross_vpc_ping = {{ (payload.allow_cross_vpc_ping if payload and (payload.allow_cross_vpc_ping is not none) else false) | tojson }}
+ # ¿Se permite ICMP entre VPCs conectadas?
+# Regla: si viene explícito en el payload, se respeta.
+# Si NO viene, se enciende automáticamente cuando existan links (peering o tgw-attach).
+allow_cross_vpc_ping = (
+  {% if payload and (payload.allow_cross_vpc_ping is not none) -%}
+  {{ payload.allow_cross_vpc_ping | tojson }}
+  {%- else -%}
+  length([for l in local.links : l if contains(["peering","tgw-attach"], lower(try(l.type, "")))]) > 0
+  {%- endif -%}
+)
 
   # Conjunto de links TGW
   tgw_links = [for l in local.links : l if try(lower(l.type), "") == "tgw-attach"]
