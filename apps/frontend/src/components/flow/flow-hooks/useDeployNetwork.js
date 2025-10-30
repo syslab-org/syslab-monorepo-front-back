@@ -123,7 +123,7 @@ function buildLinksFromEdges(nodes, edges) {
   return { links, routers };
 }
 
-const useDeployNetwork = ({ nodes, edges }) => {
+const useDeployNetwork = ({ nodes, edges, allowCrossVpcPingUI = null }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -240,25 +240,17 @@ const useDeployNetwork = ({ nodes, edges }) => {
         };
       });
 
-      // rutas para la tabla pública: si el preview sugiere IGW, la añadimos; si no, añadimos la default por defecto
+      // rutas para la tabla pública: por ahora siempre ponemos default IGW si hay subred pública
       const publicRoutes = [];
       const hasIgwInPreview = previewRoutes.some(
         (r) => String(r.target).toLowerCase() === "igw"
       );
       if (hasPublic) {
-        if (hasIgwInPreview) {
-          publicRoutes.push({
-            name: "igw-default",
-            dest_cidr: "0.0.0.0/0",
-            target: "igw",
-          });
-        } else {
-          publicRoutes.push({
-            name: "igw-default",
-            dest_cidr: "0.0.0.0/0",
-            target: "igw",
-          });
-        }
+        publicRoutes.push({
+          name: "igw-default",
+          dest_cidr: "0.0.0.0/0",
+          target: "igw",
+        });
       }
 
       // tabla privada sin default explícita (el template añade 0.0.0.0/0 → NAT si enabled)
@@ -271,7 +263,6 @@ const useDeployNetwork = ({ nodes, edges }) => {
       if (hasPrivate) {
         routeTables.push({ name: "private", routes: privateRoutes });
       }
-      // fallback: si por algún motivo no detectamos subnets, crea una "main" vacía
       if (!routeTables.length) {
         routeTables.push({ name: "main", routes: [] });
         subnetsRaw.forEach((s) => (s.route_table = "main"));
@@ -313,20 +304,22 @@ const useDeployNetwork = ({ nodes, edges }) => {
       vpcsPayload[0]?.name || `plan-${Date.now()}`;
     setPlanName(planDefaultName);
 
-    // --- NUEVO BLOQUE: cálculo robusto del flag de ping inter-VPC ---
+    // --- Cálculo del flag de ping inter-VPC con prioridad a la UI ---
     const anyLinks = links.length > 0;
-
-    // ¿Algún router lo forzó explícitamente?
     const someRouterForcesPing = nodes
       .filter((n) => n.type === TYPE_ROUTER_NODE)
       .some((n) => n.data?.allowCrossVpcPing === true);
 
-    // Regla:
-    // - Si algún router lo fuerza => true
-    // - Si hay enlaces y nadie dijo nada => true (default amigable)
-    // - Si no hay enlaces => false
-    const allowCrossVpcPing = someRouterForcesPing || anyLinks;
+    // Modo automático (si UI no toca nada): force si hay routers que lo pidan o existen enlaces
+    const autoAllowCrossVpcPing = someRouterForcesPing || anyLinks;
 
+    // Prioridad: UI override -> automático
+    const allowCrossVpcPing =
+      allowCrossVpcPingUI !== null
+        ? allowCrossVpcPingUI
+        : autoAllowCrossVpcPing;
+
+    // Construcción final del payload
     const built = {
       name: planDefaultName,
       cloud: "aws",
@@ -338,8 +331,13 @@ const useDeployNetwork = ({ nodes, edges }) => {
       vpcs: vpcsPayload,
       links,
       routers, // solo se pobla si hubo TGW
-      // Enviar solo si es true; si fuera false, lo omitimos para dejar el default del backend.
-      ...(allowCrossVpcPing ? { allow_cross_vpc_ping: true } : {}),
+      // Si la UI definió explícitamente, enviamos SIEMPRE el booleano.
+      // Si no, mantenemos compatibilidad: solo se envía true cuando aplica.
+      ...(allowCrossVpcPingUI !== null
+        ? { allow_cross_vpc_ping: allowCrossVpcPing }
+        : autoAllowCrossVpcPing
+          ? { allow_cross_vpc_ping: true }
+          : {}),
     };
 
     setTransformedData(built);
