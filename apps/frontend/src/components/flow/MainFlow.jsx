@@ -577,6 +577,8 @@ function MainFlow() {
 
             />
 
+
+
             <ReactFlow
               nodes={nodes}
               edges={edges.map(e => ({ ...e, style: connectionLineStyle, animated: true }))}
@@ -621,6 +623,7 @@ function MainFlow() {
               </Panel>
 
             </ReactFlow>
+
 
             <ConfirmDeployDialog
               open={showConfirmation}
