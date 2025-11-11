@@ -15,42 +15,42 @@ import {
   validateTopology,
 } from "../utils/topologyValidation";
 
-/** Normaliza AZ:
- * - si ya es válida, la deja
- * - si viene "us-east-1", genera "us-east-1a"
- * - si viene algo raro, cae a `${region}a`
- */
+function s(v) {
+  if (v === null || v === undefined) return "";
+  const t = typeof v;
+  if (t === "string") return v;
+  if (t === "number" || t === "boolean") return String(v);
+  return "";
+}
+
 function normalizeAz(region, az) {
   const OK =
     /^(af|ap|ca|eu|il|me|sa|us)-(central|north|south|southeast|east|west|northeast|south-2|east-2|west-2|gov-[a-z]+|\w+)-\d+[a-f]$/i;
   if (OK.test(az || "")) return az;
 
   let r = (region || "us-east-1").toLowerCase();
-  r = r.replace(/([a-f])$/i, ""); // quita letra si venía con AZ
+  r = r.replace(/([a-f])$/i, "");
 
-  let s = (az || "").toLowerCase();
-  s = s.replace("us-eas-", "us-east-");
-  s = s
+  let out = (az || "").toLowerCase();
+  out = out
+    .replace("us-eas-", "us-east-")
     .replace(/-a1\b/, "-1a")
     .replace(/-b1\b/, "-1b")
     .replace(/-c1\b/, "-1c")
     .replace(/-d1\b/, "-1d")
     .replace(/-e1\b/, "-1e");
 
-  if (OK.test(s)) return s;
+  if (OK.test(out)) return out;
   return `${r}a`;
 }
 
-/** Helper para usar el MISMO nombre de subnet en payload y en TGW */
 const resolveSubnetName = (sn) => sn?.data?.subnetName || `subnet-${sn.id}`;
 
-/** Construye links lógicos (router<->vpc => peering o TGW entre las VPCs conectadas) */
 function buildLinksFromEdges(nodes, edges) {
   const idToType = new Map(nodes.map((n) => [n.id, n.type]));
   const idToNode = new Map(nodes.map((n) => [n.id, n]));
-  const routerToVpcs = new Map(); // router -> set(vpcIds)
+  const routerToVpcs = new Map();
 
-  // --- Paso 1: identificar qué VPCs están conectadas a cada router ---
   edges.forEach((e) => {
     const sType = idToType.get(e.source);
     const tType = idToType.get(e.target);
@@ -65,13 +65,12 @@ function buildLinksFromEdges(nodes, edges) {
     routerToVpcs.get(routerId).add(vpcId);
   });
 
-  // --- Paso 2: construir links según el modo (peering o tgw) ---
   const links = [];
   const routers = [];
 
   for (const [routerId, vpcSet] of routerToVpcs.entries()) {
     const vpcs = Array.from(vpcSet);
-    if (vpcs.length < 2) continue; // nada que conectar
+    if (vpcs.length < 2) continue;
 
     const routerNode = idToNode.get(routerId);
     const routerData = routerNode?.data || {};
@@ -86,18 +85,10 @@ function buildLinksFromEdges(nodes, edges) {
     const mode = decideRouterMode(router);
 
     if (mode === "tgw") {
-      // Declaramos el router lógico TGW
-      routers.push({
-        id: router.id,
-        name: router.name,
-        type: "tgw",
-      });
-
-      // Adjuntamos cada VPC con las SUBNETS REALES del canvas
+      routers.push({ id: router.id, name: router.name, type: "tgw" });
       vpcs.forEach((vpcId) => {
         const subnetsForVpc = groupSubnetsByVpc(nodes, vpcId);
         const subnetNames = subnetsForVpc.map(resolveSubnetName);
-
         links.push({
           type: "tgw-attach",
           router_id: router.id,
@@ -106,7 +97,6 @@ function buildLinksFromEdges(nodes, edges) {
         });
       });
     } else {
-      // Peering normal entre cada par de VPCs
       for (let i = 0; i < vpcs.length; i++) {
         for (let j = i + 1; j < vpcs.length; j++) {
           links.push({
@@ -143,23 +133,18 @@ const useDeployNetwork = ({ nodes, edges, allowCrossVpcPingUI = null }) => {
     ]);
 
   const processJsonToCloud = () => {
-    // 1) Validación integral de la topología
     const { errors, warnings } = validateTopology(nodes, edges);
     if (errors.length > 0) {
-      const message =
+      setErrorMessage(
         "No se puede desplegar. Corrige estos errores:\n" +
-        errors.map((e) => `• ${e}`).join("\n");
-      setErrorMessage(message);
+        errors.map((e) => `• ${e}`).join("\n")
+      );
       return;
     }
-    if (warnings.length) {
-      console.warn("Advertencias (no bloquean):\n" + warnings.join("\n"));
-    }
+    if (warnings.length) console.warn(warnings.join("\n"));
 
-    // 2) Preview de ruteo (para detectar intenciones como NAT/IGW)
     const preview = buildRoutingPreview(nodes, edges);
 
-    // 3) VPCs del canvas
     const vpcNodes = nodes.filter((n) => n.type === TYPE_VPC_NODE);
     if (!vpcNodes.length) {
       setErrorMessage("No hay VPC en el canvas.");
@@ -167,27 +152,23 @@ const useDeployNetwork = ({ nodes, edges, allowCrossVpcPingUI = null }) => {
     }
 
     const vpcsPayload = vpcNodes.map((vpcNode) => {
-      const name =
-        vpcNode.data?.vpcName || vpcNode.data?.title || vpcNode.id;
+      const name = vpcNode.data?.vpcName || vpcNode.data?.title || vpcNode.id;
       const region = vpcNode.data?.region || "us-east-1";
       const cidr =
         vpcNode.data?.cidrBlock && vpcNode.data?.prefixLength
           ? `${vpcNode.data.cidrBlock}/${vpcNode.data.prefixLength}`
           : null;
 
-      // --- subnets & instances
       const subnetsRaw = groupSubnetsByVpc(nodes, vpcNode.id).map((sn) => {
         const az = normalizeAz(region, sn.data?.availabilityZone);
-        const isPublic =
-          (sn.data?.subnetType || "").toLowerCase() === "public";
+        const isPublic = (sn.data?.subnetType || "").toLowerCase() === "public";
 
         const instances = groupInstancesBySubnet(nodes, sn.id).map((inst) => {
           const name = inst.data?.name || `vm-${sn.id}`;
-          const ami = (inst.data?.ami || "").trim() || undefined;
           const instanceType = inst.data?.instanceType || "t2.micro";
-          const ip = (inst.data?.ipAddress || "").trim() || undefined;
-          const keypair = (inst.data?.sshAccess || "").trim() || undefined;
-
+          const keypair = s(inst.data?.sshAccess);
+          const ami = s(inst.data?.ami);
+          const ip = s(inst.data?.ipAddress);
           const associatePublic =
             typeof inst.data?.associate_public_ip === "boolean"
               ? inst.data.associate_public_ip
@@ -200,18 +181,17 @@ const useDeployNetwork = ({ nodes, edges, allowCrossVpcPingUI = null }) => {
             instance_type: instanceType,
             ip_address: ip,
             ssh_access: keypair,
-            associate_public_ip: associatePublic,
+            associate_public_ip: !!associatePublic,
           };
         });
 
-        // asignamos RT por tipo
         const routeTableName = isPublic ? "public" : "private";
 
         return {
           name: resolveSubnetName(sn),
           cidr_block: sn.data?.cidrBlock,
           availability_zone: az,
-          map_public_ip_on_launch: isPublic,
+          map_public_ip_on_launch: !!isPublic,
           subnet_type: sn.data?.subnetType,
           route_table: routeTableName,
           instances,
@@ -225,13 +205,10 @@ const useDeployNetwork = ({ nodes, edges, allowCrossVpcPingUI = null }) => {
         (s) => (s.subnet_type || "").toLowerCase() === "private"
       );
 
-      // --- interpretar preview: si había alguna ruta marcada como NAT/IGW en "main",
-      //     la normalizamos y la mapeamos a las RT adecuadas.
       const pv = preview.vpcs.find((p) => p.id === vpcNode.id);
       const previewRoutes = (pv?.main_route_table || []).map((r) => {
         const t = String(r.target || "").toLowerCase();
-        const isNat =
-          t === "nat" || t === "nat-gw" || t === "natgateway";
+        const isNat = t === "nat" || t === "nat-gw" || t === "natgateway";
         const isIgw = t === "igw" || t === "internet-gateway";
         return {
           dest_cidr: isNat ? "0.0.0.0/0" : r.dest_cidr,
@@ -240,12 +217,11 @@ const useDeployNetwork = ({ nodes, edges, allowCrossVpcPingUI = null }) => {
         };
       });
 
-      // rutas para la tabla pública: por ahora siempre ponemos default IGW si hay subred pública
       const publicRoutes = [];
       const hasIgwInPreview = previewRoutes.some(
         (r) => String(r.target).toLowerCase() === "igw"
       );
-      if (hasPublic) {
+      if (hasPublic || hasIgwInPreview) {
         publicRoutes.push({
           name: "igw-default",
           dest_cidr: "0.0.0.0/0",
@@ -253,11 +229,10 @@ const useDeployNetwork = ({ nodes, edges, allowCrossVpcPingUI = null }) => {
         });
       }
 
-      // tabla privada sin default explícita (el template añade 0.0.0.0/0 → NAT si enabled)
       const privateRoutes = [];
 
       const routeTables = [];
-      if (hasPublic) {
+      if (hasPublic || publicRoutes.length) {
         routeTables.push({ name: "public", routes: publicRoutes });
       }
       if (hasPrivate) {
@@ -265,8 +240,10 @@ const useDeployNetwork = ({ nodes, edges, allowCrossVpcPingUI = null }) => {
       }
       if (!routeTables.length) {
         routeTables.push({ name: "main", routes: [] });
-        subnetsRaw.forEach((s) => (s.route_table = "main"));
+        subnetsRaw.forEach((snb) => (snb.route_table = "main"));
       }
+
+      const natEnabled = !!vpcNode.data?.enableNatGateway;
 
       return {
         id: vpcNode.id,
@@ -275,20 +252,18 @@ const useDeployNetwork = ({ nodes, edges, allowCrossVpcPingUI = null }) => {
         cidr_block: cidr,
         internet_gateway: !!vpcNode.data?.internetGateway,
         nat_gateway: {
-          enabled: !!vpcNode.data?.enableNatGateway,
-          public_subnet: vpcNode.data?.natGatewayPublicSubnet || "",
-          elastic_ip: (vpcNode.data?.natGatewayElasticIp || "").trim(),
+          enabled: natEnabled,
+          public_subnet: natEnabled ? s(vpcNode.data?.natGatewayPublicSubnet) : "",
+          elastic_ip: natEnabled ? s(vpcNode.data?.natGatewayElasticIp) : "",
         },
         route_tables: routeTables,
         subnets: subnetsRaw,
-        allowed_ssh_cidr: vpcNode.data?.allowedSshCidr || "",
+        allowed_ssh_cidr: s(vpcNode.data?.allowedSshCidr),
       };
     });
 
-    // 4) Links y routers a partir de edges (peering o TGW)
     const { links, routers } = buildLinksFromEdges(nodes, edges);
 
-    // 5) Datos de la VLAN master
     const firstVpcCidr = vpcsPayload[0]?.cidr_block || "";
     const masterCidr =
       cidrBlockVPC && prefixLength
@@ -300,52 +275,31 @@ const useDeployNetwork = ({ nodes, edges, allowCrossVpcPingUI = null }) => {
     const vlanRegionFinal =
       vlanRegion || vpcsPayload[0]?.region || "us-east-1";
 
-    const planDefaultName =
-      vpcsPayload[0]?.name || `plan-${Date.now()}`;
+    const planDefaultName = vpcsPayload[0]?.name || `plan-${Date.now()}`;
     setPlanName(planDefaultName);
 
-    // --- Cálculo del flag de ping inter-VPC con prioridad a la UI ---
     const anyLinks = links.length > 0;
     const someRouterForcesPing = nodes
       .filter((n) => n.type === TYPE_ROUTER_NODE)
       .some((n) => n.data?.allowCrossVpcPing === true);
 
-    // Modo automático (si UI no toca nada): force si hay routers que lo pidan o existen enlaces
     const autoAllowCrossVpcPing = someRouterForcesPing || anyLinks;
-
-    // Prioridad: UI override -> automático
     const allowCrossVpcPing =
-      allowCrossVpcPingUI !== null
-        ? allowCrossVpcPingUI
-        : autoAllowCrossVpcPing;
+      allowCrossVpcPingUI !== null ? allowCrossVpcPingUI : autoAllowCrossVpcPing;
 
-    // Construcción final del payload
     const built = {
       name: planDefaultName,
       cloud: "aws",
-      vlan: {
-        name: vlanNameFinal,
-        region: vlanRegionFinal,
-        master_cidr: masterCidr,
-      },
+      vlan: { name: vlanNameFinal, region: vlanRegionFinal, master_cidr: masterCidr },
       vpcs: vpcsPayload,
       links,
-      routers, // solo se pobla si hubo TGW
-      // Si la UI definió explícitamente, enviamos SIEMPRE el booleano.
-      // Si no, mantenemos compatibilidad: solo se envía true cuando aplica.
-      ...(allowCrossVpcPingUI !== null
-        ? { allow_cross_vpc_ping: allowCrossVpcPing }
-        : autoAllowCrossVpcPing
-          ? { allow_cross_vpc_ping: true }
-          : {}),
+      routers,
+      // SIEMPRE presente para evitar Jinja Undefined:
+      allow_cross_vpc_ping: !!allowCrossVpcPing,
     };
 
     setTransformedData(built);
-    console.log("processJsonToCloud - transformedData:", {
-      cloud: "aws",
-      ...built,
-    });
-
+    console.log("processJsonToCloud - transformedData:", { cloud: "aws", ...built });
     setShowConfirmation(true);
   };
 
