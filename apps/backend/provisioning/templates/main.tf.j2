@@ -236,18 +236,28 @@ resource "aws_security_group_rule" "cross_vpc_ping_tgw_b" {
 
 # ---------------------- EC2 instances ----------------------
 resource "aws_instance" "vm" {
-  for_each = local.inst_map
-
+  for_each                    = local.inst_map
   ami                         = coalesce(each.value.ami, local.default_ami_id)
   instance_type               = each.value.instance_type
   subnet_id                   = aws_subnet.this[each.value.subnet_key].id
   associate_public_ip_address = each.value.associate_public_ip
-  private_ip                  = each.value.ip_address
-  key_name                    = each.value.ssh_access
-  vpc_security_group_ids      = [aws_security_group.vm_sg[each.value.vpc_id_key].id]
-  tags = { Name = each.value.name }
+
+  # ✅ Ajuste clave para evitar el error "expected private_ip to contain a valid IPv4 address"
+  # Si ip_address está vacío o ausente, Terraform omite el atributo y AWS asigna la IP automáticamente.
+  private_ip = (
+    try(length(trimspace(each.value.ip_address)) > 0, false)
+    ? trimspace(each.value.ip_address)
+    : null
+  )
+
+  key_name               = each.value.ssh_access
+  vpc_security_group_ids = [aws_security_group.vm_sg[each.value.vpc_id_key].id]
+  tags = {
+    Name = each.value.name
+  }
 }
 {% endif %}
+
 
 # =========================
 # IGW / NAT / ROUTE TABLES
