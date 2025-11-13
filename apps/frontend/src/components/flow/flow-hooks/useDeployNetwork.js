@@ -51,6 +51,7 @@ function buildLinksFromEdges(nodes, edges) {
   const idToNode = new Map(nodes.map((n) => [n.id, n]));
   const routerToVpcs = new Map();
 
+  // 1) Construimos el mapa router -> VPCs conectadas según edges del canvas
   edges.forEach((e) => {
     const sType = idToType.get(e.source);
     const tType = idToType.get(e.target);
@@ -68,9 +69,10 @@ function buildLinksFromEdges(nodes, edges) {
   const links = [];
   const routers = [];
 
+  // 2) Por cada router, decidimos si va en modo peering o TGW
   for (const [routerId, vpcSet] of routerToVpcs.entries()) {
     const vpcs = Array.from(vpcSet);
-    if (vpcs.length < 2) continue;
+    if (vpcs.length < 2) continue; // router que solo conecta 1 VPC no sirve
 
     const routerNode = idToNode.get(routerId);
     const routerData = routerNode?.data || {};
@@ -84,28 +86,76 @@ function buildLinksFromEdges(nodes, edges) {
 
     const mode = decideRouterMode(router);
 
+    // =======================
+    //   MODO TGW (Transit GW)
+    // =======================
     if (mode === "tgw") {
+      // Registramos el router como TGW
       routers.push({ id: router.id, name: router.name, type: "tgw" });
+
+      // Mapa VPC -> CIDR principal (10.10.0.0/16, etc.)
+      const vpcCidrs = new Map(
+        vpcs.map((vpcId) => {
+          const vpcNode = idToNode.get(vpcId);
+          const vpcData = vpcNode?.data || {};
+          const block = vpcData.cidrBlock;
+          const prefix = vpcData.prefixLength;
+          const cidr = block && prefix ? `${block}/${prefix}` : block || "";
+          return [vpcId, cidr];
+        })
+      );
+
+      // Para cada VPC conectada generamos:
+      // - tgw-attach
+      // - rutas automáticas hacia las otras VPC del mismo router
       vpcs.forEach((vpcId) => {
         const subnetsForVpc = groupSubnetsByVpc(nodes, vpcId);
         const subnetNames = subnetsForVpc.map(resolveSubnetName);
-        links.push({
+
+        // Rutas de salida de ESTA VPC hacia las demás VPC conectadas al mismo TGW
+        const toRouterRoutes = vpcs
+          .filter((otherId) => otherId !== vpcId)
+          .map((otherId) => {
+            const destCidr = vpcCidrs.get(otherId);
+            if (!destCidr) return null;
+            return {
+              dest_cidr: destCidr,
+              target: "tgw",
+            };
+          })
+          .filter(Boolean);
+
+        const linkPayload = {
           type: "tgw-attach",
           router_id: router.id,
           vpc_id: vpcId,
           subnet_names: subnetNames,
-        });
-      });
-    } else {
-      for (let i = 0; i < vpcs.length; i++) {
-        for (let j = i + 1; j < vpcs.length; j++) {
-          links.push({
-            type: "peering",
-            via_router_id: router.id,
-            vpc_a_id: vpcs[i],
-            vpc_b_id: vpcs[j],
-          });
+        };
+
+        // Solo agregamos routes si hay algo que enrutar
+        if (toRouterRoutes.length) {
+          linkPayload.routes = {
+            to_router: toRouterRoutes,
+          };
         }
+
+        links.push(linkPayload);
+      });
+
+      continue; // saltamos el bloque de peering
+    }
+
+    // ===================
+    //   MODO PEERING
+    // ===================
+    for (let i = 0; i < vpcs.length; i++) {
+      for (let j = i + 1; j < vpcs.length; j++) {
+        links.push({
+          type: "peering",
+          via_router_id: router.id,
+          vpc_a_id: vpcs[i],
+          vpc_b_id: vpcs[j],
+        });
       }
     }
   }

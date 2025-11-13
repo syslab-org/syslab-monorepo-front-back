@@ -37,16 +37,16 @@ locals {
   # Routers tipo TGW (Transit Gateway)
   tgw_routers = [for r in local.routers : r if try(lower(r.type), "") == "tgw"]
 
- # ¿Se permite ICMP entre VPCs conectadas?
-# Regla: si viene explícito en el payload, se respeta.
-# Si NO viene, se enciende automáticamente cuando existan links (peering o tgw-attach).
-allow_cross_vpc_ping = (
-  {% if payload and (payload.allow_cross_vpc_ping is not none) -%}
-  {{ payload.allow_cross_vpc_ping | tojson }}
-  {%- else -%}
-  length([for l in local.links : l if contains(["peering","tgw-attach"], lower(try(l.type, "")))]) > 0
-  {%- endif -%}
-)
+  # ¿Se permite ICMP entre VPCs conectadas?
+  # Regla: si viene explícito en el payload, se respeta.
+  # Si NO viene, se enciende automáticamente cuando existan links (peering o tgw-attach).
+  allow_cross_vpc_ping = (
+    {% if payload and (payload.allow_cross_vpc_ping is not none) -%}
+    {{ payload.allow_cross_vpc_ping | tojson }}
+    {%- else -%}
+    length([for l in local.links : l if contains(["peering","tgw-attach"], lower(try(l.type, "")))]) > 0
+    {%- endif -%}
+  )
 
   # Conjunto de links TGW
   tgw_links = [for l in local.links : l if try(lower(l.type), "") == "tgw-attach"]
@@ -242,7 +242,6 @@ resource "aws_instance" "vm" {
   subnet_id                   = aws_subnet.this[each.value.subnet_key].id
   associate_public_ip_address = each.value.associate_public_ip
 
-  # ✅ Ajuste clave para evitar el error "expected private_ip to contain a valid IPv4 address"
   # Si ip_address está vacío o ausente, Terraform omite el atributo y AWS asigna la IP automáticamente.
   private_ip = (
     try(length(trimspace(each.value.ip_address)) > 0, false)
@@ -434,7 +433,6 @@ locals {
   ])
 }
 
-# ⚠ FIX DE PLAN: for_each solo con datos del payload (no rt_id).
 resource "aws_route" "nat_default_auto" {
   for_each = {
     for x in local.nat_default_candidates :
@@ -457,20 +455,116 @@ resource "aws_route" "nat_default_auto" {
 # =========================
 # TGW + PEERING
 # =========================
+
 resource "aws_ec2_transit_gateway" "tgw" {
-  count       = length(local.tgw_routers) > 0 ? 1 : 0
+  count = length(local.tgw_routers) > 0 ? 1 : 0
+
   description = try(local.tgw_routers[0].name, "core-tgw")
-  tags        = { Name = try(local.tgw_routers[0].name, "core-tgw") }
+
+  # 🔴 Desactivamos asociaciones/propagaciones por defecto
+  default_route_table_association = "disable"
+  default_route_table_propagation = "disable"
+
+  tags = {
+    Name = try(local.tgw_routers[0].name, "core-tgw")
+  }
 }
 
 resource "aws_ec2_transit_gateway_vpc_attachment" "tgw_attach" {
   for_each = { for l in local.tgw_links : "${l.router_id}:${l.vpc_id}" => l }
+
   transit_gateway_id = aws_ec2_transit_gateway.tgw[0].id
   vpc_id             = aws_vpc.vpc[each.value.vpc_id].id
-  subnet_ids         = [for sn in coalesce(each.value.subnet_names, []) :
-    aws_subnet.this["${each.value.vpc_id}:${sn}"].id]
+  subnet_ids         = [
+    for sn in coalesce(each.value.subnet_names, []) :
+    aws_subnet.this["${each.value.vpc_id}:${sn}"].id
+  ]
+
   tags = { Name = "tgw-attach-${each.value.vpc_id}" }
 }
+
+# -------------------------
+# TGW ROUTE TABLE + RUTAS
+# -------------------------
+
+# Tabla de ruteo principal del TGW
+resource "aws_ec2_transit_gateway_route_table" "tgw_rt" {
+  count = length(local.tgw_routers) > 0 ? 1 : 0
+
+  transit_gateway_id = aws_ec2_transit_gateway.tgw[0].id
+  tags = {
+    Name = "tgw-main-rt"
+  }
+}
+
+# Asociación de cada attachment a la TGW Route Table (solo manual, sin auto-asociación)
+resource "aws_ec2_transit_gateway_route_table_association" "tgw_rt_assoc" {
+  for_each = length(local.tgw_routers) > 0 ? aws_ec2_transit_gateway_vpc_attachment.tgw_attach : {}
+
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.tgw_rt[0].id
+  transit_gateway_attachment_id  = each.value.id
+}
+
+# Destinos del TGW hacia cada VPC (CIDR completo de cada VPC)
+locals {
+  tgw_destinations = [
+    for v in local.vpcs : {
+      cidr = v.cidr_block
+      vpc  = v.id
+    }
+  ]
+}
+
+# Rutas en la tabla del TGW hacia cada VPC
+resource "aws_ec2_transit_gateway_route" "tgw_to_vpcs" {
+  for_each = length(local.tgw_routers) > 0 ? {
+    for dest in local.tgw_destinations :
+    dest.vpc => dest
+  } : {}
+
+  destination_cidr_block         = each.value.cidr
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.tgw_rt[0].id
+  transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.tgw_attach[
+    "wa18q46a:${each.value.vpc}"
+  ].id
+}
+
+# =========================
+# RUTAS EN LAS VPC HACIA EL TGW
+# (a partir de links[].routes.to_router)
+# =========================
+
+locals {
+  # Para cada link TGW y cada ruta "to_router", generamos una entrada:
+  # - vpc_id   = VPC origen
+  # - dest_cidr = CIDR de la VPC destino
+  # - rt_name  = nombre de la route table donde se instalará la ruta (aquí asumimos "public")
+  tgw_vpc_routes = flatten([
+    for l in local.tgw_links : [
+      for r in coalesce(try(l.routes.to_router, []), []) : {
+        key       = "${l.vpc_id}:${r.dest_cidr}"
+        vpc_id    = l.vpc_id
+        dest_cidr = r.dest_cidr
+        rt_name   = "public"
+      }
+    ]
+  ])
+}
+
+resource "aws_route" "tgw_routes" {
+  for_each = length(local.tgw_routers) > 0 ? {
+    for r in local.tgw_vpc_routes :
+    r.key => r
+  } : {}
+
+  route_table_id         = aws_route_table.rt_named["${each.value.vpc_id}:${each.value.rt_name}"].id
+  destination_cidr_block = each.value.dest_cidr
+  transit_gateway_id     = aws_ec2_transit_gateway.tgw[0].id
+}
+
+# -------------------------
+# PEERING
+# -------------------------
 
 locals {
   peering_links = [for l in local.links : l if try(lower(l.type), "") == "peering"]
