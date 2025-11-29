@@ -1,3 +1,4 @@
+# apps/backend/provisioning/templates/main.tf.j2
 terraform {
   required_providers {
     aws = {
@@ -138,6 +139,15 @@ resource "aws_security_group" "vm_sg" {
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = [try(each.value.allowed_ssh_cidr, "0.0.0.0/32")]
+  }
+
+  # SSH desde dentro de la misma VPC
+  ingress {
+    description = "SSH dentro de la VPC"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [each.value.cidr_block]
   }
 
   # Salida libre (necesaria para ping saliente y updates del sistema)
