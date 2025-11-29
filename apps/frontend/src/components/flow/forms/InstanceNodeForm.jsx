@@ -146,8 +146,8 @@ const InstanceNodeForm = ({
             <em>Usar AMI por defecto</em>
           </MenuItem>
           {amiList.map((a) => (
-            <MenuItem key={a.id || a.code} value={a.code || a.id}>
-              {a.name || a.id}
+            <MenuItem key={a.id || a.code} value={a.data.amiCode}>
+              {a.data.amiCode || a.id}
             </MenuItem>
           ))}
         </Select>

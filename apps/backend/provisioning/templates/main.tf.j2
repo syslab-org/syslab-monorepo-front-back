@@ -38,6 +38,20 @@ locals {
   # Routers tipo TGW (Transit Gateway)
   tgw_routers = [for r in local.routers : r if try(lower(r.type), "") == "tgw"]
 
+  # ¿Se permite ICMP entre VPCs conectadas?
+  # Regla: si viene explícito en el payload, se respeta.
+  # Si NO viene, se enciende automáticamente cuando existan links (peering o tgw-attach).
+  allow_cross_vpc_ping = (
+    {% if payload and (payload.allow_cross_vpc_ping is not none) -%}
+    {{ payload.allow_cross_vpc_ping | tojson }}
+    {%- else -%}
+    length([for l in local.links : l if contains(["peering","tgw-attach"], lower(try(l.type, "")))]) > 0
+    {%- endif -%}
+  )
+
+  # Conjunto de links TGW
+  tgw_links = [for l in local.links : l if try(lower(l.type), "") == "tgw-attach"]
+
   # Mapa rápido por ID
   vpc_by_id = { for v in local.vpcs : v.id => v }
 }
@@ -60,13 +74,6 @@ locals {
       }
     ]
   ])
-
-  subnet_map = { for s in local.all_subnets : s.key => s }
-
-  # Mapa de subnets por VPC y nombre (para resolver attachments por nombre)
-  subnets_by_vpc = {
-    for v in local.vpcs : v.id => { for s in coalesce(v.subnets, []) : s.name => s }
-  }
 }
 
 resource "aws_subnet" "this" {
@@ -99,11 +106,13 @@ locals {
 }
 
 {% if not sim %}
+# ---------------------- AMI base ----------------------
 data "aws_ssm_parameter" "al2023_ami" {
   name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64"
 }
 locals { default_ami_id = data.aws_ssm_parameter.al2023_ami.value }
 
+# ---------------------- SECURITY GROUPS ----------------------
 resource "aws_security_group" "vm_sg" {
   for_each = {
     for v in local.vpcs : v.id => v
@@ -114,17 +123,34 @@ resource "aws_security_group" "vm_sg" {
   description = "Security group for VMs in ${each.value.name}"
   vpc_id      = aws_vpc.vpc[each.key].id
 
-  dynamic "ingress" {
-    for_each = [1]
-    content {
-      description = "ICMP intra-VPC"
-      from_port   = -1
-      to_port     = -1
-      protocol    = "icmp"
-      cidr_blocks = [each.value.cidr_block]
-    }
+  # ICMP dentro de la misma VPC
+  ingress {
+    description = "ICMP intra-VPC"
+    from_port   = -1
+    to_port     = -1
+    protocol    = "icmp"
+    cidr_blocks = [each.value.cidr_block]
   }
 
+  # SSH desde tu IP (usa allowed_ssh_cidr del payload)
+  ingress {
+    description = "SSH from allowed_ssh_cidr"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [try(each.value.allowed_ssh_cidr, "0.0.0.0/32")]
+  }
+
+  # SSH desde dentro de la misma VPC
+  ingress {
+    description = "SSH dentro de la VPC"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [each.value.cidr_block]
+  }
+
+  # Salida libre (necesaria para ping saliente y updates del sistema)
   egress {
     from_port   = 0
     to_port     = 0
@@ -135,19 +161,112 @@ resource "aws_security_group" "vm_sg" {
   tags = { Name = "${each.value.name}-vm-sg" }
 }
 
-resource "aws_instance" "vm" {
-  for_each = local.inst_map
+# --- ICMP entre VPCs conectadas por PEERING (activado con allow_cross_vpc_ping=true) ---
+resource "aws_security_group_rule" "cross_vpc_ping_peering_a" {
+  for_each = {
+    for l in [for x in local.links : x if try(lower(x.type), "") == "peering"] :
+    "${l.vpc_a_id}--${l.vpc_b_id}" => l
+    if local.allow_cross_vpc_ping
+  }
 
+  type              = "ingress"
+  from_port         = -1
+  to_port           = -1
+  protocol          = "icmp"
+  security_group_id = aws_security_group.vm_sg[each.value.vpc_a_id].id
+  cidr_blocks       = [local.vpc_by_id[each.value.vpc_b_id].cidr_block]
+  description       = "Allow ICMP from peer ${each.value.vpc_b_id}"
+}
+
+resource "aws_security_group_rule" "cross_vpc_ping_peering_b" {
+  for_each = {
+    for l in [for x in local.links : x if try(lower(x.type), "") == "peering"] :
+    "${l.vpc_b_id}--${l.vpc_a_id}" => l
+    if local.allow_cross_vpc_ping
+  }
+
+  type              = "ingress"
+  from_port         = -1
+  to_port           = -1
+  protocol          = "icmp"
+  security_group_id = aws_security_group.vm_sg[each.value.vpc_b_id].id
+  cidr_blocks       = [local.vpc_by_id[each.value.vpc_a_id].cidr_block]
+  description       = "Allow ICMP from peer ${each.value.vpc_a_id}"
+}
+
+# --- ICMP entre VPCs conectadas a un mismo TGW (activado con allow_cross_vpc_ping=true) ---
+locals {
+  tgw_vpcs_by_router = {
+    for r in toset([for l in local.tgw_links : l.router_id]) :
+    r => [for l in local.tgw_links : l.vpc_id if l.router_id == r]
+  }
+  tgw_pairs = flatten([
+    for r, vpcs in local.tgw_vpcs_by_router : [
+      for i in range(length(vpcs)) : [
+        for j in range(i + 1, length(vpcs)) : {
+          a = vpcs[i]
+          b = vpcs[j]
+        }
+      ]
+    ]
+  ])
+}
+
+resource "aws_security_group_rule" "cross_vpc_ping_tgw_a" {
+  for_each = {
+    for p in local.tgw_pairs :
+    "${p.a}--${p.b}" => p
+    if local.allow_cross_vpc_ping
+  }
+
+  type              = "ingress"
+  from_port         = -1
+  to_port           = -1
+  protocol          = "icmp"
+  security_group_id = aws_security_group.vm_sg[each.value.a].id
+  cidr_blocks       = [local.vpc_by_id[each.value.b].cidr_block]
+  description       = "Allow ICMP from TGW-connected VPC ${each.value.b}"
+}
+
+resource "aws_security_group_rule" "cross_vpc_ping_tgw_b" {
+  for_each = {
+    for p in local.tgw_pairs :
+    "${p.b}--${p.a}" => p
+    if local.allow_cross_vpc_ping
+  }
+
+  type              = "ingress"
+  from_port         = -1
+  to_port           = -1
+  protocol          = "icmp"
+  security_group_id = aws_security_group.vm_sg[each.value.b].id
+  cidr_blocks       = [local.vpc_by_id[each.value.a].cidr_block]
+  description       = "Allow ICMP from TGW-connected VPC ${each.value.a}"
+}
+
+# ---------------------- EC2 instances ----------------------
+resource "aws_instance" "vm" {
+  for_each                    = local.inst_map
   ami                         = coalesce(each.value.ami, local.default_ami_id)
   instance_type               = each.value.instance_type
   subnet_id                   = aws_subnet.this[each.value.subnet_key].id
   associate_public_ip_address = each.value.associate_public_ip
-  private_ip                  = each.value.ip_address
-  key_name                    = each.value.ssh_access
-  vpc_security_group_ids      = [aws_security_group.vm_sg[each.value.vpc_id_key].id]
-  tags = { Name = each.value.name }
+
+  # Si ip_address está vacío o ausente, Terraform omite el atributo y AWS asigna la IP automáticamente.
+  private_ip = (
+    try(length(trimspace(each.value.ip_address)) > 0, false)
+    ? trimspace(each.value.ip_address)
+    : null
+  )
+
+  key_name               = each.value.ssh_access
+  vpc_security_group_ids = [aws_security_group.vm_sg[each.value.vpc_id_key].id]
+  tags = {
+    Name = each.value.name
+  }
 }
 {% endif %}
+
 
 # =========================
 # IGW / NAT / ROUTE TABLES
@@ -279,7 +398,7 @@ resource "aws_route" "rt_named_routes" {
     : null
   )
 
-  # TGW
+  # TGW (cuando se definan rutas explícitas a través del TGW)
   transit_gateway_id = (
     contains(["tgw", "transit-gateway"], each.value.target)
     ? try(aws_ec2_transit_gateway.tgw[0].id, null)
@@ -324,7 +443,6 @@ locals {
   ])
 }
 
-# ⚠ FIX DE PLAN: for_each solo con datos del payload (no rt_id).
 resource "aws_route" "nat_default_auto" {
   for_each = {
     for x in local.nat_default_candidates :
@@ -347,27 +465,121 @@ resource "aws_route" "nat_default_auto" {
 # =========================
 # TGW + PEERING
 # =========================
-resource "aws_ec2_transit_gateway" "tgw" {
-  count       = length(local.tgw_routers) > 0 ? 1 : 0
-  description = try(local.tgw_routers[0].name, "core-tgw")
-  tags        = { Name = try(local.tgw_routers[0].name, "core-tgw") }
-}
 
-locals { tgw_links = [for l in local.links : l if try(lower(l.type), "") == "tgw-attach"] }
+resource "aws_ec2_transit_gateway" "tgw" {
+  count = length(local.tgw_routers) > 0 ? 1 : 0
+
+  description = try(local.tgw_routers[0].name, "core-tgw")
+
+  # 🔴 Desactivamos asociaciones/propagaciones por defecto
+  default_route_table_association = "disable"
+  default_route_table_propagation = "disable"
+
+  tags = {
+    Name = try(local.tgw_routers[0].name, "core-tgw")
+  }
+}
 
 resource "aws_ec2_transit_gateway_vpc_attachment" "tgw_attach" {
   for_each = { for l in local.tgw_links : "${l.router_id}:${l.vpc_id}" => l }
+
   transit_gateway_id = aws_ec2_transit_gateway.tgw[0].id
   vpc_id             = aws_vpc.vpc[each.value.vpc_id].id
-  subnet_ids         = [for sn in coalesce(each.value.subnet_names, []) :
-    aws_subnet.this["${each.value.vpc_id}:${sn}"].id]
+  subnet_ids         = [
+    for sn in coalesce(each.value.subnet_names, []) :
+    aws_subnet.this["${each.value.vpc_id}:${sn}"].id
+  ]
+
   tags = { Name = "tgw-attach-${each.value.vpc_id}" }
 }
+
+# -------------------------
+# TGW ROUTE TABLE + RUTAS
+# -------------------------
+
+# Tabla de ruteo principal del TGW
+resource "aws_ec2_transit_gateway_route_table" "tgw_rt" {
+  count = length(local.tgw_routers) > 0 ? 1 : 0
+
+  transit_gateway_id = aws_ec2_transit_gateway.tgw[0].id
+  tags = {
+    Name = "tgw-main-rt"
+  }
+}
+
+# Asociación de cada attachment a la TGW Route Table (solo manual, sin auto-asociación)
+resource "aws_ec2_transit_gateway_route_table_association" "tgw_rt_assoc" {
+  for_each = length(local.tgw_routers) > 0 ? aws_ec2_transit_gateway_vpc_attachment.tgw_attach : {}
+
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.tgw_rt[0].id
+  transit_gateway_attachment_id  = each.value.id
+}
+
+# Destinos del TGW hacia cada VPC (CIDR completo de cada VPC)
+locals {
+  tgw_destinations = [
+    for v in local.vpcs : {
+      cidr = v.cidr_block
+      vpc  = v.id
+    }
+  ]
+}
+
+# Rutas en la tabla del TGW hacia cada VPC
+resource "aws_ec2_transit_gateway_route" "tgw_to_vpcs" {
+  for_each = length(local.tgw_routers) > 0 ? {
+    for dest in local.tgw_destinations :
+    dest.vpc => dest
+  } : {}
+
+  destination_cidr_block         = each.value.cidr
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.tgw_rt[0].id
+  transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.tgw_attach[
+    "wa18q46a:${each.value.vpc}"
+  ].id
+}
+
+# =========================
+# RUTAS EN LAS VPC HACIA EL TGW
+# (a partir de links[].routes.to_router)
+# =========================
+
+locals {
+  # Para cada link TGW y cada ruta "to_router", generamos una entrada:
+  # - vpc_id   = VPC origen
+  # - dest_cidr = CIDR de la VPC destino
+  # - rt_name  = nombre de la route table donde se instalará la ruta (aquí asumimos "public")
+  tgw_vpc_routes = flatten([
+    for l in local.tgw_links : [
+      for r in coalesce(try(l.routes.to_router, []), []) : {
+        key       = "${l.vpc_id}:${r.dest_cidr}"
+        vpc_id    = l.vpc_id
+        dest_cidr = r.dest_cidr
+        rt_name   = "public"
+      }
+    ]
+  ])
+}
+
+resource "aws_route" "tgw_routes" {
+  for_each = length(local.tgw_routers) > 0 ? {
+    for r in local.tgw_vpc_routes :
+    r.key => r
+  } : {}
+
+  route_table_id         = aws_route_table.rt_named["${each.value.vpc_id}:${each.value.rt_name}"].id
+  destination_cidr_block = each.value.dest_cidr
+  transit_gateway_id     = aws_ec2_transit_gateway.tgw[0].id
+}
+
+# -------------------------
+# PEERING
+# -------------------------
 
 locals {
   peering_links = [for l in local.links : l if try(lower(l.type), "") == "peering"]
 
-  # PARES (A->B) Y (B->A) PARA TODAS LAS ROUTE TABLES DECLARADAS
+  # PARES (A->B) Y (B->A) PARA TODAS LAS RT DECLARADAS
   peer_a_pairs = flatten([
     for l in local.peering_links : [
       for rt in coalesce(local.vpc_by_id[l.vpc_a_id].route_tables, []) : {
