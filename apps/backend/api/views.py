@@ -54,11 +54,20 @@ def network_plan_create(request):
 @csrf_exempt
 @require_POST
 def deploy_plan(request, plan_id):
+    # 1) Obtiene el Plan
     try:
         plan = Plan.objects.get(id=plan_id)
     except Plan.DoesNotExist:
         return JsonResponse({"ok": False, "error": "Plan not found"}, status=404)
 
+    # 2) Leer flag desde el body (simulate_only = True por defecto)
+    try:
+        body = json.loads(request.body or "{}")
+    except Exception:
+        body = {}
+    simulate_only = bool(body.get("simulate_only", True))
+
+    # 3) Valida el payload guardado
     try:
         validate_network_plan(plan.payload)
     except Exception as e:
@@ -67,14 +76,18 @@ def deploy_plan(request, plan_id):
         plan.save(update_fields=["status", "error"])
         return JsonResponse({"ok": False, "error": str(e)}, status=400)
 
+    # 4) Marca estado y lanzar tarea  con override de simulate_only
     plan.status = Plan.Status.RUNNING
     plan.error = ""
     plan.save(update_fields=["status", "error"])
 
-    task = process_network_plan.delay(plan_id=str(plan.id), payload=plan.payload)
+    merged_payload = dict(plan.payload or {})
+    merged_payload["simulate_only"] = simulate_only
+
+    task = process_network_plan.delay(plan_id=str(plan.id), payload=merged_payload)
     plan.task_id = task.id
     plan.save(update_fields=["task_id"])
-    return JsonResponse({"ok": True, "plan_id": str(plan.id), "task_id": task.id}, status=202)
+    return JsonResponse({"ok": True, "plan_id": str(plan.id), "task_id": task.id, "simulate_only": simulate_only}, status=202)
 
 # --- NUEVO: destroy ---
 from rest_framework.decorators import api_view, permission_classes

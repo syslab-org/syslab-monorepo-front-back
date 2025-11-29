@@ -15,6 +15,9 @@ export default function PlanDetailPage() {
   const [msg, setMsg] = useState(null);
   const [err, setErr] = useState(null);
 
+  // ✅ NUEVO: control del modo de despliegue (preview vs apply real)
+  const [applyMode, setApplyMode] = useState(false); // false = solo PLAN, true = APPLY
+
   const timerRef = useRef(null);
 
   async function fetchPlan() {
@@ -65,8 +68,9 @@ export default function PlanDetailPage() {
     setMsg(null);
     setErr(null);
     try {
-      const res = await api.deployPlan(id);
-      setMsg(`Deploy iniciado. task_id=${res.task_id || '¿?'} (actualizando...)`);
+      // ✅ PASAMOS EL MODO
+      const res = await api.deployPlan(id, { applyMode });
+      setMsg(`Deploy ${applyMode ? 'APPLY' : 'PLAN'} iniciado. task_id=${res.task_id || '¿?'} (actualizando...)`);
       await fetchPlan();
     } catch (e) {
       setErr(`Fallo al iniciar deploy: ${e.message}`);
@@ -84,7 +88,7 @@ export default function PlanDetailPage() {
     setErr(null);
     setLogText(null);
     try {
-      const res = await api.destroyPlan(id); // o api.destroyLast() si prefieres
+      const res = await api.destroyPlan(id); // o api.destroyLast()
       const tid = res?.task_id;
       setLastDestroyTaskId(tid || null);
       setMsg(`Destroy encolado${tid ? ` (task_id=${tid})` : ''}. Abre "Ver log (destroy)" para ver el progreso.`);
@@ -104,18 +108,28 @@ export default function PlanDetailPage() {
 
   return (
     <div style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <h2 style={{ margin: 0 }}>Plan {plan.name}</h2>
         <span style={{ padding: '2px 8px', border: '1px solid #ddd', borderRadius: 6 }}>
           Status: <b>{plan.status}</b>
         </span>
+
+        {/* ✅ Switch Apply */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+          <input
+            type="checkbox"
+            checked={applyMode}
+            onChange={(e) => setApplyMode(e.target.checked)}
+            disabled={busy}
+          />
+          <span>{applyMode ? 'Modo APPLY (real)' : 'Modo PLAN (preview)'}</span>
+        </label>
 
         {/* Botón Deploy */}
         <button
           onClick={handleDeploy}
           disabled={!canDeploy || busy}
           style={{
-            marginLeft: 'auto',
             padding: '6px 12px',
             borderRadius: 8,
             background: '#2563eb',
@@ -124,9 +138,9 @@ export default function PlanDetailPage() {
             opacity: (!canDeploy || busy) ? 0.6 : 1,
             cursor: (!canDeploy || busy) ? 'not-allowed' : 'pointer',
           }}
-          title={!canDeploy ? 'El plan está ejecutándose; espera a que termine.' : 'Lanzar deploy en AWS'}
+          title={!canDeploy ? 'El plan está ejecutándose; espera a que termine.' : (applyMode ? 'Aplicar en AWS' : 'Solo plan (preview)')}
         >
-          {deploying ? 'Lanzando…' : 'Deploy ahora'}
+          {deploying ? 'Lanzando…' : (applyMode ? 'Deploy (APPLY)' : 'Deploy (PLAN)')}
         </button>
 
         {/* Botón Destroy */}

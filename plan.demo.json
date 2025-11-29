@@ -1,0 +1,113 @@
+{
+  "name": "VPC-A",
+  "cloud": "aws",
+  "vlan": {
+    "name": "VPC-A",
+    "region": "us-east-1",
+    "master_cidr": "10.10.0.0/16"
+  },
+  "vpcs": [
+    {
+      "id": "lvbm3g52",
+      "name": "VPC-A",
+      "region": "us-east-1",
+      "cidr_block": "10.10.0.0/16",
+      "internet_gateway": true,
+      "nat_gateway": {
+        "enabled": false,
+        "public_subnet": "",
+        "elastic_ip": ""
+      },
+      "route_tables": [
+        {
+          "name": "public",
+          "routes": [
+            {
+              "name": "igw-default",
+              "dest_cidr": "0.0.0.0/0",
+              "target": "igw"
+            }
+          ]
+        }
+      ],
+      "subnets": [
+        {
+          "name": "public-a",
+          "cidr_block": "10.10.1.0/24",
+          "availability_zone": "us-east-1a",
+          "map_public_ip_on_launch": true,
+          "subnet_type": "public",
+          "route_table": "public",
+          "instances": [
+            {
+              "id": "w2browbx",
+              "name": "bastion-a",
+              "ami": "ami-0ebfd941bbafe70c6",
+              "instance_type": "t2.micro",
+              "ip_address": "",
+              "ssh_access": "tesis-key",
+              "associate_public_ip": true
+            }
+          ]
+        }
+      ],
+      "allowed_ssh_cidr": "190.20.221.154/32"
+    },
+    {
+      "id": "4e5x3hos",
+      "name": "VPC-B",
+      "region": "us-east-1",
+      "cidr_block": "10.11.0.0/16",
+      "internet_gateway": true,
+      "nat_gateway": {
+        "enabled": false,
+        "public_subnet": "",
+        "elastic_ip": ""
+      },
+      "route_tables": [
+        {
+          "name": "public",
+          "routes": [
+            {
+              "name": "igw-default",
+              "dest_cidr": "0.0.0.0/0",
+              "target": "igw"
+            }
+          ]
+        }
+      ],
+      "subnets": [
+        {
+          "name": "public-b",
+          "cidr_block": "10.11.1.0/24",
+          "availability_zone": "us-east-1a",
+          "map_public_ip_on_launch": true,
+          "subnet_type": "public",
+          "route_table": "public",
+          "instances": [
+            {
+              "id": "zyl87sb2",
+              "name": "bastion-b",
+              "ami": "ami-0ebfd941bbafe70c6",
+              "instance_type": "t2.micro",
+              "ip_address": "10.11.1.10",
+              "ssh_access": "tesis-key",
+              "associate_public_ip": true
+            }
+          ]
+        }
+      ],
+      "allowed_ssh_cidr": "190.20.221.154/32"
+    }
+  ],
+  "links": [
+    {
+      "type": "peering",
+      "via_router_id": "cjj2m3fe",
+      "vpc_a_id": "lvbm3g52",
+      "vpc_b_id": "4e5x3hos"
+    }
+  ],
+  "routers": [],
+  "allow_cross_vpc_ping": true
+}

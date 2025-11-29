@@ -53,11 +53,41 @@ class LinkRoutesDirSerializer(serializers.Serializer):
     b_to_a = RouteSerializer(many=True, required=False)
 
 class LinkSerializer(serializers.Serializer):
-    type = serializers.ChoiceField(choices=["peering"])
-    via_router_id = serializers.CharField()
-    vpc_a_id = serializers.CharField()
-    vpc_b_id = serializers.CharField()
-    routes = LinkRoutesDirSerializer(required=False)
+    # Ahora aceptamos peering y tgw-attach
+    type = serializers.ChoiceField(choices=["peering", "tgw-attach"])
+
+    # --- Campos para PEERING ---
+    via_router_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    vpc_a_id = serializers.CharField(required=False)
+    vpc_b_id = serializers.CharField(required=False)
+
+    # --- Campos para TGW-ATTACH ---
+    router_id = serializers.CharField(required=False)
+    vpc_id = serializers.CharField(required=False)
+    subnet_names = serializers.ListField(
+        child=serializers.CharField(),
+        required=False
+    )
+
+    # --- Validación condicional ---
+    def validate(self, data):
+        t = data.get("type")
+
+        if t == "peering":
+            missing = [f for f in ("via_router_id", "vpc_a_id", "vpc_b_id") if not data.get(f)]
+            if missing:
+                raise serializers.ValidationError(
+                    {f: "This field is required for peering link" for f in missing}
+                )
+
+        elif t == "tgw-attach":
+            missing = [f for f in ("router_id", "vpc_id", "subnet_names") if not data.get(f)]
+            if missing:
+                raise serializers.ValidationError(
+                    {f: "This field is required for tgw-attach link" for f in missing}
+                )
+
+        return data
 
 class VlanSerializer(serializers.Serializer):
     name = serializers.CharField(required=False, allow_blank=True, default="")

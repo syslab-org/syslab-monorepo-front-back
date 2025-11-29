@@ -180,7 +180,7 @@ function MainFlow() {
 
   const { onDrop } = useHandleDrop(reactFlowInstance, setNodes);
   const { onNodeDragStop } = useRestrictMovement(reactFlowInstance, setNodes);
-
+  const [allowCrossVpcPingUI, setAllowCrossVpcPingUI] = useState(null);
   // const [vpcData, setVPCData] = useState(null);
 
   const reactFlowWrapper = useRef(null);
@@ -334,7 +334,7 @@ function MainFlow() {
     successMessage,
     errorMessage,
     handleCloseSnackbar
-  } = useDeployNetwork({ nodes, edges })
+  } = useDeployNetwork({ nodes, edges, allowCrossVpcPingUI })
 
   useEffect(() => {
 
@@ -577,6 +577,8 @@ function MainFlow() {
 
             />
 
+
+
             <ReactFlow
               nodes={nodes}
               edges={edges.map(e => ({ ...e, style: connectionLineStyle, animated: true }))}
@@ -622,15 +624,21 @@ function MainFlow() {
 
             </ReactFlow>
 
+
             <ConfirmDeployDialog
               open={showConfirmation}
               onClose={handleCancelDeploy}
-              onConfirm={handleConfirmDeploy}
+              onConfirm={(overrideValue) => {
+                setAllowCrossVpcPingUI(overrideValue);     // <-- guarda el valor elegido (true, false o null)
+                handleConfirmDeploy();                     // <-- lanza el deploy
+              }}
               planName={planName}
               setPlanName={setPlanName}
               simulateOnly={simulateOnly}
               setSimulateOnly={setSimulateOnly}
               transformedData={transformedData}
+              allowCrossVpcPingUI={allowCrossVpcPingUI}
+              setAllowCrossVpcPingUI={setAllowCrossVpcPingUI}
             />
 
           </Card>
@@ -805,60 +813,6 @@ function MainFlow() {
         </Modal>
 
 
-        {/* Modal to confirm deploy */}
-
-        {/* <Modal
-          open={showConfirmation}
-          onClose={handleCancelDeploy}
-          aria-labelledby="parent-modal-title"
-          aria-describedby="parent-modal-description"
-        >
-          <Box sx={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: '60%',
-            height: '70%',
-            bgcolor: 'background.paper',
-            boxShadow: 24,
-            p: 4,
-            overflow: 'hidden',
-          }}>
-            <Typography id="confirm-deploy-modal-title" variant="h6" component="h2" >
-              Confirm Deployment
-            </Typography>
-            <Typography id="confirm-deploy-modal-description" sx={{ mt: 2 }}>
-              Are you sure you want to deploy the network with the following configuration?
-            </Typography>
-
-            <Box
-              sx={{
-                maxHeight: '75%',
-                overflowY: 'auto',
-                mt: 2,
-                border: '1px solid #ccc',
-                padding: 2,
-                height: '100%'
-              }}
-            >
-              <pre>{JSON.stringify(transformedData, null, 2)}</pre>
-            </Box>
-
-
-            <Stack mt={3} direction="row" spacing={2} xs={{ mt: 5 }} flexWrap="wrap">
-              <Button variant="contained" color="primary" onClick={handleConfirmDeploy}>
-                Confirm
-              </Button>
-              <Button variant="outlined" color="secondary" onClick={handleCancelDeploy}>
-                Cancel
-              </Button>
-            </Stack>
-
-          </Box>
-
-        </Modal> */}
-
         <Modal
           open={routesPreviewOpen}
           onClose={() => setRoutesPreviewOpen(false)}
@@ -920,7 +874,7 @@ function MainFlow() {
           </Alert>
         </Snackbar>
         <Snackbar
-          open={!!errorMessage} ç
+          open={!!errorMessage}
           autoHideDuration={6000}
           onClose={handleCloseSnackbar}
           anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
