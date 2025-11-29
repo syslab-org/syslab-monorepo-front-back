@@ -1,3 +1,4 @@
+// apps/frontend/src/config/networking.js
 export const RouterPolicy = {
   // modo automático por defecto
   defaultMode: "auto", // "auto" | "peering" | "tgw"

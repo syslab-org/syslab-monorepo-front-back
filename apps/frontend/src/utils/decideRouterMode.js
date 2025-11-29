@@ -1,3 +1,4 @@
+// apps/frontend/src/utils/decideRouterMode.js
 import { RouterPolicy } from "../config/networking";
 
 export function decideRouterMode(router) {
