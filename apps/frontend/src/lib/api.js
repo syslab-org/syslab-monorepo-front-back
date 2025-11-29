@@ -37,11 +37,28 @@ export const api = {
     });
   },
 
-  deployPlan(id) {
-    return jsonFetch(`/api/network/plans/${id}/deploy/`, { method: "POST", body: JSON.stringify({}) });
+  /**
+   * Deploy del plan.
+   * @param {string} id - UUID del plan.
+   * @param {object} opts - { applyMode?: boolean, simulateOnly?: boolean }
+   *  - applyMode=true  => simulate_only=false (APPLY real)
+   *  - applyMode=false => simulate_only=true  (solo PLAN)
+   *  - si pasas simulateOnly se respeta tal cual
+   */
+  deployPlan(id, opts = {}) {
+    const { applyMode, simulateOnly } = opts;
+    const body = {
+      simulate_only: typeof simulateOnly === "boolean"
+        ? simulateOnly
+        : !(!!applyMode), // por defecto: preview
+    };
+    return jsonFetch(`/api/network/plans/${id}/deploy/`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
   },
 
-  // NUEVO: destroys
+  // destroys
   destroyPlan(id) {
     return jsonFetch(`/api/network/plans/${id}/destroy/`, { method: "POST" });
   },
