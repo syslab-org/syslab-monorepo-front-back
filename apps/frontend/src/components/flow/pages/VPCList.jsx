@@ -92,6 +92,7 @@ const VPCList = () => {
   const { vpcs } = useFetchVPCs(setLoadingFlow)
   const { start, finish, setStep } = useWizard()
 
+
   const handleCreateVPCModalClose = (newVPCId, cidrBlock, prefixLength, vlanName, vlanRegion) => {
     finish();
     setWizardMode(false)
@@ -159,7 +160,7 @@ const VPCList = () => {
                 maxWidth: 600
               }}>
               Aquí puedes gestionar tus laboratorios de redes. Crea un entorno guiado para demostraciones
-              y prácticas, o una VPC avanzada si ya dominas la ocnfiguración.
+              y prácticas, o una VPC avanzada si ya dominas la configuración.
             </Typography>
           </Box>
           <Stack direction="row" spacing={2}>
