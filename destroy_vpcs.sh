@@ -52,7 +52,10 @@ list_vpcs() {
   else
     aws_ec2 describe-vpcs \
       --query 'Vpcs[].{VpcId:VpcId,Name:Tags[?Key==`Name`]|[0].Value,Cidr:CidrBlock}' --output json | \
-      jq --arg p "$PREFIX" '[ .[] | select((.Name|tostring) | startswith($p)) ]'
+      jq --arg p "$PREFIX" '
+        [ .[]
+          | select(((.Name // "") | tostring | ascii_downcase) | startswith($p | ascii_downcase))
+        ]'
   fi
 }
 
