@@ -2,7 +2,7 @@
 import { DeleteOutline, ModeEditOutlined } from "@mui/icons-material";
 import AddIcon from '@mui/icons-material/Add';
 import { Box, Button, IconButton, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from "@mui/material";
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, deleteDoc, doc } from 'firebase/firestore';
 import { useCallback, useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DB_FIRESTORE_VPCS, USER_ROL_STUDENT } from "../../../constants";
@@ -89,39 +89,40 @@ const VPCList = () => {
   const { setLoadingFlow } = useContext(LoadingFlowContext)
   const { setCidrBlockVPC, setPrefixLength, setVlanName, setVlanRegion } = useCidrBlockVPCStore();
 
-  const { vpcs } = useFetchVPCs(setLoadingFlow)
+  const { vpcs, fetchVPCs } = useFetchVPCs(setLoadingFlow)
   const { start, finish, setStep } = useWizard()
 
 
   const handleCreateVPCModalClose = (newVPCId, cidrBlock, prefixLength, vlanName, vlanRegion) => {
-    finish();
-    setWizardMode(false)
+    // 1) guarda si era wizard ANTES de resetearlo
+    const wasWizard = wizardMode;
 
-    if (cidrBlock) {
-      setCidrBlockVPC(cidrBlock)
-    }
-    if (prefixLength) {
-      setPrefixLength(prefixLength);
-    }
-    if (vlanName) {
-      setVlanName(vlanName);
-    }
-    if (vlanRegion) {
-      setVlanRegion(vlanRegion);
-    }
+    // 2) ahora sí reseteas wizard UI
+    finish();
+    setWizardMode(false);
+
+    // 3) store
+    if (cidrBlock) setCidrBlockVPC(cidrBlock);
+    if (prefixLength) setPrefixLength(prefixLength);
+    if (vlanName) setVlanName(vlanName);
+    if (vlanRegion) setVlanRegion(vlanRegion);
 
     setIsCreateVPCModalOpen(false);
-    setLoadingFlow(false)
+    setLoadingFlow(false);
+
+    // 4) navega con flag wizard
     if (newVPCId) {
-      navigate(`/admin/vpcs/${newVPCId}/mainflow`);
+      const qs = wasWizard ? "?wizard=1" : "";
+      navigate(`/admin/vpcs/${newVPCId}/mainflow${qs}`);
     }
   };
 
-  const handleLinkToFlow = (newVPCId, ipVPC) => {
+  const handleLinkToFlow = (vpc) => {
     setLoadingFlow(true)
-    setCidrBlockVPC(ipVPC)
+    setCidrBlockVPC(vpc.cidrBlock)
     setLoadingFlow(false)
-    navigate(`/admin/vpcs/${newVPCId}/mainflow`);
+    const qs = vpc.narrative === "wizard" ? "?wizard=1" : "";
+    navigate(`/admin/vpcs/${vpc.id}/mainflow${qs}`);
   }
 
   //Botón: laboratorio guiado
@@ -140,6 +141,27 @@ const VPCList = () => {
     setIsCreateVPCModalOpen(true);
   }
 
+  const handleDeleteVPC = async (vpc) => {
+    const name = vpc?.name || vpc?.id;
+
+    const confirmDelete = window.confirm(`¿Estás seguro de que deseas eliminar la VPC "${name}"? Esta acción no se puede deshacer.\n\nEsto borrará el registro en Firestore.\n(No destruye recursos en AWS si ya hiciste Deploy).`);
+    if (!confirmDelete) return;
+
+    try {
+      setLoadingFlow(true);
+      await deleteDoc(doc(db, DB_FIRESTORE_VPCS, vpc.id));
+      // refrescar lista
+      // Opción A: recargar (simple)
+      await fetchVPCs();
+      // Opción B (mejor): usar fetchVPCs desde el hook (te lo dejo en paso 2)
+    } catch (error) {
+      console.error("Error deleting VPC:", error);
+      alert("No se pudo eliminar. Revisa consola.");
+    } finally {
+      setLoadingFlow(false);
+    }
+
+  }
   return (
     <div>
       <Stack direction="column" spacing={4} >
@@ -181,17 +203,9 @@ const VPCList = () => {
               Crear VPC Avanzada
             </Button>
           </Stack>
-          {/* <div> */}
-          {/* <Button variant="contained" color="primary" onClick={() => setIsCreateVPCModalOpen(true)}>
-                            Crear Nueva VPC
-                        </Button> */}
-          {/* <Button variant="contained" startIcon={<AddIcon />} onClick={() => setIsCreateVPCModalOpen(true)} color="secondary">
-              add new VLAN
-            </Button> */}
-          {/* </div> */}
 
         </Stack>
-        <VPCsTable vpcs={vpcs} onEdit={handleLinkToFlow} />
+        <VPCsTable vpcs={vpcs} onEdit={handleLinkToFlow} onDelete={handleDeleteVPC} />
       </Stack>
 
       <CreateVPCModal
@@ -204,7 +218,7 @@ const VPCList = () => {
   )
 }
 
-const VPCsTable = ({ vpcs, onEdit }) => (
+const VPCsTable = ({ vpcs, onEdit, onDelete }) => (
 
   <TableContainer component={Paper} variant="lightPaper">
     <Table sx={{ minWidth: 650 }} aria-label="vpcs table">
@@ -227,14 +241,16 @@ const VPCsTable = ({ vpcs, onEdit }) => (
               {vpc.name}
             </TableCell>
             <TableCell >{vpc.id}</TableCell>
-            <TableCell >{vpc.cloudType}</TableCell>
+            <TableCell>
+              {(vpc?.narrative === "wizard" ? "Guiado" : "Avanzado") + " • " + (vpc?.cloudProvider || "AWS")}
+            </TableCell>
             <TableCell >Active</TableCell>
             <TableCell >
               <Stack direction="row" spacing={1}>
-                <IconButton onClick={() => onEdit(vpc.id, vpc.cidrBlock)} aria-label="edit" color="primary">
+                <IconButton onClick={() => onEdit(vpc)} aria-label="edit" color="primary">
                   <ModeEditOutlined />
                 </IconButton>
-                <IconButton aria-label="delete" color="error" >
+                <IconButton onClick={() => onDelete(vpc)} aria-label="delete" color="error">
                   <DeleteOutline />
                 </IconButton>
               </Stack>

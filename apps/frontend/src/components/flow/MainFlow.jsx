@@ -45,6 +45,8 @@ import SubNetworkNodeInstance from './node-types/SubNetworkNodeInstance';
 import VPCNodeInstance from "./node-types/VPCNodeInstance";
 import useCidrBlockVPCStore from './store/cidrBlocksIp';
 import useClickedNodeIdStore from './store/clickedNodeIdStore';
+import { useLocation } from 'react-router-dom';
+import { useWizard } from "../../contexts/WizardContext";
 
 // Importar constantes
 import {
@@ -72,7 +74,6 @@ import useRestrictMovement from "./flow-hooks/useRestrictMovement";
 import { useRestrictSubnetsInsideVPC } from "./flow-hooks/useRestrictSubnetsInsideVPC";
 import RoutePreviewPanel from "./panels/RoutePreviewPanel";
 import { buildRoutingPreview } from "./utils/buildRoutingPreview";
-
 
 
 const nodeTypes = {
@@ -336,6 +337,18 @@ function MainFlow() {
     handleCloseSnackbar
   } = useDeployNetwork({ nodes, edges, allowCrossVpcPingUI })
 
+  const location = useLocation();
+  const isWizardEntry = new URLSearchParams(location.search).get("wizard") === "1";
+
+  const { active, start, setStep } = useWizard();
+
+  useEffect(() => {
+    if (!isWizardEntry) return;
+    //Si vengo de laboratorio guiado, iniciar el wizard y avanzo al paso del canvas
+    if (!active) start();
+    setStep("flow-canvas");
+  }, [isWizardEntry, active, start, setStep]);
+
   useEffect(() => {
 
 
@@ -445,94 +458,6 @@ function MainFlow() {
     );
   }
 
-  // ==== PREVIEW: construir tablas de ruteo por VPC a partir de nodes+edges ====
-  // function buildRoutingPreview(nodes, edges) {
-  //     // 1) separar VPCs y Routers
-  //     const vpcs = nodes.filter(n => n.type === TYPE_VPC_NODE);
-  //     const routers = nodes.filter(n => n.type === TYPE_ROUTER_NODE);
-
-  //     // 2) índice rápido por id
-  //     const idToNode = new Map(nodes.map(n => [n.id, n]));
-  //     const idToType = new Map(nodes.map(n => [n.id, n.type]));
-
-  //     // 3) conexiones VPC <-> Router derivadas de edges
-  //     const vpcToRouters = new Map();
-  //     edges.forEach(e => {
-  //         const sType = idToType.get(e.source);
-  //         const tType = idToType.get(e.target);
-  //         const isVpcRouter =
-  //             (sType === TYPE_VPC_NODE && tType === TYPE_ROUTER_NODE) ||
-  //             (sType === TYPE_ROUTER_NODE && tType === TYPE_VPC_NODE);
-  //         if (!isVpcRouter) return;
-
-  //         const vpcId = (sType === TYPE_VPC_NODE) ? e.source : e.target;
-  //         const routerId = (sType === TYPE_ROUTER_NODE) ? e.source : e.target;
-
-  //         if (!vpcToRouters.has(vpcId)) vpcToRouters.set(vpcId, new Set());
-  //         vpcToRouters.get(vpcId).add(routerId);
-  //     });
-
-  //     // 4) index de rutas por router (si el form ya guardó data.routeTable)
-  //     const routesByRouter = new Map();
-  //     routers.forEach(r => {
-  //         const entries = Array.isArray(r.data?.routeTable) ? r.data.routeTable : [];
-  //         routesByRouter.set(r.id, entries);
-  //     });
-
-  //     // 5) armar preview por VPC
-  //     const preview = {
-  //         vpcs: vpcs.map(v => {
-  //             const name = v.data?.vpcName || v.data?.title || v.id;
-  //             const cidr =
-  //                 v.data?.cidrBlock && v.data?.prefixLength
-  //                     ? `${v.data.cidrBlock}/${v.data.prefixLength}`
-  //                     : null;
-
-  //             const connectedRouters = Array.from(vpcToRouters.get(v.id) || []);
-
-  //             // tabla "main" por VPC
-  //             const main = [];
-  //             if (cidr) main.push({ dest_cidr: cidr, target: 'local' });
-
-  //             // rutas desde router(es) conectados cuyo sourceVpcId === esta VPC
-  //             connectedRouters.forEach(rid => {
-  //                 const rNode = idToNode.get(rid);
-  //                 const rName = rNode?.data?.identifier || rNode?.data?.label || rid;
-  //                 const entries = routesByRouter.get(rid) || [];
-  //                 entries
-  //                     .filter(e => e.sourceVpcId === v.id)
-  //                     .forEach(e => {
-  //                         if (!e?.destCidr) return;
-  //                         main.push({
-  //                             dest_cidr: e.destCidr,
-  //                             target: rName,          // frontend: muestra por dónde saldría (router)
-  //                             via_router_id: rid      // útil para backend luego
-  //                         });
-  //                     });
-  //             });
-
-  //             // deduplicar por dest_cidr manteniendo primera coincidencia
-  //             const seen = new Set();
-  //             const mainDedup = main.filter(r => {
-  //                 if (seen.has(r.dest_cidr)) return false;
-  //                 seen.add(r.dest_cidr);
-  //                 return true;
-  //             });
-
-  //             return {
-  //                 id: v.id,
-  //                 name,
-  //                 region: v.data?.region,
-  //                 cidr,
-  //                 connectedRouters,
-  //                 main_route_table: mainDedup
-  //             };
-  //         })
-  //     };
-
-  //     return preview;
-  // }
-
 
   return (
     <NetworkProvider>
@@ -558,6 +483,19 @@ function MainFlow() {
             borderRadius: { xs: 2, sm: "0 16px 16px 0" },
           }}
             ref={reactFlowWrapper} >
+            {isWizardEntry && (
+              <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider" }}>
+                <Typography variant="overline" color="text.secondary">
+                  LABORATORIO GUIADO
+                </Typography>
+                <Typography variant="h6" sx={{ mt: 0.5 }}>
+                  Paso 2: Construye tu topología
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Arrastra una VPC al lienzo, luego crea una subnet y una instancia. Después pasamos a ruteo y pruebas.
+                </Typography>
+              </Box>
+            )}
             <PacketToolbar
               onSave={onSaveFlow}
               onRestore={onRestoreFlow}
