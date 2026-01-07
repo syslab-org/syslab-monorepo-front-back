@@ -1,7 +1,25 @@
 // apps/frontend/src/components/flow/pages/VPCList.jsx
 import { DeleteOutline, ModeEditOutlined } from "@mui/icons-material";
 import AddIcon from '@mui/icons-material/Add';
-import { Box, Button, IconButton, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from "@mui/material";
+import {
+  Box,
+  Button,
+  IconButton,
+  Paper,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Divider,
+} from "@mui/material";
 import { collection, getDocs, query, where, deleteDoc, doc } from 'firebase/firestore';
 import { useCallback, useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -81,6 +99,8 @@ const fetchAllVPCs = async () => {
 
 const VPCList = () => {
 
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [vpcToDelete, setVpcToDelete] = useState(null);
 
   const [isCreateVPCModalOpen, setIsCreateVPCModalOpen] = useState(false)
   const [wizardMode, setWizardMode] = useState(false)
@@ -92,6 +112,22 @@ const VPCList = () => {
   const { vpcs, fetchVPCs } = useFetchVPCs(setLoadingFlow)
   const { start, finish, setStep } = useWizard()
 
+
+  const deleteFirestoreOnly = async () => {
+    if (!vpcToDelete?.id) return;
+    try {
+      setLoadingFlow(true);
+      await deleteDoc(doc(db, DB_FIRESTORE_VPCS, vpcToDelete.id));
+      await fetchVPCs();
+      closeDeleteDialog();
+    } catch (error) {
+      console.error("Error deleting VPC:", error);
+      alert("No se pudo eliminar. Revisa consola.");
+    } finally {
+      setLoadingFlow(false);
+    }
+
+  }
 
   const handleCreateVPCModalClose = (newVPCId, cidrBlock, prefixLength, vlanName, vlanRegion) => {
     // 1) guarda si era wizard ANTES de resetearlo
@@ -162,6 +198,16 @@ const VPCList = () => {
     }
 
   }
+
+  const openDeleteDialog = (vpc) => {
+    setVpcToDelete(vpc);
+    setDeleteDialogOpen(true);
+  }
+  const closeDeleteDialog = () => {
+    setVpcToDelete(null);
+    setDeleteDialogOpen(false);
+  }
+
   return (
     <div>
       <Stack direction="column" spacing={4} >
@@ -205,7 +251,7 @@ const VPCList = () => {
           </Stack>
 
         </Stack>
-        <VPCsTable vpcs={vpcs} onEdit={handleLinkToFlow} onDelete={handleDeleteVPC} />
+        <VPCsTable vpcs={vpcs} onEdit={handleLinkToFlow} onDelete={openDeleteDialog} />
       </Stack>
 
       <CreateVPCModal
@@ -213,7 +259,30 @@ const VPCList = () => {
         onClose={handleCreateVPCModalClose}
         wizardMode={wizardMode}
       />
+      <Dialog open={deleteDialogOpen} onClose={closeDeleteDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Eliminar laboratorio/VPC</DialogTitle>
+        <Divider />
+        <DialogContent sx={{ pt: 2 }}>
+          <Typography variant="body1" sx={{ mb: 1 }}>
+            Vas a eliminar: <b>{vpcToDelete?.name || vpcToDelete?.id}</b>
+          </Typography>
 
+          <Typography variant="body2" color="text.secondary">
+            Esto borra el documento en Firestore. Si esta VPC ya fue desplegada en AWS,
+            los recursos podrían quedar vivos.
+          </Typography>
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={closeDeleteDialog} variant="outlined">
+            Cancelar
+          </Button>
+
+          <Button onClick={deleteFirestoreOnly} color="error" variant="contained">
+            Eliminar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   )
 }

@@ -17,6 +17,7 @@ class Plan(models.Model):
     task_id = models.CharField(max_length=64, blank=True, null=True)
     s3_key = models.CharField(max_length=256, blank=True, default="")
     error = models.TextField(blank=True, default="")
+    firestore_vpc_id = models.CharField(max_length=128, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
