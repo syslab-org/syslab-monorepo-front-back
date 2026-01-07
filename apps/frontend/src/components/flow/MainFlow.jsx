@@ -133,6 +133,8 @@ const connectionLineStyle = { strokeWidth: 2, stroke: '#1a2438' };
 
 // eslint-disable-next-line react-refresh/only-export-components
 function MainFlow() {
+  const params = useParams();
+  console.log("ROUTE PARAMS", params);
   const { vpcid } = useParams()
   const theme = useTheme();
   const dotColor = theme.palette.mode === 'light'
@@ -335,7 +337,7 @@ function MainFlow() {
     successMessage,
     errorMessage,
     handleCloseSnackbar
-  } = useDeployNetwork({ nodes, edges, allowCrossVpcPingUI })
+    } = useDeployNetwork({ nodes, edges, allowCrossVpcPingUI,  firestoreVpcId: vpcid })
 
   const location = useLocation();
   const isWizardEntry = new URLSearchParams(location.search).get("wizard") === "1";

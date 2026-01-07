@@ -41,10 +41,17 @@ def network_plan_create(request):
     except Exception as e:
         return JsonResponse({"ok": False, "error": str(e)}, status=400)
 
+    firestore_vpc_id = (
+        payload.get("firestore_vpc_id")
+        or payload.get("vpcId")
+        or payload.get("vlan", {}).get("id")
+    )
+
     plan = Plan.objects.create(
         name=payload.get("name", ""),
         payload=payload,
         status=Plan.Status.PENDING,
+        firestore_vpc_id=firestore_vpc_id,
     )
     task = process_network_plan.delay(plan_id=str(plan.id), payload=payload)
     plan.task_id = task.id
@@ -83,6 +90,17 @@ def deploy_plan(request, plan_id):
 
     merged_payload = dict(plan.payload or {})
     merged_payload["simulate_only"] = simulate_only
+    
+    # ✅ Amarre del firestore_vpc_id (si el Plan aún no lo tiene)
+    firestore_vpc_id = (
+        payload.get("firestore_vpc_id")
+        or payload.get("vpcId")
+        or payload.get("vlan", {}).get("id")
+    )
+    if firestore_vpc_id and not plan.firestore_vpc_id:
+        plan.firestore_vpc_id = firestore_vpc_id
+        plan.save(update_fields=["firestore_vpc_id"])
+    
 
     task = process_network_plan.delay(plan_id=str(plan.id), payload=merged_payload)
     plan.task_id = task.id
@@ -96,7 +114,30 @@ from rest_framework.response import Response
 from rest_framework import status
 
 @api_view(["POST"])
-@permission_classes([AllowAny])  # ajusta permisos según tu auth
+@permission_classes([AllowAny])
 def destroy_plan(request, plan_id=None):
-    task = destroy_last_deploy.delay(plan_id)
-    return Response({"task_id": task.id}, status=status.HTTP_202_ACCEPTED)
+    if not plan_id:
+        return Response({"ok": False, "error": "plan_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        plan = Plan.objects.get(id=plan_id)
+    except Plan.DoesNotExist:
+        return Response({"ok": False, "error": "Plan not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    plan.status = Plan.Status.RUNNING
+    plan.error = ""
+    plan.save(update_fields=["status", "error"])
+
+    task = destroy_last_deploy.delay(str(plan.id))
+    plan.task_id = task.id
+    plan.save(update_fields=["task_id"])
+
+    return Response(
+        {
+            "ok": True,
+            "plan_id": str(plan.id),
+            "task_id": task.id,
+            "firestore_vpc_id": plan.firestore_vpc_id,
+        },
+        status=status.HTTP_202_ACCEPTED
+    )

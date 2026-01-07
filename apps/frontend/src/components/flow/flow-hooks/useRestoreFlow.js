@@ -130,7 +130,7 @@ const useRestoreFlow = ({ setNodes, setEdges, setViewport, flowKey, getId }) => 
 
             }
 
-            if (!(expirationDate > currentDate)) {
+            if ((expirationDate > currentDate)) {
                 const { x = 0, y = 0, zoom = 1 } = viewport
                 setNodes(nodes)
                 setEdges(edges)
