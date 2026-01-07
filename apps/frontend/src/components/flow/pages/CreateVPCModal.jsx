@@ -52,7 +52,9 @@ const CreateVPCModal = ({ open, onClose, wizardMode = false }) => {
           userId,
           prefixLength,
           region,
-          type
+          type,
+          narrative: wizardMode ? "wizard" : "advanced",
+          labTemplate: vpcData?.labTemplate || null,
         })
 
         // devolvemos datos del padre (VPCList) para actualizar la lista
