@@ -12,10 +12,12 @@ from provisioning.terraform_runner import cleanup  # solo usamos cleanup aquí
 TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "provisioning" / "templates"
 S3_BUCKET = os.getenv("S3_PLANS_BUCKET", "")
 
+
 # === FUNCIONES AUXILIARES ===
 def run(cmd, cwd):
     """Ejecuta un comando y captura stdout/stderr sin levantar excepción."""
     return subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, check=False)
+
 
 def _maybe_upload_to_s3(key: str, content: str):
     """Sube logs a S3 si está configurado."""
@@ -23,16 +25,22 @@ def _maybe_upload_to_s3(key: str, content: str):
         return
     try:
         import boto3
-        boto3.client("s3").put_object(Bucket=S3_BUCKET, Key=key, Body=content.encode("utf-8"))
+
+        boto3.client("s3").put_object(
+            Bucket=S3_BUCKET, Key=key, Body=content.encode("utf-8")
+        )
     except Exception:
         pass
+
 
 # === TAREAS CELERY ===
 @shared_task(name="api.tasks.prueba_larga")
 def prueba_larga(n: int = 3):
     import time
+
     time.sleep(1)
     return {"ok": True, "n": n}
+
 
 @shared_task(bind=True)
 def process_network_plan(self, plan_id: str, payload: dict):
@@ -61,9 +69,18 @@ def process_network_plan(self, plan_id: str, payload: dict):
         or os.getenv("ECS_CONTAINER_METADATA_URI_V4")
         or os.getenv("AWS_EXECUTION_ENV")
     )
-    has_static_creds = bool(os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY"))
+    has_static_creds = bool(
+        os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY")
+    )
     ALLOW_LOCAL = os.getenv("ALLOW_LOCAL_APPLY") == "1"
     creds_ok_for_apply = running_in_ecs or (ALLOW_LOCAL and has_static_creds)
+
+    if not creds_ok_for_apply:
+        plan.status = Plan.Status.FAILURE
+        plan.error = "Terraform destroy BLOQUEADO: sin credenciales IAM detectadas."
+        plan.updated_at = timezone.now()
+        plan.save(update_fields=["status", "error", "updated_at"])
+        return {"ok": False, "error": plan.error, "log": ""}
 
     try:
         # === 1) Actualiza estado del Plan ===
@@ -101,14 +118,35 @@ def process_network_plan(self, plan_id: str, payload: dict):
         workdir = tempfile.mkdtemp(prefix="tf-multi-")
         main_tf = os.path.join(workdir, "main.tf")
 
-        # Guarda el main.tf generado
+        # === 3.1) Estado Terraform estable por plan (DEV) ===
+        state_dir = f"/tmp/tfstate/{plan_id}"
+        os.makedirs(state_dir, exist_ok=True)
+        state_path = f"{state_dir}/terraform.tfstate"
+
+        backend_tf = f"""terraform {{
+            backend "local" {{
+                path = "{state_path}"
+            }}
+        }}
+        """.lstrip()
+
+        # 1) backend.tf primero
+        with open(os.path.join(workdir, "backend.tf"), "w") as f:
+            f.write(backend_tf)
+
+        # 2) main.tf después
         with open(main_tf, "w") as f:
             f.write(tf_text)
+
+        full_log += f"[state] backend local path={state_path}\n"
 
         # === 4) Archivos de depuración ===
         try:
             import json as _json
-            pathlib.Path(workdir, "_received_plan.json").write_text(_json.dumps(payload, indent=2))
+
+            pathlib.Path(workdir, "_received_plan.json").write_text(
+                _json.dumps(payload, indent=2)
+            )
             preview = "".join(tf_text.splitlines(True)[:60])
             pathlib.Path(workdir, "_main_preview.txt").write_text(preview)
             full_log += f"[debug] dumps escritos en {workdir}\n"
@@ -124,7 +162,9 @@ def process_network_plan(self, plan_id: str, payload: dict):
 
         full_log += f"workdir={workdir}\n"
         full_log += f"simulate_only={simulate_only}\n"
-        full_log += f"running_in_ecs={running_in_ecs} has_static_creds={has_static_creds}\n\n"
+        full_log += (
+            f"running_in_ecs={running_in_ecs} has_static_creds={has_static_creds}\n\n"
+        )
 
         # === 6) Terraform init ===
         proc = run(["terraform", "init", "-input=false", "-no-color"], cwd=workdir)
@@ -133,7 +173,18 @@ def process_network_plan(self, plan_id: str, payload: dict):
             raise RuntimeError("terraform init failed")
 
         # === 7) Terraform plan ===
-        proc = run(["terraform", "plan", "-input=false", "-refresh=false", "-no-color", "-out", "plan.out"], cwd=workdir)
+        proc = run(
+            [
+                "terraform",
+                "plan",
+                "-input=false",
+                "-refresh=false",
+                "-no-color",
+                "-out",
+                "plan.out",
+            ],
+            cwd=workdir,
+        )
         full_log += f"\n$ terraform plan\n{proc.stdout}\n{proc.stderr}\n"
         if proc.returncode != 0:
             raise RuntimeError("terraform plan failed")
@@ -150,7 +201,10 @@ def process_network_plan(self, plan_id: str, payload: dict):
                 full_log += f"\n[SEGURIDAD] {msg}\n"
                 raise RuntimeError(msg)
 
-            proc = run(["terraform", "apply", "-input=false", "-no-color", "plan.out"], cwd=workdir)
+            proc = run(
+                ["terraform", "apply", "-input=false", "-no-color", "plan.out"],
+                cwd=workdir,
+            )
             full_log += f"\n$ terraform apply\n{proc.stdout}\n{proc.stderr}\n"
             if proc.returncode != 0:
                 raise RuntimeError("terraform apply failed")
@@ -206,47 +260,104 @@ def process_network_plan(self, plan_id: str, payload: dict):
             else:
                 cleanup(workdir)
 
+
 @shared_task(bind=True)
-def destroy_last_deploy(self, plan_id: str | None = None):
-    """
-    Destruye el último despliegue local de Terraform (el /tmp/tf-multi-* más reciente).
-    Usa las credenciales actuales del contenedor. Solo para DEV (state local).
-    """
+def destroy_last_deploy(self, plan_id: str):
     full_log = ""
     workdir = None
+
+    plan = Plan.objects.get(id=plan_id)
+    payload = plan.payload or {}
+
+    if payload.get("simulate_only", True):
+        # No es un fallo del sistema: es un NO-OP (no hay nada que destruir).
+        msg = "Plan en modo simulación: no hay infraestructura que destruir."
+        plan.error = msg
+        plan.updated_at = timezone.now()
+        # OJO: NO cambiamos status a FAILURE
+        plan.save(update_fields=["error", "updated_at"])
+        return {"ok": False, "error": msg, "log": "", "state_path": None}
+
+    if payload.get("simulate_only", True):
+        plan.status = Plan.Status.FAILURE
+        plan.error = "Plan en modo simulación: no hay infraestructura que destruir."
+        plan.updated_at = timezone.now()
+        plan.save(update_fields=["status", "error", "updated_at"])
+        return {"ok": False, "error": plan.error, "log": "", "state_path": None}
+
+    # (Opcional pero recomendado)
+    # si este plan NUNCA fue apply real, destroy no tiene sentido
+    # si quieres, bloquea cuando payload.simulate_only == True
+    # if payload.get("simulate_only", True):
+    #     return {"ok": False, "error": "Plan en modo simulación: no hay infraestructura que destruir."}
+
+    plan.status = Plan.Status.RUNNING
+    plan.error = ""
+    plan.task_id = self.request.id
+    plan.updated_at = timezone.now()
+    plan.save(update_fields=["status", "error", "task_id", "updated_at"])
+
     try:
-        dirs = sorted(glob.glob("/tmp/tf-multi-*"))
-        if not dirs:
-            raise RuntimeError("No hay directorios /tmp/tf-multi-* para destruir (¿KEEP_TF_DIRS=1?)")
-        workdir = dirs[-1]
+        # 1) workdir nuevo
+        workdir = tempfile.mkdtemp(prefix="tf-destroy-")
+
         full_log += f"[destroy] workdir={workdir}\n"
 
-        # init silencioso por si falta el .terraform
-        p_init = subprocess.run(
-            ["terraform", "init", "-input=false", "-no-color"],
-            cwd=workdir, text=True, capture_output=True, check=False
-        )
-        full_log += f"$ terraform init\n{p_init.stdout}\n{p_init.stderr}\n"
+        # 2) backend estable por plan_id (primero, para construir backend.tf)
+        state_dir = f"/tmp/tfstate/{plan_id}"
+        os.makedirs(state_dir, exist_ok=True)
+        state_path = f"{state_dir}/terraform.tfstate"
 
-        p = subprocess.run(
-            ["terraform", "destroy", "-auto-approve", "-no-color"],
-            cwd=workdir, text=True, capture_output=True, check=False
+        backend_tf = f"""terraform {{
+            backend "local" {{
+                path = "{state_path}"
+            }}
+        }}
+        """.lstrip()
+
+        # 3) render main.tf
+        env = Environment(
+            loader=FileSystemLoader(str(TEMPLATES_DIR)),
+            trim_blocks=True,
+            lstrip_blocks=True,
         )
+        tpl = env.get_template("main.tf.j2")
+        tf_text = tpl.render(
+            payload=payload, simulate_only=False
+        )  # destroy siempre real
+
+        # 4) escribir backend.tf primero, main.tf después
+        pathlib.Path(os.path.join(workdir, "backend.tf")).write_text(backend_tf)
+        pathlib.Path(os.path.join(workdir, "main.tf")).write_text(tf_text)
+
+        full_log += f"[state] backend local path={state_path}\n"
+
+        # 4) init
+        p_init = run(["terraform", "init", "-input=false", "-no-color"], cwd=workdir)
+        full_log += f"$ terraform init\n{p_init.stdout}\n{p_init.stderr}\n"
+        if p_init.returncode != 0:
+            raise RuntimeError("terraform init failed")
+
+        # 5) destroy
+        p = run(["terraform", "destroy", "-auto-approve", "-no-color"], cwd=workdir)
         full_log += f"$ terraform destroy\n{p.stdout}\n{p.stderr}\n"
         if p.returncode != 0:
             raise RuntimeError("terraform destroy failed")
 
-        # marcar plan si nos pasaron id (opcional)
-        if plan_id:
-            try:
-                plan = Plan.objects.get(id=plan_id)
-                plan.status = Plan.Status.SUCCESS  # o DESTROYED si agregas ese estado
-                plan.error = ""
-                plan.updated_at = timezone.now()
-                plan.save(update_fields=["status", "error", "updated_at"])
-            except Exception:
-                pass
+        plan.status = Plan.Status.SUCCESS
+        plan.error = ""
+        plan.updated_at = timezone.now()
+        plan.save(update_fields=["status", "error", "updated_at"])
 
-        return {"ok": True, "log": full_log, "workdir": workdir}
+        return {"ok": True, "log": full_log, "state_path": state_path}
+
     except Exception as e:
-        return {"ok": False, "error": str(e), "log": full_log, "workdir": workdir}
+        plan.status = Plan.Status.FAILURE
+        plan.error = str(e)
+        plan.updated_at = timezone.now()
+        plan.save(update_fields=["status", "error", "updated_at"])
+        return {"ok": False, "error": str(e), "log": full_log}
+
+    finally:
+        if workdir:
+            cleanup(workdir)

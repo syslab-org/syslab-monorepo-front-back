@@ -45,7 +45,7 @@ def network_plan_create(request):
         payload.get("firestore_vpc_id")
         or payload.get("vpcId")
         or payload.get("vlan", {}).get("id")
-    )
+)
 
     plan = Plan.objects.create(
         name=payload.get("name", ""),
@@ -90,13 +90,13 @@ def deploy_plan(request, plan_id):
 
     merged_payload = dict(plan.payload or {})
     merged_payload["simulate_only"] = simulate_only
-    
-    # ✅ Amarre del firestore_vpc_id (si el Plan aún no lo tiene)
+
     firestore_vpc_id = (
-        payload.get("firestore_vpc_id")
-        or payload.get("vpcId")
-        or payload.get("vlan", {}).get("id")
+        merged_payload.get("firestore_vpc_id")
+        or merged_payload.get("vpcId")
+        or (merged_payload.get("vlan") or {}).get("id")
     )
+
     if firestore_vpc_id and not plan.firestore_vpc_id:
         plan.firestore_vpc_id = firestore_vpc_id
         plan.save(update_fields=["firestore_vpc_id"])
