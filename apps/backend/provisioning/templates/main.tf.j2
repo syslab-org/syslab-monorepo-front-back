@@ -9,12 +9,22 @@ terraform {
 }
 
 {# ---------------------- Config base ---------------------- #}
-{% set sim = payload.simulate_only if payload is defined and payload.simulate_only is defined
-            else simulate_only|default(true) %}
+{% set sim = (
+  payload.get('simulate_only')
+  if payload is defined and payload is mapping and payload.get('simulate_only') is not none
+  else simulate_only|default(true)
+) %}
 
 # Región (normalizada sin sufijo AZ)
-{% set raw_region = (payload.vlan.region if payload and payload.vlan and payload.vlan.region
-                     else (payload.vpcs[0].region if payload and payload.vpcs else "us-east-1")) %}
+{% set raw_region = (
+  payload.get('vlan', {}).get('region')
+  if payload is defined and payload is mapping and payload.get('vlan')
+  else (
+    payload.get('vpcs', [])[0].get('region')
+    if payload is defined and payload is mapping and (payload.get('vpcs') or [])
+    else "us-east-1"
+  )
+) %}
 {% set norm_region = (raw_region[:-1] if raw_region and (raw_region|string)[-1].isalpha() else raw_region) %}
 
 provider "aws" {
@@ -31,9 +41,9 @@ provider "aws" {
 
 # -------- Datos del plan en locals (desde el payload) ------------------------
 locals {
-  vpcs     = {{ (payload.vpcs   if payload and payload.vpcs   else []) | tojson }}
-  links    = {{ (payload.links  if payload and payload.links  else []) | tojson }}
-  routers  = {{ (payload.routers if payload and payload.routers else []) | tojson }}
+  vpcs     = {{ ((payload.get('vpcs', [])   if payload is mapping else []) | tojson) }}
+  links    = {{ ((payload.get('links', [])  if payload is mapping else []) | tojson) }}
+  routers  = {{ ((payload.get('routers', []) if payload is mapping else []) | tojson) }}
 
   # Routers tipo TGW (Transit Gateway)
   tgw_routers = [for r in local.routers : r if try(lower(r.type), "") == "tgw"]
@@ -42,8 +52,8 @@ locals {
   # Regla: si viene explícito en el payload, se respeta.
   # Si NO viene, se enciende automáticamente cuando existan links (peering o tgw-attach).
   allow_cross_vpc_ping = (
-    {% if payload and (payload.allow_cross_vpc_ping is not none) -%}
-    {{ payload.allow_cross_vpc_ping | tojson }}
+    {% if payload is mapping and (payload.get('allow_cross_vpc_ping') is not none) -%}
+    {{ payload.get('allow_cross_vpc_ping') | tojson }}
     {%- else -%}
     length([for l in local.links : l if contains(["peering","tgw-attach"], lower(try(l.type, "")))]) > 0
     {%- endif -%}

@@ -3,7 +3,7 @@ from celery import shared_task
 import os, tempfile, subprocess, json, pathlib, glob
 from django.utils import timezone
 from django.db import transaction
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from pathlib import Path
 from .models import Plan
 from provisioning.terraform_runner import cleanup  # solo usamos cleanup aquí
@@ -33,6 +33,37 @@ def _maybe_upload_to_s3(key: str, content: str):
         pass
 
 
+def normalize_payload(payload: dict) -> dict:
+    """Asegura shape estable del payload para que Jinja/Terraform no dependan del curl."""
+    payload = payload or {}
+
+    # Colecciones esperadas
+    payload.setdefault("vpcs", [])
+    payload.setdefault("links", [])
+    payload.setdefault("routers", [])
+
+    # vlan suele existir en algunos flujos (aunque venga vacío)
+    vlan = payload.get("vlan")
+    if not isinstance(vlan, dict):
+        vlan = {}
+    payload["vlan"] = vlan
+
+    # Normaliza región si viene en vpcs[0]
+    if not vlan.get("region") and payload.get("vpcs"):
+        first_vpc = (
+            payload["vpcs"][0]
+            if isinstance(payload["vpcs"], list) and payload["vpcs"]
+            else {}
+        )
+        if isinstance(first_vpc, dict) and first_vpc.get("region"):
+            vlan["region"] = first_vpc.get("region")
+
+    # Normaliza simulate_only (default True)
+    payload["simulate_only"] = bool(payload.get("simulate_only", True))
+
+    return payload
+
+
 # === TAREAS CELERY ===
 @shared_task(name="api.tasks.prueba_larga")
 def prueba_larga(n: int = 3):
@@ -59,8 +90,9 @@ def process_network_plan(self, plan_id: str, payload: dict):
             payload = json.loads(payload or "{}")
         except Exception:
             payload = {}
-    payload = payload or {}
-    simulate_only = bool(payload.get("simulate_only", True))
+
+    payload = normalize_payload(payload if isinstance(payload, dict) else {})
+    simulate_only = payload["simulate_only"]
 
     # --- Detecta entorno (para permitir apply real solo si hay credenciales válidas) ---
     running_in_ecs = bool(
@@ -73,14 +105,9 @@ def process_network_plan(self, plan_id: str, payload: dict):
         os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY")
     )
     ALLOW_LOCAL = os.getenv("ALLOW_LOCAL_APPLY") == "1"
-    creds_ok_for_apply = running_in_ecs or (ALLOW_LOCAL and has_static_creds)
 
-    if not creds_ok_for_apply:
-        plan.status = Plan.Status.FAILURE
-        plan.error = "Terraform destroy BLOQUEADO: sin credenciales IAM detectadas."
-        plan.updated_at = timezone.now()
-        plan.save(update_fields=["status", "error", "updated_at"])
-        return {"ok": False, "error": plan.error, "log": ""}
+    # Solo exigimos credenciales si se va a hacer apply real.
+    creds_ok_for_apply = running_in_ecs or (ALLOW_LOCAL and has_static_creds)
 
     try:
         # === 1) Actualiza estado del Plan ===
@@ -106,12 +133,13 @@ def process_network_plan(self, plan_id: str, payload: dict):
             loader=FileSystemLoader(str(TEMPLATES_DIR)),
             trim_blocks=True,
             lstrip_blocks=True,
+            undefined=StrictUndefined,
         )
         tpl = env.get_template("main.tf.j2")
 
         tf_text = tpl.render(
             payload=payload,
-            simulate_only=payload.get("simulate_only", True),
+            simulate_only=simulate_only,
         )
 
         # === 3) Crea directorio temporal de trabajo ===
@@ -145,7 +173,7 @@ def process_network_plan(self, plan_id: str, payload: dict):
             import json as _json
 
             pathlib.Path(workdir, "_received_plan.json").write_text(
-                _json.dumps(payload, indent=2)
+                _json.dumps(payload, indent=2, default=str)
             )
             preview = "".join(tf_text.splitlines(True)[:60])
             pathlib.Path(workdir, "_main_preview.txt").write_text(preview)
@@ -162,9 +190,7 @@ def process_network_plan(self, plan_id: str, payload: dict):
 
         full_log += f"workdir={workdir}\n"
         full_log += f"simulate_only={simulate_only}\n"
-        full_log += (
-            f"running_in_ecs={running_in_ecs} has_static_creds={has_static_creds}\n\n"
-        )
+        full_log += f"running_in_ecs={running_in_ecs} has_static_creds={has_static_creds} ALLOW_LOCAL_APPLY={ALLOW_LOCAL}\n\n"
 
         # === 6) Terraform init ===
         proc = run(["terraform", "init", "-input=false", "-no-color"], cwd=workdir)
@@ -199,7 +225,19 @@ def process_network_plan(self, plan_id: str, payload: dict):
                     "AWS_ACCESS_KEY_ID/SECRET_ACCESS_KEY."
                 )
                 full_log += f"\n[SEGURIDAD] {msg}\n"
-                raise RuntimeError(msg)
+
+                # Marca el plan como FAILURE (apply intentado sin credenciales)
+                plan_obj.status = Plan.Status.FAILURE
+                plan_obj.error = msg
+                plan_obj.updated_at = timezone.now()
+                plan_obj.save(update_fields=["status", "error", "updated_at"])
+
+                return {
+                    "ok": False,
+                    "error": msg,
+                    "plan_id": str(plan_obj.id),
+                    "log": full_log,
+                }
 
             proc = run(
                 ["terraform", "apply", "-input=false", "-no-color", "plan.out"],
@@ -320,6 +358,7 @@ def destroy_last_deploy(self, plan_id: str):
             loader=FileSystemLoader(str(TEMPLATES_DIR)),
             trim_blocks=True,
             lstrip_blocks=True,
+            undefined=StrictUndefined,
         )
         tpl = env.get_template("main.tf.j2")
         tf_text = tpl.render(
