@@ -64,6 +64,29 @@ def normalize_payload(payload: dict) -> dict:
     return payload
 
 
+# === Helper: Lee outputs de Terraform como JSON simplificado ===
+def read_terraform_outputs_json(cwd: str) -> dict:
+    """Lee `terraform output -json` y devuelve un dict simplificado (solo values).
+
+    Nota: solo funciona si existe state con outputs (normalmente después de apply).
+    """
+    proc = run(["terraform", "output", "-json", "-no-color"], cwd=cwd)
+    if proc.returncode != 0:
+        raise RuntimeError(f"terraform output failed: {proc.stderr.strip()}")
+
+    raw = (proc.stdout or "{}").strip() or "{}"
+    data = json.loads(raw)
+
+    # Terraform devuelve: { key: { value, type, sensitive } }
+    simplified = {}
+    for k, v in (data or {}).items():
+        if isinstance(v, dict) and "value" in v:
+            simplified[k] = v.get("value")
+        else:
+            simplified[k] = v
+    return simplified
+
+
 # === TAREAS CELERY ===
 @shared_task(name="api.tasks.prueba_larga")
 def prueba_larga(n: int = 3):
@@ -147,7 +170,7 @@ def process_network_plan(self, plan_id: str, payload: dict):
         main_tf = os.path.join(workdir, "main.tf")
 
         # === 3.1) Estado Terraform estable por plan (DEV) ===
-        state_dir = f"/tmp/tfstate/{plan_id}"
+        state_dir = f"/tfstate/{plan_id}"
         os.makedirs(state_dir, exist_ok=True)
         state_path = f"{state_dir}/terraform.tfstate"
 
@@ -229,8 +252,18 @@ def process_network_plan(self, plan_id: str, payload: dict):
                 # Marca el plan como FAILURE (apply intentado sin credenciales)
                 plan_obj.status = Plan.Status.FAILURE
                 plan_obj.error = msg
+                plan_obj.applied = False
+                plan_obj.last_action = "apply"
                 plan_obj.updated_at = timezone.now()
-                plan_obj.save(update_fields=["status", "error", "updated_at"])
+                plan_obj.save(
+                    update_fields=[
+                        "status",
+                        "error",
+                        "applied",
+                        "last_action",
+                        "updated_at",
+                    ]
+                )
 
                 return {
                     "ok": False,
@@ -248,6 +281,14 @@ def process_network_plan(self, plan_id: str, payload: dict):
                 raise RuntimeError("terraform apply failed")
             applied = True
 
+            # Guardar outputs (solo después de apply real)
+            try:
+                tf_outputs = read_terraform_outputs_json(workdir)
+                plan_obj.outputs = tf_outputs
+                plan_obj.last_outputs = tf_outputs
+            except Exception as oe:
+                full_log += f"\n[outputs] No pude leer terraform output -json: {oe}\n"
+
         # === 9) Guarda logs y marca SUCCESS ===
         s3_key = f"plans/{plan_obj.id}.log"
         _maybe_upload_to_s3(s3_key, full_log)
@@ -255,8 +296,31 @@ def process_network_plan(self, plan_id: str, payload: dict):
         plan_obj.status = Plan.Status.SUCCESS
         plan_obj.s3_key = s3_key if S3_BUCKET else ""
         plan_obj.error = ""
+        plan_obj.applied = applied
+        plan_obj.last_action = "apply" if applied else "plan"
         plan_obj.updated_at = timezone.now()
-        plan_obj.save(update_fields=["status", "s3_key", "error", "updated_at"])
+
+        # Si fue solo plan (simulate), intentamos leer outputs pero puede no existir state.
+        if not applied:
+            try:
+                tf_outputs = read_terraform_outputs_json(workdir)
+                plan_obj.outputs = tf_outputs
+                plan_obj.last_outputs = tf_outputs
+            except Exception:
+                pass
+
+        plan_obj.save(
+            update_fields=[
+                "status",
+                "s3_key",
+                "error",
+                "applied",
+                "last_action",
+                "outputs",
+                "last_outputs",
+                "updated_at",
+            ]
+        )
 
         return {
             "ok": True,
@@ -307,6 +371,19 @@ def destroy_last_deploy(self, plan_id: str):
     plan = Plan.objects.get(id=plan_id)
     payload = plan.payload or {}
 
+    # --- Detecta entorno (para permitir destroy real solo si hay credenciales válidas) ---
+    running_in_ecs = bool(
+        os.getenv("ECS_TASK_DEFINITION")
+        or os.getenv("ECS_CONTAINER_METADATA_URI")
+        or os.getenv("ECS_CONTAINER_METADATA_URI_V4")
+        or os.getenv("AWS_EXECUTION_ENV")
+    )
+    has_static_creds = bool(
+        os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY")
+    )
+    ALLOW_LOCAL = os.getenv("ALLOW_LOCAL_APPLY") == "1"
+    creds_ok_for_apply = running_in_ecs or (ALLOW_LOCAL and has_static_creds)
+
     if payload.get("simulate_only", True):
         # No es un fallo del sistema: es un NO-OP (no hay nada que destruir).
         msg = "Plan en modo simulación: no hay infraestructura que destruir."
@@ -314,14 +391,27 @@ def destroy_last_deploy(self, plan_id: str):
         plan.updated_at = timezone.now()
         # OJO: NO cambiamos status a FAILURE
         plan.save(update_fields=["error", "updated_at"])
-        return {"ok": False, "error": msg, "log": "", "state_path": None}
+        return {
+            "ok": False,
+            "error": msg,
+            "log": "",
+            "state_path": None,
+            "plan_id": str(plan.id),
+        }
 
-    if payload.get("simulate_only", True):
+    if not creds_ok_for_apply:
+        msg = "Terraform destroy BLOQUEADO: sin credenciales IAM detectadas."
         plan.status = Plan.Status.FAILURE
-        plan.error = "Plan en modo simulación: no hay infraestructura que destruir."
+        plan.error = msg
         plan.updated_at = timezone.now()
         plan.save(update_fields=["status", "error", "updated_at"])
-        return {"ok": False, "error": plan.error, "log": "", "state_path": None}
+        return {
+            "ok": False,
+            "error": msg,
+            "log": "",
+            "state_path": None,
+            "plan_id": str(plan.id),
+        }
 
     # (Opcional pero recomendado)
     # si este plan NUNCA fue apply real, destroy no tiene sentido
@@ -331,9 +421,20 @@ def destroy_last_deploy(self, plan_id: str):
 
     plan.status = Plan.Status.RUNNING
     plan.error = ""
+    plan.s3_key = ""
     plan.task_id = self.request.id
+    plan.last_action = "destroy"
     plan.updated_at = timezone.now()
-    plan.save(update_fields=["status", "error", "task_id", "updated_at"])
+    plan.save(
+        update_fields=[
+            "status",
+            "error",
+            "s3_key",
+            "task_id",
+            "last_action",
+            "updated_at",
+        ]
+    )
 
     try:
         # 1) workdir nuevo
@@ -342,7 +443,7 @@ def destroy_last_deploy(self, plan_id: str):
         full_log += f"[destroy] workdir={workdir}\n"
 
         # 2) backend estable por plan_id (primero, para construir backend.tf)
-        state_dir = f"/tmp/tfstate/{plan_id}"
+        state_dir = f"/tfstate/{plan_id}"
         os.makedirs(state_dir, exist_ok=True)
         state_path = f"{state_dir}/terraform.tfstate"
 
@@ -361,6 +462,10 @@ def destroy_last_deploy(self, plan_id: str):
             undefined=StrictUndefined,
         )
         tpl = env.get_template("main.tf.j2")
+
+        payload = normalize_payload(payload if isinstance(payload, dict) else {})
+        payload["simulate_only"] = False
+
         tf_text = tpl.render(
             payload=payload, simulate_only=False
         )  # destroy siempre real
@@ -383,18 +488,51 @@ def destroy_last_deploy(self, plan_id: str):
         if p.returncode != 0:
             raise RuntimeError("terraform destroy failed")
 
-        plan.status = Plan.Status.SUCCESS
-        plan.error = ""
-        plan.updated_at = timezone.now()
-        plan.save(update_fields=["status", "error", "updated_at"])
+        s3_key = f"plans/{plan.id}.destroy.log"
+        _maybe_upload_to_s3(s3_key, full_log)
 
-        return {"ok": True, "log": full_log, "state_path": state_path}
+        plan.status = Plan.Status.SUCCESS
+        plan.s3_key = s3_key if S3_BUCKET else ""
+        plan.error = ""
+        plan.applied = False
+        plan.last_outputs = plan.outputs or {}  # guarda outputs previos
+        plan.outputs = {}
+        plan.updated_at = timezone.now()
+        plan.save(
+            update_fields=[
+                "status",
+                "s3_key",
+                "error",
+                "applied",
+                "outputs",
+                "updated_at",
+                "last_outputs",
+            ]
+        )
+
+        return {
+            "ok": True,
+            "log": full_log,
+            "state_path": state_path,
+            "plan_id": str(plan.id),
+            "s3_key": plan.s3_key,
+        }
 
     except Exception as e:
+        try:
+            if full_log:
+                _maybe_upload_to_s3(
+                    f"plans/{str(plan.id)}.destroy.error.log",
+                    full_log + f"\n\nERROR: {e}\n",
+                )
+        except Exception:
+            pass
+
         plan.status = Plan.Status.FAILURE
         plan.error = str(e)
+        plan.last_action = "destroy"
         plan.updated_at = timezone.now()
-        plan.save(update_fields=["status", "error", "updated_at"])
+        plan.save(update_fields=["status", "error", "last_action", "updated_at"])
         return {"ok": False, "error": str(e), "log": full_log}
 
     finally:
