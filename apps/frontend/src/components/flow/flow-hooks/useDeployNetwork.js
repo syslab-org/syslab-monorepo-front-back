@@ -163,7 +163,12 @@ function buildLinksFromEdges(nodes, edges) {
   return { links, routers };
 }
 
-const useDeployNetwork = ({ nodes, edges, allowCrossVpcPingUI = null }) => {
+const useDeployNetwork = ({
+  nodes,
+  edges,
+  allowCrossVpcPingUI = null,
+  firestoreVpcId,
+}) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -187,7 +192,7 @@ const useDeployNetwork = ({ nodes, edges, allowCrossVpcPingUI = null }) => {
     if (errors.length > 0) {
       setErrorMessage(
         "No se puede desplegar. Corrige estos errores:\n" +
-        errors.map((e) => `• ${e}`).join("\n")
+          errors.map((e) => `• ${e}`).join("\n")
       );
       return;
     }
@@ -303,7 +308,9 @@ const useDeployNetwork = ({ nodes, edges, allowCrossVpcPingUI = null }) => {
         internet_gateway: !!vpcNode.data?.internetGateway,
         nat_gateway: {
           enabled: natEnabled,
-          public_subnet: natEnabled ? s(vpcNode.data?.natGatewayPublicSubnet) : "",
+          public_subnet: natEnabled
+            ? s(vpcNode.data?.natGatewayPublicSubnet)
+            : "",
           elastic_ip: natEnabled ? s(vpcNode.data?.natGatewayElasticIp) : "",
         },
         route_tables: routeTables,
@@ -322,8 +329,7 @@ const useDeployNetwork = ({ nodes, edges, allowCrossVpcPingUI = null }) => {
 
     const vlanNameFinal =
       vlanName || vpcsPayload[0]?.name || `VLAN-${Date.now()}`;
-    const vlanRegionFinal =
-      vlanRegion || vpcsPayload[0]?.region || "us-east-1";
+    const vlanRegionFinal = vlanRegion || vpcsPayload[0]?.region || "us-east-1";
 
     const planDefaultName = vpcsPayload[0]?.name || `plan-${Date.now()}`;
     setPlanName(planDefaultName);
@@ -335,21 +341,32 @@ const useDeployNetwork = ({ nodes, edges, allowCrossVpcPingUI = null }) => {
 
     const autoAllowCrossVpcPing = someRouterForcesPing || anyLinks;
     const allowCrossVpcPing =
-      allowCrossVpcPingUI !== null ? allowCrossVpcPingUI : autoAllowCrossVpcPing;
+      allowCrossVpcPingUI !== null
+        ? allowCrossVpcPingUI
+        : autoAllowCrossVpcPing;
 
     const built = {
       name: planDefaultName,
       cloud: "aws",
-      vlan: { name: vlanNameFinal, region: vlanRegionFinal, master_cidr: masterCidr },
+      firestore_vpc_id: firestoreVpcId || null, // ✅ top-level (el backend lo lee directo)
+      vpcId: firestoreVpcId || null, // ✅ alias opcional (por si algún lado lo usa)
+      vlan: {
+        id: firestoreVpcId || null, // ✅ para compatibilidad con payload antiguo
+        name: vlanNameFinal,
+        region: vlanRegionFinal,
+        master_cidr: masterCidr,
+      },
       vpcs: vpcsPayload,
       links,
       routers,
-      // SIEMPRE presente para evitar Jinja Undefined:
       allow_cross_vpc_ping: !!allowCrossVpcPing,
     };
 
     setTransformedData(built);
-    console.log("processJsonToCloud - transformedData:", { cloud: "aws", ...built });
+    console.log("processJsonToCloud - transformedData:", {
+      cloud: "aws",
+      ...built,
+    });
     setShowConfirmation(true);
   };
 
@@ -368,7 +385,7 @@ const useDeployNetwork = ({ nodes, edges, allowCrossVpcPingUI = null }) => {
           return;
         }
       }
-
+    console.log("firestoreVpcId", firestoreVpcId);
       const res = await api.createPlan({
         name: planName || "plan-" + Date.now(),
         ...transformedData,
