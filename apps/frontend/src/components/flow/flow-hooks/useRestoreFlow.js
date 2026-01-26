@@ -91,7 +91,7 @@ const useRestoreFlow = ({ setNodes, setEdges, setViewport, flowKey, getId }) => 
         // console.log("let flow = loadFlowFromLocalStorage(flowKey): ", flow);
 
         if (!flow || flow.id !== vpcid) {
-            // console.log("aqui 2");
+             console.log("aqui 2");
             const fetchedFlow = await fetchFlowFromFirebase(vpcid)
             // console.log("fetchedFlow: ", fetchedFlow);
 
@@ -114,20 +114,23 @@ const useRestoreFlow = ({ setNodes, setEdges, setViewport, flowKey, getId }) => 
         }
 
         if (flow) {
-            // console.log("flowRestore", flow);
+            console.log("flowRestore", flow);
             setCidrBlockVPC(flow.cidrBlock)
             setPrefixLength(flow.prefixLength || '')
             const { expiration, nodes = [], edges = [], viewport = {} } = flow
             const currentDate = new Date()
 
             const expirationDate = convertToDate(expiration)
+            console.log(expirationDate);
+            console.log(currentDate);
+            
             if (!expirationDate) {
                 setLoadingFlow(false)
                 return
 
             }
 
-            if (expirationDate > currentDate) {
+            if ((expirationDate > currentDate)) {
                 const { x = 0, y = 0, zoom = 1 } = viewport
                 setNodes(nodes)
                 setEdges(edges)
