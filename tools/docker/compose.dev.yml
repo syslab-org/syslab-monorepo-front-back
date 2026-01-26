@@ -28,6 +28,8 @@ services:
       dockerfile: tools/docker/backend.Dockerfile
     volumes:
       - ../../apps/backend:/app
+      - tfstate:/tfstate
+      - tfwork:/tfwork
     env_file:
       - ../../.env
     environment:
@@ -68,6 +70,8 @@ services:
     command: bash -lc "celery -A teg worker -E --loglevel=INFO --pool=solo"
     volumes:
       - ../../apps/backend:/app
+      - tfstate:/tfstate
+      - tfwork:/tfwork
     env_file:
       - ../../.env
     environment:
@@ -151,6 +155,8 @@ services:
 volumes:
   frontend_node_modules:
   pgdata:
+  tfstate:
+  tfwork:
 
 networks:
   appnet:

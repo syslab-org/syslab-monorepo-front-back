@@ -1,29 +1,39 @@
 // apps/frontend/src/components/flow/pages/CreateVPCModal.jsx
-import { Box, Modal } from '@mui/material';
+import { Box, Modal, Stack, Typography } from '@mui/material';
 import { addDoc, collection } from 'firebase/firestore';
 import { useContext } from 'react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { LoadingFlowContext } from '../../../contexts/LoadingFlowContext';
 import { db } from '../../../firebase/firebaseConfig';
 import NewVLANForm from '../forms/NewVLANForm';
+import { useWizard } from '../../../contexts/WizardContext';
+import WizardModalLayout from '../components/WizardModalLayout';
 
 const style = {
   position: 'absolute',
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
-  width: 400,
-  bgcolor: 'background.paper',
-  border: '2px solid #000',
-  boxShadow: 24,
-  p: 4,
-};
 
+  width: 'min(720px, 92vw)',
+  maxHeight: '90vh',
+
+  overflow: 'hidden',       // ⬅️ clave: el scroll lo hará el layout
+  bgcolor: 'background.paper',
+  borderRadius: 3,
+  boxShadow: 24,
+
+  // ⚠️ Ojo: quitamos p:4 de aquí, para que el layout controle padding
+};
 // eslint-disable-next-line react/prop-types
-const CreateVPCModal = ({ open, onClose }) => {
+const CreateVPCModal = ({ open, onClose, wizardMode = false }) => {
   const { setLoadingFlow, loadingFlow } = useContext(LoadingFlowContext)
   const { user } = useAuth()
   const userId = user.userId
+
+  const { active, currentStep, steps } = useWizard()
+
+
 
   const handleCreateVPC = async (vpcData) => {
     // console.log("loadingFlow",loadingFlow);
@@ -42,36 +52,71 @@ const CreateVPCModal = ({ open, onClose }) => {
           userId,
           prefixLength,
           region,
-          type
+          type,
+          narrative: wizardMode ? "wizard" : "advanced",
+          labTemplate: vpcData?.labTemplate || null,
         })
 
-        onClose(vpcDoc.id, cidrBlock, prefixLength, vpcData.vlanName, vpcData.region);
+        // devolvemos datos del padre (VPCList) para actualizar la lista
+        onClose(
+          vpcDoc.id,
+          cidrBlock,
+          prefixLength,
+          vpcData.vlanName,
+          vpcData.region);
 
       } catch (error) {
+        // TODO: en un siguiente paso, aquí enganchamos snackbar global
         console.error("Error creating VPC:", error)
+        setLoadingFlow(false);
       }
 
     } else {
       console.error("Error: Missing VPC name or cloud type")
+      setLoadingFlow(false);
     }
   }
 
+  // ------- UI: títulos y textos según modo -------
+
+  const isWizardActive = wizardMode && active;
+
+  let title = "Crear nueva VPC";
+  let subtitle = "Define el nombre del laboratorio, la región y el rango de direcciones. Luego podrás agregar VPCs, subredes e instancias.";
+  let stepLabel = "";
+
+  if (wizardMode) {
+    title = "Crear laboratorio";
+    subtitle = "Define el nombre del laboratorio, la región y el rango de direcciones. Después te guiaremos por subredes, instancias y pruebas.";
+    if (isWizardActive && Array.isArray(steps) && steps.length > 0) {
+      const idx = steps.indexOf(currentStep);
+      const stepNumber = idx >= 0 ? idx + 1 : 1;
+      stepLabel = `Paso ${stepNumber} de ${steps.length}`;
+
+    } else {
+      stepLabel = "Laboratorio guiado";
+    }
+  }
 
 
   return (
     <Modal
       open={open}
       onClose={() => onClose()}
-      aria-labelledby="parent-modal-title"
-      aria-describedby="parent-modal-description"
+      aria-labelledby="create-vpc-modal-title"
+      aria-describedby="create-vpc-modal-description"
     >
-
-      <Box sx={{ ...style, width: 400 }}>
-        {/* <NewVPCForm onSave={handleCreateVPC}/> */}
-        <NewVLANForm onSave={handleCreateVPC} />
+      <Box sx={style}>
+        <WizardModalLayout
+          eyebrow={wizardMode ? stepLabel : null}
+          title={title}
+          description={subtitle}
+        >
+          <NewVLANForm onSave={handleCreateVPC} wizardMode={wizardMode} />
+        </WizardModalLayout>
       </Box>
     </Modal>
-  )
+  );
 }
 
 export default CreateVPCModal
