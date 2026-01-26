@@ -160,7 +160,7 @@ def deploy_plan(request, plan_id: UUID):
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
-def destroy_plan(_request, plan_id: UUID):
+def destroy_plan(request, plan_id: UUID):
 
     # if not plan_id:
     #     return Response(
@@ -174,6 +174,15 @@ def destroy_plan(_request, plan_id: UUID):
         return Response(
             {"ok": False, "error": "Plan not found"}, status=status.HTTP_404_NOT_FOUND
         )
+    # 1.1) Solo se destruyen planes que hayan terminado OK
+    if plan.status != Plan.Status.SUCCESS:
+        return Response(
+            {
+                "ok": False,
+                "error": f"No se puede destruir un plan en estado {plan.status}. Debe estar en SUCCESS.",
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
     # 2) Bloqueo si está corriendo
     if _is_running(plan):
         return Response(
@@ -185,7 +194,7 @@ def destroy_plan(_request, plan_id: UUID):
         )
 
     # 3) Bloqueo si es simulación (no hay infraestructura real que destruir)
-    if (plan.payload or {}).get("simulate_only", True):
+    if bool((plan.payload or {}).get("simulate_only", True)):
         return Response(
             {
                 "ok": False,
@@ -195,13 +204,20 @@ def destroy_plan(_request, plan_id: UUID):
         )
 
     # 4) Marcar RUNNING + lanzar task
+    # Aseguramos consistencia: destruir siempre implica simulate_only=False
+    merged_payload = dict(plan.payload or {})
+    merged_payload["simulate_only"] = False
+    plan.payload = merged_payload
+    plan.updated_at = timezone.now()
+
     plan.status = Plan.Status.RUNNING
     plan.error = ""
-    plan.save(update_fields=["status", "error"])
+    plan.save(update_fields=["status", "error", "updated_at", "payload"])
 
     task = destroy_last_deploy.delay(str(plan.id))
     plan.task_id = task.id
-    plan.save(update_fields=["task_id"])
+    plan.updated_at = timezone.now()
+    plan.save(update_fields=["task_id", "updated_at"])
 
     return Response(
         {
@@ -216,7 +232,7 @@ def destroy_plan(_request, plan_id: UUID):
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
-def destroy_last_plan(_request):
+def destroy_last_plan(request):
     plan = (
         Plan.objects.filter(status=Plan.Status.SUCCESS)
         .exclude(payload__simulate_only=True)
@@ -230,4 +246,4 @@ def destroy_last_plan(_request):
         )
 
     # reutiliza tu lógica real: llama destroy_plan(plan_id)
-    return destroy_plan(_request, plan.id)
+    return destroy_plan(request, plan.id)

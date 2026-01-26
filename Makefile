@@ -56,8 +56,8 @@ SLEEP             ?= 5
   up down restart start stop up-nobuild recreate ps ps-healthy logs \
   logs-backend logs-frontend logs-celery logs-flower logs-redis \
   rm-stopped ps-paused unpause build build-nc pull prune nuke \
-  setup lint test migrate createsuperuser sh-backend sh-frontend sh-celery sh-flower sh-redis \
-  dbshell psql \
+  setup lint test migrate makemigrations-api migrate-all migrate-api createsuperuser sh-backend sh-frontend sh-celery sh-flower sh-redis \
+  dbshell psql plan-outputs \
   ecr-login check-images build-backend build-celery tag-backend tag-celery push-backend push-celery push \
   aws-init aws-up aws-up-no-celery aws-stop aws-up-safe aws-redeploy aws-redeploy-safe aws-down aws-status tf-outputs echo-backend-url deploy-all aws-bootstrap \
   aws-ecs-status aws-wait-ecs aws-wait-alb aws-migrate \
@@ -78,6 +78,8 @@ help:
 	@echo " RUNBOOK A · DESARROLLO LOCAL"
 	@echo "  make up            # levanta dev stack (frontend, backend, celery, redis, postgres)"
 	@echo "  make migrate       # aplica migraciones (DB: Postgres local)"
+	@echo "  make migrate-api   # makemigrations api + migrate (útil cuando cambias models)"
+	@echo "  make plan-outputs PLAN_ID=<uuid> # imprime Plan.outputs desde la DB local"
 	@echo "  make smoke-local   # healthz + tarea Celery + /api/network/plan"
 	@echo "  make logs          # logs de todos los servicios"
 	@echo ""
@@ -186,6 +188,16 @@ test:
 migrate:
 	$(COMPOSE) exec $(SVC_BACKEND) bash -lc "python manage.py migrate"
 
+makemigrations:
+	$(COMPOSE) exec $(SVC_BACKEND) bash -lc "python manage.py makemigrations"
+
+makemigrations-api:
+	$(COMPOSE) exec $(SVC_BACKEND) bash -lc "python manage.py makemigrations api"
+
+migrate-all: makemigrations-api migrate
+
+migrate-api: migrate-all
+
 createsuperuser:
 	$(COMPOSE) exec $(SVC_BACKEND) bash -lc "python manage.py createsuperuser"
 
@@ -201,6 +213,10 @@ dbshell:    ## Django dbshell (usa psql dentro del backend)
 
 psql:       ## psql directo en el contenedor Postgres
 	$(COMPOSE) exec $(SVC_PG) psql -U teg -d teg
+
+plan-outputs: ## Imprime outputs/status/last_action de un Plan (DB local). Uso: make plan-outputs PLAN_ID=<uuid>
+	@[ -n "$(PLAN_ID)" ] || { echo "❌ PLAN_ID vacío. Ej: make plan-outputs PLAN_ID=<uuid>"; exit 1; }
+	$(COMPOSE) exec -T $(SVC_BACKEND) bash -lc "python manage.py shell -c \"from api.models import Plan; p=Plan.objects.get(id='$(PLAN_ID)'); import json; print(json.dumps({'id':str(p.id),'status':p.status,'last_action':p.last_action,'applied':p.applied,'outputs':(p.outputs or {})}, indent=2, default=str))\""
 
 # =============================================================================
 # RUNBOOK B · PUBLICAR IMÁGENES EN ECR

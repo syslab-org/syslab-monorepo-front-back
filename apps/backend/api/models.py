@@ -28,6 +28,8 @@ class Plan(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    outputs = models.JSONField(blank=True, null=True, default=dict)
+    last_outputs = models.JSONField(blank=True, null=True, default=dict)
 
     def __str__(self) -> str:
         return f"{self.id} [{self.status}] {self.name}"

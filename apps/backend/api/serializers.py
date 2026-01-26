@@ -6,7 +6,7 @@ from .models import Plan
 class PlanListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Plan
-        fields = ("id", "name", "status", "task_id", "created_at")
+        fields = ("id", "name", "status", "applied", "last_action", "created_at")
         read_only_fields = fields
 
 
@@ -19,9 +19,14 @@ class PlanDetailSerializer(serializers.ModelSerializer):
             "status",
             "task_id",
             "created_at",
-            "payload",
-            "error",
             "updated_at",
+            "payload",
+            "outputs",
+            "last_outputs",
+            "applied",
+            "last_action",
+            "s3_key",
+            "error",
         )
         read_only_fields = fields
 
