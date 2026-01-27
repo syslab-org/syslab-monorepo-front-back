@@ -39,6 +39,19 @@ La arquitectura se compone de tres capas principales:
 	3.	Ejecuta los comandos terraform init, terraform plan y terraform apply (si es un despliegue real).
 	4.	Registra logs completos y estados en la base de datos y/o S3.
 
+3.2.1 Entorno DEV con Docker Compose
+    • Se estandarizó el entorno local con `tools/docker/compose.dev.yml` (frontend, backend, celery, redis, postgres, flower).
+    • El backend y celery montan:
+      - /tfstate y /tfwork como volúmenes para persistir estado y directorios de trabajo.
+      - ~/.aws dentro del contenedor (solo lectura) para usar perfiles AWS sin exponer claves en .env.
+    • Variables clave usadas en DEV:
+      - HOME=/home/app
+      - AWS_SDK_LOAD_CONFIG=1
+      - AWS_PROFILE=<perfil>
+      - AWS_DEFAULT_REGION=us-east-1
+      - ALLOW_LOCAL_APPLY=1
+    • Healthchecks: backend expone /healthz, postgres usa pg_isready, redis usa redis-cli ping, celery usa inspect ping.
+
 3.3 Capa de infraestructura (Terraform + AWS)
 	•	Terraform es el motor declarativo que interpreta la plantilla generada (main.tf).
 	•	Se crean recursos como:
@@ -52,7 +65,7 @@ La arquitectura se compone de tres capas principales:
 Hito	Descripción	Estado
 1. Deploy Simulado (simulate_only=true)	Permite ejecutar Terraform en modo plan sin aplicar cambios en AWS. Ideal para pruebas de validación y visualización previa.	✅ Completado
 2. Deploy real (simulate_only=false)	Permite ejecutar terraform apply con credenciales IAM reales. Se valida la presencia de variables de entorno y permisos antes de aplicar.	✅ Completado
-3. Destroy Plan desde UI	Se implementó un botón que llama un endpoint Django para ejecutar terraform destroy sobre el plan aplicado, solo si el estado es aplicado.	✅ Completado
+3. Destroy Plan desde UI	Se implementó el endpoint de destroy y se validó end-to-end: deploy real -> outputs -> destroy, destruyendo 6 recursos sin dejar huérfanos. El Plan queda con applied=false y outputs={} tras destroy.
 4. Formulario de VPC y Subnets con validación CIDR	Los formularios del canvas validan rangos IP válidos y aseguran coherencia entre VPC y subredes.	✅ Completado
 5. main.tf.j2 modular e inteligente (opción B)	La plantilla Terraform ahora interpreta dinámicamente el JSON del canvas, adaptándose a cualquier combinación de VPCs, subnets, routers o enlaces. Incluye instrumentación con outputs para capturar información clave tras apply.	✅ Completado
 6. NAT Gateway + IGW automáticos	El sistema detecta si una VPC requiere acceso a internet y genera automáticamente los recursos necesarios.	✅ Completado
@@ -125,8 +138,10 @@ _main_preview.txt
 	3.	Se ejecutan los comandos:
 
 terraform init
-terraform plan (si simulate_only=true)
-terraform apply (si simulate_only=false)
+terraform plan
+terraform apply (solo si simulate_only=false)
+terraform output -json (solo después de apply)
+terraform destroy (cuando se llama Destroy y simulate_only=false)
 
 
 	4.	Tras apply, se ejecuta terraform output -json para capturar outputs definidos en main.tf.j2.
@@ -145,7 +160,7 @@ La plantilla main.tf.j2 es dinámica: interpreta cualquier estructura JSON que c
 	•	Reproducibilidad:
 Cada despliegue genera archivos temporales reproducibles y logs auditables, lo que permite volver a ejecutar el mismo plan o destruirlo completamente.
 	•	Seguridad:
-Los despliegues reales (simulate_only=false) solo se permiten cuando hay credenciales IAM configuradas o se ejecuta dentro de un entorno autorizado (ECS/Render). Se bloquea apply y destroy si no existen credenciales válidas.
+Seguridad: Los despliegues reales (simulate_only=false) y el destroy solo se permiten cuando el entorno está autorizado. En local: requiere ALLOW_LOCAL_APPLY=1 y credenciales válidas vía AWS profile montado (AWS_SDK_LOAD_CONFIG=1 + AWS_PROFILE) o claves estáticas. En producción: permitido por task role (ECS/Render).
 	•	Instrumentación:
 La opción B de main.tf.j2 incluye outputs declarados que capturan información clave tras apply, los cuales se almacenan en el campo Plan.outputs luego de ejecutar terraform output -json.
 	•	Orquestación:
@@ -201,5 +216,6 @@ Para enero de 2026, se ha validado que el sistema cumple con los siguientes aspe
 - Se ha reforzado la seguridad bloqueando la ejecución de apply y destroy cuando no se detectan credenciales IAM válidas, evitando despliegues o destrucciones no autorizadas.
 - La interfaz de usuario refleja en tiempo real el estado de ejecución mediante polling al backend, mejorando la experiencia y transparencia del proceso.
 - El sistema está preparado para evolucionar hacia la persistencia del estado Terraform en almacenamiento remoto (S3), lo que permitirá escalabilidad y colaboración multiusuario.
+- Validación end-to-end comprobada por logs: apply real creó 6 recursos (VPC, Subnet, IGW, Route Table, Association, Route) y destroy eliminó los mismos 6 recursos, dejando el plan en SUCCESS con applied=false y outputs vacío.
 
 Este estado técnico validado confirma que la plataforma es apta para uso académico y experimental, con un diseño robusto que puede ser base para futuras extensiones y mejoras.
