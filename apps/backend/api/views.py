@@ -1,10 +1,7 @@
 # apps/backend/api/views.py
-import json
+import os
 from uuid import UUID
-from django.http import JsonResponse
 from django.utils import timezone
-from django.views.decorators.http import require_POST
-from django.views.decorators.csrf import csrf_exempt
 from celery.result import AsyncResult
 from .validators import validate_network_plan
 from .tasks import prueba_larga, process_network_plan, destroy_last_deploy
@@ -17,6 +14,30 @@ from rest_framework import status
 
 def _is_running(plan) -> bool:
     return plan.status == Plan.Status.RUNNING
+
+
+def _can_run_real_terraform() -> bool:
+    """Regla única para permitir acciones reales (apply/destroy).
+
+    - En producción/ECS: permitido por task role.
+    - En local: solo si ALLOW_LOCAL_APPLY=1 y existen AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY.
+    """
+    running_in_ecs = bool(
+        os.getenv("ECS_TASK_DEFINITION")
+        or os.getenv("ECS_CONTAINER_METADATA_URI")
+        or os.getenv("ECS_CONTAINER_METADATA_URI_V4")
+        or os.getenv("AWS_EXECUTION_ENV")
+    )
+    allow_local = os.getenv("ALLOW_LOCAL_APPLY") == "1"
+    # Caso A: keys directas en env
+    has_static_creds = bool(
+        os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY")
+    )
+    # Caso B: profile + config montado
+    has_profile = (
+        bool(os.getenv("AWS_PROFILE")) and os.getenv("AWS_SDK_LOAD_CONFIG") == "1"
+    )
+    return running_in_ecs or (allow_local and (has_static_creds or has_profile))
 
 
 @api_view(["GET"])
@@ -106,6 +127,20 @@ def deploy_plan(request, plan_id: UUID):
     body = request.data or {}
     simulate_only = bool(body.get("simulate_only", True))
 
+    # 3.1) Si es apply real, valida que el entorno permite acciones reales
+    if not simulate_only and not _can_run_real_terraform():
+        return Response(
+            {
+                "ok": False,
+                "error": (
+                    "Terraform apply BLOQUEADO: no hay credenciales IAM detectadas. "
+                    "En local requiere ALLOW_LOCAL_APPLY=1 y AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY. "
+                    "En producción, ejecutar en ECS con task role."
+                ),
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
+
     # 4) Valida payload guardado
 
     try:
@@ -121,7 +156,9 @@ def deploy_plan(request, plan_id: UUID):
     # 5) Marcar RUNNING
     plan.status = Plan.Status.RUNNING
     plan.error = ""
-    plan.save(update_fields=["status", "error"])
+    # Guardamos la intención (la ejecución real la confirma tasks.py)
+    plan.last_action = "apply" if not simulate_only else "plan"
+    plan.save(update_fields=["status", "error", "last_action"])
 
     # 6) Payload final para la task
     merged_payload = dict(plan.payload or {})
@@ -130,7 +167,8 @@ def deploy_plan(request, plan_id: UUID):
     # Persistimos el simulate_only en el payload (single source of truth)
     plan.updated_at = timezone.now()
     plan.payload = merged_payload
-    plan.save(update_fields=["updated_at", "payload"])
+    plan.last_action = "apply" if not simulate_only else "plan"
+    plan.save(update_fields=["updated_at", "payload", "last_action"])
 
     # 7) Amarre de firestore_vpc_id si faltaba
     firestore_vpc_id = (
@@ -174,12 +212,22 @@ def destroy_plan(request, plan_id: UUID):
         return Response(
             {"ok": False, "error": "Plan not found"}, status=status.HTTP_404_NOT_FOUND
         )
-    # 1.1) Solo se destruyen planes que hayan terminado OK
+    # 1.1) Solo se destruyen planes que hayan terminado OK y que realmente fueron aplicados
     if plan.status != Plan.Status.SUCCESS:
         return Response(
             {
                 "ok": False,
                 "error": f"No se puede destruir un plan en estado {plan.status}. Debe estar en SUCCESS.",
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    # Si nunca se aplicó (solo plan/simulación), no hay nada real que destruir
+    if not bool(getattr(plan, "applied", False)):
+        return Response(
+            {
+                "ok": False,
+                "error": "Este plan no fue aplicado (applied=False). No hay infraestructura real que destruir.",
             },
             status=status.HTTP_409_CONFLICT,
         )
@@ -203,6 +251,20 @@ def destroy_plan(request, plan_id: UUID):
             status=status.HTTP_409_CONFLICT,
         )
 
+    # 3.1) Destroy real también requiere credenciales
+    if not _can_run_real_terraform():
+        return Response(
+            {
+                "ok": False,
+                "error": (
+                    "Terraform destroy BLOQUEADO: no hay credenciales IAM detectadas. "
+                    "En local requiere ALLOW_LOCAL_APPLY=1 y AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY. "
+                    "En producción, ejecutar en ECS con task role."
+                ),
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
+
     # 4) Marcar RUNNING + lanzar task
     # Aseguramos consistencia: destruir siempre implica simulate_only=False
     merged_payload = dict(plan.payload or {})
@@ -212,7 +274,8 @@ def destroy_plan(request, plan_id: UUID):
 
     plan.status = Plan.Status.RUNNING
     plan.error = ""
-    plan.save(update_fields=["status", "error", "updated_at", "payload"])
+    plan.last_action = "destroy"
+    plan.save(update_fields=["status", "error", "updated_at", "payload", "last_action"])
 
     task = destroy_last_deploy.delay(str(plan.id))
     plan.task_id = task.id
@@ -234,8 +297,7 @@ def destroy_plan(request, plan_id: UUID):
 @permission_classes([AllowAny])
 def destroy_last_plan(request):
     plan = (
-        Plan.objects.filter(status=Plan.Status.SUCCESS)
-        .exclude(payload__simulate_only=True)
+        Plan.objects.filter(status=Plan.Status.SUCCESS, applied=True)
         .order_by("-updated_at")
         .first()
     )

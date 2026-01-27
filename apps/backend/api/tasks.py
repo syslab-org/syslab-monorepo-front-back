@@ -1,6 +1,13 @@
-# apps/backend/api/tasks.py
 from celery import shared_task
 import os, tempfile, subprocess, json, pathlib, glob
+
+import boto3
+from botocore.exceptions import (
+    ProfileNotFound,
+    NoCredentialsError,
+    NoRegionError,
+    ClientError,
+)
 from django.utils import timezone
 from django.db import transaction
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
@@ -87,6 +94,65 @@ def read_terraform_outputs_json(cwd: str) -> dict:
     return simplified
 
 
+def aws_creds_diagnostics() -> dict:
+    """Devuelve un diagnóstico simple sobre credenciales AWS dentro del container.
+
+    Soporta:
+    - ECS task role (AWS_EXECUTION_ENV / metadata)
+    - Static creds por env vars
+    - Shared config/credentials (AWS_PROFILE + ~/.aws montado)
+
+    Nota: esto NO imprime secretos; solo estado y errores.
+    """
+    profile = os.getenv("AWS_PROFILE")
+    region = os.getenv("AWS_DEFAULT_REGION") or os.getenv("AWS_REGION")
+    allow_local = os.getenv("ALLOW_LOCAL_APPLY") == "1"
+
+    running_in_ecs = bool(
+        os.getenv("ECS_TASK_DEFINITION")
+        or os.getenv("ECS_CONTAINER_METADATA_URI")
+        or os.getenv("ECS_CONTAINER_METADATA_URI_V4")
+        or os.getenv("AWS_EXECUTION_ENV")
+    )
+
+    has_static_creds = bool(
+        os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY")
+    )
+
+    return {
+        "running_in_ecs": running_in_ecs,
+        "allow_local_apply": allow_local,
+        "has_static_creds": has_static_creds,
+        "aws_profile": profile or "",
+        "aws_region": region or "",
+    }
+
+
+def can_call_aws_sts() -> tuple[bool, str]:
+    """Chequeo REAL: intenta llamar STS GetCallerIdentity.
+
+    Esto valida que boto3/botocore pueden resolver credenciales en el container.
+    """
+    profile = os.getenv("AWS_PROFILE")
+
+    try:
+        # Si hay profile, lo usamos. Si no, boto3 decide (env/role/etc).
+        session = boto3.Session(profile_name=profile) if profile else boto3.Session()
+        sts = session.client("sts")
+        _ = sts.get_caller_identity()
+        return True, "sts_ok"
+    except ProfileNotFound as e:
+        return False, f"profile_not_found: {e}"
+    except NoRegionError as e:
+        return False, f"no_region: {e}"
+    except NoCredentialsError as e:
+        return False, f"no_credentials: {e}"
+    except ClientError as e:
+        return False, f"client_error: {e}"
+    except Exception as e:
+        return False, f"unknown_error: {e}"
+
+
 # === TAREAS CELERY ===
 @shared_task(name="api.tasks.prueba_larga")
 def prueba_larga(n: int = 3):
@@ -117,20 +183,14 @@ def process_network_plan(self, plan_id: str, payload: dict):
     payload = normalize_payload(payload if isinstance(payload, dict) else {})
     simulate_only = payload["simulate_only"]
 
-    # --- Detecta entorno (para permitir apply real solo si hay credenciales válidas) ---
-    running_in_ecs = bool(
-        os.getenv("ECS_TASK_DEFINITION")
-        or os.getenv("ECS_CONTAINER_METADATA_URI")
-        or os.getenv("ECS_CONTAINER_METADATA_URI_V4")
-        or os.getenv("AWS_EXECUTION_ENV")
-    )
-    has_static_creds = bool(
-        os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY")
-    )
-    ALLOW_LOCAL = os.getenv("ALLOW_LOCAL_APPLY") == "1"
+    # --- Detecta entorno/credenciales (soporta AWS_PROFILE + ~/.aws montado) ---
+    diag = aws_creds_diagnostics()
+    ALLOW_LOCAL = diag["allow_local_apply"]
 
     # Solo exigimos credenciales si se va a hacer apply real.
-    creds_ok_for_apply = running_in_ecs or (ALLOW_LOCAL and has_static_creds)
+    # En ECS: ok por task role. En local: requiere ALLOW_LOCAL_APPLY=1 y credenciales resolubles.
+    sts_ok, sts_reason = can_call_aws_sts()
+    creds_ok_for_apply = bool(diag["running_in_ecs"] or (ALLOW_LOCAL and sts_ok))
 
     try:
         # === 1) Actualiza estado del Plan ===
@@ -213,7 +273,7 @@ def process_network_plan(self, plan_id: str, payload: dict):
 
         full_log += f"workdir={workdir}\n"
         full_log += f"simulate_only={simulate_only}\n"
-        full_log += f"running_in_ecs={running_in_ecs} has_static_creds={has_static_creds} ALLOW_LOCAL_APPLY={ALLOW_LOCAL}\n\n"
+        full_log += f"aws_diag={diag} sts_ok={sts_ok} sts_reason={sts_reason} ALLOW_LOCAL_APPLY={ALLOW_LOCAL}\n\n"
 
         # === 6) Terraform init ===
         proc = run(["terraform", "init", "-input=false", "-no-color"], cwd=workdir)
@@ -243,9 +303,10 @@ def process_network_plan(self, plan_id: str, payload: dict):
         if not simulate_only:
             if not creds_ok_for_apply:
                 msg = (
-                    "Terraform apply BLOQUEADO: sin credenciales IAM detectadas. "
-                    "Ejecuta en ECS (task role) o exporta ALLOW_LOCAL_APPLY=1 y "
-                    "AWS_ACCESS_KEY_ID/SECRET_ACCESS_KEY."
+                    "Terraform apply BLOQUEADO: no hay credenciales AWS resolubles en este container. "
+                    "En ECS se resuelve por task role. En local requiere ALLOW_LOCAL_APPLY=1 y credenciales disponibles "
+                    "(env vars o AWS_PROFILE + ~/.aws montado). "
+                    f"Diagnóstico: {diag} / sts_reason={sts_reason}"
                 )
                 full_log += f"\n[SEGURIDAD] {msg}\n"
 
@@ -285,7 +346,6 @@ def process_network_plan(self, plan_id: str, payload: dict):
             try:
                 tf_outputs = read_terraform_outputs_json(workdir)
                 plan_obj.outputs = tf_outputs
-                plan_obj.last_outputs = tf_outputs
             except Exception as oe:
                 full_log += f"\n[outputs] No pude leer terraform output -json: {oe}\n"
 
@@ -305,7 +365,6 @@ def process_network_plan(self, plan_id: str, payload: dict):
             try:
                 tf_outputs = read_terraform_outputs_json(workdir)
                 plan_obj.outputs = tf_outputs
-                plan_obj.last_outputs = tf_outputs
             except Exception:
                 pass
 
@@ -317,7 +376,6 @@ def process_network_plan(self, plan_id: str, payload: dict):
                 "applied",
                 "last_action",
                 "outputs",
-                "last_outputs",
                 "updated_at",
             ]
         )
@@ -371,18 +429,26 @@ def destroy_last_deploy(self, plan_id: str):
     plan = Plan.objects.get(id=plan_id)
     payload = plan.payload or {}
 
-    # --- Detecta entorno (para permitir destroy real solo si hay credenciales válidas) ---
-    running_in_ecs = bool(
-        os.getenv("ECS_TASK_DEFINITION")
-        or os.getenv("ECS_CONTAINER_METADATA_URI")
-        or os.getenv("ECS_CONTAINER_METADATA_URI_V4")
-        or os.getenv("AWS_EXECUTION_ENV")
-    )
-    has_static_creds = bool(
-        os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY")
-    )
-    ALLOW_LOCAL = os.getenv("ALLOW_LOCAL_APPLY") == "1"
-    creds_ok_for_apply = running_in_ecs or (ALLOW_LOCAL and has_static_creds)
+    # 🔒 Regla de dominio: solo destruir si fue aplicado realmente
+    if not plan.applied:
+        msg = "Destroy bloqueado: el plan nunca fue aplicado (applied=false)."
+        plan.error = msg
+        plan.updated_at = timezone.now()
+        plan.save(update_fields=["error", "updated_at"])
+        return {
+            "ok": False,
+            "error": msg,
+            "log": "",
+            "state_path": None,
+            "plan_id": str(plan.id),
+        }
+
+    # --- Detecta entorno/credenciales (soporta AWS_PROFILE + ~/.aws montado) ---
+    diag = aws_creds_diagnostics()
+    ALLOW_LOCAL = diag["allow_local_apply"]
+
+    sts_ok, sts_reason = can_call_aws_sts()
+    creds_ok_for_apply = bool(diag["running_in_ecs"] or (ALLOW_LOCAL and sts_ok))
 
     if payload.get("simulate_only", True):
         # No es un fallo del sistema: es un NO-OP (no hay nada que destruir).
@@ -400,7 +466,12 @@ def destroy_last_deploy(self, plan_id: str):
         }
 
     if not creds_ok_for_apply:
-        msg = "Terraform destroy BLOQUEADO: sin credenciales IAM detectadas."
+        msg = (
+            "Terraform destroy BLOQUEADO: no hay credenciales AWS resolubles en este container. "
+            "En ECS se resuelve por task role. En local requiere ALLOW_LOCAL_APPLY=1 y credenciales disponibles "
+            "(env vars o AWS_PROFILE + ~/.aws montado). "
+            f"Diagnóstico: {diag} / sts_reason={sts_reason}"
+        )
         plan.status = Plan.Status.FAILURE
         plan.error = msg
         plan.updated_at = timezone.now()
@@ -441,6 +512,7 @@ def destroy_last_deploy(self, plan_id: str):
         workdir = tempfile.mkdtemp(prefix="tf-destroy-")
 
         full_log += f"[destroy] workdir={workdir}\n"
+        full_log += f"aws_diag={diag} sts_ok={sts_ok} sts_reason={sts_reason} ALLOW_LOCAL_APPLY={ALLOW_LOCAL}\n"
 
         # 2) backend estable por plan_id (primero, para construir backend.tf)
         state_dir = f"/tfstate/{plan_id}"
@@ -495,7 +567,6 @@ def destroy_last_deploy(self, plan_id: str):
         plan.s3_key = s3_key if S3_BUCKET else ""
         plan.error = ""
         plan.applied = False
-        plan.last_outputs = plan.outputs or {}  # guarda outputs previos
         plan.outputs = {}
         plan.updated_at = timezone.now()
         plan.save(
@@ -506,7 +577,6 @@ def destroy_last_deploy(self, plan_id: str):
                 "applied",
                 "outputs",
                 "updated_at",
-                "last_outputs",
             ]
         )
 

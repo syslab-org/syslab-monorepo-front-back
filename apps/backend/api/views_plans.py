@@ -1,12 +1,10 @@
 # apps/backend/api/views_plans.py
-from rest_framework import viewsets, status
+from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.shortcuts import get_object_or_404
 
 from .models import Plan
 from .serializers import PlanListSerializer, PlanDetailSerializer
-from .tasks import process_network_plan
 
 
 class PlanViewSet(viewsets.ReadOnlyModelViewSet):
@@ -38,26 +36,4 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
                 "status": plan.status,
                 "outputs": plan.outputs or {},
             }
-        )
-
-    @action(detail=True, methods=["post"])
-    def deploy(self, request, pk=None):
-        plan = get_object_or_404(Plan, pk=pk)
-
-        # Encolar tarea de procesamiento con el payload del plan
-        async_res = process_network_plan.delay(
-            plan_id=str(plan.id), payload=plan.payload
-        )
-
-        # Actualizar estado y task_id
-        plan.status = Plan.Status.RUNNING
-
-        plan.task_id = async_res.id
-
-        plan.save(update_fields=["status", "task_id", "updated_at"])
-
-        #  Responder
-        return Response(
-            {"ok": True, "plan_id": str(plan.id), "task_id": async_res.id},
-            status=status.HTTP_202_ACCEPTED,
         )
