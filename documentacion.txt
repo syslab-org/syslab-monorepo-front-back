@@ -71,6 +71,9 @@ Hito	Descripción	Estado
 6. NAT Gateway + IGW automáticos	El sistema detecta si una VPC requiere acceso a internet y genera automáticamente los recursos necesarios.	✅ Completado
 7. Transit Gateway y enlaces tipo tgw-attach	Se añadió soporte para routers lógicos (TGW) que permiten conectar múltiples VPCs en topologías complejas.	✅ Completado
 8. Persistencia y logging avanzado	Cada ejecución almacena los logs, el estado del plan y su relación con el usuario, permitiendo auditoría y análisis posterior. Se implementó persistencia local del estado Terraform en volumen /tfstate, facilitando destrucción reproducible.	✅ Completado
+9. UX profesional de PlanList y PlanDetail
+Se redefinió el modelo visual de planes, diferenciando claramente entre estado de ejecución (SUCCESS / FAILURE / RUNNING) y estado de ciclo de vida (PREVIEW / ACTIVE / DESTROYED). 
+Se eliminaron botones y logs duplicados, dejando una única fuente de verdad para acciones y logs del plan.	✅ Completado
 
 ⸻
 
@@ -87,10 +90,13 @@ Hito	Descripción	Estado
 	•	Ese JSON se envía al backend (endpoint /api/network/plan/).
 	•	Se crea un registro Plan en la base de datos y una tarea Celery asíncrona se encarga de ejecutar Terraform.
 	3.	Desde el panel “Plans” puede:
-	•	Ver el estado (PENDING, RUNNING, SUCCESS, FAILURE).
-	•	Ver logs detallados de la ejecución de Terraform.
-	•	Re-lanzar el plan (deploy real o simulado).
-	•	Destruir la infraestructura desplegada (botón “Destroy”).
+	•	Ver el estado de la última ejecución (SUCCESS / FAILURE).
+	•	Ver el estado del ciclo de vida del plan:
+  		- PREVIEW: nunca aplicado.
+  		- ACTIVE: infraestructura desplegada actualmente.
+  		- DESTROYED: infraestructura destruida, plan histórico válido.
+	•	Ver un único log del plan, correspondiente siempre a la última ejecución (deploy o destroy).
+	•	Ejecutar Deploy o Destroy según corresponda, sin ambigüedades.
 
 ⸻
 
@@ -165,6 +171,9 @@ Seguridad: Los despliegues reales (simulate_only=false) y el destroy solo se per
 La opción B de main.tf.j2 incluye outputs declarados que capturan información clave tras apply, los cuales se almacenan en el campo Plan.outputs luego de ejecutar terraform output -json.
 	•	Orquestación:
 Celery actúa como orquestador real del ciclo de vida Terraform, gestionando estados, logs, y secuencia de comandos init → plan → apply → output → destroy.
+	•	Claridad semántica (UX-first):
+  	La interfaz distingue explícitamente entre “plan”, “ejecución” y “estado de infraestructura”, evitando confusión entre logs, botones o estados. 
+  	Esto permite escalar el sistema sin romper el modelo mental del usuario.
 
 ⸻
 
@@ -185,7 +194,8 @@ El sistema actualmente permite:
 9. Próximos hitos
 
 Hito próximo	Descripción
-1. Restricción de destroy solo si Plan.applied=true	Implementar validación en backend y UI para impedir destrucción de planes no aplicados, asegurando consistencia.
+1. Historial de ejecuciones por plan
+   Persistir múltiples ejecuciones (deploy / destroy) por plan, permitiendo visualizar un timeline histórico y preparar el sistema para rollback, diff de outputs y auditoría avanzada.
 2. UI polling de estado RUNNING desde base de datos	Mejorar experiencia de usuario mostrando actualización en tiempo real del estado de ejecución del plan.
 3. Persistencia futura de estado Terraform en S3	Desarrollar backend para almacenar y recuperar el state Terraform en S3, permitiendo compartir estado entre sesiones y escalabilidad en entornos distribuidos.
 4. Añadir validaciones visuales en el canvas	Detectar errores en tiempo real (CIDR solapados, enlaces inválidos, etc.).
@@ -217,5 +227,6 @@ Para enero de 2026, se ha validado que el sistema cumple con los siguientes aspe
 - La interfaz de usuario refleja en tiempo real el estado de ejecución mediante polling al backend, mejorando la experiencia y transparencia del proceso.
 - El sistema está preparado para evolucionar hacia la persistencia del estado Terraform en almacenamiento remoto (S3), lo que permitirá escalabilidad y colaboración multiusuario.
 - Validación end-to-end comprobada por logs: apply real creó 6 recursos (VPC, Subnet, IGW, Route Table, Association, Route) y destroy eliminó los mismos 6 recursos, dejando el plan en SUCCESS con applied=false y outputs vacío.
+- La experiencia de usuario fue refinada para eliminar ambigüedades: existe un único log por plan (última ejecución), botones de acción contextuales (Deploy o Destroy) y una representación clara del estado real de la infraestructura.
 
 Este estado técnico validado confirma que la plataforma es apta para uso académico y experimental, con un diseño robusto que puede ser base para futuras extensiones y mejoras.

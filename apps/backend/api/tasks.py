@@ -1,5 +1,5 @@
 from celery import shared_task
-import os, tempfile, subprocess, json, pathlib, glob
+import os, tempfile, subprocess, json, pathlib
 
 import boto3
 from botocore.exceptions import (
@@ -17,27 +17,12 @@ from provisioning.terraform_runner import cleanup  # solo usamos cleanup aquí
 
 # === CONFIGURACIONES GLOBALES ===
 TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "provisioning" / "templates"
-S3_BUCKET = os.getenv("S3_PLANS_BUCKET", "")
 
 
 # === FUNCIONES AUXILIARES ===
 def run(cmd, cwd):
     """Ejecuta un comando y captura stdout/stderr sin levantar excepción."""
     return subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, check=False)
-
-
-def _maybe_upload_to_s3(key: str, content: str):
-    """Sube logs a S3 si está configurado."""
-    if not S3_BUCKET:
-        return
-    try:
-        import boto3
-
-        boto3.client("s3").put_object(
-            Bucket=S3_BUCKET, Key=key, Body=content.encode("utf-8")
-        )
-    except Exception:
-        pass
 
 
 def normalize_payload(payload: dict) -> dict:
@@ -208,8 +193,24 @@ def process_network_plan(self, plan_id: str, payload: dict):
 
             plan_obj.status = Plan.Status.RUNNING
             plan_obj.task_id = self.request.id
+            # ✅ Persistimos el task_id específico del último deploy (plan/apply)
+            plan_obj.last_deploy_task_id = self.request.id
             plan_obj.updated_at = timezone.now()
-            plan_obj.save(update_fields=["status", "task_id", "payload", "updated_at"])
+            plan_obj.last_log = ""
+            plan_obj.last_log_updated_at = timezone.now()
+            plan_obj.last_action = "apply" if not simulate_only else "plan"
+            plan_obj.save(
+                update_fields=[
+                    "status",
+                    "task_id",
+                    "last_deploy_task_id",
+                    "payload",
+                    "updated_at",
+                    "last_log",
+                    "last_log_updated_at",
+                    "last_action",
+                ]
+            )
 
         # === 2) Renderiza main.tf (Jinja) ===
         env = Environment(
@@ -309,7 +310,9 @@ def process_network_plan(self, plan_id: str, payload: dict):
                     f"Diagnóstico: {diag} / sts_reason={sts_reason}"
                 )
                 full_log += f"\n[SEGURIDAD] {msg}\n"
-
+                # Persistimos logs en DB para depuración desde el frontend
+                plan_obj.last_log = full_log
+                plan_obj.last_log_updated_at = timezone.now()
                 # Marca el plan como FAILURE (apply intentado sin credenciales)
                 plan_obj.status = Plan.Status.FAILURE
                 plan_obj.error = msg
@@ -322,6 +325,8 @@ def process_network_plan(self, plan_id: str, payload: dict):
                         "error",
                         "applied",
                         "last_action",
+                        "last_log",
+                        "last_log_updated_at",
                         "updated_at",
                     ]
                 )
@@ -350,11 +355,12 @@ def process_network_plan(self, plan_id: str, payload: dict):
                 full_log += f"\n[outputs] No pude leer terraform output -json: {oe}\n"
 
         # === 9) Guarda logs y marca SUCCESS ===
-        s3_key = f"plans/{plan_obj.id}.log"
-        _maybe_upload_to_s3(s3_key, full_log)
+        # Persistimos logs en DB para depuración desde el frontend
+        plan_obj.last_log = full_log
+        plan_obj.last_log_updated_at = timezone.now()
 
         plan_obj.status = Plan.Status.SUCCESS
-        plan_obj.s3_key = s3_key if S3_BUCKET else ""
+        plan_obj.s3_key = ""
         plan_obj.error = ""
         plan_obj.applied = applied
         plan_obj.last_action = "apply" if applied else "plan"
@@ -376,6 +382,8 @@ def process_network_plan(self, plan_id: str, payload: dict):
                 "applied",
                 "last_action",
                 "outputs",
+                "last_log",
+                "last_log_updated_at",
                 "updated_at",
             ]
         )
@@ -384,26 +392,28 @@ def process_network_plan(self, plan_id: str, payload: dict):
             "ok": True,
             "plan_id": str(plan_obj.id),
             "applied": applied,
-            "s3_key": plan_obj.s3_key,
+            "s3_key": "",
             "log": full_log,
         }
 
     except Exception as e:
         # === Error general ===
-        try:
-            if full_log:
-                _maybe_upload_to_s3(
-                    f"plans/{str(plan_obj.id) if plan_obj else 'no-plan'}.error.log",
-                    full_log + f"\n\nERROR: {e}\n",
-                )
-        except Exception:
-            pass
-
         if plan_obj:
+            # Persistimos logs en DB incluso en fallo
+            plan_obj.last_log = full_log + f"\n\nERROR: {e}\n"
+            plan_obj.last_log_updated_at = timezone.now()
             plan_obj.status = Plan.Status.FAILURE
             plan_obj.error = str(e)
             plan_obj.updated_at = timezone.now()
-            plan_obj.save(update_fields=["status", "error", "updated_at"])
+            plan_obj.save(
+                update_fields=[
+                    "status",
+                    "error",
+                    "last_log",
+                    "last_log_updated_at",
+                    "updated_at",
+                ]
+            )
 
         return {
             "ok": False,
@@ -433,8 +443,12 @@ def destroy_last_deploy(self, plan_id: str):
     if not plan.applied:
         msg = "Destroy bloqueado: el plan nunca fue aplicado (applied=false)."
         plan.error = msg
+        plan.last_log = full_log + msg
+        plan.last_log_updated_at = timezone.now()
         plan.updated_at = timezone.now()
-        plan.save(update_fields=["error", "updated_at"])
+        plan.save(
+            update_fields=["error", "last_log", "last_log_updated_at", "updated_at"]
+        )
         return {
             "ok": False,
             "error": msg,
@@ -454,9 +468,13 @@ def destroy_last_deploy(self, plan_id: str):
         # No es un fallo del sistema: es un NO-OP (no hay nada que destruir).
         msg = "Plan en modo simulación: no hay infraestructura que destruir."
         plan.error = msg
+        plan.last_log = full_log + msg
+        plan.last_log_updated_at = timezone.now()
         plan.updated_at = timezone.now()
         # OJO: NO cambiamos status a FAILURE
-        plan.save(update_fields=["error", "updated_at"])
+        plan.save(
+            update_fields=["error", "last_log", "last_log_updated_at", "updated_at"]
+        )
         return {
             "ok": False,
             "error": msg,
@@ -474,8 +492,18 @@ def destroy_last_deploy(self, plan_id: str):
         )
         plan.status = Plan.Status.FAILURE
         plan.error = msg
+        plan.last_log = full_log + msg
+        plan.last_log_updated_at = timezone.now()
         plan.updated_at = timezone.now()
-        plan.save(update_fields=["status", "error", "updated_at"])
+        plan.save(
+            update_fields=[
+                "status",
+                "error",
+                "last_log",
+                "last_log_updated_at",
+                "updated_at",
+            ]
+        )
         return {
             "ok": False,
             "error": msg,
@@ -494,7 +522,11 @@ def destroy_last_deploy(self, plan_id: str):
     plan.error = ""
     plan.s3_key = ""
     plan.task_id = self.request.id
+    # ✅ Persistimos el task_id específico del último destroy
+    plan.last_destroy_task_id = self.request.id
     plan.last_action = "destroy"
+    plan.last_log = ""
+    plan.last_log_updated_at = timezone.now()
     plan.updated_at = timezone.now()
     plan.save(
         update_fields=[
@@ -502,7 +534,10 @@ def destroy_last_deploy(self, plan_id: str):
             "error",
             "s3_key",
             "task_id",
+            "last_destroy_task_id",
             "last_action",
+            "last_log",
+            "last_log_updated_at",
             "updated_at",
         ]
     )
@@ -560,11 +595,10 @@ def destroy_last_deploy(self, plan_id: str):
         if p.returncode != 0:
             raise RuntimeError("terraform destroy failed")
 
-        s3_key = f"plans/{plan.id}.destroy.log"
-        _maybe_upload_to_s3(s3_key, full_log)
-
+        plan.last_log = full_log
+        plan.last_log_updated_at = timezone.now()
         plan.status = Plan.Status.SUCCESS
-        plan.s3_key = s3_key if S3_BUCKET else ""
+        plan.s3_key = ""
         plan.error = ""
         plan.applied = False
         # Importante: NO borramos outputs en destroy.
@@ -578,6 +612,8 @@ def destroy_last_deploy(self, plan_id: str):
                 "error",
                 "applied",
                 "last_action",
+                "last_log",
+                "last_log_updated_at",
                 "updated_at",
             ]
         )
@@ -587,24 +623,26 @@ def destroy_last_deploy(self, plan_id: str):
             "log": full_log,
             "state_path": state_path,
             "plan_id": str(plan.id),
-            "s3_key": plan.s3_key,
+            "s3_key": "",
         }
 
     except Exception as e:
-        try:
-            if full_log:
-                _maybe_upload_to_s3(
-                    f"plans/{str(plan.id)}.destroy.error.log",
-                    full_log + f"\n\nERROR: {e}\n",
-                )
-        except Exception:
-            pass
-
+        plan.last_log = full_log + f"\n\nERROR: {e}\n"
+        plan.last_log_updated_at = timezone.now()
         plan.status = Plan.Status.FAILURE
         plan.error = str(e)
         plan.last_action = "destroy"
         plan.updated_at = timezone.now()
-        plan.save(update_fields=["status", "error", "last_action", "updated_at"])
+        plan.save(
+            update_fields=[
+                "status",
+                "error",
+                "last_action",
+                "last_log",
+                "last_log_updated_at",
+                "updated_at",
+            ]
+        )
         return {"ok": False, "error": str(e), "log": full_log}
 
     finally:
