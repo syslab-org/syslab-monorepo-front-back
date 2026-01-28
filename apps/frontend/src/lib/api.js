@@ -36,7 +36,7 @@ export const api = {
   getPlan: (id) => jsonFetch(`/api/network/plans/${id}/`),
   getPlanPayload: (id) => jsonFetch(`/api/network/plans/${id}/payload/`),
   getPlanOutputs: (id) => jsonFetch(`/api/network/plans/${id}/outputs/`),
-
+  getPlanLogs: (id) => jsonFetch(`/api/network/plans/${id}/logs/`),
   createPlan(plan) {
     return jsonFetch(`/api/network/plan/`, {
       method: "POST",

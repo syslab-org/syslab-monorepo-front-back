@@ -41,6 +41,9 @@ class PlanListSerializer(serializers.ModelSerializer):
 
 
 class PlanDetailSerializer(serializers.ModelSerializer):
+    simulate_only = serializers.SerializerMethodField()
+    can_destroy = serializers.SerializerMethodField()
+
     class Meta:
         model = Plan
         fields = (
@@ -54,10 +57,32 @@ class PlanDetailSerializer(serializers.ModelSerializer):
             "outputs",
             "applied",
             "last_action",
-            "s3_key",
             "error",
+            "simulate_only",
+            "can_destroy",
+            "last_deploy_task_id",
+            "last_destroy_task_id",
         )
         read_only_fields = fields
+
+    def get_simulate_only(self, obj):
+        payload = getattr(obj, "payload", None) or {}
+        if isinstance(payload, dict):
+            return bool(payload.get("simulate_only", True))
+        return True
+
+    def get_can_destroy(self, obj):
+        # Regla única: solo se puede destruir si el plan terminó OK, fue aplicado real,
+        # y NO está en modo simulación.
+        if getattr(obj, "status", None) != Plan.Status.SUCCESS:
+            return False
+        if not bool(getattr(obj, "applied", False)):
+            return False
+        if self.get_simulate_only(obj):
+            return False
+        if getattr(obj, "last_action", "") == "destroy":
+            return False
+        return True
 
 
 class SubnetSerializer(serializers.Serializer):
@@ -108,7 +133,9 @@ class LinkSerializer(serializers.Serializer):
     type = serializers.ChoiceField(choices=["peering", "tgw-attach"])
 
     # --- Campos para PEERING ---
-    via_router_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    via_router_id = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True
+    )
     vpc_a_id = serializers.CharField(required=False)
     vpc_b_id = serializers.CharField(required=False)
 
@@ -121,14 +148,22 @@ class LinkSerializer(serializers.Serializer):
         t = data.get("type")
 
         if t == "peering":
-            missing = [f for f in ("via_router_id", "vpc_a_id", "vpc_b_id") if not data.get(f)]
+            missing = [
+                f for f in ("via_router_id", "vpc_a_id", "vpc_b_id") if not data.get(f)
+            ]
             if missing:
-                raise serializers.ValidationError({f: "This field is required for peering link" for f in missing})
+                raise serializers.ValidationError(
+                    {f: "This field is required for peering link" for f in missing}
+                )
 
         elif t == "tgw-attach":
-            missing = [f for f in ("router_id", "vpc_id", "subnet_names") if not data.get(f)]
+            missing = [
+                f for f in ("router_id", "vpc_id", "subnet_names") if not data.get(f)
+            ]
             if missing:
-                raise serializers.ValidationError({f: "This field is required for tgw-attach link" for f in missing})
+                raise serializers.ValidationError(
+                    {f: "This field is required for tgw-attach link" for f in missing}
+                )
 
         return data
 

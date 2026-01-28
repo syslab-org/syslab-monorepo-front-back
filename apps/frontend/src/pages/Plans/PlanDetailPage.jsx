@@ -38,7 +38,13 @@ function computeLifecycle(plan) {
   const status = plan?.status;
   const lastAction = plan?.last_action || plan?.lastAction || '';
   const applied = Boolean(plan?.applied);
-  const simulateOnly = Boolean(plan?.payload?.simulate_only ?? plan?.payload?.simulateOnly ?? true);
+  const simulateOnly = Boolean(
+    plan?.simulate_only ??
+    plan?.simulateOnly ??
+    plan?.payload?.simulate_only ??
+    plan?.payload?.simulateOnly ??
+    true
+  );
 
   // 1) Preview gana siempre si es simulate_only (no hay infraestructura real)
   if (simulateOnly) {
@@ -135,7 +141,7 @@ export default function PlanDetailPage() {
   const canDeploy = !isRunning;
 
   // Destroy permitido cuando está ACTIVE + SUCCESS (regla backend), y no está corriendo
-  const canDestroy = !isRunning && lifecycle.allowDestroy && plan?.status === 'SUCCESS';
+  const canDestroy = !isRunning && (plan?.can_destroy ?? lifecycle.allowDestroy) && plan?.status === 'SUCCESS';
 
   const fetchPlan = useCallback(
     async ({ resetLoading = false } = {}) => {
@@ -220,6 +226,26 @@ export default function PlanDetailPage() {
     }
   }
 
+  async function fetchPlanLogs() {
+    if (!id) return;
+    setErr(null);
+
+    try {
+      const resp = await api.getPlanLogs(id);
+      const text = resp?.log ?? '';
+      setLogText(text && String(text).trim().length > 0 ? text : '(sin log guardado)');
+    } catch (e) {
+      // Fallback: intenta leer el log desde task_status si existe task_id
+      if (plan?.task_id) {
+        await fetchTaskLog(plan.task_id);
+        return;
+      }
+      const backendMsg = e?.response?.data?.error || e?.response?.data?.detail;
+      const msg = backendMsg || e?.message || String(e);
+      setErr(`No pude cargar logs: ${msg}`);
+    }
+  }
+
   useEffect(() => {
     // reset de prevStatus cuando cambia el id
     prevStatusRef.current = null;
@@ -229,6 +255,14 @@ export default function PlanDetailPage() {
       if (msgTimerRef.current) clearTimeout(msgTimerRef.current);
     };
   }, [fetchPlan, id]);
+
+  useEffect(() => {
+    if (tab !== 'logs') return;
+    if (logText) return;
+    // intenta cargar el log persistido automáticamente al entrar al tab
+    fetchPlanLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, id]);
 
   useEffect(() => {
     // Auto-oculta el mensaje de término (SUCCESS/FAILURE) luego de 5s.
@@ -325,9 +359,29 @@ export default function PlanDetailPage() {
 
         <Chip
           size="small"
-          label={Boolean(plan?.payload?.simulate_only ?? plan?.payload?.simulateOnly ?? true) ? 'PREVIEW' : 'REAL'}
+          label={
+            Boolean(
+              plan?.simulate_only ??
+              plan?.simulateOnly ??
+              plan?.payload?.simulate_only ??
+              plan?.payload?.simulateOnly ??
+              true
+            )
+              ? 'PREVIEW'
+              : 'REAL'
+          }
           variant="outlined"
-          color={Boolean(plan?.payload?.simulate_only ?? plan?.payload?.simulateOnly ?? true) ? 'info' : 'success'}
+          color={
+            Boolean(
+              plan?.simulate_only ??
+              plan?.simulateOnly ??
+              plan?.payload?.simulate_only ??
+              plan?.payload?.simulateOnly ??
+              true
+            )
+              ? 'info'
+              : 'success'
+          }
         />
 
         <Button variant="outlined" onClick={() => navigate('/admin/plans')}>
@@ -417,22 +471,28 @@ export default function PlanDetailPage() {
                 label={applyMode ? 'Modo APPLY (real)' : 'Modo PLAN (preview)'}
               />
 
-              <Button
-                variant="contained"
-                onClick={handleDeploy}
-                disabled={!canDeploy || busy}
-              >
-                {deploying ? 'Lanzando…' : applyMode ? 'Deploy (APPLY)' : 'Deploy (PLAN)'}
-              </Button>
+              {/* Solo mostrar Deploy si lifecycle.key !== 'ACTIVE' */}
+              {lifecycle.key !== 'ACTIVE' && (
+                <Button
+                  variant="contained"
+                  onClick={handleDeploy}
+                  disabled={!canDeploy || busy}
+                >
+                  {deploying ? 'Lanzando…' : applyMode ? 'Deploy (APPLY)' : 'Deploy (PLAN)'}
+                </Button>
+              )}
 
-              <Button
-                variant="outlined"
-                color="error"
-                onClick={handleDestroy}
-                disabled={!canDestroy || busy}
-              >
-                {destroying ? 'Destruyendo…' : 'Destroy'}
-              </Button>
+              {/* Solo mostrar Destroy si lifecycle.key === 'ACTIVE' */}
+              {lifecycle.key === 'ACTIVE' && (
+                <Button
+                  variant="outlined"
+                  color="error"
+                  onClick={handleDestroy}
+                  disabled={!canDestroy || busy}
+                >
+                  {destroying ? 'Destruyendo…' : 'Destroy'}
+                </Button>
+              )}
             </Stack>
           </Stack>
 
@@ -476,6 +536,35 @@ export default function PlanDetailPage() {
                 Este detalle sirve para entender <b>qué pasó</b> (status), <b>qué existe hoy</b> (lifecycle) y
                 <b> qué acciones son válidas</b> (deploy/destroy).
               </Typography>
+
+              {/* Microcopy aclaratorio */}
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                El estado indica la última ejecución; el lifecycle indica qué existe hoy en AWS.
+              </Typography>
+
+              {/* Bloque Última ejecución */}
+              <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Última ejecución
+                </Typography>
+                <Divider sx={{ mb: 1 }} />
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                  <Stack spacing={0.5}>
+                    <Typography variant="body2" color="text.secondary">
+                      Última acción:{' '}
+                      <b>{plan?.last_action || '—'}</b>
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Resultado:{' '}
+                      <Chip size="small" {...statusChipProps(plan?.status)} />
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Fecha:{' '}
+                      <b>{formatDateTime(plan?.updated_at)}</b>
+                    </Typography>
+                  </Stack>
+                </Stack>
+              </Paper>
             </Box>
           )}
 
@@ -550,56 +639,45 @@ export default function PlanDetailPage() {
             <Box sx={{ p: 3 }}>
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
                 <Box sx={{ flex: 1 }}>
-                  <Typography variant="h6">Logs</Typography>
+                  <Typography variant="h6">Logs del plan</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Logs del último deploy o destroy (según el task_id).
+                    El log corresponde siempre a la última ejecución (deploy o destroy).
                   </Typography>
                 </Box>
-
-                <Stack direction="row" spacing={1} flexWrap="wrap">
-                  <Button
-                    variant="outlined"
-                    onClick={() => fetchTaskLog(plan?.task_id)}
-                    disabled={!plan?.task_id}
-                  >
-                    Ver log (deploy)
-                  </Button>
-
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    onClick={() => fetchTaskLog(lastDestroyTaskId)}
-                    disabled={!lastDestroyTaskId}
-                  >
-                    Ver log (destroy)
-                  </Button>
-                </Stack>
+                <Button variant="contained" onClick={fetchPlanLogs}>
+                  Ver log del plan
+                </Button>
               </Stack>
 
               <Box sx={{ mt: 2 }}>
                 {!logText && (
                   <Alert severity="info">
-                    Selecciona “Ver log” para cargar el texto del log.
+                    Haz clic en “Ver log del plan” para mostrar el log de la última ejecución.
                   </Alert>
                 )}
 
                 {logText && (
-                  <Paper
-                    variant="outlined"
-                    sx={{ mt: 2, p: 2, bgcolor: 'background.default', overflow: 'auto' }}
-                  >
-                    <Box
-                      component="pre"
-                      sx={{
-                        m: 0,
-                        whiteSpace: 'pre-wrap',
-                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                        fontSize: 12,
-                      }}
+                  <>
+                    <Alert severity="info" sx={{ mb: 1 }}>
+                      Este log corresponde a la última ejecución del plan.
+                    </Alert>
+                    <Paper
+                      variant="outlined"
+                      sx={{ mt: 2, p: 2, bgcolor: 'background.default', overflow: 'auto' }}
                     >
-                      {logText}
-                    </Box>
-                  </Paper>
+                      <Box
+                        component="pre"
+                        sx={{
+                          m: 0,
+                          whiteSpace: 'pre-wrap',
+                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                          fontSize: 12,
+                        }}
+                      >
+                        {logText}
+                      </Box>
+                    </Paper>
+                  </>
                 )}
               </Box>
             </Box>
