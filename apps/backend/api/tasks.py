@@ -567,7 +567,9 @@ def destroy_last_deploy(self, plan_id: str):
         plan.s3_key = s3_key if S3_BUCKET else ""
         plan.error = ""
         plan.applied = False
-        plan.outputs = {}
+        # Importante: NO borramos outputs en destroy.
+        # Se conservan como "últimos outputs cuando estuvo ACTIVE" para auditoría/debug.
+        plan.last_action = "destroy"
         plan.updated_at = timezone.now()
         plan.save(
             update_fields=[
@@ -575,7 +577,7 @@ def destroy_last_deploy(self, plan_id: str):
                 "s3_key",
                 "error",
                 "applied",
-                "outputs",
+                "last_action",
                 "updated_at",
             ]
         )
