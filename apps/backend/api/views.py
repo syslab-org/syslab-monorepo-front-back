@@ -16,6 +16,24 @@ def _is_running(plan) -> bool:
     return plan.status == Plan.Status.RUNNING
 
 
+def _plan_running_conflict(plan: Plan) -> Response:
+    """Respuesta estándar cuando un Plan ya está en ejecución.
+
+    Centraliza el mensaje/shape para que el frontend pueda manejarlo de forma consistente.
+    """
+    return Response(
+        {
+            "ok": False,
+            "error": "Plan en ejecución. Espera a que termine antes de lanzar otra acción.",
+            "code": "PLAN_RUNNING",
+            "plan_id": str(plan.id),
+            "status": plan.status,
+            "task_id": plan.task_id,
+        },
+        status=status.HTTP_409_CONFLICT,
+    )
+
+
 def _can_run_real_terraform() -> bool:
     """Regla única para permitir acciones reales (apply/destroy).
 
@@ -114,13 +132,7 @@ def deploy_plan(request, plan_id: UUID):
 
     # 2) Bloqueo si está corriendo
     if _is_running(plan):
-        return Response(
-            {
-                "ok": False,
-                "error": "Plan en ejecución. Espera a que termine antes de lanzar otra acción.",
-            },
-            status=status.HTTP_409_CONFLICT,
-        )
+        return _plan_running_conflict(plan)
 
     # 3) Leer flag simulate_only (default True)
 
@@ -233,13 +245,7 @@ def destroy_plan(request, plan_id: UUID):
         )
     # 2) Bloqueo si está corriendo
     if _is_running(plan):
-        return Response(
-            {
-                "ok": False,
-                "error": "Plan en ejecución. Espera a que termine antes de lanzar otra acción.",
-            },
-            status=status.HTTP_409_CONFLICT,
-        )
+        return _plan_running_conflict(plan)
 
     # 3) Bloqueo si es simulación (no hay infraestructura real que destruir)
     if bool((plan.payload or {}).get("simulate_only", True)):

@@ -299,7 +299,26 @@ export default function PlanDetailPage() {
         await fetchTaskLog(res.task_id);
       }
     } catch (e) {
-      setErr(`Fallo al iniciar deploy: ${e?.message || String(e)}`);
+      const status = e?.status;
+      const backendMsg =
+        e?.data?.error ||
+        e?.data?.detail ||
+        (typeof e?.data === 'string' ? e.data : null);
+
+      // If the backend says "conflict" (already running), treat it as info and refresh status
+      if (status === 409) {
+        setErr(null);
+        setMsg({
+          severity: 'info',
+          text:
+            backendMsg ||
+            'Plan en ejecución. Espera a que termine antes de lanzar otra acción. (Actualizando estado…)',
+        });
+        await fetchPlan();
+        return;
+      }
+
+      setErr(`Fallo al iniciar deploy: ${backendMsg || e?.message || String(e)}`);
     } finally {
       setDeploying(false);
     }
@@ -336,7 +355,25 @@ export default function PlanDetailPage() {
         await fetchTaskLog(tid);
       }
     } catch (e) {
-      setErr(`Fallo al iniciar destroy: ${e?.message || String(e)}`);
+      const status = e?.status;
+      const backendMsg =
+        e?.data?.error ||
+        e?.data?.detail ||
+        (typeof e?.data === 'string' ? e.data : null);
+
+      if (status === 409) {
+        setErr(null);
+        setMsg({
+          severity: 'info',
+          text:
+            backendMsg ||
+            'Plan en ejecución. Espera a que termine antes de lanzar otra acción. (Actualizando estado…)',
+        });
+        await fetchPlan();
+        return;
+      }
+
+      setErr(`Fallo al iniciar destroy: ${backendMsg || e?.message || String(e)}`);
     } finally {
       setDestroying(false);
     }
@@ -476,7 +513,7 @@ export default function PlanDetailPage() {
                 <Button
                   variant="contained"
                   onClick={handleDeploy}
-                  disabled={!canDeploy || busy}
+                  disabled={!canDeploy || busy || isRunning}
                 >
                   {deploying ? 'Lanzando…' : applyMode ? 'Deploy (APPLY)' : 'Deploy (PLAN)'}
                 </Button>

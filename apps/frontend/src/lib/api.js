@@ -14,7 +14,12 @@ async function jsonFetch(path, options = {}) {
   const body = isJSON ? await res.json().catch(() => ({})) : await res.text();
   if (!res.ok) {
     const msg = isJSON ? JSON.stringify(body) : String(body).slice(0, 300);
-    throw new Error(`HTTP ${res.status} ${res.statusText} - ${msg}`);
+    const err = new Error(`HTTP ${res.status} ${res.statusText} - ${msg}`);
+    // Attach useful context for callers (e.g., PlanDetailPage handling 409 conflicts)
+    err.status = res.status;
+    err.statusText = res.statusText;
+    err.data = body;
+    throw err;
   }
   return body;
 }
