@@ -1,13 +1,43 @@
-# apps/backend/api/serializers.py
 from rest_framework import serializers
 from .models import Plan
 
 
 class PlanListSerializer(serializers.ModelSerializer):
+    simulate_only = serializers.SerializerMethodField()
+    can_destroy = serializers.SerializerMethodField()
+
     class Meta:
         model = Plan
-        fields = ("id", "name", "status", "applied", "last_action", "created_at")
+        fields = (
+            "id",
+            "name",
+            "status",
+            "applied",
+            "last_action",
+            "created_at",
+            "simulate_only",
+            "can_destroy",
+        )
         read_only_fields = fields
+
+    def get_simulate_only(self, obj):
+        payload = getattr(obj, "payload", None) or {}
+        if isinstance(payload, dict):
+            return bool(payload.get("simulate_only", True))
+        return True
+
+    def get_can_destroy(self, obj):
+        # Regla única: solo se puede destruir si el plan terminó OK, fue aplicado real,
+        # y NO está en modo simulación.
+        if getattr(obj, "status", None) != Plan.Status.SUCCESS:
+            return False
+        if not bool(getattr(obj, "applied", False)):
+            return False
+        if self.get_simulate_only(obj):
+            return False
+        if getattr(obj, "last_action", "") == "destroy":
+            return False
+        return True
 
 
 class PlanDetailSerializer(serializers.ModelSerializer):
@@ -22,7 +52,6 @@ class PlanDetailSerializer(serializers.ModelSerializer):
             "updated_at",
             "payload",
             "outputs",
-            "last_outputs",
             "applied",
             "last_action",
             "s3_key",
@@ -79,9 +108,7 @@ class LinkSerializer(serializers.Serializer):
     type = serializers.ChoiceField(choices=["peering", "tgw-attach"])
 
     # --- Campos para PEERING ---
-    via_router_id = serializers.CharField(
-        required=False, allow_blank=True, allow_null=True
-    )
+    via_router_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     vpc_a_id = serializers.CharField(required=False)
     vpc_b_id = serializers.CharField(required=False)
 
@@ -90,27 +117,18 @@ class LinkSerializer(serializers.Serializer):
     vpc_id = serializers.CharField(required=False)
     subnet_names = serializers.ListField(child=serializers.CharField(), required=False)
 
-    # --- Validación condicional ---
     def validate(self, data):
         t = data.get("type")
 
         if t == "peering":
-            missing = [
-                f for f in ("via_router_id", "vpc_a_id", "vpc_b_id") if not data.get(f)
-            ]
+            missing = [f for f in ("via_router_id", "vpc_a_id", "vpc_b_id") if not data.get(f)]
             if missing:
-                raise serializers.ValidationError(
-                    {f: "This field is required for peering link" for f in missing}
-                )
+                raise serializers.ValidationError({f: "This field is required for peering link" for f in missing})
 
         elif t == "tgw-attach":
-            missing = [
-                f for f in ("router_id", "vpc_id", "subnet_names") if not data.get(f)
-            ]
+            missing = [f for f in ("router_id", "vpc_id", "subnet_names") if not data.get(f)]
             if missing:
-                raise serializers.ValidationError(
-                    {f: "This field is required for tgw-attach link" for f in missing}
-                )
+                raise serializers.ValidationError({f: "This field is required for tgw-attach link" for f in missing})
 
         return data
 
