@@ -1,5 +1,5 @@
 // apps/frontend/src/pages/Plans/PlanDetailPage.jsx
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -118,13 +118,14 @@ export default function PlanDetailPage() {
   const [logText, setLogText] = useState(null);
   const [lastDestroyTaskId, setLastDestroyTaskId] = useState(null);
 
-  const [msg, setMsg] = useState(null);
+  const [msg, setMsg] = useState(null); // { text: string, severity: 'success'|'info'|'warning'|'error' }
   const [err, setErr] = useState(null);
 
   const timerRef = useRef(null);
+  const msgTimerRef = useRef(null);
+  const prevStatusRef = useRef(null);
 
   const isRunning = plan?.status === TASK_STATE_RUNNING || plan?.status === TASK_STATE_PENDING;
-  const isTerminal = plan?.status === 'SUCCESS' || plan?.status === 'FAILURE';
 
   const lifecycle = useMemo(() => computeLifecycle(plan), [plan]);
 
@@ -136,25 +137,55 @@ export default function PlanDetailPage() {
   // Destroy permitido cuando está ACTIVE + SUCCESS (regla backend), y no está corriendo
   const canDestroy = !isRunning && lifecycle.allowDestroy && plan?.status === 'SUCCESS';
 
-  async function fetchPlan({ resetLoading = false } = {}) {
-    if (!id) return;
-    if (resetLoading) setLoading(true);
-    try {
-      const data = await api.getPlan(id);
-      setPlan(data);
-      setLoading(false);
+  const fetchPlan = useCallback(
+    async ({ resetLoading = false } = {}) => {
+      if (!id) return;
+      if (resetLoading) setLoading(true);
+      try {
+        const prevStatus = prevStatusRef.current;
 
-      // Poll solo si está corriendo
-      if (data?.status === TASK_STATE_RUNNING || data?.status === TASK_STATE_PENDING) {
-        timerRef.current = setTimeout(() => fetchPlan(), POLL_MS);
+        const data = await api.getPlan(id);
+        setPlan(data);
+        setLoading(false);
+
+        const nowStatus = data?.status;
+        const nowTerminal = nowStatus === 'SUCCESS' || nowStatus === 'FAILURE';
+        const wasRunning = prevStatus === TASK_STATE_RUNNING || prevStatus === TASK_STATE_PENDING;
+
+        // Si inició una acción y el usuario recarga la página mientras estaba RUNNING,
+        // igual queremos limpiar el banner “iniciado” cuando detectemos estado terminal.
+        const msgLooksLikeStarted =
+          typeof msg === 'object' &&
+          typeof msg?.text === 'string' &&
+          msg.text.toLowerCase().includes('iniciado');
+
+        if ((wasRunning && nowTerminal) || (msgLooksLikeStarted && nowTerminal)) {
+          const terminalSeverity = nowStatus === 'SUCCESS' ? 'success' : 'error';
+          setMsg({
+            severity: terminalSeverity,
+            text: `Terminó: ${nowStatus}${nowStatus === 'FAILURE' && data?.error ? ` — ${data.error}` : ''}`,
+          });
+        }
+
+        // Actualiza el prevStatus para el próximo poll
+        prevStatusRef.current = nowStatus;
+
+        // Poll solo si está corriendo
+        if (nowStatus === TASK_STATE_RUNNING || nowStatus === TASK_STATE_PENDING) {
+          if (timerRef.current) clearTimeout(timerRef.current);
+          timerRef.current = setTimeout(() => fetchPlan(), POLL_MS);
+        }
+      } catch (e) {
+        setLoading(false);
+        setErr(`Error cargando plan: ${e?.message || String(e)}`);
+        // eslint-disable-next-line no-console
+        console.error(e);
       }
-    } catch (e) {
-      setLoading(false);
-      setErr(`Error cargando plan: ${e?.message || String(e)}`);
-      // eslint-disable-next-line no-console
-      console.error(e);
-    }
-  }
+    },
+    // OJO: incluimos `id` y `msg` porque usamos ambos para decidir si limpiar el banner.
+    // No incluimos `plan` para evitar estados viejos.
+    [id, msg]
+  );
 
   async function fetchOutputs() {
     if (!id) return;
@@ -190,24 +221,44 @@ export default function PlanDetailPage() {
   }
 
   useEffect(() => {
+    // reset de prevStatus cuando cambia el id
+    prevStatusRef.current = null;
     fetchPlan({ resetLoading: true });
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
+      if (msgTimerRef.current) clearTimeout(msgTimerRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [fetchPlan, id]);
+
+  useEffect(() => {
+    // Auto-oculta el mensaje de término (SUCCESS/FAILURE) luego de 5s.
+    const isTerminalMsg =
+      msg && typeof msg === 'object' && typeof msg.text === 'string' && msg.text.startsWith('Terminó:');
+
+    if (!isTerminalMsg) return undefined;
+
+    if (msgTimerRef.current) clearTimeout(msgTimerRef.current);
+    msgTimerRef.current = setTimeout(() => setMsg(null), 5000);
+
+    return () => {
+      if (msgTimerRef.current) clearTimeout(msgTimerRef.current);
+    };
+  }, [msg]);
 
   const handleDeploy = async () => {
     setDeploying(true);
     setMsg(null);
     setErr(null);
     setLogText(null);
+    if (msgTimerRef.current) clearTimeout(msgTimerRef.current);
+    prevStatusRef.current = plan?.status ?? null;
     try {
       // backend espera simulate_only; api.deployPlan en tu proyecto ya hace el mapeo.
       const res = await api.deployPlan(id, { applyMode });
-      setMsg(
-        `Deploy ${applyMode ? 'APPLY' : 'PLAN'} iniciado. task_id=${res?.task_id || '—'} (actualizando estado…)`
-      );
+      setMsg({
+        severity: 'success',
+        text: `Deploy ${applyMode ? 'APPLY' : 'PLAN'} iniciado. task_id=${res?.task_id || '—'} (actualizando estado…)`,
+      });
       await fetchPlan();
       // Si estamos en tab logs, auto-carga el log
       if (res?.task_id && tab === 'logs') {
@@ -235,13 +286,17 @@ export default function PlanDetailPage() {
     setErr(null);
     setLogText(null);
 
+    if (msgTimerRef.current) clearTimeout(msgTimerRef.current);
+    prevStatusRef.current = plan?.status ?? null;
+
     try {
       const res = await api.destroyPlan(id);
       const tid = res?.task_id;
       setLastDestroyTaskId(tid || null);
-      setMsg(
-        `Destroy encolado${tid ? ` (task_id=${tid})` : ''}. Revisa Logs para ver el progreso.`
-      );
+      setMsg({
+        severity: 'success',
+        text: `Destroy encolado${tid ? ` (task_id=${tid})` : ''}. Revisa Logs para ver el progreso.`,
+      });
       await fetchPlan();
       if (tid && tab === 'logs') {
         await fetchTaskLog(tid);
@@ -324,8 +379,8 @@ export default function PlanDetailPage() {
             </Alert>
           )}
           {msg && (
-            <Alert severity="success" sx={{ mb: 2 }}>
-              {msg}
+            <Alert severity={typeof msg === 'string' ? 'success' : msg.severity || 'success'} sx={{ mb: 2 }}>
+              {typeof msg === 'string' ? msg : msg.text}
             </Alert>
           )}
           {plan?.error && (
