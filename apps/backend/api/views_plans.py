@@ -21,6 +21,7 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
     GET /api/network/plans/         -> lista de planes (sin payload)
     GET /api/network/plans/<id>/    -> detalle del plan (con payload)
     GET /api/network/plans/<id>/payload/ -> solo el JSON (payload "crudo")
+    GET /api/network/plans/<id>/logs/ -> log persistido de la última ejecución (apply o destroy)
     """
 
     queryset = Plan.objects.all().order_by("-created_at")

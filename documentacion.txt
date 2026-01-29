@@ -32,12 +32,12 @@ La arquitectura se compone de tres capas principales:
 
 3.2 Backend (Django + Celery + Terraform)
 	•	Django maneja la API REST y la base de datos de planes (“plans”).
-	•	Cada Plan representa un despliegue o simulación.
+	•	Modelo actual (Camino 1): 1 Plan = 1 stack. Cada Plan representa una única infraestructura (stack Terraform) asociada a un state persistente. El plan puede ejecutarse múltiples veces (deploy o destroy), pero siempre reutiliza el mismo state y apunta al mismo conjunto de recursos.
 	•	Al recibir el JSON, se ejecuta una tarea Celery (process_network_plan) que:
 	1.	Renderiza el archivo main.tf.j2 con la plantilla de Terraform.
 	2.	Crea un directorio temporal (/tmp/tf-multi-*) y guarda los archivos generados.
 	3.	Ejecuta los comandos terraform init, terraform plan y terraform apply (si es un despliegue real).
-	4.	Registra logs completos y estados en la base de datos y/o S3.
+	4.	Registra logs completos y estados en la base de datos. (La integración con S3 queda preparada para una fase futura, pero no se usa en el estado actual del sistema).
 
 3.2.1 Entorno DEV con Docker Compose
     • Se estandarizó el entorno local con `tools/docker/compose.dev.yml` (frontend, backend, celery, redis, postgres, flower).
@@ -151,8 +151,34 @@ terraform destroy (cuando se llama Destroy y simulate_only=false)
 
 
 	4.	Tras apply, se ejecuta terraform output -json para capturar outputs definidos en main.tf.j2.
-	5.	Los logs, estado y outputs se guardan en la base de datos y/o en S3.
-	6.	El estado Terraform se persiste localmente en volumen /tfstate, permitiendo que destroy sea reproducible y consistente.
+	5.	Los logs, estado y outputs se almacenan en la base de datos del Plan (Plan.last_log y Plan.outputs).
+	6.	El estado Terraform se persiste localmente en /tfstate/<plan_id>/terraform.tfstate, garantizando que las operaciones destroy sean reproducibles y coherentes para ese mismo Plan.
+5.2 Reglas de ejecución, consistencia y control de concurrencia (HTTP 409)
+
+Para evitar estados inconsistentes o corrupción del state de Terraform, el sistema impone una regla estricta:
+
+• Un Plan solo puede tener una ejecución activa a la vez.
+
+Implementación técnica:
+• Al iniciar un Deploy o Destroy, el backend valida si el Plan se encuentra en estado RUNNING.
+• Si existe una ejecución en curso, la API responde HTTP 409 Conflict con el mensaje:
+  "Plan en ejecución. Espera a que termine antes de lanzar otra acción."
+• La respuesta incluye el task_id activo para trazabilidad y depuración.
+
+Motivación técnica:
+• Terraform utiliza un state como fuente única de verdad.
+• Ejecutar apply/destroy concurrentes sobre el mismo state puede provocar locks inconsistentes, recursos huérfanos o destrucciones parciales.
+• Bajo el modelo Camino 1 (1 Plan = 1 stack), todas las ejecuciones reutilizan el mismo state ubicado en /tfstate/<plan_id>/terraform.tfstate.
+
+Impacto en la experiencia de usuario (UX):
+• Si el usuario intenta ejecutar una acción mientras otra está en curso, la interfaz muestra un aviso claro de "Plan en ejecución".
+• Las acciones quedan deshabilitadas hasta que la ejecución finaliza.
+• El task_id visible permite seguir el progreso y entender exactamente qué proceso está en marcha.
+
+Resultado:
+• Deploy y Destroy se convierten en operaciones deterministas.
+• Se garantiza que cada acción afecta siempre al mismo stack del Plan.
+• Se elimina el riesgo de recursos AWS huérfanos por concurrencia.
 
 ⸻
 
@@ -187,15 +213,15 @@ El sistema actualmente permite:
 	•	Registrar y almacenar outputs en el campo Plan.outputs, llenado tras ejecutar terraform output -json, facilitando análisis y auditoría de los recursos creados.
 	•	Controlar estrictamente la seguridad, bloqueando operaciones apply y destroy si no existen credenciales IAM válidas, previniendo despliegues no autorizados.
 	•	Orquestar el ciclo completo de vida Terraform mediante Celery, que gestiona la creación, planificación, aplicación, captura de outputs y destrucción de infraestructuras.
-	•	Proveer un sistema de logging avanzado y persistente, con estados almacenados en la base de datos y posibilidad de integración futura con S3 para almacenamiento remoto del estado y logs.
+	•	Sistema de logging avanzado y consistente: cada Plan mantiene un único log correspondiente siempre a la última ejecución (deploy o destroy), almacenado en Plan.last_log, estableciendo una única fuente de verdad y evitando ambigüedades en la UI.
 
 ⸻
 
 9. Próximos hitos
 
 Hito próximo	Descripción
-1. Historial de ejecuciones por plan
-   Persistir múltiples ejecuciones (deploy / destroy) por plan, permitiendo visualizar un timeline histórico y preparar el sistema para rollback, diff de outputs y auditoría avanzada.
+1. Evolución al Camino 2 (historial de ejecuciones por plan)
+   Migrar el modelo actual (Camino 1: 1 Plan = 1 stack) hacia un esquema con múltiples ejecuciones por Plan (PlanExecution), permitiendo un timeline histórico, rollback, comparación de outputs y auditoría avanzada.
 2. UI polling de estado RUNNING desde base de datos	Mejorar experiencia de usuario mostrando actualización en tiempo real del estado de ejecución del plan.
 3. Persistencia futura de estado Terraform en S3	Desarrollar backend para almacenar y recuperar el state Terraform en S3, permitiendo compartir estado entre sesiones y escalabilidad en entornos distribuidos.
 4. Añadir validaciones visuales en el canvas	Detectar errores en tiempo real (CIDR solapados, enlaces inválidos, etc.).
@@ -216,10 +242,11 @@ Además, la estructura es escalable y educativa: cada paso del despliegue es vis
 
 11. Estado técnico validado (enero 2026)
 
+
 Para enero de 2026, se ha validado que el sistema cumple con los siguientes aspectos técnicos:
 
 - La plantilla main.tf.j2 opción B está completamente instrumentada con outputs que permiten extraer información clave de los recursos desplegados, facilitando la trazabilidad y auditoría.
-- La persistencia del estado Terraform en un backend local montado en volumen /tfstate garantiza que las operaciones destroy sean reproducibles y consistentes, evitando pérdidas o inconsistencias en el estado.
+- El estado Terraform validado actualmente se persiste mediante un backend local montado en /tfstate, y los logs se almacenan en la base de datos del Plan. La integración con S3 está diseñada pero no activa en esta fase.
 - La distinción clara entre simulate_only=true (ejecución de terraform plan sin aplicar cambios) y simulate_only=false (terraform apply real) está implementada y controlada, asegurando que el usuario pueda elegir entre simulación y despliegue efectivo.
 - El campo Plan.outputs se llena automáticamente tras cada apply mediante la ejecución de terraform output -json, almacenando toda la información relevante para análisis posteriores.
 - El ciclo completo de vida de un plan (create plan → plan → apply → outputs → destroy) está orquestado mediante Celery, que maneja estados, logs, y validaciones de seguridad.

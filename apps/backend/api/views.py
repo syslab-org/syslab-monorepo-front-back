@@ -34,6 +34,35 @@ def _plan_running_conflict(plan: Plan) -> Response:
     )
 
 
+def _plan_state_conflict(plan: Plan, action: str) -> Response:
+    """
+    Enforce Camino 1: 1 Plan = 1 stack.
+    - apply: solo permitido si applied == False
+    - destroy: solo permitido si applied == True
+    """
+    if action == "apply" and plan.applied:
+        return Response(
+            {
+                "ok": False,
+                "error": "El plan ya fue aplicado. Debe destruirse antes de volver a aplicar.",
+                "code": "PLAN_ALREADY_APPLIED",
+                "plan_id": str(plan.id),
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
+    if action == "destroy" and not plan.applied:
+        return Response(
+            {
+                "ok": False,
+                "error": "El plan no está aplicado. No hay infraestructura que destruir.",
+                "code": "PLAN_NOT_APPLIED",
+                "plan_id": str(plan.id),
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
+    return None
+
+
 def _can_run_real_terraform() -> bool:
     """Regla única para permitir acciones reales (apply/destroy).
 
@@ -134,6 +163,10 @@ def deploy_plan(request, plan_id: UUID):
     if _is_running(plan):
         return _plan_running_conflict(plan)
 
+    conflict = _plan_state_conflict(plan, "apply")
+    if conflict:
+        return conflict
+
     # 3) Leer flag simulate_only (default True)
 
     body = request.data or {}
@@ -225,27 +258,31 @@ def destroy_plan(request, plan_id: UUID):
             {"ok": False, "error": "Plan not found"}, status=status.HTTP_404_NOT_FOUND
         )
     # 1.1) Solo se destruyen planes que hayan terminado OK y que realmente fueron aplicados
-    if plan.status != Plan.Status.SUCCESS:
-        return Response(
-            {
-                "ok": False,
-                "error": f"No se puede destruir un plan en estado {plan.status}. Debe estar en SUCCESS.",
-            },
-            status=status.HTTP_409_CONFLICT,
-        )
+    # if plan.status != Plan.Status.SUCCESS:
+    #     return Response(
+    #         {
+    #             "ok": False,
+    #             "error": f"No se puede destruir un plan en estado {plan.status}. Debe estar en SUCCESS.",
+    #         },
+    #         status=status.HTTP_409_CONFLICT,
+    #     )
 
     # Si nunca se aplicó (solo plan/simulación), no hay nada real que destruir
-    if not bool(getattr(plan, "applied", False)):
-        return Response(
-            {
-                "ok": False,
-                "error": "Este plan no fue aplicado (applied=False). No hay infraestructura real que destruir.",
-            },
-            status=status.HTTP_409_CONFLICT,
-        )
+    # if not bool(getattr(plan, "applied", False)):
+    #     return Response(
+    #         {
+    #             "ok": False,
+    #             "error": "Este plan no fue aplicado (applied=False). No hay infraestructura real que destruir.",
+    #         },
+    #         status=status.HTTP_409_CONFLICT,
+    #     )
     # 2) Bloqueo si está corriendo
     if _is_running(plan):
         return _plan_running_conflict(plan)
+
+    conflict = _plan_state_conflict(plan, "destroy")
+    if conflict:
+        return conflict
 
     # 3) Bloqueo si es simulación (no hay infraestructura real que destruir)
     if bool((plan.payload or {}).get("simulate_only", True)):

@@ -130,12 +130,30 @@ export default function PlanDetailPage() {
   const timerRef = useRef(null);
   const msgTimerRef = useRef(null);
   const prevStatusRef = useRef(null);
+  const actionLockRef = useRef(false);
 
   const isRunning = plan?.status === TASK_STATE_RUNNING || plan?.status === TASK_STATE_PENDING;
 
   const lifecycle = useMemo(() => computeLifecycle(plan), [plan]);
 
   const busy = deploying || destroying;
+
+  function getConflictMessage(e, fallback) {
+    const payload = e?.data ?? e?.response?.data;
+    const code = payload?.code;
+    const taskId = payload?.task_id || payload?.taskId;
+
+    if (code === 'PLAN_RUNNING') {
+      return `${payload?.error || fallback}${taskId ? ` (task_id=${taskId})` : ''}`;
+    }
+
+    const backendMsg =
+      payload?.error ||
+      payload?.detail ||
+      (typeof payload === 'string' ? payload : null);
+
+    return backendMsg || fallback;
+  }
 
   // Deploy permitido cuando el plan NO está corriendo
   const canDeploy = !isRunning;
@@ -157,6 +175,16 @@ export default function PlanDetailPage() {
         const nowStatus = data?.status;
         const nowTerminal = nowStatus === 'SUCCESS' || nowStatus === 'FAILURE';
         const wasRunning = prevStatus === TASK_STATE_RUNNING || prevStatus === TASK_STATE_PENDING;
+
+        const nowRunning = nowStatus === TASK_STATE_RUNNING || nowStatus === TASK_STATE_PENDING;
+
+        // Si el plan está corriendo y no hay mensaje activo, muestra uno único (evita duplicados)
+        if (nowRunning && !msg) {
+          setMsg({
+            severity: 'info',
+            text: `Plan en ejecución. Espera a que termine antes de lanzar otra acción.${data?.task_id ? ` (task_id=${data.task_id})` : ''}`,
+          });
+        }
 
         // Si inició una acción y el usuario recarga la página mientras estaba RUNNING,
         // igual queremos limpiar el banner “iniciado” cuando detectemos estado terminal.
@@ -280,6 +308,12 @@ export default function PlanDetailPage() {
   }, [msg]);
 
   const handleDeploy = async () => {
+    if (actionLockRef.current) return;
+    actionLockRef.current = true;
+    if (busy || isRunning) {
+      actionLockRef.current = false;
+      return;
+    }
     setDeploying(true);
     setMsg(null);
     setErr(null);
@@ -290,8 +324,8 @@ export default function PlanDetailPage() {
       // backend espera simulate_only; api.deployPlan en tu proyecto ya hace el mapeo.
       const res = await api.deployPlan(id, { applyMode });
       setMsg({
-        severity: 'success',
-        text: `Deploy ${applyMode ? 'APPLY' : 'PLAN'} iniciado. task_id=${res?.task_id || '—'} (actualizando estado…)`,
+        severity: 'info',
+        text: `Deploy ${applyMode ? 'APPLY' : 'PLAN'} iniciado.${res?.task_id ? ` task_id=${res.task_id}` : ''} (actualizando estado…)`,
       });
       await fetchPlan();
       // Si estamos en tab logs, auto-carga el log
@@ -299,38 +333,49 @@ export default function PlanDetailPage() {
         await fetchTaskLog(res.task_id);
       }
     } catch (e) {
-      const status = e?.status;
-      const backendMsg =
-        e?.data?.error ||
-        e?.data?.detail ||
-        (typeof e?.data === 'string' ? e.data : null);
-
+      const status = e?.status ?? e?.response?.status;
+      const payload = e?.data ?? e?.response?.data;
       // If the backend says "conflict" (already running), treat it as info and refresh status
       if (status === 409) {
         setErr(null);
         setMsg({
           severity: 'info',
-          text:
-            backendMsg ||
-            'Plan en ejecución. Espera a que termine antes de lanzar otra acción. (Actualizando estado…)',
+          text: getConflictMessage(
+            e,
+            'Plan en ejecución. Espera a que termine antes de lanzar otra acción.'
+          ),
         });
         await fetchPlan();
         return;
       }
-
+      const backendMsg =
+        payload?.error ||
+        payload?.detail ||
+        (typeof payload === 'string' ? payload : null);
       setErr(`Fallo al iniciar deploy: ${backendMsg || e?.message || String(e)}`);
     } finally {
+      actionLockRef.current = false;
       setDeploying(false);
     }
   };
 
   const handleDestroy = async () => {
-    if (!canDestroy) return;
+    if (actionLockRef.current) return;
+    actionLockRef.current = true;
+    if (busy || isRunning) {
+      actionLockRef.current = false;
+      return;
+    }
+    if (!canDestroy) {
+      actionLockRef.current = false;
+      return;
+    }
     if (
       !window.confirm(
         'Esto destruirá los recursos en AWS asociados a ESTE plan.\n\n¿Continuar?'
       )
     ) {
+      actionLockRef.current = false;
       return;
     }
 
@@ -347,7 +392,7 @@ export default function PlanDetailPage() {
       const tid = res?.task_id;
       setLastDestroyTaskId(tid || null);
       setMsg({
-        severity: 'success',
+        severity: 'info',
         text: `Destroy encolado${tid ? ` (task_id=${tid})` : ''}. Revisa Logs para ver el progreso.`,
       });
       await fetchPlan();
@@ -355,26 +400,27 @@ export default function PlanDetailPage() {
         await fetchTaskLog(tid);
       }
     } catch (e) {
-      const status = e?.status;
-      const backendMsg =
-        e?.data?.error ||
-        e?.data?.detail ||
-        (typeof e?.data === 'string' ? e.data : null);
-
+      const status = e?.status ?? e?.response?.status;
+      const payload = e?.data ?? e?.response?.data;
       if (status === 409) {
         setErr(null);
         setMsg({
           severity: 'info',
-          text:
-            backendMsg ||
-            'Plan en ejecución. Espera a que termine antes de lanzar otra acción. (Actualizando estado…)',
+          text: getConflictMessage(
+            e,
+            'Plan en ejecución. Espera a que termine antes de lanzar otra acción.'
+          ),
         });
         await fetchPlan();
         return;
       }
-
+      const backendMsg =
+        payload?.error ||
+        payload?.detail ||
+        (typeof payload === 'string' ? payload : null);
       setErr(`Fallo al iniciar destroy: ${backendMsg || e?.message || String(e)}`);
     } finally {
+      actionLockRef.current = false;
       setDestroying(false);
     }
   };
@@ -497,44 +543,46 @@ export default function PlanDetailPage() {
             </Stack>
 
             <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={applyMode}
-                    onChange={(e) => setApplyMode(e.target.checked)}
-                    disabled={busy}
-                  />
-                }
-                label={applyMode ? 'Modo APPLY (real)' : 'Modo PLAN (preview)'}
-              />
+              <>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={applyMode}
+                      onChange={(e) => setApplyMode(e.target.checked)}
+                      disabled={busy || isRunning}
+                    />
+                  }
+                  label={applyMode ? 'Modo APPLY (real)' : 'Modo PLAN (preview)'}
+                />
 
-              {/* Solo mostrar Deploy si lifecycle.key !== 'ACTIVE' */}
-              {lifecycle.key !== 'ACTIVE' && (
-                <Button
-                  variant="contained"
-                  onClick={handleDeploy}
-                  disabled={!canDeploy || busy || isRunning}
-                >
-                  {deploying ? 'Lanzando…' : applyMode ? 'Deploy (APPLY)' : 'Deploy (PLAN)'}
-                </Button>
-              )}
+                {/* Solo mostrar Deploy si lifecycle.key !== 'ACTIVE' */}
+                {lifecycle.key !== 'ACTIVE' && (
+                  <Button
+                    variant="contained"
+                    onClick={handleDeploy}
+                    disabled={!canDeploy || busy}
+                  >
+                    {deploying ? 'Lanzando…' : applyMode ? 'Deploy (APPLY)' : 'Deploy (PLAN)'}
+                  </Button>
+                )}
 
-              {/* Solo mostrar Destroy si lifecycle.key === 'ACTIVE' */}
-              {lifecycle.key === 'ACTIVE' && (
-                <Button
-                  variant="outlined"
-                  color="error"
-                  onClick={handleDestroy}
-                  disabled={!canDestroy || busy}
-                >
-                  {destroying ? 'Destruyendo…' : 'Destroy'}
-                </Button>
-              )}
+                {/* Solo mostrar Destroy si lifecycle.key === 'ACTIVE' */}
+                {lifecycle.key === 'ACTIVE' && (
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    onClick={handleDestroy}
+                    disabled={!canDestroy || busy}
+                  >
+                    {destroying ? 'Destruyendo…' : 'Destroy'}
+                  </Button>
+                )}
+              </>
             </Stack>
           </Stack>
 
           {isRunning && (
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 2 }}>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
               <CircularProgress size={16} />
               <Typography variant="body2" color="text.secondary">
                 Procesando… (se actualiza automáticamente)
