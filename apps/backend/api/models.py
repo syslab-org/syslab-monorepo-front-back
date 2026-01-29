@@ -91,3 +91,11 @@ class Plan(models.Model):
 
     class Meta:
         ordering = ["-updated_at"]
+        constraints = [
+            # Camino 1: 1 Canvas = 1 Plan. Garantiza unicidad cuando firestore_vpc_id existe.
+            models.UniqueConstraint(
+                fields=["firestore_vpc_id"],
+                condition=models.Q(firestore_vpc_id__isnull=False),
+                name="uniq_plan_firestore_vpc_id",
+            )
+        ]
