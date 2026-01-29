@@ -83,7 +83,9 @@ function computeLifecycle(plan) {
   return {
     key: 'NOT_APPLIED',
     label: 'NOT APPLIED',
-    helper: 'Plan real aún no aplicado.',
+    helper: String(lastAction).toLowerCase() === 'canvas_update'
+      ? 'Cambios detectados desde el canvas: listo para aplicar en AWS.'
+      : 'Plan real aún no aplicado.',
     chip: { variant: 'outlined', color: 'warning' },
     allowDestroy: false,
   };
@@ -525,6 +527,11 @@ export default function PlanDetailPage() {
               {plan.error}
             </Alert>
           )}
+          {(String(plan?.last_action || plan?.lastAction || '').toLowerCase() === 'canvas_update') && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              Plan actualizado desde canvas. Hay cambios pendientes; ejecuta <b>Deploy</b> para aplicar la nueva infraestructura.
+            </Alert>
+          )}
 
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
             <Stack spacing={0.5} sx={{ flex: 1 }}>
@@ -534,6 +541,11 @@ export default function PlanDetailPage() {
               <Typography variant="body2" color="text.secondary">
                 Última acción: <b>{plan?.last_action || plan?.lastAction || '—'}</b>
               </Typography>
+              {String(plan?.last_action || plan?.lastAction || '').toLowerCase() === 'canvas_update' && (
+                <Typography variant="caption" color="warning.main" sx={{ display: 'block' }}>
+                  El canvas cambió: la infraestructura desplegada (si existía) ya no coincide con este plan.
+                </Typography>
+              )}
               <Typography variant="body2" color="text.secondary">
                 task_id: <b>{plan?.task_id || '—'}</b>
               </Typography>
@@ -637,8 +649,13 @@ export default function PlanDetailPage() {
                   <Stack spacing={0.5}>
                     <Typography variant="body2" color="text.secondary">
                       Última acción:{' '}
-                      <b>{plan?.last_action || '—'}</b>
+                      <b>{plan?.last_action || plan?.lastAction || '—'}</b>
                     </Typography>
+                    {String(plan?.last_action || plan?.lastAction || '').toLowerCase() === 'canvas_update' && (
+                      <Typography variant="caption" color="warning.main" sx={{ display: 'block' }}>
+                        El canvas cambió: la infraestructura desplegada (si existía) ya no coincide con este plan.
+                      </Typography>
+                    )}
                     <Typography variant="body2" color="text.secondary">
                       Resultado:{' '}
                       <Chip size="small" {...statusChipProps(plan?.status)} />

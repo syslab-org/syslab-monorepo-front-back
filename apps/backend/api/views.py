@@ -121,6 +121,7 @@ def task_status(request, task_id: str):
 @permission_classes([AllowAny])
 def network_plan_create(request):
     payload = request.data or {}
+
     # 1) Validación
     try:
         validate_network_plan(payload)
@@ -128,6 +129,7 @@ def network_plan_create(request):
         return Response(
             {"ok": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST
         )
+
     # 2) Firestore ID (si viene)
     firestore_vpc_id = (
         payload.get("firestore_vpc_id")
@@ -135,16 +137,61 @@ def network_plan_create(request):
         or payload.get("vlan", {}).get("id")
     )
 
-    # 3) Crear Plan (NO dispara task aquí, tu decisión actual)
-    plan = Plan.objects.create(
-        name=payload.get("name", ""),
-        payload=payload,
-        status=Plan.Status.PENDING,
+    # Reglas Camino 1: necesitamos un identificador estable del canvas.
+    if not firestore_vpc_id:
+        return Response(
+            {
+                "ok": False,
+                "error": "firestore_vpc_id (canvas id) es requerido para mantener 1 Canvas = 1 Plan.",
+                "code": "MISSING_CANVAS_ID",
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # 3) Upsert del Plan por canvas_id (1 Canvas = 1 Plan)
+    plan, created = Plan.objects.get_or_create(
         firestore_vpc_id=firestore_vpc_id,
+        defaults={
+            "name": payload.get("name", ""),
+            "payload": payload,
+            "status": Plan.Status.PENDING,
+        },
     )
 
+    # Si ya existe, actualizamos name/payload (pero respetamos RUNNING)
+    if not created:
+        if _is_running(plan):
+            return _plan_running_conflict(plan)
+
+        plan.name = payload.get("name", plan.name or "")
+        plan.payload = payload
+        # Si el plan estaba aplicado y el canvas cambió, marcamos que ahora hay cambios pendientes.
+        plan.applied = False
+        plan.last_action = "canvas_update"
+        plan.updated_at = timezone.now()
+        # Mantener estado consistente: cambios desde canvas => PENDING y sin errores.
+        plan.status = Plan.Status.PENDING
+        plan.error = ""
+        plan.save(
+            update_fields=[
+                "name",
+                "payload",
+                "updated_at",
+                "status",
+                "error",
+                "applied",
+                "last_action",
+            ]
+        )
+
     return Response(
-        {"ok": True, "plan_id": str(plan.id)}, status=status.HTTP_201_CREATED
+        {
+            "ok": True,
+            "plan_id": str(plan.id),
+            "created": created,
+            "firestore_vpc_id": firestore_vpc_id,
+        },
+        status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
     )
 
 
