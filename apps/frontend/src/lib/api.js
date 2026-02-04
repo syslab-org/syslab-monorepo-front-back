@@ -42,6 +42,12 @@ export const api = {
   getPlanPayload: (id) => jsonFetch(`/api/network/plans/${id}/payload/`),
   getPlanOutputs: (id) => jsonFetch(`/api/network/plans/${id}/outputs/`),
   getPlanLogs: (id) => jsonFetch(`/api/network/plans/${id}/logs/`),
+  syncPlanFromCanvas(payload) {
+    return jsonFetch(`/api/network/plans/sync-from-canvas/`, {
+      method: "POST",
+      body: typeof payload === "string" ? payload : JSON.stringify(payload),
+    });
+  },
   createPlan(plan) {
     return jsonFetch(`/api/network/plan/`, {
       method: "POST",
@@ -74,6 +80,6 @@ export const api = {
     return jsonFetch(`/api/network/plans/${id}/destroy/`, { method: "POST" });
   },
   destroyLast() {
-    return jsonFetch(`/api/network/plans/destroy-last`, { method: "POST" });
+    return jsonFetch(`/api/network/plans/destroy-last/`, { method: "POST" });
   },
 };

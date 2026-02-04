@@ -145,6 +145,7 @@ function MainFlow() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [restorationDone, setRestorationDone] = useState(false);
+  const [canvasPlanId, setCanvasPlanId] = useState(null);
   const [showRoutePreview, setShowRoutePreview] = useState(false);
 
   const { loadingFlow } = useContext(LoadingFlowContext);
@@ -322,7 +323,7 @@ function MainFlow() {
   const onNodeDrag = useNodeDrag({ nodes, setTarget, TYPE_SUBNETWORK_NODE });
   //const onNodeDragStop = useNodeDragStop({ nodes, setNodes, reactFlow, TYPE_SUBNETWORK_NODE, TYPE_VPC_NODE });
   const onSaveFlow = useSaveFlow({ reactFlowInstance, flowKey, vpcid });
-  const onRestoreFlow = useRestoreFlow({ setNodes, setEdges, setViewport, flowKey, getId });
+  const onRestoreFlow = useRestoreFlow({ setNodes, setEdges, setViewport, flowKey, getId, setCanvasPlanId });
 
   const {
     showConfirmation,
@@ -336,8 +337,14 @@ function MainFlow() {
     handleConfirmDeploy,
     successMessage,
     errorMessage,
-    handleCloseSnackbar
-    } = useDeployNetwork({ nodes, edges, allowCrossVpcPingUI,  firestoreVpcId: vpcid })
+    handleCloseSnackbar,
+    validationState,
+    validationError,
+    validationResult,
+    handleValidatePlan,
+    handleApplyReal,
+    handleOpenPlanDetails,
+  } = useDeployNetwork({ nodes, edges, allowCrossVpcPingUI, firestoreVpcId: vpcid })
 
   const location = useLocation();
   const isWizardEntry = new URLSearchParams(location.search).get("wizard") === "1";
@@ -568,10 +575,18 @@ function MainFlow() {
             <ConfirmDeployDialog
               open={showConfirmation}
               onClose={handleCancelDeploy}
-              onConfirm={(overrideValue) => {
-                setAllowCrossVpcPingUI(overrideValue);     // <-- guarda el valor elegido (true, false o null)
-                handleConfirmDeploy();                     // <-- lanza el deploy
+              onValidatePlan={(overrideValue) => {
+                setAllowCrossVpcPingUI(overrideValue);
+                handleValidatePlan();
               }}
+              onApplyReal={(overrideValue) => {
+                setAllowCrossVpcPingUI(overrideValue);
+                handleApplyReal();
+              }}
+              onOpenPlanDetails={handleOpenPlanDetails}
+              validationState={validationState}
+              validationError={validationError}
+              validationResult={validationResult}
               planName={planName}
               setPlanName={setPlanName}
               simulateOnly={simulateOnly}
@@ -579,6 +594,7 @@ function MainFlow() {
               transformedData={transformedData}
               allowCrossVpcPingUI={allowCrossVpcPingUI}
               setAllowCrossVpcPingUI={setAllowCrossVpcPingUI}
+              existingPlanId={canvasPlanId}
             />
 
           </Card>

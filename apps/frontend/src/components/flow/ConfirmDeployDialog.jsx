@@ -1,6 +1,6 @@
 // apps/frontend/src/components/flow/ConfirmDeployDialog.jsx
-import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -10,12 +10,12 @@ import {
   DialogTitle,
   Divider,
   FormControlLabel,
-  IconButton,
   Stack,
   Switch,
   TextField,
-  Tooltip,
   Typography,
+  ToggleButton,
+  ToggleButtonGroup,
 } from "@mui/material";
 import { useMemo } from "react";
 import DeployConfirmationRoutes from "./panels/DeployConfirmationRoutes";
@@ -47,18 +47,26 @@ function exportPlanToJson(transformedData, planName = "plan-export") {
 export default function ConfirmDeployDialog({
   open,
   onClose,
-  onConfirm,                // si quieres pasar el override al confirmar: onConfirm(allowCrossVpcPingUI)
+  onConfirm, //Legacy: (allowCrossVpcPing) => void
+  onValidatePlan,
+  onApplyReal,
+  onOpenPlanDetails, // (planId?: string) => void
+  validationState = "idle", // idle | syncing | planning | success | error
+  validationError = null,
+  validationResult = null,
   planName,
   setPlanName,
   simulateOnly,
   setSimulateOnly,
   transformedData,
-  allowCrossVpcPingUI,      // <- controlado por el padre
-  setAllowCrossVpcPingUI,   // <- setter del padre
+  allowCrossVpcPingUI,
+  setAllowCrossVpcPingUI,
+  existingPlanId = null,
 }) {
   const allowRealApply = import.meta.env.VITE_ALLOW_REAL_APPLY === "1";
 
   // Normalización segura
+  const effectivePlanId = validationResult?.plan_id || existingPlanId || null;
   const vpcs = Array.isArray(transformedData?.vpcs) ? transformedData.vpcs : [];
   const links = Array.isArray(transformedData?.links) ? transformedData.links : [];
   const vlan = transformedData?.vlan || {};
@@ -117,6 +125,34 @@ export default function ConfirmDeployDialog({
 
       <DialogContent dividers>
         <Stack spacing={2}>
+          {/* ---- Estado de validación (2 fases) ---- */}
+          {validationState === "syncing" && (
+            <Alert severity="info">Sincronizando plan con backend…</Alert>
+          )}
+          {validationState === "planning" && (
+            <Alert severity="info">Ejecutando validación (Terraform plan)…</Alert>
+          )}
+          {validationState === "success" && (
+            <Alert severity="success">
+              Validación OK. Puedes aplicar (deploy real) o ver detalles.
+            </Alert>
+          )}
+          {validationState === "error" && (
+            <Alert severity="error">
+              {validationError || "Validación fallida."}
+              {effectivePlanId ? (
+                <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                  Plan asociado: {effectivePlanId}
+                </Typography>
+              ) : null}
+            </Alert>
+          )}
+          {validationState === "idle" && (
+            <Typography variant="body2" color="text.secondary">
+              Aún no has validado este plan con el backend.
+            </Typography>
+          )}
+
           {/* ---- Nombre del plan ---- */}
           <TextField
             fullWidth
@@ -142,7 +178,7 @@ export default function ConfirmDeployDialog({
             }
           />
 
-          {/* ---- Switch de ping entre VPCs (override opcional) ---- */}
+          {/* ---- Ping entre VPCs (override opcional) ---- */}
           <Box
             sx={{
               p: 1.5,
@@ -150,45 +186,38 @@ export default function ConfirmDeployDialog({
               borderRadius: 1.5,
             }}
           >
-            <Stack
-              direction="row"
-              alignItems="center"
-              justifyContent="space-between"
-              spacing={1}
-              flexWrap="wrap"
-            >
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={allowCrossVpcPingUI === true}
-                    onChange={(e) =>
-                      setAllowCrossVpcPingUI(e.target.checked ? true : false)
-                    }
-                  />
-                }
-                label={<Typography variant="body2">Permitir ping entre VPCs (override)</Typography>}
-              />
-
-              <Stack direction="row" spacing={1} alignItems="center">
+            <Stack spacing={1}>
+              <Stack
+                direction="row"
+                alignItems="center"
+                justifyContent="space-between"
+                spacing={1}
+                flexWrap="wrap"
+              >
+                <Typography variant="body2">Ping entre VPCs</Typography>
                 {pingStatusChip}
-                <Tooltip title="Volver a modo automático (no forzar)">
-                  <span>
-                    <IconButton
-                      onClick={() => setAllowCrossVpcPingUI(null)}
-                      size="small"
-                      aria-label="Restablecer a automático"
-                    >
-                      <RestartAltIcon fontSize="small" />
-                    </IconButton>
-                  </span>
-                </Tooltip>
               </Stack>
-            </Stack>
 
-            <Typography variant="caption" color="text.secondary">
-              Si no cambias este control o presionas <b>“restablecer”</b>, el sistema usará el
-              comportamiento <b>automático</b> (se decide según enlaces entre VPCs o flags en routers).
-            </Typography>
+              <ToggleButtonGroup
+                size="small"
+                exclusive
+                value={allowCrossVpcPingUI}
+                onChange={(_e, next) => {
+                  // `next` puede ser null si clickean el botón activo; evitamos dejarlo vacío.
+                  if (next === null) return;
+                  setAllowCrossVpcPingUI(next);
+                }}
+              >
+                <ToggleButton value={null}>Automático</ToggleButton>
+                <ToggleButton value={true}>Activado</ToggleButton>
+                <ToggleButton value={false}>Desactivado</ToggleButton>
+              </ToggleButtonGroup>
+
+              <Typography variant="caption" color="text.secondary">
+                Automático = se decide según enlaces (peering/TGW) o flags del payload. Override = fuerzas el
+                comportamiento explícitamente.
+              </Typography>
+            </Stack>
           </Box>
 
           {/* ---- Mensajes contextuales ---- */}
@@ -199,7 +228,7 @@ export default function ConfirmDeployDialog({
           )}
 
           {!simulateOnly && (
-            <Typography variant="body2" sx={{ color: "#b45309" }}>
+            <Typography variant="body2" sx={{ color: (theme) => theme.palette.warning.main }}>
               ⚠️ Esto ejecutará un <b>Terraform apply</b> real en AWS. Asegúrate de tener credenciales IAM válidas.
             </Typography>
           )}
@@ -301,13 +330,55 @@ export default function ConfirmDeployDialog({
 
       <DialogActions>
         <Button onClick={onClose}>Cancelar</Button>
+
         <Button
-          onClick={() => onConfirm?.(allowCrossVpcPingUI)}
+          onClick={() => onValidatePlan?.(allowCrossVpcPingUI)}
           variant="contained"
           color="primary"
+          disabled={validationState === "syncing" || validationState === "planning"}
         >
-          {simulateOnly ? "Validar (plan)" : "Desplegar (apply)"}
+          Validar (plan)
         </Button>
+
+        {validationState !== "success" && effectivePlanId && (
+          <Button
+            onClick={() => onOpenPlanDetails?.(effectivePlanId)}
+            variant="outlined"
+          >
+            Ver plan existente
+          </Button>
+        )}
+
+        {validationState === "success" && (
+          <>
+            <Button
+              onClick={() => onOpenPlanDetails?.(effectivePlanId)}
+              variant="outlined"
+            >
+              Ver plan
+            </Button>
+
+            <Button
+              onClick={() => onApplyReal?.(allowCrossVpcPingUI)}
+              variant="contained"
+              color="warning"
+              disabled={!allowRealApply || simulateOnly}
+            >
+              {simulateOnly ? "Desplegar (apply) — activa Apply real" : "Desplegar (apply)"}
+            </Button>
+          </>
+        )}
+
+        {/* fallback legacy */}
+        {validationState === "idle" && !onValidatePlan && (
+          <Button
+            onClick={() => onConfirm?.(allowCrossVpcPingUI)}
+            variant="contained"
+            color="primary"
+          >
+            {simulateOnly ? "Validar (plan)" : "Desplegar (apply)"}
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );
