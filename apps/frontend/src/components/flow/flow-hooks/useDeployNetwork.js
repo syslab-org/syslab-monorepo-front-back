@@ -1,5 +1,8 @@
 // apps/frontend/src/components/flow/flow-hooks/useDeployNetwork.js
 import { useContext, useState } from "react";
+import { doc, setDoc } from "firebase/firestore";
+import { db } from "../../../firebase/firebaseConfig";
+import { DB_FIRESTORE_VPCS } from "../../../constants";
 import { useNavigate } from "react-router-dom";
 import { RouterPolicy } from "../../../config/networking";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -45,6 +48,28 @@ function normalizeAz(region, az) {
 }
 
 const resolveSubnetName = (sn) => sn?.data?.subnetName || `subnet-${sn.id}`;
+
+// Helper para calcular un hash estable del canvas (topología actual)
+function computeCanvasHash(nodes, edges) {
+  try {
+    const n = (nodes || []).map((x) => ({
+      id: x.id,
+      type: x.type,
+      data: x.data || {},
+      position: x.position || null,
+    }));
+    const e = (edges || []).map((x) => ({
+      id: x.id,
+      source: x.source,
+      target: x.target,
+      type: x.type || null,
+    }));
+    return JSON.stringify({ n, e });
+  } catch (_err) {
+    // Fallback: still changes when topology shows different sizes
+    return `n:${(nodes || []).length}-e:${(edges || []).length}`;
+  }
+}
 
 function buildLinksFromEdges(nodes, edges) {
   const idToType = new Map(nodes.map((n) => [n.id, n.type]));
@@ -102,7 +127,7 @@ function buildLinksFromEdges(nodes, edges) {
           const prefix = vpcData.prefixLength;
           const cidr = block && prefix ? `${block}/${prefix}` : block || "";
           return [vpcId, cidr];
-        })
+        }),
       );
 
       // Para cada VPC conectada generamos:
@@ -178,6 +203,10 @@ const useDeployNetwork = ({
   const [errorMessage, setErrorMessage] = useState(null);
   const { setLoadingFlow } = useContext(LoadingFlowContext);
   const [simulateOnly, setSimulateOnly] = useState(true);
+  const [validationState, setValidationState] = useState("idle");
+  const [validationError, setValidationError] = useState(null);
+  const [validationResult, setValidationResult] = useState(null);
+  const [validatedCanvasHash, setValidatedCanvasHash] = useState(null);
 
   const { vlanName, vlanRegion, cidrBlockVPC, prefixLength } =
     useCidrBlockVPCStore((s) => [
@@ -187,12 +216,40 @@ const useDeployNetwork = ({
       s.prefixLength,
     ]);
 
+  // Option B: persist planId in the canvas Firestore doc
+  const persistPlanIdToCanvas = async ({
+    canvasId,
+    planId,
+    name,
+    created,
+    validationOk,
+  }) => {
+    if (!canvasId || !planId) return;
+    try {
+      const docRef = doc(db, DB_FIRESTORE_VPCS, canvasId);
+      await setDoc(
+        docRef,
+        {
+          planId,
+          planName: name || "",
+          planCreatedFromCanvas: !!created,
+          planValidationOk:
+            typeof validationOk === "boolean" ? validationOk : null,
+          planUpdatedAt: new Date(),
+        },
+        { merge: true },
+      );
+    } catch (e) {
+      console.warn("No se pudo persistir planId en Firestore:", e);
+    }
+  };
+
   const processJsonToCloud = () => {
     const { errors, warnings } = validateTopology(nodes, edges);
     if (errors.length > 0) {
       setErrorMessage(
         "No se puede desplegar. Corrige estos errores:\n" +
-          errors.map((e) => `• ${e}`).join("\n")
+          errors.map((e) => `• ${e}`).join("\n"),
       );
       return;
     }
@@ -254,10 +311,10 @@ const useDeployNetwork = ({
       });
 
       const hasPublic = subnetsRaw.some(
-        (s) => (s.subnet_type || "").toLowerCase() === "public"
+        (s) => (s.subnet_type || "").toLowerCase() === "public",
       );
       const hasPrivate = subnetsRaw.some(
-        (s) => (s.subnet_type || "").toLowerCase() === "private"
+        (s) => (s.subnet_type || "").toLowerCase() === "private",
       );
 
       const pv = preview.vpcs.find((p) => p.id === vpcNode.id);
@@ -274,7 +331,7 @@ const useDeployNetwork = ({
 
       const publicRoutes = [];
       const hasIgwInPreview = previewRoutes.some(
-        (r) => String(r.target).toLowerCase() === "igw"
+        (r) => String(r.target).toLowerCase() === "igw",
       );
       if (hasPublic || hasIgwInPreview) {
         publicRoutes.push({
@@ -367,45 +424,185 @@ const useDeployNetwork = ({
       cloud: "aws",
       ...built,
     });
+
+    const currentHash = computeCanvasHash(nodes, edges);
+
+    // Si el canvas cambió desde la última validación, reseteamos el estado.
+    if (validatedCanvasHash && validatedCanvasHash !== currentHash) {
+      setValidationState("idle");
+      setValidationError(null);
+      setValidationResult(null);
+    }
     setShowConfirmation(true);
   };
 
-  const handleConfirmDeploy = async () => {
-    setShowConfirmation(false);
+  const pollPlanUntilDone = async (
+    planId,
+    { intervalMs = 1200, timeoutMs = 60000 } = {},
+  ) => {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const plan = await api.getPlan(planId);
+      const st = String(plan?.status || "");
+      if (st && st !== "RUNNING" && st !== "PENDING") return plan;
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+    throw new Error("Timeout esperando resultado del plan");
+  };
+
+  const handleValidatePlan = async () => {
+    setLoadingFlow(true);
+    setSuccessMessage(null);
+    setErrorMessage(null);
+    setValidationError(null);
+
+    try {
+      if (!transformedData) {
+        setLoadingFlow(false);
+        setValidationState("error");
+        setValidationError("No hay datos transformados para validar.");
+        setErrorMessage("No hay datos transformados para validar.");
+        return;
+      }
+
+      setValidationState("syncing");
+
+      const syncRes = await api.syncPlanFromCanvas({
+        name: planName || "plan-" + Date.now(),
+        ...transformedData,
+        simulate_only: true,
+      });
+
+      const planId = syncRes?.plan_id;
+      if (!planId) throw new Error("sync-from-canvas no devolvió plan_id");
+      await persistPlanIdToCanvas({
+        canvasId: firestoreVpcId,
+        planId,
+        name: planName || "plan-" + Date.now(),
+        created: !!syncRes?.created,
+        validationOk: null, // aún no sabemos
+      });
+
+      setValidationResult({ plan_id: planId, created: !!syncRes?.created });
+      setValidationState("planning");
+
+      await api.deployPlan(planId, { simulateOnly: true });
+
+      const finalPlan = await pollPlanUntilDone(planId);
+      const finalStatus = String(finalPlan?.status || "");
+
+      if (finalStatus === "SUCCESS") {
+        setValidationState("success");
+        setSuccessMessage("Validación OK (Terraform plan)");
+        setValidatedCanvasHash(computeCanvasHash(nodes, edges));
+        await persistPlanIdToCanvas({
+          canvasId: firestoreVpcId,
+          planId,
+          name: planName || "plan-" + Date.now(),
+          created: !!syncRes?.created,
+          validationOk: true,
+        });
+      } else {
+        const msg = finalPlan?.error || "Validación fallida";
+        setValidationState("error");
+        setValidationError(msg);
+        setErrorMessage(msg);
+        setValidatedCanvasHash(null);
+        await persistPlanIdToCanvas({
+          canvasId: firestoreVpcId,
+          planId,
+          name: planName || "plan-" + Date.now(),
+          created: !!syncRes?.created,
+          validationOk: false,
+        });
+      }
+
+      setLoadingFlow(false);
+    } catch (error) {
+      const msg = error?.message || "Error desconocido";
+      setLoadingFlow(false);
+      setValidationState("error");
+      setValidationError(msg);
+      setErrorMessage(msg);
+      setValidatedCanvasHash(null);
+    }
+  };
+
+  const handleOpenPlanDetails = (planIdOverride) => {
+    const planId = planIdOverride || validationResult?.plan_id;
+    if (planId) navigate(`/admin/plans/${planId}`);
+  };
+
+  const handleApplyReal = async () => {
+    const planId = validationResult?.plan_id;
+    if (!planId) {
+      setErrorMessage("Primero valida el plan.");
+      return;
+    }
+
+    const txt = window.prompt("Para confirmar escribe: DEPLOY");
+    if (txt !== "DEPLOY") {
+      setErrorMessage("Deploy cancelado por el usuario.");
+      return;
+    }
+
     setLoadingFlow(true);
     setSuccessMessage(null);
     setErrorMessage(null);
 
     try {
-      if (!simulateOnly) {
-        const txt = window.prompt("Para confirmar escribe: DEPLOY");
-        if (txt !== "DEPLOY") {
-          setLoadingFlow(false);
-          setErrorMessage("Deploy cancelado por el usuario.");
-          return;
-        }
-      }
-    console.log("firestoreVpcId", firestoreVpcId);
-      const res = await api.createPlan({
-        name: planName || "plan-" + Date.now(),
-        ...transformedData,
-        simulate_only: simulateOnly,
-      });
-
+      await api.deployPlan(planId, { simulateOnly: false, applyMode: true });
       setLoadingFlow(false);
-      setSuccessMessage(`Plan creado. task_id=${res.task_id || "?"}`);
-      navigate(`/admin/plans/${res.plan_id || "?"}`);
+      navigate(`/admin/plans/${planId}`);
     } catch (error) {
       setLoadingFlow(false);
-      setErrorMessage(
-        `Fallo al crear el Plan: ${error?.message || "Error desconocido"}`
-      );
+      setErrorMessage(error?.message || "Error desconocido");
     }
+  };
+
+  // const handleConfirmDeploy = async () => {
+  //   setShowConfirmation(false);
+  //   setLoadingFlow(true);
+  //   setSuccessMessage(null);
+  //   setErrorMessage(null);
+
+  //   try {
+  //     if (!simulateOnly) {
+  //       const txt = window.prompt("Para confirmar escribe: DEPLOY");
+  //       if (txt !== "DEPLOY") {
+  //         setLoadingFlow(false);
+  //         setErrorMessage("Deploy cancelado por el usuario.");
+  //         return;
+  //       }
+  //     }
+  //     console.log("firestoreVpcId", firestoreVpcId);
+  //     const res = await api.syncPlanFromCanvas({
+  //       name: planName || "plan-" + Date.now(),
+  //       ...transformedData,
+  //       simulate_only: simulateOnly,
+  //     });
+
+  //     setLoadingFlow(false);
+  //     setSuccessMessage(
+  //       `${res.message || "Plan sincronizado."} plan_id=${res.plan_id || "?"}`,
+  //     );
+  //     navigate(`/admin/plans/${res.plan_id || "?"}`);
+  //   } catch (error) {
+  //     setLoadingFlow(false);
+  //     setErrorMessage(
+  //       `Fallo al crear el Plan: ${error?.message || "Error desconocido"}`,
+  //     );
+  //   }
+  // };
+  const handleConfirmDeploy = async () => {
+    await handleValidatePlan();
   };
 
   const handleCancelDeploy = () => {
     setShowConfirmation(false);
     setTransformedData(null);
+    // Nota: NO reseteamos validationState/validationResult aquí.
+    // Eso permite reabrir el modal y seguir teniendo disponible el plan_id.
   };
 
   const handleCloseSnackbar = (_e, reason) => {
@@ -427,6 +624,12 @@ const useDeployNetwork = ({
     handleCancelDeploy,
     handleConfirmDeploy,
     handleCloseSnackbar,
+    validationState,
+    validationError,
+    validationResult,
+    handleValidatePlan,
+    handleApplyReal,
+    handleOpenPlanDetails,
   };
 };
 

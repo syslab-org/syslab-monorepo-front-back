@@ -37,6 +37,18 @@ class Plan(models.Model):
     firestore_vpc_id = models.CharField(
         max_length=128, null=True, blank=True, db_index=True
     )
+    canvas_hash = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Hash del canvas/payload para detectar cambios sin comparar todo.",
+    )
+    canvas_updated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Fecha/hora del último sync desde el canvas (frontend/Firestore).",
+    )
     applied = models.BooleanField(
         default=False,
         help_text="True si la última ejecución fue un APPLY real (infra creada).",

@@ -108,7 +108,10 @@ const normalizeFetchedDoc = (docData) => {
     }
   }
 
-  return { flow, cidrBlock, prefixLength };
+  const planId =
+    docData.planId ?? data.planId ?? docData.plan_id ?? data.plan_id ?? null;
+
+  return { flow, cidrBlock, prefixLength, planId };
 };
 
 const useRestoreFlow = ({
@@ -117,6 +120,7 @@ const useRestoreFlow = ({
   setViewport,
   flowKey,
   getId,
+  setCanvasPlanId,
 }) => {
   const { vpcid } = useParams();
   const { setCidrBlockVPC, setPrefixLength } = useCidrBlockVPCStore();
@@ -139,12 +143,20 @@ const useRestoreFlow = ({
           return;
         }
 
-        const { flow: fetchedFlow, cidrBlock, prefixLength } = normalized;
+        const {
+          flow: fetchedFlow,
+          cidrBlock,
+          prefixLength,
+          planId,
+        } = normalized;
 
         // Actualiza CIDR/prefix aunque el flow esté en otro formato
         if (cidrBlock) setCidrBlockVPC(cidrBlock);
         if (prefixLength !== undefined && prefixLength !== null) {
           setPrefixLength(prefixLength || "");
+        }
+        if (typeof setCanvasPlanId === "function") {
+          setCanvasPlanId(planId || null);
         }
 
         if (!fetchedFlow) {
@@ -161,12 +173,16 @@ const useRestoreFlow = ({
           id: vpcid,
           cidrBlock: cidrBlock,
           prefixLength: prefixLength || "",
+          planId: planId || null,
         });
       }
 
       if (!flow) {
         setLoadingFlow(false);
         return;
+      }
+      if (typeof setCanvasPlanId === "function") {
+        setCanvasPlanId(flow.planId || null);
       }
 
       // ✅ Si no hay expiration, NO bloqueamos la restauración (evita canvas vacío por esquema viejo)
@@ -197,11 +213,19 @@ const useRestoreFlow = ({
           return;
         }
 
-        const { flow: fetchedFlow, cidrBlock, prefixLength } = normalized;
+        const {
+          flow: fetchedFlow,
+          cidrBlock,
+          prefixLength,
+          planId,
+        } = normalized;
 
         if (cidrBlock) setCidrBlockVPC(cidrBlock);
         if (prefixLength !== undefined && prefixLength !== null) {
           setPrefixLength(prefixLength || "");
+        }
+        if (typeof setCanvasPlanId === "function") {
+          setCanvasPlanId(planId || null);
         }
 
         if (!fetchedFlow) {
@@ -218,6 +242,7 @@ const useRestoreFlow = ({
           id: vpcid,
           cidrBlock: cidrBlock,
           prefixLength: prefixLength || "",
+          planId: planId || null,
         });
       }
 

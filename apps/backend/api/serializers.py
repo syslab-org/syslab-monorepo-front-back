@@ -17,6 +17,7 @@ class PlanListSerializer(serializers.ModelSerializer):
             "created_at",
             "simulate_only",
             "can_destroy",
+            "firestore_vpc_id",
         )
         read_only_fields = fields
 
@@ -62,6 +63,9 @@ class PlanDetailSerializer(serializers.ModelSerializer):
             "can_destroy",
             "last_deploy_task_id",
             "last_destroy_task_id",
+            "firestore_vpc_id",
+            "canvas_hash",
+            "canvas_updated_at",
         )
         read_only_fields = fields
 

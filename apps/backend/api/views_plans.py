@@ -1,6 +1,9 @@
-# apps/backend/api/views_plans.py
 import os
-from rest_framework import status
+
+from django.db import IntegrityError, transaction
+from django.db.utils import ProgrammingError
+from django.utils.dateparse import parse_datetime
+
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -30,6 +33,114 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
         if self.action in ("retrieve", "payload"):
             return PlanDetailSerializer
         return PlanListSerializer
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="sync-from-canvas",
+        url_name="sync-from-canvas",
+    )
+    def sync_from_canvas(self, request):
+        try:
+            # Accept canvas id from: canvas_id, firestore_vpc_id, vpcId
+            data = request.data
+            firestore_vpc_id = (
+                data.get("canvas_id")
+                or data.get("firestore_vpc_id")
+                or data.get("vpcId")
+            )
+            if not firestore_vpc_id:
+                return Response(
+                    {"ok": False, "error": "firestore_vpc_id/canvas_id es requerido."},
+                    status=400,
+                )
+
+            payload = data.get("payload", None)
+            if payload is None:
+                payload = dict(data)
+                payload.pop("payload", None)
+
+            name = data.get("name", "")
+            canvas_hash = data.get("canvas_hash")
+            canvas_updated_at = data.get("canvas_updated_at")
+
+            dt_canvas_updated_at = None
+            if canvas_updated_at:
+                dt_canvas_updated_at = parse_datetime(canvas_updated_at)
+
+            created = False
+
+            with transaction.atomic():
+                plan = Plan.objects.filter(firestore_vpc_id=firestore_vpc_id).first()
+                if plan:
+                    plan.name = name or plan.name or ""
+                    plan.payload = payload
+                    plan.canvas_hash = canvas_hash
+                    plan.canvas_updated_at = dt_canvas_updated_at
+                    plan.error = ""
+                    plan.save()
+                    msg = "Plan actualizado desde canvas"
+                else:
+                    try:
+                        plan = Plan.objects.create(
+                            name=name or "",
+                            payload=payload,
+                            firestore_vpc_id=firestore_vpc_id,
+                            canvas_hash=canvas_hash,
+                            canvas_updated_at=dt_canvas_updated_at,
+                            status=Plan.Status.PENDING,
+                        )
+                        created = True
+                        msg = "Plan creado desde canvas"
+                    except IntegrityError:
+                        # Race: duplicate, fetch and update
+                        plan = Plan.objects.get(firestore_vpc_id=firestore_vpc_id)
+                        plan.name = name or plan.name or ""
+                        plan.payload = payload
+                        plan.canvas_hash = canvas_hash
+                        plan.canvas_updated_at = dt_canvas_updated_at
+                        plan.error = ""
+                        plan.save()
+                        msg = "Plan actualizado desde canvas"
+
+            return Response(
+                {
+                    "ok": True,
+                    "plan_id": str(plan.id),
+                    "created": created,
+                    "message": msg,
+                }
+            )
+        except ProgrammingError as e:
+            return Response(
+                {
+                    "ok": False,
+                    "error": (
+                        "Error de esquema en la base de datos. Parece que faltan migraciones del modelo Plan. "
+                        "Ejecuta: python manage.py makemigrations api && python manage.py migrate"
+                    ),
+                    "detail": str(e),
+                },
+                status=500,
+            )
+        except Exception as e:
+            return Response(
+                {
+                    "ok": False,
+                    "error": "Error inesperado al sincronizar el plan.",
+                    "detail": str(e),
+                },
+                status=500,
+            )
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="sync_from_canvas",
+        url_name="sync_from_canvas",
+    )
+    def sync_from_canvas_legacy(self, request):
+        return self.sync_from_canvas(request)
 
     @action(detail=True, methods=["get"])
     def payload(self, request, pk=None):
