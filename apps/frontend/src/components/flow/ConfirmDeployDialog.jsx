@@ -125,20 +125,37 @@ export default function ConfirmDeployDialog({
 
       <DialogContent dividers>
         <Stack spacing={2}>
+          {/* ---- Plan asociado al canvas (si existe) ---- */}
+          {effectivePlanId ? (
+            <Alert
+              severity="info"
+              variant="outlined"
+              action={
+                <Button
+                  size="small"
+                  onClick={() => onOpenPlanDetails?.(effectivePlanId)}
+                >
+                  Ver plan existente
+                </Button>
+              }
+            >
+              Este canvas ya tiene un plan asociado. Revisa su estado antes de validar o aplicar.
+            </Alert>
+          ) : null}
           {/* ---- Estado de validación (2 fases) ---- */}
           {validationState === "syncing" && (
-            <Alert severity="info">Sincronizando plan con backend…</Alert>
+            <Alert severity="info" variant="filled">Sincronizando plan con backend…</Alert>
           )}
           {validationState === "planning" && (
-            <Alert severity="info">Ejecutando validación (Terraform plan)…</Alert>
+            <Alert severity="info" variant="filled">Ejecutando validación (Terraform plan)…</Alert>
           )}
           {validationState === "success" && (
-            <Alert severity="success">
+            <Alert severity="success" variant="filled">
               Validación OK. Puedes aplicar (deploy real) o ver detalles.
             </Alert>
           )}
           {validationState === "error" && (
-            <Alert severity="error">
+            <Alert severity="error" variant="filled">
               {validationError || "Validación fallida."}
               {effectivePlanId ? (
                 <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
