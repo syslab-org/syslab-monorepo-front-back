@@ -216,7 +216,7 @@ const useDeployNetwork = ({
       s.prefixLength,
     ]);
 
-  // Option B: persist planId in the canvas Firestore doc
+  // persist planId in the canvas Firestore doc
   const persistPlanIdToCanvas = async ({
     canvasId,
     planId,
