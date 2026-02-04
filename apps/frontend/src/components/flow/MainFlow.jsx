@@ -163,6 +163,7 @@ function MainFlow() {
   const [isCanvasDirty, setIsCanvasDirty] = useState(false);
   const [editGuardOpen, setEditGuardOpen] = useState(false);
   const editGuardRef = useRef({ fn: null, args: null });
+  const [ignoreDirtyGuard, setIgnoreDirtyGuard] = useState(false);
 
   const { loadingFlow } = useContext(LoadingFlowContext);
   useRestrictSubnetsInsideVPC()
@@ -266,6 +267,10 @@ function MainFlow() {
     };
   }, [vpcid]);
 
+  useEffect(() => {
+    setIgnoreDirtyGuard(false);
+  }, [canvasPlanId, validatedPlanHash]);
+
   // Effect to compute isCanvasDirty whenever nodes/edges or validated hash changes
   useEffect(() => {
     if (!validatedPlanHash) {
@@ -288,7 +293,7 @@ function MainFlow() {
       }
 
       // 2) Warning: canvas cambió desde la última validación y ya existe un plan
-      if (canvasPlanId && validatedPlanHash && isCanvasDirty) {
+      if (canvasPlanId && validatedPlanHash && isCanvasDirty && !ignoreDirtyGuard) {
         editGuardRef.current = { fn, args };
         setEditGuardOpen(true);
         return;
@@ -796,7 +801,7 @@ function MainFlow() {
                   variant="outlined"
                   onClick={() => {
                     setEditGuardOpen(false);
-                    // abre el modal de 2 fases (validación/preview) con el payload actual
+                    setIgnoreDirtyGuard(false);
                     processJsonToCloud();
                   }}
                 >
@@ -806,6 +811,9 @@ function MainFlow() {
                   variant="contained"
                   onClick={() => {
                     setEditGuardOpen(false);
+                    // El usuario acepta el riesgo: no interrumpir más con el modal
+                    // mientras el canvas siga “desactualizado”.
+                    setIgnoreDirtyGuard(true);
                     editGuardRef.current = { fn: null, args: null };
                   }}
                 >
