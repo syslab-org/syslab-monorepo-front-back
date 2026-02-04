@@ -15,9 +15,15 @@ import { initialNodes } from './utils/initials-elements';
 // mui
 import {
   Alert,
+  Backdrop,
   Box,
   Button,
   Card,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Grid,
   Modal,
   Snackbar,
@@ -45,7 +51,7 @@ import SubNetworkNodeInstance from './node-types/SubNetworkNodeInstance';
 import VPCNodeInstance from "./node-types/VPCNodeInstance";
 import useCidrBlockVPCStore from './store/cidrBlocksIp';
 import useClickedNodeIdStore from './store/clickedNodeIdStore';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useWizard } from "../../contexts/WizardContext";
 
 // Importar constantes
@@ -62,12 +68,14 @@ import {
 } from './utils/constants';
 
 import { useTheme } from "@mui/material/styles";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs } from "firebase/firestore";
 import { useContext } from "react";
 import { LoadingFlowContext } from "../../contexts/LoadingFlowContext";
 import { NetworkProvider } from "../../contexts/NetworkNodesContext";
 import { db } from "../../firebase/firebaseConfig";
 import ConfirmDeployDialog from "./ConfirmDeployDialog";
+import { api } from "../../lib/api";
+import { DB_FIRESTORE_VPCS } from "../../constants";
 import useDeployNetwork from "./flow-hooks/useDeployNetwork";
 import useHandleDrop from "./flow-hooks/useHandleDrop";
 import useRestrictMovement from "./flow-hooks/useRestrictMovement";
@@ -136,6 +144,7 @@ function MainFlow() {
   const params = useParams();
   console.log("ROUTE PARAMS", params);
   const { vpcid } = useParams()
+  const navigate = useNavigate();
   const theme = useTheme();
   const dotColor = theme.palette.mode === 'light'
     ? 'rgba(90,98,117,0.15)'
@@ -147,6 +156,13 @@ function MainFlow() {
   const [restorationDone, setRestorationDone] = useState(false);
   const [canvasPlanId, setCanvasPlanId] = useState(null);
   const [showRoutePreview, setShowRoutePreview] = useState(false);
+  const [canvasPlanInfo, setCanvasPlanInfo] = useState(null);
+  const [isCanvasLocked, setIsCanvasLocked] = useState(false);
+  const [canvasUiError, setCanvasUiError] = useState(null);
+  const [validatedPlanHash, setValidatedPlanHash] = useState(null);
+  const [isCanvasDirty, setIsCanvasDirty] = useState(false);
+  const [editGuardOpen, setEditGuardOpen] = useState(false);
+  const editGuardRef = useRef({ fn: null, args: null });
 
   const { loadingFlow } = useContext(LoadingFlowContext);
   useRestrictSubnetsInsideVPC()
@@ -199,7 +215,145 @@ function MainFlow() {
   }, []);
 
 
-  const onNodeClick = useNodeClick(setSelectedNode, setModalIsOpen);
+  const isPlanRunning = (st) => {
+    const s = String(st || '').toUpperCase();
+    return s === 'RUNNING' || s === 'PENDING' || s === 'STARTED';
+  };
+
+  // Helper para calcular un hash estable del canvas (topología actual)
+  const computeCanvasHashLite = (nodesArr, edgesArr) => {
+    try {
+      const n = (nodesArr || []).map((x) => ({
+        id: x.id,
+        type: x.type,
+        data: x.data || {},
+        position: x.position || null,
+      }));
+      const e = (edgesArr || []).map((x) => ({
+        id: x.id,
+        source: x.source,
+        target: x.target,
+        type: x.type || null,
+      }));
+      return JSON.stringify({ n, e });
+    } catch (_err) {
+      return `n:${(nodesArr || []).length}-e:${(edgesArr || []).length}`;
+    }
+  };
+  // Load plan metadata (planId + planCanvasHash) from Firestore
+  useEffect(() => {
+    let alive = true;
+
+    const loadPlanMeta = async () => {
+      try {
+        if (!vpcid) return;
+        const ref = doc(db, DB_FIRESTORE_VPCS, vpcid);
+        const snap = await getDoc(ref);
+        if (!alive) return;
+
+        const data = snap.exists() ? snap.data() : null;
+        setCanvasPlanId(data?.planId || null);
+        setValidatedPlanHash(data?.planCanvasHash || null);
+      } catch (_e) {
+        if (!alive) return;
+        setValidatedPlanHash(null);
+      }
+    };
+
+    loadPlanMeta();
+    return () => {
+      alive = false;
+    };
+  }, [vpcid]);
+
+  // Effect to compute isCanvasDirty whenever nodes/edges or validated hash changes
+  useEffect(() => {
+    if (!validatedPlanHash) {
+      setIsCanvasDirty(false);
+      return;
+    }
+    const current = computeCanvasHashLite(nodes, edges);
+    setIsCanvasDirty(current !== validatedPlanHash);
+  }, [nodes, edges, validatedPlanHash]);
+
+  const guardBeforeEdit = (
+    fn,
+    msgLocked = 'Hay un plan ejecutándose. Revisa el plan antes de editar el canvas.'
+  ) => {
+    return (...args) => {
+      // 1) Lock fuerte si hay ejecución
+      if (isCanvasLocked) {
+        setCanvasUiError(msgLocked);
+        return;
+      }
+
+      // 2) Warning: canvas cambió desde la última validación y ya existe un plan
+      if (canvasPlanId && validatedPlanHash && isCanvasDirty) {
+        editGuardRef.current = { fn, args };
+        setEditGuardOpen(true);
+        return;
+      }
+
+      return fn?.(...args);
+    };
+  };
+
+  const onNodeClickBase = useNodeClick(setSelectedNode, setModalIsOpen);
+  const onNodeClick = guardBeforeEdit(onNodeClickBase);
+  useEffect(() => {
+    let alive = true;
+    let timer = null;
+
+    const load = async () => {
+      if (!canvasPlanId) {
+        if (alive) {
+          setCanvasPlanInfo(null);
+          setIsCanvasLocked(false);
+        }
+        return;
+      }
+
+      try {
+        const plan = await api.getPlan(canvasPlanId);
+        if (!alive) return;
+
+        setCanvasPlanInfo(plan || null);
+        setIsCanvasLocked(isPlanRunning(plan?.status));
+
+        // Poll solo si está corriendo
+        if (isPlanRunning(plan?.status)) {
+          timer = window.setInterval(async () => {
+            try {
+              const p = await api.getPlan(canvasPlanId);
+              if (!alive) return;
+              setCanvasPlanInfo(p || null);
+              const running = isPlanRunning(p?.status);
+              setIsCanvasLocked(running);
+              if (!running && timer) {
+                window.clearInterval(timer);
+                timer = null;
+              }
+            } catch (_e) {
+              // Si falla el polling, no bloqueamos indefinidamente
+              if (!alive) return;
+              setIsCanvasLocked(false);
+            }
+          }, 1500);
+        }
+      } catch (_e) {
+        if (!alive) return;
+        setCanvasPlanInfo(null);
+        setIsCanvasLocked(false);
+      }
+    };
+
+    load();
+
+    return () => {
+      alive = false;
+      if (timer) window.clearInterval(timer);
+    };
+  }, [canvasPlanId]);
 
 
   const closeModal = () => {
@@ -346,6 +500,21 @@ function MainFlow() {
     handleOpenPlanDetails,
   } = useDeployNetwork({ nodes, edges, allowCrossVpcPingUI, firestoreVpcId: vpcid })
 
+  // Mantener el canvas sincronizado con el último plan validado, sin recargar
+  useEffect(() => {
+    if (validationState === 'success' && validationResult?.plan_id) {
+      const pid = validationResult.plan_id;
+      setCanvasPlanId(pid);
+
+      const okHash = computeCanvasHashLite(nodes, edges);
+      setValidatedPlanHash(okHash);
+
+      // El canvas acaba de validarse, así que no está desactualizado
+      setIsCanvasDirty(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [validationState, validationResult?.plan_id]);
+
   const location = useLocation();
   const isWizardEntry = new URLSearchParams(location.search).get("wizard") === "1";
 
@@ -458,18 +627,20 @@ function MainFlow() {
   const restoreInitialNodes = () => {
     setNodes(initialNodes);
   };
-
-  if (loadingFlow) {
-    return (
-      <Box sx={{ p: 4 }}>
-        <Typography variant="h6">🔄 Restaurando red... espera un momento</Typography>
-      </Box>
-    );
-  }
-
-
   return (
     <NetworkProvider>
+      <Backdrop
+        open={!!loadingFlow}
+        sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.modal + 1 }}
+      >
+        <Stack spacing={2} alignItems="center">
+          <CircularProgress />
+          <Typography variant="h6">🔄 Procesando…</Typography>
+          <Typography variant="body2" sx={{ opacity: 0.9 }}>
+            Validando/ejecutando plan o restaurando red. No cierres la pestaña.
+          </Typography>
+        </Stack>
+      </Backdrop>
       <Grid container >
         <Grid item xs={12} sm={2} md={2}>
 
@@ -486,12 +657,17 @@ function MainFlow() {
         </Grid>
 
         <Grid item xs={12} sm={10} md={10}>
-          <Card sx={{
-            width: "100%",
-            height: "100vh",
-            borderRadius: { xs: 2, sm: "0 16px 16px 0" },
-          }}
-            ref={reactFlowWrapper} >
+          <Card
+            sx={{
+              width: "100%",
+              height: "100vh",
+              borderRadius: { xs: 2, sm: "0 16px 16px 0" },
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+            ref={reactFlowWrapper}
+          >
             {isWizardEntry && (
               <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider" }}>
                 <Typography variant="overline" color="text.secondary">
@@ -505,71 +681,138 @@ function MainFlow() {
                 </Typography>
               </Box>
             )}
-            <PacketToolbar
-              onSave={onSaveFlow}
-              onRestore={onRestoreFlow}
-              onRestoreInitial={restoreInitialNodes}
-              onDeploy={processJsonToCloud}
-              onZoomIn={handleZoomIn}
-              onZoomOut={handleZoomOut}
-              onFitView={handleFitView}
-              title="Logical"
-              onPreviewRoutes={() => {
-                const preview = buildRoutingPreview(nodes, edges);
-                setRoutesPreviewData(preview);
-                setRoutesPreviewOpen(true);
-                // si quieres ver en consola también:
-                // console.log('ROUTES PREVIEW', preview);
+            <Box
+              sx={{
+                flexShrink: 0,
+                position: "sticky",
+                top: 0,
+                zIndex: 50,
+                backgroundColor: (t) => t.palette.background.paper,
               }}
-
-            />
-
-
-
-            <ReactFlow
-              nodes={nodes}
-              edges={edges.map(e => ({ ...e, style: connectionLineStyle, animated: true }))}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onNodeClick={onNodeClick}
-              onConnect={(params) => onConnect(params, setEdges, () => reactFlowInstance?.getEdges?.() || [])}
-              onInit={setReactFlowInstance}
-              onDrop={onDrop}
-              onNodeDragStart={onNodeDragStart}
-              onNodeDrag={onNodeDrag}
-              onNodeDragStop={onNodeDragStop}
-              onDragOver={onDragOver}
-              backgroundVariant="dots"
-              snapToGrid
-              snapGrid={[24, 24]}              // alineación limpia
-              selectionOnDrag={false}          // evita seleccionar “marco azul” al arrastrar
-              elevateNodesOnSelect
-              onConnectStart={onConnectStart}
-              onConnectEnd={onConnectEnd}
-              fitViewOptions={{
-                padding: 0.2,
-              }}
-              isValidConnection={(connection) => isValidConnection(connection, nodes)}
-              className="overview"
-              nodeTypes={nodeTypes}
-              nodeOrigin={[0, 0]}
-              style={{
-                backgroundColor: "#D3D2E5",
-              }}
-              connectionLineStyle={connectionLineStyle}
-              onPaneClick={() => setNodes(nds => nds.map(n => ({ ...n, selected: false })))}
-
             >
+              <PacketToolbar
+                onSave={onSaveFlow}
+                onRestore={onRestoreFlow}
+                onRestoreInitial={restoreInitialNodes}
+                onDeploy={processJsonToCloud}
+                onZoomIn={handleZoomIn}
+                onZoomOut={handleZoomOut}
+                onFitView={handleFitView}
+                title="Logical"
+                onPreviewRoutes={() => {
+                  const preview = buildRoutingPreview(nodes, edges);
+                  setRoutesPreviewData(preview);
+                  setRoutesPreviewOpen(true);
+                  // si quieres ver en consola también:
+                  // console.log('ROUTES PREVIEW', preview);
+                }}
+                planStatus={canvasPlanInfo}
+                isCanvasLocked={isCanvasLocked}
+                isCanvasDirty={isCanvasDirty}
+              />
+            </Box>
+            <Box sx={{ flex: 1, minHeight: 0, position: "relative" }}>
+              <ReactFlow
+                nodes={nodes}
+                edges={edges.map(e => ({ ...e, style: connectionLineStyle, animated: true }))}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onNodeClick={onNodeClick}
+                onConnect={guardBeforeEdit((params) => onConnect(params, setEdges, () => reactFlowInstance?.getEdges?.() || []))}
+                onInit={setReactFlowInstance}
+                onDrop={guardBeforeEdit(onDrop)}
+                onNodeDragStart={guardBeforeEdit(onNodeDragStart)}
+                onNodeDrag={guardBeforeEdit(onNodeDrag)}
+                onNodeDragStop={guardBeforeEdit(onNodeDragStop)}
+                onDragOver={onDragOver}
+                backgroundVariant="dots"
+                snapToGrid
+                snapGrid={[24, 24]}              // alineación limpia
+                selectionOnDrag={false}          // evita seleccionar “marco azul” al arrastrar
+                elevateNodesOnSelect
+                onConnectStart={onConnectStart}
+                onConnectEnd={onConnectEnd}
+                fitViewOptions={{
+                  padding: 0.2,
+                }}
+                isValidConnection={(connection) => isValidConnection(connection, nodes)}
+                className="overview"
+                nodeTypes={nodeTypes}
+                nodeOrigin={[0, 0]}
+                style={{
+                  backgroundColor: "#D3D2E5",
+                  width: "100%",
+                  height: "100%",
+                }}
+                connectionLineStyle={connectionLineStyle}
+                onPaneClick={() => setNodes(nds => nds.map(n => ({ ...n, selected: false })))}
+              >
+                <Controls />
+                <Background variant="dots" gap={24} size={1.2} color={dotColor} />
+                <Panel position="top-right">
+                  <Button variant="contained" size="small" onClick={() => setShowRoutePreview(true)}>
+                    Preview de rutas
+                  </Button>
+                </Panel>
+              </ReactFlow>
+            </Box>
+            <Snackbar
+              open={!!canvasUiError}
+              autoHideDuration={6000}
+              onClose={(_e, reason) => {
+                if (reason === 'clickaway') return;
+                setCanvasUiError(null);
+              }}
+              anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+            >
+              <Alert severity="warning" variant="filled" sx={{ width: '100%' }}>
+                {canvasUiError}
+              </Alert>
+            </Snackbar>
 
-              <Controls />
-              <Background variant="dots" gap={24} size={1.2} color={dotColor} />
-              <Panel position="top-right">
-                <Button variant="contained" size="small" onClick={() => setShowRoutePreview(true)}>
-                  Preview de rutas
+            <Dialog
+              open={editGuardOpen}
+              onClose={() => setEditGuardOpen(false)}
+              maxWidth="sm"
+              fullWidth
+            >
+              <DialogTitle>Canvas desactualizado vs Plan</DialogTitle>
+              <DialogContent>
+                <Typography variant="body2" color="text.secondary">
+                  Este canvas cambió desde la última validación asociada al plan.
+                  Si sigues editando, el plan ya no representa exactamente lo que estás viendo.
+                </Typography>
+              </DialogContent>
+              <DialogActions>
+                <Button
+                  onClick={() => {
+                    setEditGuardOpen(false);
+                    if (canvasPlanId) navigate(`/admin/plans/${canvasPlanId}`);
+                  }}
+                >
+                  Ver plan
                 </Button>
-              </Panel>
-
-            </ReactFlow>
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    setEditGuardOpen(false);
+                    // abre el modal de 2 fases (validación/preview) con el payload actual
+                    processJsonToCloud();
+                  }}
+                >
+                  Re-validar
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={() => {
+                    setEditGuardOpen(false);
+                    editGuardRef.current = { fn: null, args: null };
+                  }}
+                >
+                  Seguir editando
+                </Button>
+              </DialogActions>
+            </Dialog>
 
 
             <ConfirmDeployDialog

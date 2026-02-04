@@ -223,6 +223,7 @@ const useDeployNetwork = ({
     name,
     created,
     validationOk,
+    canvasHash,
   }) => {
     if (!canvasId || !planId) return;
     try {
@@ -236,6 +237,7 @@ const useDeployNetwork = ({
           planValidationOk:
             typeof validationOk === "boolean" ? validationOk : null,
           planUpdatedAt: new Date(),
+          planCanvasHash: typeof canvasHash === "string" ? canvasHash : null,
         },
         { merge: true },
       );
@@ -494,13 +496,15 @@ const useDeployNetwork = ({
       if (finalStatus === "SUCCESS") {
         setValidationState("success");
         setSuccessMessage("Validación OK (Terraform plan)");
-        setValidatedCanvasHash(computeCanvasHash(nodes, edges));
+        const okHash = computeCanvasHash(nodes, edges);
+        setValidatedCanvasHash(okHash);
         await persistPlanIdToCanvas({
           canvasId: firestoreVpcId,
           planId,
           name: planName || "plan-" + Date.now(),
           created: !!syncRes?.created,
           validationOk: true,
+          canvasHash: okHash,
         });
       } else {
         const msg = finalPlan?.error || "Validación fallida";
@@ -514,6 +518,7 @@ const useDeployNetwork = ({
           name: planName || "plan-" + Date.now(),
           created: !!syncRes?.created,
           validationOk: false,
+          canvasHash: null,
         });
       }
 
