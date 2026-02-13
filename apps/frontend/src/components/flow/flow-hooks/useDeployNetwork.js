@@ -56,7 +56,6 @@ function computeCanvasHash(nodes, edges) {
       id: x.id,
       type: x.type,
       data: x.data || {},
-      position: x.position || null,
     }));
     const e = (edges || []).map((x) => ({
       id: x.id,
