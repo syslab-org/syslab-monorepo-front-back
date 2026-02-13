@@ -228,7 +228,6 @@ function MainFlow() {
         id: x.id,
         type: x.type,
         data: x.data || {},
-        position: x.position || null,
       }));
       const e = (edgesArr || []).map((x) => ({
         id: x.id,
