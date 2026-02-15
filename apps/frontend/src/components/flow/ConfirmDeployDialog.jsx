@@ -145,7 +145,12 @@ export default function ConfirmDeployDialog({
           ) : null}
           {/* ---- Estado de validación (2 fases) ---- */}
           {validationState === "syncing" && (
-            <Alert severity="info" variant="filled">Sincronizando plan con backend…</Alert>
+            <Alert severity="info" variant="filled">
+              Sincronizando plan con backend…
+              <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                Detectando si existe un plan previo asociado al canvas.
+              </Typography>
+            </Alert>
           )}
           {validationState === "planning" && (
             <Alert severity="info" variant="filled">Ejecutando validación (Terraform plan)…</Alert>
