@@ -161,6 +161,24 @@ function MainFlow() {
   const [canvasUiError, setCanvasUiError] = useState(null);
   const [validatedPlanHash, setValidatedPlanHash] = useState(null);
   const [isCanvasDirty, setIsCanvasDirty] = useState(false);
+  // =========================
+  // Canvas State Machine (derivado)
+  // =========================
+  const canvasState = (() => {
+    if (!canvasPlanId) return "NO_PLAN";
+
+    if (isCanvasLocked) return "PLAN_RUNNING";
+
+    if (canvasPlanId && validatedPlanHash && isCanvasDirty) {
+      return "PLAN_OUTDATED";
+    }
+
+    if (canvasPlanId && validatedPlanHash && !isCanvasDirty) {
+      return "PLAN_VALIDATED";
+    }
+
+    return "PLAN_SYNCED";
+  })();
   const dirtyInitializedRef = useRef(false);
   const [editGuardOpen, setEditGuardOpen] = useState(false);
   const editGuardRef = useRef({ fn: null, args: null });
@@ -770,8 +788,7 @@ function MainFlow() {
                   // console.log('ROUTES PREVIEW', preview);
                 }}
                 planStatus={canvasPlanInfo}
-                isCanvasLocked={isCanvasLocked}
-                isCanvasDirty={isCanvasDirty}
+                canvasState={canvasState}
               />
             </Box>
             <Box sx={{ flex: 1, minHeight: 0, position: "relative" }}>
@@ -904,6 +921,7 @@ function MainFlow() {
               allowCrossVpcPingUI={allowCrossVpcPingUI}
               setAllowCrossVpcPingUI={setAllowCrossVpcPingUI}
               existingPlanId={canvasPlanId || canvasPlanInfo?.id || null}
+              canvasState={canvasState}
             />
 
           </Card>

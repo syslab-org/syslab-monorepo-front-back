@@ -23,8 +23,7 @@ export default function PacketToolbar({
   title = 'Logical',
   onPreviewRoutes,
   planStatus = null, // { status, last_action, simulate_only, updated_at }
-  isCanvasLocked = false,
-  isCanvasDirty = false,
+  canvasState = "NO_PLAN",
 }) {
   const { mode, toggle } = useThemeMode();
 
@@ -59,14 +58,14 @@ export default function PacketToolbar({
                         : 'default'
                 }
               />
-              {isCanvasDirty ? (
+              {canvasState === "PLAN_OUTDATED" && (
                 <Chip
                   size="small"
                   variant="outlined"
                   label="DESACTUALIZADO"
                   color="warning"
                 />
-              ) : null}
+              )}
             </>
           ) : null}
         </div>
@@ -88,31 +87,31 @@ export default function PacketToolbar({
 
         {/* Botones de acción */}
         <div className="pt-toolbar__group">
-          <Button variant="outlined" className="pt-btn" startIcon={<SaveIcon />} onClick={onSave} size="small" disabled={isCanvasLocked}>Save</Button>
-          <Button variant="outlined" className="pt-btn" startIcon={<RestoreIcon />} onClick={onRestore} size="small" disabled={isCanvasLocked}>Restore</Button>
-          <Button variant="outlined" className="pt-btn pt-btn--yellow" startIcon={<RestartAltIcon />} onClick={onRestoreInitial} size="small" disabled={isCanvasLocked}>Restore Initial</Button>
-          <Button variant="outlined" className="pt-btn pt-btn--green" startIcon={<PlayArrowIcon />} onClick={onDeploy} size="small" disabled={isCanvasLocked}>Deploy</Button>
-          <Button variant="outlined" className="pt-btn pt-btn--green" startIcon={<PlayArrowIcon />} onClick={onPreviewRoutes} size="small" disabled={isCanvasLocked}>Preview</Button>
+          <Button variant="outlined" className="pt-btn" startIcon={<SaveIcon />} onClick={onSave} size="small" disabled={canvasState === "PLAN_RUNNING"}>Save</Button>
+          <Button variant="outlined" className="pt-btn" startIcon={<RestoreIcon />} onClick={onRestore} size="small" disabled={canvasState === "PLAN_RUNNING"}>Restore</Button>
+          <Button variant="outlined" className="pt-btn pt-btn--yellow" startIcon={<RestartAltIcon />} onClick={onRestoreInitial} size="small" disabled={canvasState === "PLAN_RUNNING"}>Restore Initial</Button>
+          <Button variant="outlined" className="pt-btn pt-btn--green" startIcon={<PlayArrowIcon />} onClick={onDeploy} size="small" disabled={canvasState === "PLAN_RUNNING"}>Deploy</Button>
+          <Button variant="outlined" className="pt-btn pt-btn--green" startIcon={<PlayArrowIcon />} onClick={onPreviewRoutes} size="small" disabled={canvasState === "PLAN_RUNNING"}>Preview</Button>
         </div>
 
       </div>
 
       {/* Mensajes visibles de estado (canvas) */}
-      {isCanvasLocked ? (
+      {canvasState === "PLAN_RUNNING" && (
         <Box sx={{ mt: 1 }}>
           <Alert severity="warning" variant="outlined">
-            Hay un plan ejecutándose. El canvas está bloqueado para evitar ediciones inconsistentes.
+            Hay un plan ejecutándose. El canvas está bloqueado.
           </Alert>
         </Box>
-      ) : null}
+      )}
 
-      {!isCanvasLocked && isCanvasDirty ? (
+      {canvasState === "PLAN_OUTDATED" && (
         <Box sx={{ mt: 1 }}>
           <Alert severity="info" variant="outlined">
             El canvas cambió desde la última validación. Revalida antes de aplicar (deploy real).
           </Alert>
         </Box>
-      ) : null}
+      )}
 
     </div>
   );
