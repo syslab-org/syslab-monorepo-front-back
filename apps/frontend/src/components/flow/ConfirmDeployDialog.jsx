@@ -62,6 +62,7 @@ export default function ConfirmDeployDialog({
   allowCrossVpcPingUI,
   setAllowCrossVpcPingUI,
   existingPlanId = null,
+  canvasState = "NO_PLAN",
 }) {
   const allowRealApply = import.meta.env.VITE_ALLOW_REAL_APPLY === "1";
   console.log("existingPlanId:", existingPlanId);
@@ -143,6 +144,26 @@ export default function ConfirmDeployDialog({
               El nombre del plan es inmutable y no puede modificarse.
             </Alert>
           ) : null}
+
+          {/* ---- Estado global del canvas (derivado) ---- */}
+          {canvasState === "PLAN_OUTDATED" && (
+            <Alert severity="warning" variant="outlined">
+              La topología actual difiere de la última validación exitosa.
+              Debes revalidar antes de aplicar cambios en infraestructura real.
+            </Alert>
+          )}
+
+          {canvasState === "PLAN_RUNNING" && (
+            <Alert severity="warning" variant="filled">
+              Existe un plan en ejecución. El canvas está bloqueado hasta que finalice.
+            </Alert>
+          )}
+
+          {canvasState === "PLAN_VALIDATED" && validationState === "idle" && (
+            <Alert severity="success" variant="outlined">
+              El canvas coincide con el último plan validado.
+            </Alert>
+          )}
           {/* ---- Estado de validación (2 fases) ---- */}
           {validationState === "syncing" && (
             <Alert severity="info" variant="filled">
