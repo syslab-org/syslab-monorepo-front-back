@@ -225,7 +225,7 @@ const useDeployNetwork = ({
     }
   };
 
-  const processJsonToCloud = () => {
+  const processJsonToCloud = async () => {
     const { errors, warnings } = validateTopology(nodes, edges);
     if (errors.length > 0) {
       setErrorMessage(
@@ -370,7 +370,12 @@ const useDeployNetwork = ({
     const vlanRegionFinal = vlanRegion || vpcsPayload[0]?.region || "us-east-1";
 
     const planDefaultName = vpcsPayload[0]?.name || `plan-${Date.now()}`;
-    setPlanName(planDefaultName);
+
+    // Solo sugerimos nombre si aún no hay uno definido.
+    // No volvemos a sincronizarlo con la VPC.
+    if (!planName) {
+      setPlanName(planDefaultName);
+    }
 
     const anyLinks = links.length > 0;
     const someRouterForcesPing = nodes
@@ -406,8 +411,43 @@ const useDeployNetwork = ({
       ...built,
     });
 
-    // (hash infra/canvas ya no se usa aquí para resetear validación)
+    // Abrimos el modal inmediatamente (UX reactiva)
     setShowConfirmation(true);
+
+    // 🔎 Intentar sincronizar con backend en segundo plano
+    try {
+      if (firestoreVpcId) {
+        setValidationState("syncing");
+
+        const syncRes = await api.syncPlanFromCanvas({
+          name: built.name || "plan-" + Date.now(),
+          ...built,
+          simulate_only: true,
+        });
+
+        const planId = syncRes?.plan_id;
+
+        if (planId) {
+          await persistPlanIdToCanvas({
+            canvasId: firestoreVpcId,
+            planId,
+            name: built.name,
+            created: !!syncRes?.created,
+            validationOk: null,
+          });
+
+          setValidationResult({
+            plan_id: planId,
+            created: !!syncRes?.created,
+          });
+
+          setValidationState("idle");
+        }
+      }
+    } catch (e) {
+      console.warn("No se pudo detectar plan existente antes de validar:", e);
+      setValidationState("idle");
+    }
   };
 
   const pollPlanUntilDone = async (

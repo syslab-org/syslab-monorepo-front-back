@@ -223,35 +223,50 @@ function MainFlow() {
   };
 
   // Helper para calcular un hash estable del canvas (topología actual)
+  // Importante: debe ser determinista (mismo contenido => mismo hash),
+  // independientemente del orden del array de nodes/edges.
   const computeCanvasHashLite = (nodesArr, edgesArr) => {
     try {
-      const n = (nodesArr || []).map((x) => {
-        const data = { ...(x.data || {}) };
+      const round = (v) => {
+        // Reducimos ruido de floats sin perder cambios reales
+        const n = Number(v);
+        if (Number.isNaN(n)) return 0;
+        return Math.round(n * 100) / 100;
+      };
 
-        // 🔎 Elimina campos derivados o visuales que no deben afectar el hash
-        delete data.connectedRouters; // se recalcula por edges
-        delete data.selected;
-        delete data.hovered;
+      const nodesStable = (nodesArr || [])
+        .map((x) => {
+          const data = { ...(x.data || {}) };
 
-        return {
+          // 🔎 Elimina campos derivados o visuales que no deben afectar el hash
+          delete data.connectedRouters; // se recalcula por edges
+          delete data.selected;
+          delete data.hovered;
+
+          return {
+            id: x.id,
+            type: x.type,
+            // parentId/parentNode es parte de la topología
+            parentId: x.parentId || x.parentNode || null,
+            position: {
+              x: round(x.position?.x ?? 0),
+              y: round(x.position?.y ?? 0),
+            },
+            data,
+          };
+        })
+        .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+      const edgesStable = (edgesArr || [])
+        .map((x) => ({
           id: x.id,
-          type: x.type,
-          position: {
-            x: x.position?.x ?? 0,
-            y: x.position?.y ?? 0,
-          },
-          data,
-        };
-      });
+          source: x.source,
+          target: x.target,
+          type: x.type || null,
+        }))
+        .sort((a, b) => String(a.id).localeCompare(String(b.id)));
 
-      const e = (edgesArr || []).map((x) => ({
-        id: x.id,
-        source: x.source,
-        target: x.target,
-        type: x.type || null,
-      }));
-
-      return JSON.stringify({ n, e });
+      return JSON.stringify({ n: nodesStable, e: edgesStable });
     } catch (_err) {
       return `n:${(nodesArr || []).length}-e:${(edgesArr || []).length}`;
     }
@@ -286,26 +301,26 @@ function MainFlow() {
     setIgnoreDirtyGuard(false);
   }, [canvasPlanId, validatedPlanHash]);
 
-  // Effect to compute isCanvasDirty only after restoration is done
   useEffect(() => {
     if (!restorationDone) return;
 
-    if (!validatedPlanHash) {
+    // Si no hay plan asociado, no existe concepto de "dirty"
+    if (!canvasPlanId || !validatedPlanHash) {
       setIsCanvasDirty(false);
       return;
     }
 
     const current = computeCanvasHashLite(nodes, edges);
+    const dirty = current !== validatedPlanHash;
 
-    // Evita marcar como dirty inmediatamente después de restaurar/refresh
-    if (!dirtyInitializedRef.current) {
-      dirtyInitializedRef.current = true;
-      setIsCanvasDirty(false);
-      return;
+    setIsCanvasDirty(dirty);
+
+    // Si vuelve a coincidir, levantamos el ignore
+    if (!dirty) {
+      setIgnoreDirtyGuard(false);
     }
 
-    setIsCanvasDirty(current !== validatedPlanHash);
-  }, [nodes, edges, validatedPlanHash, restorationDone]);
+  }, [nodes, edges, validatedPlanHash, canvasPlanId, restorationDone]);
 
   const guardBeforeEdit = (
     fn,
@@ -540,13 +555,22 @@ function MainFlow() {
       const okHash = computeCanvasHashLite(nodes, edges);
       setValidatedPlanHash(okHash);
 
-      // Persistir el hash validado en Firestore para que sobreviva a refresh
-      try {
-        const ref = doc(db, DB_FIRESTORE_VPCS, vpcid);
-        setDoc(ref, { planCanvasHash: okHash }, { merge: true });
-      } catch (_e) {
-        console.warn("No se pudo persistir planCanvasHash:", _e);
-      }
+      // Persistir planId y hash validado en Firestore para que sobreviva a refresh
+      (async () => {
+        try {
+          const ref = doc(db, DB_FIRESTORE_VPCS, vpcid);
+          await setDoc(
+            ref,
+            {
+              planId: pid,
+              planCanvasHash: okHash,
+            },
+            { merge: true }
+          );
+        } catch (_e) {
+          console.warn("No se pudo persistir planCanvasHash:", _e);
+        }
+      })();
 
       // El canvas acaba de validarse, así que no está desactualizado
       setIsCanvasDirty(false);
@@ -858,7 +882,7 @@ function MainFlow() {
 
 
             <ConfirmDeployDialog
-              open={showConfirmation}
+              open={showConfirmation && restorationDone}
               onClose={handleCancelDeploy}
               onValidatePlan={(overrideValue) => {
                 setAllowCrossVpcPingUI(overrideValue);
@@ -879,7 +903,7 @@ function MainFlow() {
               transformedData={transformedData}
               allowCrossVpcPingUI={allowCrossVpcPingUI}
               setAllowCrossVpcPingUI={setAllowCrossVpcPingUI}
-              existingPlanId={validationResult?.plan_id || null}
+              existingPlanId={canvasPlanId || canvasPlanInfo?.id || null}
             />
 
           </Card>

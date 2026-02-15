@@ -64,9 +64,9 @@ export default function ConfirmDeployDialog({
   existingPlanId = null,
 }) {
   const allowRealApply = import.meta.env.VITE_ALLOW_REAL_APPLY === "1";
-
+  console.log("existingPlanId:", existingPlanId);
   // Normalización segura
-  const effectivePlanId = validationResult?.plan_id || existingPlanId || null;
+  const effectivePlanId = existingPlanId ?? validationResult?.plan_id ?? null;
   const vpcs = Array.isArray(transformedData?.vpcs) ? transformedData.vpcs : [];
   const links = Array.isArray(transformedData?.links) ? transformedData.links : [];
   const vlan = transformedData?.vlan || {};
@@ -139,7 +139,8 @@ export default function ConfirmDeployDialog({
                 </Button>
               }
             >
-              Este canvas ya tiene un plan asociado. Revisa su estado antes de validar o aplicar.
+              Este canvas ya tiene un plan asociado (ID: {effectivePlanId}).
+              El nombre del plan es inmutable y no puede modificarse.
             </Alert>
           ) : null}
           {/* ---- Estado de validación (2 fases) ---- */}
@@ -164,19 +165,30 @@ export default function ConfirmDeployDialog({
               ) : null}
             </Alert>
           )}
-          {validationState === "idle" && (
+          {validationState === "idle" && !existingPlanId && (
             <Typography variant="body2" color="text.secondary">
               Aún no has validado este plan con el backend.
             </Typography>
           )}
+
 
           {/* ---- Nombre del plan ---- */}
           <TextField
             fullWidth
             label="Nombre del Plan"
             value={planName}
-            onChange={(e) => setPlanName(e.target.value)}
+            onChange={(e) => {
+              if (!effectivePlanId) {
+                setPlanName(e.target.value);
+              }
+            }}
             placeholder="p.ej. red-principal"
+            disabled={!!effectivePlanId}
+            helperText={
+              effectivePlanId
+                ? "Este plan ya fue creado y su nombre no puede modificarse."
+                : "Puedes definir el nombre antes de validar el plan."
+            }
           />
 
           {/* ---- Toggle Simulación / Apply ---- */}
