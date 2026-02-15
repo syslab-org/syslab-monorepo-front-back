@@ -68,7 +68,7 @@ import {
 } from './utils/constants';
 
 import { useTheme } from "@mui/material/styles";
-import { collection, doc, getDoc, getDocs } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, setDoc } from "firebase/firestore";
 import { useContext } from "react";
 import { LoadingFlowContext } from "../../contexts/LoadingFlowContext";
 import { NetworkProvider } from "../../contexts/NetworkNodesContext";
@@ -161,6 +161,7 @@ function MainFlow() {
   const [canvasUiError, setCanvasUiError] = useState(null);
   const [validatedPlanHash, setValidatedPlanHash] = useState(null);
   const [isCanvasDirty, setIsCanvasDirty] = useState(false);
+  const dirtyInitializedRef = useRef(false);
   const [editGuardOpen, setEditGuardOpen] = useState(false);
   const editGuardRef = useRef({ fn: null, args: null });
   const [ignoreDirtyGuard, setIgnoreDirtyGuard] = useState(false);
@@ -224,17 +225,32 @@ function MainFlow() {
   // Helper para calcular un hash estable del canvas (topología actual)
   const computeCanvasHashLite = (nodesArr, edgesArr) => {
     try {
-      const n = (nodesArr || []).map((x) => ({
-        id: x.id,
-        type: x.type,
-        data: x.data || {},
-      }));
+      const n = (nodesArr || []).map((x) => {
+        const data = { ...(x.data || {}) };
+
+        // 🔎 Elimina campos derivados o visuales que no deben afectar el hash
+        delete data.connectedRouters; // se recalcula por edges
+        delete data.selected;
+        delete data.hovered;
+
+        return {
+          id: x.id,
+          type: x.type,
+          position: {
+            x: x.position?.x ?? 0,
+            y: x.position?.y ?? 0,
+          },
+          data,
+        };
+      });
+
       const e = (edgesArr || []).map((x) => ({
         id: x.id,
         source: x.source,
         target: x.target,
         type: x.type || null,
       }));
+
       return JSON.stringify({ n, e });
     } catch (_err) {
       return `n:${(nodesArr || []).length}-e:${(edgesArr || []).length}`;
@@ -270,15 +286,26 @@ function MainFlow() {
     setIgnoreDirtyGuard(false);
   }, [canvasPlanId, validatedPlanHash]);
 
-  // Effect to compute isCanvasDirty whenever nodes/edges or validated hash changes
+  // Effect to compute isCanvasDirty only after restoration is done
   useEffect(() => {
+    if (!restorationDone) return;
+
     if (!validatedPlanHash) {
       setIsCanvasDirty(false);
       return;
     }
+
     const current = computeCanvasHashLite(nodes, edges);
+
+    // Evita marcar como dirty inmediatamente después de restaurar/refresh
+    if (!dirtyInitializedRef.current) {
+      dirtyInitializedRef.current = true;
+      setIsCanvasDirty(false);
+      return;
+    }
+
     setIsCanvasDirty(current !== validatedPlanHash);
-  }, [nodes, edges, validatedPlanHash]);
+  }, [nodes, edges, validatedPlanHash, restorationDone]);
 
   const guardBeforeEdit = (
     fn,
@@ -303,7 +330,7 @@ function MainFlow() {
   };
 
   const onNodeClickBase = useNodeClick(setSelectedNode, setModalIsOpen);
-  const onNodeClick = guardBeforeEdit(onNodeClickBase);
+  const onNodeClick = onNodeClickBase;
   useEffect(() => {
     let alive = true;
     let timer = null;
@@ -513,6 +540,14 @@ function MainFlow() {
       const okHash = computeCanvasHashLite(nodes, edges);
       setValidatedPlanHash(okHash);
 
+      // Persistir el hash validado en Firestore para que sobreviva a refresh
+      try {
+        const ref = doc(db, DB_FIRESTORE_VPCS, vpcid);
+        setDoc(ref, { planCanvasHash: okHash }, { merge: true });
+      } catch (_e) {
+        console.warn("No se pudo persistir planCanvasHash:", _e);
+      }
+
       // El canvas acaba de validarse, así que no está desactualizado
       setIsCanvasDirty(false);
     }
@@ -698,7 +733,7 @@ function MainFlow() {
                 onSave={onSaveFlow}
                 onRestore={onRestoreFlow}
                 onRestoreInitial={restoreInitialNodes}
-                onDeploy={processJsonToCloud}
+                onDeploy={guardBeforeEdit(processJsonToCloud)}
                 onZoomIn={handleZoomIn}
                 onZoomOut={handleZoomOut}
                 onFitView={handleFitView}
@@ -725,9 +760,9 @@ function MainFlow() {
                 onConnect={guardBeforeEdit((params) => onConnect(params, setEdges, () => reactFlowInstance?.getEdges?.() || []))}
                 onInit={setReactFlowInstance}
                 onDrop={guardBeforeEdit(onDrop)}
-                onNodeDragStart={guardBeforeEdit(onNodeDragStart)}
-                onNodeDrag={guardBeforeEdit(onNodeDrag)}
-                onNodeDragStop={guardBeforeEdit(onNodeDragStop)}
+                onNodeDragStart={onNodeDragStart}
+                onNodeDrag={onNodeDrag}
+                onNodeDragStop={onNodeDragStop}
                 onDragOver={onDragOver}
                 backgroundVariant="dots"
                 snapToGrid
@@ -844,7 +879,7 @@ function MainFlow() {
               transformedData={transformedData}
               allowCrossVpcPingUI={allowCrossVpcPingUI}
               setAllowCrossVpcPingUI={setAllowCrossVpcPingUI}
-              existingPlanId={canvasPlanId}
+              existingPlanId={validationResult?.plan_id || null}
             />
 
           </Card>

@@ -130,52 +130,48 @@ const useRestoreFlow = ({
     setLoadingFlow(true);
 
     try {
-      let flow = loadFlowFromLocalStorage(flowKey);
+      // 🔁 Siempre intentamos restaurar desde Firestore como fuente de verdad
+      let flow = null;
 
-      // Si no hay en local o no corresponde al vpc actual, traer de Firestore
-      if (!flow || flow.id !== vpcid) {
-        const fetchedDoc = await fetchFlowFromFirebase(vpcid);
-        const normalized = normalizeFetchedDoc(fetchedDoc);
+      const fetchedDoc = await fetchFlowFromFirebase(vpcid);
+      const normalized = normalizeFetchedDoc(fetchedDoc);
 
-        if (!normalized) {
-          console.warn("No document data available to restore");
-          setLoadingFlow(false);
-          return;
-        }
-
-        const {
-          flow: fetchedFlow,
-          cidrBlock,
-          prefixLength,
-          planId,
-        } = normalized;
-
-        // Actualiza CIDR/prefix aunque el flow esté en otro formato
-        if (cidrBlock) setCidrBlockVPC(cidrBlock);
-        if (prefixLength !== undefined && prefixLength !== null) {
-          setPrefixLength(prefixLength || "");
-        }
-        if (typeof setCanvasPlanId === "function") {
-          setCanvasPlanId(planId || null);
-        }
-
-        if (!fetchedFlow) {
-          console.warn(
-            "No flow data available to restore (missing field 'flow')",
-          );
-          setLoadingFlow(false);
-          return;
-        }
-
-        flow = fetchedFlow;
-        saveFlowToLocalStorage(flowKey, {
-          ...flow,
-          id: vpcid,
-          cidrBlock: cidrBlock,
-          prefixLength: prefixLength || "",
-          planId: planId || null,
-        });
+      if (!normalized) {
+        console.warn("No document data available to restore");
+        setLoadingFlow(false);
+        return;
       }
+
+      const { flow: fetchedFlow, cidrBlock, prefixLength, planId } = normalized;
+
+      // Actualiza CIDR / prefix / planId desde Firestore
+      if (cidrBlock) setCidrBlockVPC(cidrBlock);
+      if (prefixLength !== undefined && prefixLength !== null) {
+        setPrefixLength(prefixLength || "");
+      }
+      if (typeof setCanvasPlanId === "function") {
+        setCanvasPlanId(planId || null);
+      }
+
+      if (!fetchedFlow) {
+        console.warn(
+          "No flow data available to restore (missing field 'flow')",
+        );
+        setLoadingFlow(false);
+        return;
+      }
+
+      flow = fetchedFlow;
+
+      // 🔄 Sincronizamos localStorage SOLO con lo que viene guardado (saved),
+      // nunca usamos el draft local como fuente principal.
+      saveFlowToLocalStorage(flowKey, {
+        ...flow,
+        id: vpcid,
+        cidrBlock: cidrBlock,
+        prefixLength: prefixLength || "",
+        planId: planId || null,
+      });
 
       if (!flow) {
         setLoadingFlow(false);
@@ -200,50 +196,6 @@ const useRestoreFlow = ({
 
         // forza fallback a Firestore para este vpcid
         flow = null;
-      }
-
-      // si el cache expiró, volvemos a intentar desde Firestore
-      if (!flow) {
-        const fetchedDoc = await fetchFlowFromFirebase(vpcid);
-        const normalized = normalizeFetchedDoc(fetchedDoc);
-
-        if (!normalized) {
-          console.warn("No document data available to restore");
-          setLoadingFlow(false);
-          return;
-        }
-
-        const {
-          flow: fetchedFlow,
-          cidrBlock,
-          prefixLength,
-          planId,
-        } = normalized;
-
-        if (cidrBlock) setCidrBlockVPC(cidrBlock);
-        if (prefixLength !== undefined && prefixLength !== null) {
-          setPrefixLength(prefixLength || "");
-        }
-        if (typeof setCanvasPlanId === "function") {
-          setCanvasPlanId(planId || null);
-        }
-
-        if (!fetchedFlow) {
-          console.warn(
-            "No flow data available to restore (missing flow/reactFlow/nodes/edges)",
-          );
-          setLoadingFlow(false);
-          return;
-        }
-
-        flow = fetchedFlow;
-        saveFlowToLocalStorage(flowKey, {
-          ...flow,
-          id: vpcid,
-          cidrBlock: cidrBlock,
-          prefixLength: prefixLength || "",
-          planId: planId || null,
-        });
       }
 
       const { x = 0, y = 0, zoom = 1 } = viewport;
