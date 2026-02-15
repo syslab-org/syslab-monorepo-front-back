@@ -413,12 +413,11 @@ const useDeployNetwork = ({
 
     // Abrimos el modal inmediatamente (UX reactiva)
     setShowConfirmation(true);
+    setValidationState("syncing");
 
     // 🔎 Intentar sincronizar con backend en segundo plano
     try {
       if (firestoreVpcId) {
-        setValidationState("syncing");
-
         const syncRes = await api.syncPlanFromCanvas({
           name: built.name || "plan-" + Date.now(),
           ...built,
