@@ -49,27 +49,6 @@ function normalizeAz(region, az) {
 
 const resolveSubnetName = (sn) => sn?.data?.subnetName || `subnet-${sn.id}`;
 
-// Helper para calcular un hash estable del canvas (topología actual)
-function computeCanvasHash(nodes, edges) {
-  try {
-    const n = (nodes || []).map((x) => ({
-      id: x.id,
-      type: x.type,
-      data: x.data || {},
-    }));
-    const e = (edges || []).map((x) => ({
-      id: x.id,
-      source: x.source,
-      target: x.target,
-      type: x.type || null,
-    }));
-    return JSON.stringify({ n, e });
-  } catch (_err) {
-    // Fallback: still changes when topology shows different sizes
-    return `n:${(nodes || []).length}-e:${(edges || []).length}`;
-  }
-}
-
 function buildLinksFromEdges(nodes, edges) {
   const idToType = new Map(nodes.map((n) => [n.id, n.type]));
   const idToNode = new Map(nodes.map((n) => [n.id, n]));
@@ -205,6 +184,7 @@ const useDeployNetwork = ({
   const [validationState, setValidationState] = useState("idle");
   const [validationError, setValidationError] = useState(null);
   const [validationResult, setValidationResult] = useState(null);
+  // Ahora representa hash de infraestructura real (payload Terraform), no del canvas visual
   const [validatedCanvasHash, setValidatedCanvasHash] = useState(null);
 
   const { vlanName, vlanRegion, cidrBlockVPC, prefixLength } =
@@ -426,14 +406,7 @@ const useDeployNetwork = ({
       ...built,
     });
 
-    const currentHash = computeCanvasHash(nodes, edges);
-
-    // Si el canvas cambió desde la última validación, reseteamos el estado.
-    if (validatedCanvasHash && validatedCanvasHash !== currentHash) {
-      setValidationState("idle");
-      setValidationError(null);
-      setValidationResult(null);
-    }
+    // (hash infra/canvas ya no se usa aquí para resetear validación)
     setShowConfirmation(true);
   };
 
@@ -495,22 +468,19 @@ const useDeployNetwork = ({
       if (finalStatus === "SUCCESS") {
         setValidationState("success");
         setSuccessMessage("Validación OK (Terraform plan)");
-        const okHash = computeCanvasHash(nodes, edges);
-        setValidatedCanvasHash(okHash);
         await persistPlanIdToCanvas({
           canvasId: firestoreVpcId,
           planId,
           name: planName || "plan-" + Date.now(),
           created: !!syncRes?.created,
           validationOk: true,
-          canvasHash: okHash,
+          canvasHash: null,
         });
       } else {
         const msg = finalPlan?.error || "Validación fallida";
         setValidationState("error");
         setValidationError(msg);
         setErrorMessage(msg);
-        setValidatedCanvasHash(null);
         await persistPlanIdToCanvas({
           canvasId: firestoreVpcId,
           planId,
@@ -528,7 +498,6 @@ const useDeployNetwork = ({
       setValidationState("error");
       setValidationError(msg);
       setErrorMessage(msg);
-      setValidatedCanvasHash(null);
     }
   };
 
