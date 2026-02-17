@@ -151,12 +151,20 @@ resource "aws_security_group" "vm_sg" {
   }
 
   # SSH desde tu IP (usa allowed_ssh_cidr del payload)
-  ingress {
-    description = "SSH from allowed_ssh_cidr"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [try(each.value.allowed_ssh_cidr, "0.0.0.0/32")]
+  dynamic "ingress" {
+    for_each = (
+      try(length(trimspace(each.value.allowed_ssh_cidr)) > 0, false)
+      ? [trimspace(each.value.allowed_ssh_cidr)]
+      : []
+    )
+
+    content {
+      description = "SSH from allowed_ssh_cidr"
+      from_port   = 22
+      to_port     = 22
+      protocol    = "tcp"
+      cidr_blocks = [ingress.value]
+    }
   }
 
   # SSH desde dentro de la misma VPC

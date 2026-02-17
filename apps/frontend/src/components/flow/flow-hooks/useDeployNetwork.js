@@ -1,5 +1,5 @@
 // apps/frontend/src/components/flow/flow-hooks/useDeployNetwork.js
-import { useContext, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "../../../firebase/firebaseConfig";
 import { DB_FIRESTORE_VPCS } from "../../../constants";
@@ -186,6 +186,28 @@ const useDeployNetwork = ({
   const [validationResult, setValidationResult] = useState(null);
   // Ahora representa hash de infraestructura real (payload Terraform), no del canvas visual
   const [validatedCanvasHash, setValidatedCanvasHash] = useState(null);
+
+  // =========================
+  // Stable plan name (inmutable once first resolved)
+  // =========================
+  const planNameRef = useRef("");
+
+  // Si el usuario escribe un nombre manual, lo fijamos una sola vez.
+  useEffect(() => {
+    if (!planNameRef.current && planName) {
+      planNameRef.current = planName;
+    }
+  }, [planName]);
+
+  const ensurePlanName = () => {
+    if (!planNameRef.current) {
+      const fallback = transformedData?.name || `plan-${Date.now()}`;
+      planNameRef.current = planName || fallback;
+      // Si aún no hay planName visible en UI, lo seteamos una sola vez.
+      if (!planName) setPlanName(planNameRef.current);
+    }
+    return planNameRef.current;
+  };
 
   const { vlanName, vlanRegion, cidrBlockVPC, prefixLength } =
     useCidrBlockVPCStore((s) => [
@@ -418,10 +440,10 @@ const useDeployNetwork = ({
     // 🔎 Intentar sincronizar con backend en segundo plano
     try {
       if (firestoreVpcId) {
+        // sync_from_canvas SOLO crea/actualiza el Plan (no ejecuta Terraform)
         const syncRes = await api.syncPlanFromCanvas({
-          name: built.name || "plan-" + Date.now(),
+          name: ensurePlanName() || built.name,
           ...built,
-          simulate_only: true,
         });
 
         const planId = syncRes?.plan_id;
@@ -479,11 +501,12 @@ const useDeployNetwork = ({
       }
 
       setValidationState("syncing");
+      const stableName = ensurePlanName();
 
+      // sync_from_canvas SOLO crea/actualiza el Plan (no ejecuta Terraform)
       const syncRes = await api.syncPlanFromCanvas({
-        name: planName || "plan-" + Date.now(),
+        name: stableName,
         ...transformedData,
-        simulate_only: true,
       });
 
       const planId = syncRes?.plan_id;
@@ -491,7 +514,7 @@ const useDeployNetwork = ({
       await persistPlanIdToCanvas({
         canvasId: firestoreVpcId,
         planId,
-        name: planName || "plan-" + Date.now(),
+        name: stableName,
         created: !!syncRes?.created,
         validationOk: null, // aún no sabemos
       });
@@ -510,7 +533,7 @@ const useDeployNetwork = ({
         await persistPlanIdToCanvas({
           canvasId: firestoreVpcId,
           planId,
-          name: planName || "plan-" + Date.now(),
+          name: stableName,
           created: !!syncRes?.created,
           validationOk: true,
           canvasHash: null,
@@ -523,7 +546,7 @@ const useDeployNetwork = ({
         await persistPlanIdToCanvas({
           canvasId: firestoreVpcId,
           planId,
-          name: planName || "plan-" + Date.now(),
+          name: stableName,
           created: !!syncRes?.created,
           validationOk: false,
           canvasHash: null,
@@ -552,6 +575,11 @@ const useDeployNetwork = ({
       return;
     }
 
+    if (!transformedData) {
+      setErrorMessage("No hay datos transformados para aplicar.");
+      return;
+    }
+
     const txt = window.prompt("Para confirmar escribe: DEPLOY");
     if (txt !== "DEPLOY") {
       setErrorMessage("Deploy cancelado por el usuario.");
@@ -563,7 +591,17 @@ const useDeployNetwork = ({
     setErrorMessage(null);
 
     try {
+      const stableName = ensurePlanName();
+
+      // 1) Re-sync antes de aplicar para garantizar que el backend tiene el payload más reciente.
+      await api.syncPlanFromCanvas({
+        name: stableName,
+        ...transformedData,
+      });
+
+      // 2) Apply real (Terraform apply)
       await api.deployPlan(planId, { simulateOnly: false, applyMode: true });
+
       setLoadingFlow(false);
       navigate(`/admin/plans/${planId}`);
     } catch (error) {
