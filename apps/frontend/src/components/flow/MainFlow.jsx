@@ -789,6 +789,7 @@ function MainFlow() {
                 }}
                 planStatus={canvasPlanInfo}
                 canvasState={canvasState}
+                validationState={validationState}
               />
             </Box>
             <Box sx={{ flex: 1, minHeight: 0, position: "relative" }}>

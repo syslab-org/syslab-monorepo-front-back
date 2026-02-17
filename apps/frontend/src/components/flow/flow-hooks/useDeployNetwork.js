@@ -181,7 +181,16 @@ const useDeployNetwork = ({
   const [errorMessage, setErrorMessage] = useState(null);
   const { setLoadingFlow } = useContext(LoadingFlowContext);
   const [simulateOnly, setSimulateOnly] = useState(true);
-  const [validationState, setValidationState] = useState("idle");
+  // Máquina de estados explícita del plan
+  const PLAN_STATES = {
+    IDLE: "IDLE",
+    SYNCING: "SYNCING",
+    PLANNING: "PLANNING",
+    SUCCESS: "SUCCESS",
+    ERROR: "ERROR",
+  };
+
+  const [validationState, setValidationState] = useState(PLAN_STATES.IDLE);
   const [validationError, setValidationError] = useState(null);
   const [validationResult, setValidationResult] = useState(null);
   // Ahora representa hash de infraestructura real (payload Terraform), no del canvas visual
@@ -435,7 +444,7 @@ const useDeployNetwork = ({
 
     // Abrimos el modal inmediatamente (UX reactiva)
     setShowConfirmation(true);
-    setValidationState("syncing");
+    setValidationState(PLAN_STATES.SYNCING);
 
     // 🔎 Intentar sincronizar con backend en segundo plano
     try {
@@ -462,12 +471,12 @@ const useDeployNetwork = ({
             created: !!syncRes?.created,
           });
 
-          setValidationState("idle");
+          setValidationState(PLAN_STATES.IDLE);
         }
       }
     } catch (e) {
       console.warn("No se pudo detectar plan existente antes de validar:", e);
-      setValidationState("idle");
+      setValidationState(PLAN_STATES.IDLE);
     }
   };
 
@@ -494,13 +503,13 @@ const useDeployNetwork = ({
     try {
       if (!transformedData) {
         setLoadingFlow(false);
-        setValidationState("error");
+        setValidationState(PLAN_STATES.ERROR);
         setValidationError("No hay datos transformados para validar.");
         setErrorMessage("No hay datos transformados para validar.");
         return;
       }
 
-      setValidationState("syncing");
+      setValidationState(PLAN_STATES.SYNCING);
       const stableName = ensurePlanName();
 
       // sync_from_canvas SOLO crea/actualiza el Plan (no ejecuta Terraform)
@@ -520,7 +529,7 @@ const useDeployNetwork = ({
       });
 
       setValidationResult({ plan_id: planId, created: !!syncRes?.created });
-      setValidationState("planning");
+      setValidationState(PLAN_STATES.PLANNING);
 
       await api.deployPlan(planId, { simulateOnly: true });
 
@@ -528,7 +537,7 @@ const useDeployNetwork = ({
       const finalStatus = String(finalPlan?.status || "");
 
       if (finalStatus === "SUCCESS") {
-        setValidationState("success");
+        setValidationState(PLAN_STATES.SUCCESS);
         setSuccessMessage("Validación OK (Terraform plan)");
         await persistPlanIdToCanvas({
           canvasId: firestoreVpcId,
@@ -540,7 +549,7 @@ const useDeployNetwork = ({
         });
       } else {
         const msg = finalPlan?.error || "Validación fallida";
-        setValidationState("error");
+        setValidationState(PLAN_STATES.ERROR);
         setValidationError(msg);
         setErrorMessage(msg);
         await persistPlanIdToCanvas({
@@ -557,7 +566,7 @@ const useDeployNetwork = ({
     } catch (error) {
       const msg = error?.message || "Error desconocido";
       setLoadingFlow(false);
-      setValidationState("error");
+      setValidationState(PLAN_STATES.ERROR);
       setValidationError(msg);
       setErrorMessage(msg);
     }
@@ -646,6 +655,7 @@ const useDeployNetwork = ({
     handleValidatePlan,
     handleApplyReal,
     handleOpenPlanDetails,
+    PLAN_STATES,
   };
 };
 
