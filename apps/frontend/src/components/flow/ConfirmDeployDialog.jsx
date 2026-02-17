@@ -395,14 +395,25 @@ export default function ConfirmDeployDialog({
         )}
       </DialogContent>
 
-      <DialogActions>
-        <Button onClick={onClose}>Cancelar</Button>
+      <DialogActions sx={{ position: 'relative' }}>
+        {isInitializing && (
+          <Box
+            sx={{
+              position: 'absolute',
+              inset: 0,
+              backgroundColor: (theme) => theme.palette.background.paper,
+              opacity: 0.6,
+              zIndex: 1,
+            }}
+          />
+        )}
+        <Button onClick={onClose} disabled={isInitializing}>Cancelar</Button>
 
         <Button
           onClick={() => onValidatePlan?.(allowCrossVpcPingUI)}
           variant="contained"
           color="primary"
-          disabled={validationState === "syncing" || validationState === "planning"}
+          disabled={isInitializing || validationState === "syncing" || validationState === "planning"}
         >
           Validar (plan)
         </Button>
@@ -411,6 +422,7 @@ export default function ConfirmDeployDialog({
           <Button
             onClick={() => onOpenPlanDetails?.(effectivePlanId)}
             variant="outlined"
+            disabled={isInitializing}
           >
             Ver plan existente
           </Button>
@@ -421,6 +433,7 @@ export default function ConfirmDeployDialog({
             <Button
               onClick={() => onOpenPlanDetails?.(effectivePlanId)}
               variant="outlined"
+              disabled={isInitializing}
             >
               Ver plan
             </Button>
@@ -429,7 +442,7 @@ export default function ConfirmDeployDialog({
               onClick={() => onApplyReal?.(allowCrossVpcPingUI)}
               variant="contained"
               color="warning"
-              disabled={!allowRealApply || simulateOnly}
+              disabled={isInitializing || !allowRealApply || simulateOnly}
             >
               {simulateOnly ? "Desplegar (apply) — activa Apply real" : "Desplegar (apply)"}
             </Button>
@@ -442,6 +455,7 @@ export default function ConfirmDeployDialog({
             onClick={() => onConfirm?.(allowCrossVpcPingUI)}
             variant="contained"
             color="primary"
+            disabled={isInitializing}
           >
             {simulateOnly ? "Validar (plan)" : "Desplegar (apply)"}
           </Button>
