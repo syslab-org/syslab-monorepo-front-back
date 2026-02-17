@@ -901,27 +901,15 @@ function MainFlow() {
             <ConfirmDeployDialog
               open={showConfirmation && restorationDone}
               onClose={handleCancelDeploy}
-              onValidatePlan={(overrideValue) => {
-                setAllowCrossVpcPingUI(overrideValue);
-                handleValidatePlan();
-              }}
-              onApplyReal={(overrideValue) => {
-                setAllowCrossVpcPingUI(overrideValue);
-                handleApplyReal();
-              }}
-              onOpenPlanDetails={handleOpenPlanDetails}
               validationState={validationState}
-              validationError={validationError}
               validationResult={validationResult}
-              planName={planName}
-              setPlanName={setPlanName}
-              simulateOnly={simulateOnly}
-              setSimulateOnly={setSimulateOnly}
               transformedData={transformedData}
-              allowCrossVpcPingUI={allowCrossVpcPingUI}
-              setAllowCrossVpcPingUI={setAllowCrossVpcPingUI}
-              existingPlanId={canvasPlanId || canvasPlanInfo?.id || null}
-              canvasState={canvasState}
+              onValidate={handleValidatePlan}
+              onDeploy={handleApplyReal}
+              onViewPlan={() =>
+                handleOpenPlanDetails(validationResult?.plan_id)
+              }
+              loadingFlow={loadingFlow}
             />
 
           </Card>
