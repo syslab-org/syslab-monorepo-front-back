@@ -177,9 +177,6 @@ const useRestoreFlow = ({
         setLoadingFlow(false);
         return;
       }
-      if (typeof setCanvasPlanId === "function") {
-        setCanvasPlanId(flow.planId || null);
-      }
 
       // ✅ Si no hay expiration, NO bloqueamos la restauración (evita canvas vacío por esquema viejo)
       // Si está expirado, limpiamos cache y caemos a Firestore.
