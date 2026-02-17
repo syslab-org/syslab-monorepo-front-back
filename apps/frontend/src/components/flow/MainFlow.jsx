@@ -160,25 +160,9 @@ function MainFlow() {
   const [isCanvasLocked, setIsCanvasLocked] = useState(false);
   const [canvasUiError, setCanvasUiError] = useState(null);
   const [validatedPlanHash, setValidatedPlanHash] = useState(null);
+  const [hasValidatedInSession, setHasValidatedInSession] = useState(false);
   const [isCanvasDirty, setIsCanvasDirty] = useState(false);
-  // =========================
-  // Canvas State Machine (derivado)
-  // =========================
-  const canvasState = (() => {
-    if (!canvasPlanId) return "NO_PLAN";
 
-    if (isCanvasLocked) return "PLAN_RUNNING";
-
-    if (canvasPlanId && validatedPlanHash && isCanvasDirty) {
-      return "PLAN_OUTDATED";
-    }
-
-    if (canvasPlanId && validatedPlanHash && !isCanvasDirty) {
-      return "PLAN_VALIDATED";
-    }
-
-    return "PLAN_SYNCED";
-  })();
   const dirtyInitializedRef = useRef(false);
   const [editGuardOpen, setEditGuardOpen] = useState(false);
   const editGuardRef = useRef({ fn: null, args: null });
@@ -240,35 +224,60 @@ function MainFlow() {
     return s === 'RUNNING' || s === 'PENDING' || s === 'STARTED';
   };
 
+  // Stable stringify para que el hash sea determinista (ordena keys recursivamente)
+  const stableStringify = (value) => {
+    const seen = new WeakSet();
+
+    const norm = (v) => {
+      if (v === undefined) return null;
+      if (v === null) return null;
+
+      const t = typeof v;
+      if (t === 'number' || t === 'boolean' || t === 'string') return v;
+
+      if (Array.isArray(v)) return v.map(norm);
+
+      if (t === 'object') {
+        if (seen.has(v)) return '[Circular]';
+        seen.add(v);
+
+        const out = {};
+        for (const k of Object.keys(v).sort()) {
+          out[k] = norm(v[k]);
+        }
+        return out;
+      }
+
+      return String(v);
+    };
+
+    return JSON.stringify(norm(value));
+  };
   // Helper para calcular un hash estable del canvas (topología actual)
   // Importante: debe ser determinista (mismo contenido => mismo hash),
   // independientemente del orden del array de nodes/edges.
   const computeCanvasHashLite = (nodesArr, edgesArr) => {
     try {
-      const round = (v) => {
-        // Reducimos ruido de floats sin perder cambios reales
-        const n = Number(v);
-        if (Number.isNaN(n)) return 0;
-        return Math.round(n * 100) / 100;
-      };
-
       const nodesStable = (nodesArr || [])
         .map((x) => {
           const data = { ...(x.data || {}) };
 
-          // 🔎 Elimina campos derivados o visuales que no deben afectar el hash
-          delete data.connectedRouters; // se recalcula por edges
+          delete data.connectedRouters;
           delete data.selected;
           delete data.hovered;
+          delete data.positionAbsolute;
+          delete data.dragging;
+          delete data.resizing;
+          delete data.width;
+          delete data.height;
 
           return {
             id: x.id,
             type: x.type,
-            // parentId/parentNode es parte de la topología
             parentId: x.parentId || x.parentNode || null,
             position: {
-              x: round(x.position?.x ?? 0),
-              y: round(x.position?.y ?? 0),
+              x: x.position?.x ?? null,
+              y: x.position?.y ?? null,
             },
             data,
           };
@@ -284,7 +293,7 @@ function MainFlow() {
         }))
         .sort((a, b) => String(a.id).localeCompare(String(b.id)));
 
-      return JSON.stringify({ n: nodesStable, e: edgesStable });
+      return stableStringify({ n: nodesStable, e: edgesStable });
     } catch (_err) {
       return `n:${(nodesArr || []).length}-e:${(edgesArr || []).length}`;
     }
@@ -317,6 +326,7 @@ function MainFlow() {
 
   useEffect(() => {
     setIgnoreDirtyGuard(false);
+    dirtyInitializedRef.current = false;
   }, [canvasPlanId, validatedPlanHash]);
 
   useEffect(() => {
@@ -328,9 +338,24 @@ function MainFlow() {
       return;
     }
 
-    const current = computeCanvasHashLite(nodes, edges);
-    const dirty = current !== validatedPlanHash;
+    // Evita falsos positivos justo después de restaurar/hidratar ReactFlow.
+    // La primera evaluación solo "calienta" el hash actual.
+    if (!dirtyInitializedRef.current) {
+      dirtyInitializedRef.current = true;
+      setIsCanvasDirty(false);
+      return;
+    }
 
+    const current = computeCanvasHashLite(nodes, edges);
+
+    // Si no existe hash validado persistido (caso extremo),
+    // no podemos comparar todavía.
+    if (!validatedPlanHash) {
+      setIsCanvasDirty(false);
+      return;
+    }
+
+    const dirty = current !== validatedPlanHash;
     setIsCanvasDirty(dirty);
 
     // Si vuelve a coincidir, levantamos el ignore
@@ -338,7 +363,7 @@ function MainFlow() {
       setIgnoreDirtyGuard(false);
     }
 
-  }, [nodes, edges, validatedPlanHash, canvasPlanId, restorationDone]);
+  }, [nodes, edges, validatedPlanHash, canvasPlanId, restorationDone, hasValidatedInSession]);
 
   const guardBeforeEdit = (
     fn,
@@ -564,9 +589,31 @@ function MainFlow() {
     handleOpenPlanDetails,
   } = useDeployNetwork({ nodes, edges, allowCrossVpcPingUI, firestoreVpcId: vpcid })
 
+  // =========================
+  // Canvas State Machine (derivado, simplificado y consistente)
+  // =========================
+  const canvasState = (() => {
+    if (!canvasPlanId) return "NO_PLAN";
+
+    if (isCanvasLocked) return "PLAN_RUNNING";
+
+    // Si existe plan asociado y el hash actual no coincide con el validado,
+    // el canvas está desactualizado, independientemente del validationState actual.
+    if (isCanvasDirty) {
+      return "PLAN_OUTDATED";
+    }
+
+    // Si ya hubo validación exitosa en esta sesión y no está dirty,
+    // lo marcamos como validado.
+    if (validationState === "SUCCESS") {
+      return "PLAN_VALIDATED";
+    }
+
+    return "PLAN_SYNCED";
+  })();
   // Mantener el canvas sincronizado con el último plan validado, sin recargar
   useEffect(() => {
-    if (validationState === 'success' && validationResult?.plan_id) {
+    if (validationState === 'SUCCESS' && validationResult?.plan_id) {
       const pid = validationResult.plan_id;
       setCanvasPlanId(pid);
 
@@ -592,6 +639,7 @@ function MainFlow() {
 
       // El canvas acaba de validarse, así que no está desactualizado
       setIsCanvasDirty(false);
+      setHasValidatedInSession(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [validationState, validationResult?.plan_id]);
@@ -903,6 +951,7 @@ function MainFlow() {
               open={showConfirmation && restorationDone}
               onClose={handleCancelDeploy}
               validationState={validationState}
+              canvasState={canvasState}
               validationResult={validationResult}
               transformedData={transformedData}
               onValidate={handleValidatePlan}

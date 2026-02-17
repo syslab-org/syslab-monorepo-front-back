@@ -41,6 +41,7 @@ const ConfirmDeployDialog = ({
   open,
   onClose,
   validationState,
+  canvasState,
   validationResult,
   transformedData,
   onValidate,
@@ -60,6 +61,7 @@ const ConfirmDeployDialog = ({
     if (isSyncing) {
       return <Alert severity="info">Validando infraestructura...</Alert>;
     }
+
     if (isValidated) {
       return (
         <Alert severity="success">
@@ -67,6 +69,7 @@ const ConfirmDeployDialog = ({
         </Alert>
       );
     }
+
     if (hasError) {
       return (
         <Alert severity="error">
@@ -74,11 +77,18 @@ const ConfirmDeployDialog = ({
         </Alert>
       );
     }
-    return (
-      <Alert severity="warning">
-        El canvas cambió desde la última validación. Debes validar nuevamente.
-      </Alert>
-    );
+
+    // ⚠️ Mostrar advertencia SOLO si el canvas realmente está desactualizado
+    if (canvasState === "PLAN_OUTDATED") {
+      return (
+        <Alert severity="warning">
+          El canvas cambió desde la última validación. Debes validar nuevamente.
+        </Alert>
+      );
+    }
+
+    // En cualquier otro caso no mostramos banner
+    return null;
   };
 
   const totalSubnets = vpcs.reduce(

@@ -136,7 +136,7 @@ export default function PacketToolbar({
             startIcon={<PlayArrowIcon />}
             onClick={onDeploy}
             size="small"
-            disabled={canvasState === "PLAN_RUNNING" || canvasState === "PLAN_OUTDATED"}
+            disabled={canvasState === "PLAN_RUNNING"}
           >
             Deploy
           </Button>
