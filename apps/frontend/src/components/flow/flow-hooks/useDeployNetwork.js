@@ -238,19 +238,21 @@ const useDeployNetwork = ({
     if (!canvasId || !planId) return;
     try {
       const docRef = doc(db, DB_FIRESTORE_VPCS, canvasId);
-      await setDoc(
-        docRef,
-        {
-          planId,
-          planName: name || "",
-          planCreatedFromCanvas: !!created,
-          planValidationOk:
-            typeof validationOk === "boolean" ? validationOk : null,
-          planUpdatedAt: new Date(),
-          planCanvasHash: typeof canvasHash === "string" ? canvasHash : null,
-        },
-        { merge: true },
-      );
+      const payload = {
+        planId,
+        planName: name || "",
+        planCreatedFromCanvas: !!created,
+        planValidationOk:
+          typeof validationOk === "boolean" ? validationOk : null,
+        planUpdatedAt: new Date(),
+      };
+
+      // Solo persistimos hash cuando viene explícitamente definido
+      if (typeof canvasHash === "string") {
+        payload.planCanvasHash = canvasHash;
+      }
+
+      await setDoc(docRef, payload, { merge: true });
     } catch (e) {
       console.warn("No se pudo persistir planId en Firestore:", e);
     }
@@ -545,7 +547,6 @@ const useDeployNetwork = ({
           name: stableName,
           created: !!syncRes?.created,
           validationOk: true,
-          canvasHash: null,
         });
       } else {
         const msg = finalPlan?.error || "Validación fallida";
@@ -558,7 +559,6 @@ const useDeployNetwork = ({
           name: stableName,
           created: !!syncRes?.created,
           validationOk: false,
-          canvasHash: null,
         });
       }
 
