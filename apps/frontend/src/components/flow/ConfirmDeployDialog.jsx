@@ -45,422 +45,179 @@ function exportPlanToJson(transformedData, planName = "plan-export") {
   }
 }
 
-export default function ConfirmDeployDialog({
+const ConfirmDeployDialog = ({
   open,
   onClose,
-  onConfirm, //Legacy: (allowCrossVpcPing) => void
-  onValidatePlan,
-  onApplyReal,
-  onOpenPlanDetails, // (planId?: string) => void
-  validationState = "idle", // idle | syncing | planning | success | error
-  validationError = null,
-  validationResult = null,
-  planName,
-  setPlanName,
-  simulateOnly,
-  setSimulateOnly,
+  validationState,
+  validationResult,
   transformedData,
-  allowCrossVpcPingUI,
-  setAllowCrossVpcPingUI,
-  existingPlanId = null,
-  canvasState = "NO_PLAN",
-}) {
-  const allowRealApply = import.meta.env.VITE_ALLOW_REAL_APPLY === "1";
-  console.log("existingPlanId:", existingPlanId);
-  // Normalización segura
-  const effectivePlanId = existingPlanId ?? validationResult?.plan_id ?? null;
-  const isInitializing =
-    open &&
-    (validationState === "syncing" || validationState === "planning");
-  const vpcs = Array.isArray(transformedData?.vpcs) ? transformedData.vpcs : [];
-  const links = Array.isArray(transformedData?.links) ? transformedData.links : [];
-  const vlan = transformedData?.vlan || {};
+  onValidate,
+  onDeploy,
+  onViewPlan,
+  loadingFlow,
+}) => {
+  const isValidated = validationState === "success";
+  const hasError = validationState === "error";
+  const isSyncing =
+    validationState === "syncing" || validationState === "planning";
 
-  // Totales del plan
-  const totalVpcs = vpcs.length;
-  const totalSubnets = vpcs.reduce(
-    (acc, vpc) => acc + (vpc.subnets?.length || 0),
-    0
-  );
-  const totalInstances = vpcs.reduce(
-    (acc, vpc) =>
-      acc +
-      (vpc.subnets?.reduce((a, sn) => a + (sn.instances?.length || 0), 0) || 0),
-    0
-  );
-  const totalNat = vpcs.filter((v) => v.nat_gateway?.enabled).length;
-  const totalIgw = vpcs.filter((v) => v.internet_gateway).length;
-  const totalRouters = links.reduce((acc, l) => {
-    const id = l.via_router_id;
-    return id ? acc.add(id) : acc;
-  }, new Set()).size;
+  const vpcs = transformedData?.vpcs || [];
 
-  // Chip de estado del override (true/false/null)
-  const pingStatusChip = useMemo(() => {
-    if (allowCrossVpcPingUI === true) {
+  const renderBanner = () => {
+    if (isSyncing) {
+      return <Alert severity="info">Validando infraestructura...</Alert>;
+    }
+
+    if (isValidated) {
       return (
-        <Chip
-          size="small"
-          color="success"
-          label="Ping entre VPCs: Activado (override)"
-        />
+        <Alert severity="success">
+          Infraestructura validada correctamente. Puedes desplegar o revisar el
+          plan.
+        </Alert>
       );
     }
-    if (allowCrossVpcPingUI === false) {
+
+    if (hasError) {
       return (
-        <Chip
-          size="small"
-          color="error"
-          label="Ping entre VPCs: Desactivado (override)"
-        />
+        <Alert severity="error">
+          Error durante la validación. Revisa los detalles antes de continuar.
+        </Alert>
       );
     }
+
     return (
-      <Chip
-        size="small"
-        variant="outlined"
-        label="Ping entre VPCs: Automático"
-      />
+      <Alert severity="warning">
+        El canvas cambió desde la última validación. Debes validar nuevamente.
+      </Alert>
     );
-  }, [allowCrossVpcPingUI]);
+  };
+
+  const mapTarget = (target) => {
+    if (target === "igw") return "Internet Gateway";
+    if (target === "nat") return "NAT Gateway";
+    if (target === "local") return "Local";
+    return target;
+  };
+
+  const totalSubnets = vpcs.reduce(
+    (acc, v) => acc + (v.subnets?.length || 0),
+    0
+  );
+
+  const totalInstances = vpcs.reduce(
+    (acc, v) =>
+      acc +
+      (v.subnets || []).reduce(
+        (subAcc, s) => subAcc + (s.instances?.length || 0),
+        0
+      ),
+    0
+  );
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>Confirmar despliegue</DialogTitle>
+      <DialogTitle>Confirmar infraestructura</DialogTitle>
+
       <DialogContent dividers>
-        {isInitializing ? (
-          <Stack spacing={2} alignItems="center" sx={{ py: 4 }}>
-            <CircularProgress />
-            <Typography variant="body2" color="text.secondary">
-              Cargando información del plan...
-            </Typography>
+        {renderBanner()}
+
+        <Box mt={3}>
+          <Typography variant="h6" gutterBottom>
+            Resumen de infraestructura
+          </Typography>
+
+          <Stack direction="row" spacing={1} flexWrap="wrap">
+            <Chip label={`Cloud: ${transformedData?.cloud || "aws"}`} />
+            <Chip label={`VPCs: ${vpcs.length}`} />
+            <Chip label={`Subnets: ${totalSubnets}`} />
+            <Chip label={`Instancias: ${totalInstances}`} />
           </Stack>
-        ) : (
-          <Stack spacing={2}>
-            {/* ---- Plan asociado al canvas (si existe) ---- */}
-            {effectivePlanId ? (
-              <Alert
-                severity="info"
-                variant="outlined"
-                action={
-                  <Button
-                    size="small"
-                    onClick={() => onOpenPlanDetails?.(effectivePlanId)}
-                  >
-                    Ver plan existente
-                  </Button>
-                }
-              >
-                Este canvas ya tiene un plan asociado (ID: {effectivePlanId}).
-                El nombre del plan es inmutable y no puede modificarse.
-              </Alert>
-            ) : null}
+        </Box>
 
-            {/* ---- Estado global del canvas (derivado) ---- */}
-            {canvasState === "PLAN_OUTDATED" && (
-              <Alert severity="warning" variant="outlined">
-                La topología actual difiere de la última validación exitosa.
-                Debes revalidar antes de aplicar cambios en infraestructura real.
-              </Alert>
-            )}
+        <Box mt={4}>
+          <Typography variant="h6" gutterBottom>
+            Detalle por VPC
+          </Typography>
 
-            {canvasState === "PLAN_RUNNING" && (
-              <Alert severity="warning" variant="filled">
-                Existe un plan en ejecución. El canvas está bloqueado hasta que finalice.
-              </Alert>
-            )}
-
-            {canvasState === "PLAN_VALIDATED" && validationState === "idle" && (
-              <Alert severity="success" variant="outlined">
-                El canvas coincide con el último plan validado.
-              </Alert>
-            )}
-            {/* ---- Estado de validación (2 fases) ---- */}
-            {validationState === "syncing" && (
-              <Alert severity="info" variant="filled">
-                Sincronizando plan con backend…
-                <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
-                  Detectando si existe un plan previo asociado al canvas.
-                </Typography>
-              </Alert>
-            )}
-            {validationState === "planning" && (
-              <Alert severity="info" variant="filled">Ejecutando validación (Terraform plan)…</Alert>
-            )}
-            {validationState === "success" && (
-              <Alert severity="success" variant="filled">
-                Validación OK. Puedes aplicar (deploy real) o ver detalles.
-              </Alert>
-            )}
-            {validationState === "error" && (
-              <Alert severity="error" variant="filled">
-                {validationError || "Validación fallida."}
-                {effectivePlanId ? (
-                  <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
-                    Plan asociado: {effectivePlanId}
-                  </Typography>
-                ) : null}
-              </Alert>
-            )}
-            {validationState === "idle" && !existingPlanId && (
-              <Typography variant="body2" color="text.secondary">
-                Aún no has validado este plan con el backend.
-              </Typography>
-            )}
-
-
-            {/* ---- Nombre del plan ---- */}
-            <TextField
-              fullWidth
-              label="Nombre del Plan"
-              value={planName}
-              onChange={(e) => {
-                if (!effectivePlanId) {
-                  setPlanName(e.target.value);
-                }
-              }}
-              placeholder="p.ej. red-principal"
-              disabled={!!effectivePlanId}
-              helperText={
-                effectivePlanId
-                  ? "Este plan ya fue creado y su nombre no puede modificarse."
-                  : "Puedes definir el nombre antes de validar el plan."
-              }
-            />
-
-            {/* ---- Toggle Simulación / Apply ---- */}
-            <FormControlLabel
-              control={
-                <Switch
-                  disabled={!allowRealApply}
-                  checked={!simulateOnly}
-                  onChange={(e) => setSimulateOnly(!e.target.checked)}
-                />
-              }
-              label={
-                allowRealApply
-                  ? "Apply real (Terraform apply)"
-                  : "Apply real (bloqueado por entorno)"
-              }
-            />
-
-            {/* ---- Ping entre VPCs (override opcional) ---- */}
+          {vpcs.map((vpc) => (
             <Box
-              sx={{
-                p: 1.5,
-                border: (theme) => `1px dashed ${theme.palette.divider}`,
-                borderRadius: 1.5,
-              }}
+              key={vpc.id}
+              mb={3}
+              p={2}
+              border="1px solid #eee"
+              borderRadius={2}
             >
-              <Stack spacing={1}>
-                <Stack
-                  direction="row"
-                  alignItems="center"
-                  justifyContent="space-between"
-                  spacing={1}
-                  flexWrap="wrap"
-                >
-                  <Typography variant="body2">Ping entre VPCs</Typography>
-                  {pingStatusChip}
-                </Stack>
+              <Typography variant="subtitle1">{vpc.name}</Typography>
 
-                <ToggleButtonGroup
-                  size="small"
-                  exclusive
-                  value={allowCrossVpcPingUI}
-                  onChange={(_e, next) => {
-                    // `next` puede ser null si clickean el botón activo; evitamos dejarlo vacío.
-                    if (next === null) return;
-                    setAllowCrossVpcPingUI(next);
-                  }}
-                >
-                  <ToggleButton value={null}>Automático</ToggleButton>
-                  <ToggleButton value={true}>Activado</ToggleButton>
-                  <ToggleButton value={false}>Desactivado</ToggleButton>
-                </ToggleButtonGroup>
-
-                <Typography variant="caption" color="text.secondary">
-                  Automático = se decide según enlaces (peering/TGW) o flags del payload. Override = fuerzas el
-                  comportamiento explícitamente.
-                </Typography>
+              <Stack direction="row" spacing={1} mt={1} flexWrap="wrap">
+                <Chip label={`CIDR: ${vpc.cidr_block}`} />
+                <Chip label={`Región: ${vpc.region}`} />
+                {vpc.internet_gateway && (
+                  <Chip label="IGW habilitado" color="primary" />
+                )}
+                {vpc.nat_gateway?.enabled && (
+                  <Chip label="NAT habilitado" color="secondary" />
+                )}
               </Stack>
-            </Box>
 
-            {/* ---- Mensajes contextuales ---- */}
-            {!allowRealApply && (
-              <Typography variant="body2" color="text.secondary">
-                Para habilitar el apply real, define <code>VITE_ALLOW_REAL_APPLY=1</code> en el entorno del frontend.
-              </Typography>
-            )}
-
-            {!simulateOnly && (
-              <Typography variant="body2" sx={{ color: (theme) => theme.palette.warning.main }}>
-                ⚠️ Esto ejecutará un <b>Terraform apply</b> real en AWS. Asegúrate de tener credenciales IAM válidas.
-              </Typography>
-            )}
-
-            {/* ---- Resumen global ---- */}
-            <Divider sx={{ my: 1.5 }} />
-            <Typography variant="h6">Resumen general del plan</Typography>
-            <Stack direction="row" flexWrap="wrap" gap={1.2} sx={{ mt: 1 }}>
-              <Chip size="small" color="primary" label={`Cloud: ${transformedData?.cloud || "aws"}`} />
-              <Chip size="small" label={`VLAN: ${vlan?.name || "no definida"}`} />
-              {vlan?.region && <Chip size="small" label={`Región: ${vlan.region}`} />}
-              {vlan?.master_cidr && <Chip size="small" label={`CIDR maestro: ${vlan.master_cidr}`} />}
-              <Chip size="small" label={`VPCs: ${totalVpcs}`} />
-              <Chip size="small" label={`Subnets: ${totalSubnets}`} />
-              <Chip size="small" label={`Instancias: ${totalInstances}`} />
-              <Chip size="small" label={`Routers: ${totalRouters}`} />
-              <Chip
-                size="small"
-                color={totalIgw ? "info" : "default"}
-                label={`Internet Gateways: ${totalIgw}`}
-              />
-              <Chip
-                size="small"
-                color={totalNat ? "warning" : "default"}
-                label={`NAT Gateways: ${totalNat}`}
-              />
-              {pingStatusChip}
-            </Stack>
-
-            {/* ---- Botón de exportar plan ---- */}
-            {transformedData && (
-              <Box sx={{ mt: 1 }}>
-                <Button
-                  variant="outlined"
-                  color="secondary"
-                  onClick={() => exportPlanToJson(transformedData, planName)}
-                >
-                  Exportar plan a JSON
-                </Button>
-                <Typography variant="caption" sx={{ ml: 1, color: "text.secondary" }}>
-                  Guarda una copia local del plan antes de ejecutar el deploy.
+              <Box mt={2}>
+                <Typography variant="subtitle2">
+                  Tablas de rutas
                 </Typography>
-              </Box>
-            )}
 
-            {/* ---- Detalle por VPC ---- */}
-            {vpcs.length > 0 && (
-              <>
-                <Divider sx={{ my: 2 }} />
-                <Typography variant="h6">Detalle por VPC</Typography>
+                {vpc.route_tables?.map((rt) => (
+                  <Box key={rt.name} mt={1} ml={2}>
+                    <Typography variant="body2">
+                      Tabla: {rt.name}
+                    </Typography>
 
-                {vpcs.map((vpc) => (
-                  <Box key={vpc.id} sx={{ mt: 1.5 }}>
-                    <Stack
-                      direction="row"
-                      alignItems="center"
-                      spacing={1}
-                      flexWrap="wrap"
-                      sx={{ mb: 0.5 }}
-                    >
-                      <Typography variant="subtitle1">
-                        {vpc.name || "(sin nombre)"}
+                    {rt.routes?.map((route, index) => (
+                      <Typography
+                        key={index}
+                        variant="body2"
+                        sx={{ ml: 2 }}
+                      >
+                        {route.dest_cidr} → {mapTarget(route.target)}
                       </Typography>
-                      {vpc.cidr_block && (
-                        <Chip size="small" variant="outlined" label={`CIDR: ${vpc.cidr_block}`} />
-                      )}
-                      {vpc.region && (
-                        <Chip size="small" variant="outlined" label={`Región: ${vpc.region}`} />
-                      )}
-                      {vpc.internet_gateway && (
-                        <Chip size="small" color="info" label="IGW habilitado" />
-                      )}
-                      {vpc.nat_gateway?.enabled && (
-                        <Chip size="small" color="warning" label="NAT habilitado" />
-                      )}
-                      <Chip size="small" label={`Subnets: ${vpc.subnets?.length || 0}`} />
-                      <Chip
-                        size="small"
-                        label={`Instancias: ${vpc.subnets?.reduce((a, sn) => a + (sn.instances?.length || 0), 0) || 0
-                          }`}
-                      />
-                    </Stack>
+                    ))}
                   </Box>
                 ))}
-
-                {/* ---- Tablas de rutas ---- */}
-                <Divider sx={{ my: 2 }} />
-                <Typography variant="h6" sx={{ mb: 1 }}>
-                  Tablas de rutas generadas
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  Revisa las rutas locales, NAT, Internet Gateway y peering antes de confirmar el despliegue.
-                </Typography>
-                <DeployConfirmationRoutes vpcs={vpcs} />
-              </>
-            )}
-          </Stack>
-        )}
+              </Box>
+            </Box>
+          ))}
+        </Box>
       </DialogContent>
 
-      <DialogActions sx={{ position: 'relative' }}>
-        {isInitializing && (
-          <Box
-            sx={{
-              position: 'absolute',
-              inset: 0,
-              backgroundColor: (theme) => theme.palette.background.paper,
-              opacity: 0.6,
-              zIndex: 1,
-            }}
-          />
-        )}
-        <Button onClick={onClose} disabled={isInitializing}>Cancelar</Button>
+      <DialogActions>
+        <Button onClick={onClose}>Cancelar</Button>
 
         <Button
-          onClick={() => onValidatePlan?.(allowCrossVpcPingUI)}
           variant="contained"
-          color="primary"
-          disabled={isInitializing || validationState === "syncing" || validationState === "planning"}
+          onClick={onValidate}
+          disabled={loadingFlow}
         >
-          Validar (plan)
+          Validar
         </Button>
 
-        {validationState !== "success" && effectivePlanId && (
-          <Button
-            onClick={() => onOpenPlanDetails?.(effectivePlanId)}
-            variant="outlined"
-            disabled={isInitializing}
-          >
-            Ver plan existente
-          </Button>
-        )}
+        <Button
+          variant="outlined"
+          onClick={onViewPlan}
+          disabled={!validationResult?.plan_id}
+        >
+          Ver plan
+        </Button>
 
-        {validationState === "success" && (
-          <>
-            <Button
-              onClick={() => onOpenPlanDetails?.(effectivePlanId)}
-              variant="outlined"
-              disabled={isInitializing}
-            >
-              Ver plan
-            </Button>
-
-            <Button
-              onClick={() => onApplyReal?.(allowCrossVpcPingUI)}
-              variant="contained"
-              color="warning"
-              disabled={isInitializing || !allowRealApply || simulateOnly}
-            >
-              {simulateOnly ? "Desplegar (apply) — activa Apply real" : "Desplegar (apply)"}
-            </Button>
-          </>
-        )}
-
-        {/* fallback legacy */}
-        {validationState === "idle" && !onValidatePlan && (
-          <Button
-            onClick={() => onConfirm?.(allowCrossVpcPingUI)}
-            variant="contained"
-            color="primary"
-            disabled={isInitializing}
-          >
-            {simulateOnly ? "Validar (plan)" : "Desplegar (apply)"}
-          </Button>
-        )}
+        <Button
+          variant="contained"
+          color="success"
+          onClick={onDeploy}
+          disabled={!isValidated || loadingFlow}
+        >
+          Desplegar
+        </Button>
       </DialogActions>
     </Dialog>
   );
-}
+};
+
+export default ConfirmDeployDialog;
