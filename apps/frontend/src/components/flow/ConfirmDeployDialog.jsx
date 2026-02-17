@@ -8,18 +8,10 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
-  FormControlLabel,
   Stack,
-  Switch,
-  TextField,
   Typography,
-  ToggleButton,
-  ToggleButtonGroup,
   CircularProgress,
 } from "@mui/material";
-import { useMemo } from "react";
-import DeployConfirmationRoutes from "./panels/DeployConfirmationRoutes";
 
 /**
  * Exporta el plan actual (transformedData) a un archivo JSON descargable.
@@ -56,10 +48,11 @@ const ConfirmDeployDialog = ({
   onViewPlan,
   loadingFlow,
 }) => {
-  const isValidated = validationState === "success";
-  const hasError = validationState === "error";
+  const isValidated = validationState === "SUCCESS";
+  const hasError = validationState === "ERROR";
   const isSyncing =
-    validationState === "syncing" || validationState === "planning";
+    validationState === "SYNCING" ||
+    validationState === "PLANNING";
 
   const vpcs = transformedData?.vpcs || [];
 
@@ -67,16 +60,13 @@ const ConfirmDeployDialog = ({
     if (isSyncing) {
       return <Alert severity="info">Validando infraestructura...</Alert>;
     }
-
     if (isValidated) {
       return (
         <Alert severity="success">
-          Infraestructura validada correctamente. Puedes desplegar o revisar el
-          plan.
+          Infraestructura validada correctamente. Puedes desplegar o revisar el plan.
         </Alert>
       );
     }
-
     if (hasError) {
       return (
         <Alert severity="error">
@@ -84,7 +74,6 @@ const ConfirmDeployDialog = ({
         </Alert>
       );
     }
-
     return (
       <Alert severity="warning">
         El canvas cambió desde la última validación. Debes validar nuevamente.
@@ -92,18 +81,10 @@ const ConfirmDeployDialog = ({
     );
   };
 
-  const mapTarget = (target) => {
-    if (target === "igw") return "Internet Gateway";
-    if (target === "nat") return "NAT Gateway";
-    if (target === "local") return "Local";
-    return target;
-  };
-
   const totalSubnets = vpcs.reduce(
     (acc, v) => acc + (v.subnets?.length || 0),
     0
   );
-
   const totalInstances = vpcs.reduce(
     (acc, v) =>
       acc +
@@ -117,80 +98,65 @@ const ConfirmDeployDialog = ({
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>Confirmar infraestructura</DialogTitle>
-
       <DialogContent dividers>
-        {renderBanner()}
-
-        <Box mt={3}>
-          <Typography variant="h6" gutterBottom>
-            Resumen de infraestructura
-          </Typography>
-
-          <Stack direction="row" spacing={1} flexWrap="wrap">
-            <Chip label={`Cloud: ${transformedData?.cloud || "aws"}`} />
-            <Chip label={`VPCs: ${vpcs.length}`} />
-            <Chip label={`Subnets: ${totalSubnets}`} />
-            <Chip label={`Instancias: ${totalInstances}`} />
-          </Stack>
-        </Box>
-
-        <Box mt={4}>
-          <Typography variant="h6" gutterBottom>
-            Detalle por VPC
-          </Typography>
-
-          {vpcs.map((vpc) => (
+        <Box position="relative">
+          {loadingFlow && (
             <Box
-              key={vpc.id}
-              mb={3}
-              p={2}
-              border="1px solid #eee"
-              borderRadius={2}
+              sx={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "rgba(255,255,255,0.6)",
+                zIndex: 10,
+              }}
             >
-              <Typography variant="subtitle1">{vpc.name}</Typography>
-
-              <Stack direction="row" spacing={1} mt={1} flexWrap="wrap">
-                <Chip label={`CIDR: ${vpc.cidr_block}`} />
-                <Chip label={`Región: ${vpc.region}`} />
-                {vpc.internet_gateway && (
-                  <Chip label="IGW habilitado" color="primary" />
-                )}
-                {vpc.nat_gateway?.enabled && (
-                  <Chip label="NAT habilitado" color="secondary" />
-                )}
-              </Stack>
-
-              <Box mt={2}>
-                <Typography variant="subtitle2">
-                  Tablas de rutas
-                </Typography>
-
-                {vpc.route_tables?.map((rt) => (
-                  <Box key={rt.name} mt={1} ml={2}>
-                    <Typography variant="body2">
-                      Tabla: {rt.name}
-                    </Typography>
-
-                    {rt.routes?.map((route, index) => (
-                      <Typography
-                        key={index}
-                        variant="body2"
-                        sx={{ ml: 2 }}
-                      >
-                        {route.dest_cidr} → {mapTarget(route.target)}
-                      </Typography>
-                    ))}
-                  </Box>
-                ))}
-              </Box>
+              <CircularProgress size={40} />
             </Box>
-          ))}
+          )}
+
+          {renderBanner()}
+
+          <Box mt={3}>
+            <Typography variant="subtitle1" gutterBottom>
+              Resumen
+            </Typography>
+            <Stack direction="row" spacing={1} flexWrap="wrap">
+              <Chip label={`Cloud: ${transformedData?.cloud || "aws"}`} />
+              <Chip label={`VPCs: ${vpcs.length}`} />
+              <Chip label={`Subnets: ${totalSubnets}`} />
+              <Chip label={`Instancias: ${totalInstances}`} />
+            </Stack>
+          </Box>
+
+          <Box mt={4}>
+            {vpcs.map((vpc) => (
+              <Box
+                key={vpc.id}
+                mb={2}
+                p={2}
+                border="1px solid #eee"
+                borderRadius={2}
+              >
+                <Typography variant="subtitle2">{vpc.name}</Typography>
+                <Stack direction="row" spacing={1} mt={1} flexWrap="wrap">
+                  <Chip label={`CIDR: ${vpc.cidr_block}`} size="small" />
+                  <Chip label={`Región: ${vpc.region}`} size="small" />
+                  {vpc.internet_gateway && (
+                    <Chip label="IGW" size="small" color="primary" />
+                  )}
+                  {vpc.nat_gateway?.enabled && (
+                    <Chip label="NAT" size="small" color="secondary" />
+                  )}
+                </Stack>
+              </Box>
+            ))}
+          </Box>
         </Box>
       </DialogContent>
-
       <DialogActions>
         <Button onClick={onClose}>Cancelar</Button>
-
         <Button
           variant="contained"
           onClick={onValidate}
@@ -198,7 +164,13 @@ const ConfirmDeployDialog = ({
         >
           Validar
         </Button>
-
+        <Button
+          variant="outlined"
+          onClick={() => exportPlanToJson(transformedData, transformedData?.name || "plan")}
+          disabled={!transformedData}
+        >
+          Exportar JSON
+        </Button>
         <Button
           variant="outlined"
           onClick={onViewPlan}
@@ -206,7 +178,6 @@ const ConfirmDeployDialog = ({
         >
           Ver plan
         </Button>
-
         <Button
           variant="contained"
           color="success"

@@ -24,8 +24,63 @@ export default function PacketToolbar({
   onPreviewRoutes,
   planStatus = null, // { status, last_action, simulate_only, updated_at }
   canvasState = "NO_PLAN",
+  validationState = "IDLE",
 }) {
   const { mode, toggle } = useThemeMode();
+
+  const PLAN_STATES = {
+    IDLE: "IDLE",
+    SYNCING: "SYNCING",
+    PLANNING: "PLANNING",
+    SUCCESS: "SUCCESS",
+    ERROR: "ERROR",
+  };
+
+  const normalizedValidation = String(validationState || "").toUpperCase();
+
+  const renderPlanChip = () => {
+    if (!normalizedValidation || normalizedValidation === PLAN_STATES.IDLE) {
+      return null;
+    }
+
+    if (normalizedValidation === PLAN_STATES.SUCCESS) {
+      return (
+        <Chip
+          size="small"
+          variant="outlined"
+          label="PLAN: VALIDADO"
+          color="success"
+        />
+      );
+    }
+
+    if (
+      normalizedValidation === PLAN_STATES.SYNCING ||
+      normalizedValidation === PLAN_STATES.PLANNING
+    ) {
+      return (
+        <Chip
+          size="small"
+          variant="outlined"
+          label="PLAN: VALIDANDO..."
+          color="info"
+        />
+      );
+    }
+
+    if (normalizedValidation === PLAN_STATES.ERROR) {
+      return (
+        <Chip
+          size="small"
+          variant="outlined"
+          label="PLAN: ERROR"
+          color="error"
+        />
+      );
+    }
+
+    return null;
+  };
 
   return (
     <div
@@ -42,32 +97,17 @@ export default function PacketToolbar({
         {/* Izquierda: título */}
         <div className="pt-toolbar__title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span>{title}</span>
-          {planStatus?.status ? (
-            <>
+          <>
+            {renderPlanChip()}
+            {canvasState === "PLAN_OUTDATED" && (
               <Chip
                 size="small"
                 variant="outlined"
-                label={`PLAN: ${String(planStatus.status).toUpperCase()}`}
-                color={
-                  String(planStatus.status).toUpperCase() === 'SUCCESS'
-                    ? 'success'
-                    : ['RUNNING', 'PENDING', 'STARTED'].includes(String(planStatus.status).toUpperCase())
-                      ? 'info'
-                      : String(planStatus.status).toUpperCase() === 'FAILURE'
-                        ? 'error'
-                        : 'default'
-                }
+                label="DESACTUALIZADO"
+                color="warning"
               />
-              {canvasState === "PLAN_OUTDATED" && (
-                <Chip
-                  size="small"
-                  variant="outlined"
-                  label="DESACTUALIZADO"
-                  color="warning"
-                />
-              )}
-            </>
-          ) : null}
+            )}
+          </>
         </div>
 
         {/* Controles de vista */}
@@ -90,7 +130,16 @@ export default function PacketToolbar({
           <Button variant="outlined" className="pt-btn" startIcon={<SaveIcon />} onClick={onSave} size="small" disabled={canvasState === "PLAN_RUNNING"}>Save</Button>
           <Button variant="outlined" className="pt-btn" startIcon={<RestoreIcon />} onClick={onRestore} size="small" disabled={canvasState === "PLAN_RUNNING"}>Restore</Button>
           <Button variant="outlined" className="pt-btn pt-btn--yellow" startIcon={<RestartAltIcon />} onClick={onRestoreInitial} size="small" disabled={canvasState === "PLAN_RUNNING"}>Restore Initial</Button>
-          <Button variant="outlined" className="pt-btn pt-btn--green" startIcon={<PlayArrowIcon />} onClick={onDeploy} size="small" disabled={canvasState === "PLAN_RUNNING"}>Deploy</Button>
+          <Button
+            variant="outlined"
+            className="pt-btn pt-btn--green"
+            startIcon={<PlayArrowIcon />}
+            onClick={onDeploy}
+            size="small"
+            disabled={canvasState === "PLAN_RUNNING" || canvasState === "PLAN_OUTDATED"}
+          >
+            Deploy
+          </Button>
           <Button variant="outlined" className="pt-btn pt-btn--green" startIcon={<PlayArrowIcon />} onClick={onPreviewRoutes} size="small" disabled={canvasState === "PLAN_RUNNING"}>Preview</Button>
         </div>
 
