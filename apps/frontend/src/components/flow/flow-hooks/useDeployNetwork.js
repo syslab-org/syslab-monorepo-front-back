@@ -572,40 +572,6 @@ const useDeployNetwork = ({
     }
   };
 
-  // const handleConfirmDeploy = async () => {
-  //   setShowConfirmation(false);
-  //   setLoadingFlow(true);
-  //   setSuccessMessage(null);
-  //   setErrorMessage(null);
-
-  //   try {
-  //     if (!simulateOnly) {
-  //       const txt = window.prompt("Para confirmar escribe: DEPLOY");
-  //       if (txt !== "DEPLOY") {
-  //         setLoadingFlow(false);
-  //         setErrorMessage("Deploy cancelado por el usuario.");
-  //         return;
-  //       }
-  //     }
-  //     console.log("firestoreVpcId", firestoreVpcId);
-  //     const res = await api.syncPlanFromCanvas({
-  //       name: planName || "plan-" + Date.now(),
-  //       ...transformedData,
-  //       simulate_only: simulateOnly,
-  //     });
-
-  //     setLoadingFlow(false);
-  //     setSuccessMessage(
-  //       `${res.message || "Plan sincronizado."} plan_id=${res.plan_id || "?"}`,
-  //     );
-  //     navigate(`/admin/plans/${res.plan_id || "?"}`);
-  //   } catch (error) {
-  //     setLoadingFlow(false);
-  //     setErrorMessage(
-  //       `Fallo al crear el Plan: ${error?.message || "Error desconocido"}`,
-  //     );
-  //   }
-  // };
   const handleConfirmDeploy = async () => {
     await handleValidatePlan();
   };
