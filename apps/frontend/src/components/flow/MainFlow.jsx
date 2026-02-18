@@ -255,6 +255,7 @@ function MainFlow() {
     dirtyInitializedRef.current = false;
   }, [canvasPlanId, validatedPlanHash]);
 
+
   useEffect(() => {
     if (!restorationDone) return;
 
@@ -290,6 +291,20 @@ function MainFlow() {
     }
 
   }, [nodes, edges, validatedPlanHash, canvasPlanId, restorationDone, hasValidatedInSession]);
+
+  // 🔎 Re-evaluar estado dirty inmediatamente después de restaurar desde Firestore
+  useEffect(() => {
+    if (!restorationDone) return;
+    if (!canvasPlanId || !validatedPlanHash) return;
+
+    const current = computeInfraHash(nodes, edges);
+
+    if (current !== validatedPlanHash) {
+      setIsCanvasDirty(true);
+    } else {
+      setIsCanvasDirty(false);
+    }
+  }, [restorationDone, canvasPlanId, validatedPlanHash]);
 
   const guardBeforeEdit = (
     fn,
