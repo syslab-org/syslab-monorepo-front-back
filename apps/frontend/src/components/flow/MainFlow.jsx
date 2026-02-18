@@ -53,7 +53,7 @@ import useCidrBlockVPCStore from './store/cidrBlocksIp';
 import useClickedNodeIdStore from './store/clickedNodeIdStore';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useWizard } from "../../contexts/WizardContext";
-
+import { computeInfraHash } from "./utils/infraHash";
 // Importar constantes
 import {
   DB_AMI_LIST,
@@ -224,52 +224,6 @@ function MainFlow() {
     return s === 'RUNNING' || s === 'PENDING' || s === 'STARTED';
   };
 
-  // Stable stringify para que el hash sea determinista (ordena keys recursivamente)
-  const stableStringify = (value) => {
-    const seen = new WeakSet();
-
-    const norm = (v) => {
-      if (v === undefined) return null;
-      if (v === null) return null;
-
-      const t = typeof v;
-      if (t === 'number' || t === 'boolean' || t === 'string') return v;
-
-      if (Array.isArray(v)) return v.map(norm);
-
-      if (t === 'object') {
-        if (seen.has(v)) return '[Circular]';
-        seen.add(v);
-
-        const out = {};
-        for (const k of Object.keys(v).sort()) {
-          out[k] = norm(v[k]);
-        }
-        return out;
-      }
-
-      return String(v);
-    };
-
-    return JSON.stringify(norm(value));
-  };
-
-  // Nuevo helper: genera un hash basado en la infraestructura real (preview)
-  const computeInfraHash = (nodesArr, edgesArr) => {
-    try {
-      const preview = buildRoutingPreview(nodesArr, edgesArr);
-
-      const payloadLite = {
-        vpcs: preview?.vpcs || [],
-        links: preview?.links || [],
-        routers: preview?.routers || [],
-      };
-
-      return stableStringify(payloadLite);
-    } catch (_err) {
-      return `infra:n${(nodesArr || []).length}-e${(edgesArr || []).length}`;
-    }
-  };
   // Load plan metadata (planId + planCanvasHash) from Firestore
   useEffect(() => {
     let alive = true;
