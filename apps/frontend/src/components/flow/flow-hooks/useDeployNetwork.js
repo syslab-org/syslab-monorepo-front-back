@@ -446,40 +446,10 @@ const useDeployNetwork = ({
 
     // Abrimos el modal inmediatamente (UX reactiva)
     setShowConfirmation(true);
-    setValidationState(PLAN_STATES.SYNCING);
 
-    // 🔎 Intentar sincronizar con backend en segundo plano
-    try {
-      if (firestoreVpcId) {
-        // sync_from_canvas SOLO crea/actualiza el Plan (no ejecuta Terraform)
-        const syncRes = await api.syncPlanFromCanvas({
-          name: ensurePlanName() || built.name,
-          ...built,
-        });
-
-        const planId = syncRes?.plan_id;
-
-        if (planId) {
-          await persistPlanIdToCanvas({
-            canvasId: firestoreVpcId,
-            planId,
-            name: built.name,
-            created: !!syncRes?.created,
-            validationOk: null,
-          });
-
-          setValidationResult({
-            plan_id: planId,
-            created: !!syncRes?.created,
-          });
-
-          setValidationState(PLAN_STATES.IDLE);
-        }
-      }
-    } catch (e) {
-      console.warn("No se pudo detectar plan existente antes de validar:", e);
-      setValidationState(PLAN_STATES.IDLE);
-    }
+    // No sincronizamos ni creamos plan aquí.
+    // El plan se crea / sincroniza únicamente cuando el usuario presiona "Validar".
+    setValidationState(PLAN_STATES.IDLE);
   };
 
   const pollPlanUntilDone = async (

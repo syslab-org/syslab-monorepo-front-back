@@ -253,49 +253,21 @@ function MainFlow() {
 
     return JSON.stringify(norm(value));
   };
-  // Helper para calcular un hash estable del canvas (topología actual)
-  // Importante: debe ser determinista (mismo contenido => mismo hash),
-  // independientemente del orden del array de nodes/edges.
-  const computeCanvasHashLite = (nodesArr, edgesArr) => {
+
+  // Nuevo helper: genera un hash basado en la infraestructura real (preview)
+  const computeInfraHash = (nodesArr, edgesArr) => {
     try {
-      const nodesStable = (nodesArr || [])
-        .map((x) => {
-          const data = { ...(x.data || {}) };
+      const preview = buildRoutingPreview(nodesArr, edgesArr);
 
-          delete data.connectedRouters;
-          delete data.selected;
-          delete data.hovered;
-          delete data.positionAbsolute;
-          delete data.dragging;
-          delete data.resizing;
-          delete data.width;
-          delete data.height;
+      const payloadLite = {
+        vpcs: preview?.vpcs || [],
+        links: preview?.links || [],
+        routers: preview?.routers || [],
+      };
 
-          return {
-            id: x.id,
-            type: x.type,
-            parentId: x.parentId || x.parentNode || null,
-            position: {
-              x: x.position?.x ?? null,
-              y: x.position?.y ?? null,
-            },
-            data,
-          };
-        })
-        .sort((a, b) => String(a.id).localeCompare(String(b.id)));
-
-      const edgesStable = (edgesArr || [])
-        .map((x) => ({
-          id: x.id,
-          source: x.source,
-          target: x.target,
-          type: x.type || null,
-        }))
-        .sort((a, b) => String(a.id).localeCompare(String(b.id)));
-
-      return stableStringify({ n: nodesStable, e: edgesStable });
+      return stableStringify(payloadLite);
     } catch (_err) {
-      return `n:${(nodesArr || []).length}-e:${(edgesArr || []).length}`;
+      return `infra:n${(nodesArr || []).length}-e${(edgesArr || []).length}`;
     }
   };
   // Load plan metadata (planId + planCanvasHash) from Firestore
@@ -346,7 +318,7 @@ function MainFlow() {
       return;
     }
 
-    const current = computeCanvasHashLite(nodes, edges);
+    const current = computeInfraHash(nodes, edges);
 
     // Si no existe hash validado persistido (caso extremo),
     // no podemos comparar todavía.
@@ -617,7 +589,7 @@ function MainFlow() {
       const pid = validationResult.plan_id;
       setCanvasPlanId(pid);
 
-      const okHash = computeCanvasHashLite(nodes, edges);
+      const okHash = computeInfraHash(nodes, edges);
       setValidatedPlanHash(okHash);
 
       // Persistir planId y hash validado en Firestore para que sobreviva a refresh
