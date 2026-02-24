@@ -1,5 +1,4 @@
 import { styled } from '@mui/material/styles'
-import { DRAWERWITH } from '../../../../constants'
 import MuiAppBar from '@mui/material/AppBar';
 
 
@@ -15,8 +14,8 @@ export const AppBarStyle = styled(MuiAppBar, {
     color: '#ffffff',
 
     ...(open && {
-        marginLeft: DRAWERWITH,
-        width: `calc(100% - ${DRAWERWITH}px)`,
+        marginLeft: 260,
+        width: `calc(100% - 260px)`,
         transition: theme.transitions.create(['width', 'margin'], {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.enteringScreen,
