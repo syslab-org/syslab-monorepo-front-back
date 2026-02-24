@@ -45,7 +45,7 @@ export const MainListItems = () => {
         <ListItemIcon variant="whiteStyle">
           <CloudQueue />
         </ListItemIcon>
-        <ListItemText primary="Virtual Private Cloud" />
+        <ListItemText primary="Laboratorios" />
       </ListItemButton>
       <ListItemButton
         variant="whiteStyle"
@@ -55,20 +55,14 @@ export const MainListItems = () => {
         <ListItemIcon variant="whiteStyle">
           <PeopleIcon />
         </ListItemIcon>
-        <ListItemText primary="Planes de red" />
+        <ListItemText
+          primary="Ejecuciones de Infraestructura"
+          primaryTypographyProps={{ noWrap: false }}
+          sx={{ whiteSpace: "normal" }}
+        />
       </ListItemButton>
-      <ListItemButton variant="whiteStyle">
-        <ListItemIcon variant="whiteStyle">
-          <BarChartIcon />
-        </ListItemIcon>
-        <ListItemText primary="Reports" />
-      </ListItemButton>
-      <ListItemButton variant="whiteStyle">
-        <ListItemIcon variant="whiteStyle">
-          <LayersIcon />
-        </ListItemIcon>
-        <ListItemText primary="Integrations" />
-      </ListItemButton>
+
+
     </React.Fragment>
   );
 };

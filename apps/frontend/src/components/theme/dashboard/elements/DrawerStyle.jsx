@@ -9,7 +9,7 @@ export const DrawerStyle = styled(MuiDrawer, { shouldForwardProp: (prop) => prop
         '& .MuiDrawer-paper': {
             position: 'relative',
             whiteSpace: 'nowrap',
-            width: DRAWERWITH,
+            width: 260,
             transition: theme.transitions.create('width', {
                 easing: theme.transitions.easing.sharp,
                 duration: theme.transitions.duration.enteringScreen,
@@ -24,9 +24,9 @@ export const DrawerStyle = styled(MuiDrawer, { shouldForwardProp: (prop) => prop
                     easing: theme.transitions.easing.sharp,
                     duration: theme.transitions.duration.leavingScreen,
                 }),
-                width: theme.spacing(7),
+                width: 72,
                 [theme.breakpoints.up('sm')]: {
-                    width: theme.spacing(9),
+                    width: 72,
                 },
             }),
         },
