@@ -1,4 +1,4 @@
-import { styled } from '@mui/material'
+import { styled } from '@mui/material/styles'
 import { DRAWERWITH } from '../../../../constants'
 import MuiDrawer from '@mui/material/Drawer';
 
@@ -17,7 +17,7 @@ export const DrawerStyle = styled(MuiDrawer, { shouldForwardProp: (prop) => prop
             boxSizing: 'border-box',
             backgroundColor: '#233044',
             color: '#ffffff',
-          
+
             ...(!open && {
                 overflowX: 'hidden',
                 transition: theme.transitions.create('width', {
