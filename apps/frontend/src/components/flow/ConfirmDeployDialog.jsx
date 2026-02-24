@@ -1,6 +1,6 @@
 // apps/frontend/src/components/flow/ConfirmDeployDialog.jsx
-import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -8,17 +8,10 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
-  FormControlLabel,
-  IconButton,
   Stack,
-  Switch,
-  TextField,
-  Tooltip,
   Typography,
+  CircularProgress,
 } from "@mui/material";
-import { useMemo } from "react";
-import DeployConfirmationRoutes from "./panels/DeployConfirmationRoutes";
 
 /**
  * Exporta el plan actual (transformedData) a un archivo JSON descargable.
@@ -44,271 +37,168 @@ function exportPlanToJson(transformedData, planName = "plan-export") {
   }
 }
 
-export default function ConfirmDeployDialog({
+const ConfirmDeployDialog = ({
   open,
   onClose,
-  onConfirm,                // si quieres pasar el override al confirmar: onConfirm(allowCrossVpcPingUI)
-  planName,
-  setPlanName,
-  simulateOnly,
-  setSimulateOnly,
+  validationState,
+  canvasState,
+  validationResult,
   transformedData,
-  allowCrossVpcPingUI,      // <- controlado por el padre
-  setAllowCrossVpcPingUI,   // <- setter del padre
-}) {
-  const allowRealApply = import.meta.env.VITE_ALLOW_REAL_APPLY === "1";
+  onValidate,
+  onDeploy,
+  onViewPlan,
+  loadingFlow,
+}) => {
+  const isValidated = validationState === "SUCCESS";
+  const hasError = validationState === "ERROR";
+  const isSyncing =
+    validationState === "SYNCING" ||
+    validationState === "PLANNING";
 
-  // Normalización segura
-  const vpcs = Array.isArray(transformedData?.vpcs) ? transformedData.vpcs : [];
-  const links = Array.isArray(transformedData?.links) ? transformedData.links : [];
-  const vlan = transformedData?.vlan || {};
+  const vpcs = transformedData?.vpcs || [];
 
-  // Totales del plan
-  const totalVpcs = vpcs.length;
+  const renderBanner = () => {
+    if (isSyncing) {
+      return <Alert severity="info">Validando infraestructura...</Alert>;
+    }
+
+    if (isValidated) {
+      return (
+        <Alert severity="success">
+          Infraestructura validada correctamente. Puedes desplegar o revisar el plan.
+        </Alert>
+      );
+    }
+
+    if (hasError) {
+      return (
+        <Alert severity="error">
+          Error durante la validación. Revisa los detalles antes de continuar.
+        </Alert>
+      );
+    }
+
+    // ⚠️ Mostrar advertencia SOLO si el canvas realmente está desactualizado
+    if (canvasState === "PLAN_OUTDATED") {
+      return (
+        <Alert severity="warning">
+          El canvas cambió desde la última validación. Debes validar nuevamente.
+        </Alert>
+      );
+    }
+
+    // En cualquier otro caso no mostramos banner
+    return null;
+  };
+
   const totalSubnets = vpcs.reduce(
-    (acc, vpc) => acc + (vpc.subnets?.length || 0),
+    (acc, v) => acc + (v.subnets?.length || 0),
     0
   );
   const totalInstances = vpcs.reduce(
-    (acc, vpc) =>
+    (acc, v) =>
       acc +
-      (vpc.subnets?.reduce((a, sn) => a + (sn.instances?.length || 0), 0) || 0),
+      (v.subnets || []).reduce(
+        (subAcc, s) => subAcc + (s.instances?.length || 0),
+        0
+      ),
     0
   );
-  const totalNat = vpcs.filter((v) => v.nat_gateway?.enabled).length;
-  const totalIgw = vpcs.filter((v) => v.internet_gateway).length;
-  const totalRouters = links.reduce((acc, l) => {
-    const id = l.via_router_id;
-    return id ? acc.add(id) : acc;
-  }, new Set()).size;
-
-  // Chip de estado del override (true/false/null)
-  const pingStatusChip = useMemo(() => {
-    if (allowCrossVpcPingUI === true) {
-      return (
-        <Chip
-          size="small"
-          color="success"
-          label="Ping entre VPCs: Activado (override)"
-        />
-      );
-    }
-    if (allowCrossVpcPingUI === false) {
-      return (
-        <Chip
-          size="small"
-          color="error"
-          label="Ping entre VPCs: Desactivado (override)"
-        />
-      );
-    }
-    return (
-      <Chip
-        size="small"
-        variant="outlined"
-        label="Ping entre VPCs: Automático"
-      />
-    );
-  }, [allowCrossVpcPingUI]);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>Confirmar despliegue</DialogTitle>
-
+      <DialogTitle>Confirmar infraestructura</DialogTitle>
       <DialogContent dividers>
-        <Stack spacing={2}>
-          {/* ---- Nombre del plan ---- */}
-          <TextField
-            fullWidth
-            label="Nombre del Plan"
-            value={planName}
-            onChange={(e) => setPlanName(e.target.value)}
-            placeholder="p.ej. red-principal"
-          />
-
-          {/* ---- Toggle Simulación / Apply ---- */}
-          <FormControlLabel
-            control={
-              <Switch
-                disabled={!allowRealApply}
-                checked={!simulateOnly}
-                onChange={(e) => setSimulateOnly(!e.target.checked)}
-              />
-            }
-            label={
-              allowRealApply
-                ? "Apply real (Terraform apply)"
-                : "Apply real (bloqueado por entorno)"
-            }
-          />
-
-          {/* ---- Switch de ping entre VPCs (override opcional) ---- */}
-          <Box
-            sx={{
-              p: 1.5,
-              border: (theme) => `1px dashed ${theme.palette.divider}`,
-              borderRadius: 1.5,
-            }}
-          >
-            <Stack
-              direction="row"
-              alignItems="center"
-              justifyContent="space-between"
-              spacing={1}
-              flexWrap="wrap"
+        <Box position="relative">
+          {loadingFlow && (
+            <Box
+              sx={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "rgba(255,255,255,0.6)",
+                zIndex: 10,
+              }}
             >
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={allowCrossVpcPingUI === true}
-                    onChange={(e) =>
-                      setAllowCrossVpcPingUI(e.target.checked ? true : false)
-                    }
-                  />
-                }
-                label={<Typography variant="body2">Permitir ping entre VPCs (override)</Typography>}
-              />
-
-              <Stack direction="row" spacing={1} alignItems="center">
-                {pingStatusChip}
-                <Tooltip title="Volver a modo automático (no forzar)">
-                  <span>
-                    <IconButton
-                      onClick={() => setAllowCrossVpcPingUI(null)}
-                      size="small"
-                      aria-label="Restablecer a automático"
-                    >
-                      <RestartAltIcon fontSize="small" />
-                    </IconButton>
-                  </span>
-                </Tooltip>
-              </Stack>
-            </Stack>
-
-            <Typography variant="caption" color="text.secondary">
-              Si no cambias este control o presionas <b>“restablecer”</b>, el sistema usará el
-              comportamiento <b>automático</b> (se decide según enlaces entre VPCs o flags en routers).
-            </Typography>
-          </Box>
-
-          {/* ---- Mensajes contextuales ---- */}
-          {!allowRealApply && (
-            <Typography variant="body2" color="text.secondary">
-              Para habilitar el apply real, define <code>VITE_ALLOW_REAL_APPLY=1</code> en el entorno del frontend.
-            </Typography>
-          )}
-
-          {!simulateOnly && (
-            <Typography variant="body2" sx={{ color: "#b45309" }}>
-              ⚠️ Esto ejecutará un <b>Terraform apply</b> real en AWS. Asegúrate de tener credenciales IAM válidas.
-            </Typography>
-          )}
-
-          {/* ---- Resumen global ---- */}
-          <Divider sx={{ my: 1.5 }} />
-          <Typography variant="h6">Resumen general del plan</Typography>
-          <Stack direction="row" flexWrap="wrap" gap={1.2} sx={{ mt: 1 }}>
-            <Chip size="small" color="primary" label={`Cloud: ${transformedData?.cloud || "aws"}`} />
-            <Chip size="small" label={`VLAN: ${vlan?.name || "no definida"}`} />
-            {vlan?.region && <Chip size="small" label={`Región: ${vlan.region}`} />}
-            {vlan?.master_cidr && <Chip size="small" label={`CIDR maestro: ${vlan.master_cidr}`} />}
-            <Chip size="small" label={`VPCs: ${totalVpcs}`} />
-            <Chip size="small" label={`Subnets: ${totalSubnets}`} />
-            <Chip size="small" label={`Instancias: ${totalInstances}`} />
-            <Chip size="small" label={`Routers: ${totalRouters}`} />
-            <Chip
-              size="small"
-              color={totalIgw ? "info" : "default"}
-              label={`Internet Gateways: ${totalIgw}`}
-            />
-            <Chip
-              size="small"
-              color={totalNat ? "warning" : "default"}
-              label={`NAT Gateways: ${totalNat}`}
-            />
-            {pingStatusChip}
-          </Stack>
-
-          {/* ---- Botón de exportar plan ---- */}
-          {transformedData && (
-            <Box sx={{ mt: 1 }}>
-              <Button
-                variant="outlined"
-                color="secondary"
-                onClick={() => exportPlanToJson(transformedData, planName)}
-              >
-                Exportar plan a JSON
-              </Button>
-              <Typography variant="caption" sx={{ ml: 1, color: "text.secondary" }}>
-                Guarda una copia local del plan antes de ejecutar el deploy.
-              </Typography>
+              <CircularProgress size={40} />
             </Box>
           )}
 
-          {/* ---- Detalle por VPC ---- */}
-          {vpcs.length > 0 && (
-            <>
-              <Divider sx={{ my: 2 }} />
-              <Typography variant="h6">Detalle por VPC</Typography>
+          {renderBanner()}
 
-              {vpcs.map((vpc) => (
-                <Box key={vpc.id} sx={{ mt: 1.5 }}>
-                  <Stack
-                    direction="row"
-                    alignItems="center"
-                    spacing={1}
-                    flexWrap="wrap"
-                    sx={{ mb: 0.5 }}
-                  >
-                    <Typography variant="subtitle1">
-                      {vpc.name || "(sin nombre)"}
-                    </Typography>
-                    {vpc.cidr_block && (
-                      <Chip size="small" variant="outlined" label={`CIDR: ${vpc.cidr_block}`} />
-                    )}
-                    {vpc.region && (
-                      <Chip size="small" variant="outlined" label={`Región: ${vpc.region}`} />
-                    )}
-                    {vpc.internet_gateway && (
-                      <Chip size="small" color="info" label="IGW habilitado" />
-                    )}
-                    {vpc.nat_gateway?.enabled && (
-                      <Chip size="small" color="warning" label="NAT habilitado" />
-                    )}
-                    <Chip size="small" label={`Subnets: ${vpc.subnets?.length || 0}`} />
-                    <Chip
-                      size="small"
-                      label={`Instancias: ${vpc.subnets?.reduce((a, sn) => a + (sn.instances?.length || 0), 0) || 0
-                        }`}
-                    />
-                  </Stack>
-                </Box>
-              ))}
+          <Box mt={3}>
+            <Typography variant="subtitle1" gutterBottom>
+              Resumen
+            </Typography>
+            <Stack direction="row" spacing={1} flexWrap="wrap">
+              <Chip label={`Cloud: ${transformedData?.cloud || "aws"}`} />
+              <Chip label={`VPCs: ${vpcs.length}`} />
+              <Chip label={`Subnets: ${totalSubnets}`} />
+              <Chip label={`Instancias: ${totalInstances}`} />
+            </Stack>
+          </Box>
 
-              {/* ---- Tablas de rutas ---- */}
-              <Divider sx={{ my: 2 }} />
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                Tablas de rutas generadas
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                Revisa las rutas locales, NAT, Internet Gateway y peering antes de confirmar el despliegue.
-              </Typography>
-              <DeployConfirmationRoutes vpcs={vpcs} />
-            </>
-          )}
-        </Stack>
+          <Box mt={4}>
+            {vpcs.map((vpc) => (
+              <Box
+                key={vpc.id}
+                mb={2}
+                p={2}
+                border="1px solid #eee"
+                borderRadius={2}
+              >
+                <Typography variant="subtitle2">{vpc.name}</Typography>
+                <Stack direction="row" spacing={1} mt={1} flexWrap="wrap">
+                  <Chip label={`CIDR: ${vpc.cidr_block}`} size="small" />
+                  <Chip label={`Región: ${vpc.region}`} size="small" />
+                  {vpc.internet_gateway && (
+                    <Chip label="IGW" size="small" color="primary" />
+                  )}
+                  {vpc.nat_gateway?.enabled && (
+                    <Chip label="NAT" size="small" color="secondary" />
+                  )}
+                </Stack>
+              </Box>
+            ))}
+          </Box>
+        </Box>
       </DialogContent>
-
       <DialogActions>
         <Button onClick={onClose}>Cancelar</Button>
         <Button
-          onClick={() => onConfirm?.(allowCrossVpcPingUI)}
           variant="contained"
-          color="primary"
+          onClick={onValidate}
+          disabled={loadingFlow}
         >
-          {simulateOnly ? "Validar (plan)" : "Desplegar (apply)"}
+          Validar
+        </Button>
+        <Button
+          variant="outlined"
+          onClick={() => exportPlanToJson(transformedData, transformedData?.name || "plan")}
+          disabled={!transformedData}
+        >
+          Exportar JSON
+        </Button>
+        <Button
+          variant="outlined"
+          onClick={onViewPlan}
+          disabled={!validationResult?.plan_id}
+        >
+          Ver plan
+        </Button>
+        <Button
+          variant="contained"
+          color="success"
+          onClick={onDeploy}
+          disabled={!isValidated || loadingFlow}
+        >
+          Desplegar
         </Button>
       </DialogActions>
     </Dialog>
   );
-}
+};
+
+export default ConfirmDeployDialog;
