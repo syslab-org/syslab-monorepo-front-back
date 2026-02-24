@@ -33,16 +33,15 @@ export const stableStringify = (value) => {
 // Genera un hash basado en la infraestructura real (preview)
 export const computeInfraHash = (nodesArr, edgesArr) => {
   try {
-    const preview = buildRoutingPreview(nodesArr, edgesArr);
+    const preview = buildRoutingPreview(nodesArr || [], edgesArr || []);
 
     const payloadLite = {
       vpcs: preview?.vpcs || [],
-      links: preview?.links || [],
-      routers: preview?.routers || [],
     };
 
     return stableStringify(payloadLite);
-  } catch (_err) {
+  } catch (err) {
+    console.warn("computeInfraHash fallback:", err);
     return `infra:n${(nodesArr || []).length}-e${(edgesArr || []).length}`;
   }
 };

@@ -22,6 +22,7 @@ Desarrollar una plataforma educativa y experimental que:
 
 La arquitectura se compone de tres capas principales:
 
+
 3.1 Frontend (React + Canvas)
 	•	Implementado con React y React Flow.
 	•	Permite crear nodos (VPCs, subnets, routers, instancias) y enlaces entre ellos.
@@ -29,6 +30,69 @@ La arquitectura se compone de tres capas principales:
 	•	Al presionar “Deploy”, el sistema:
 	•	Convierte la topología en un JSON estructurado.
 	•	Envía ese JSON al backend para su procesamiento.
+
+3.1.1 Sincronización determinística entre Canvas y Plan Validado (Hash-based)
+
+Durante esta etapa del desarrollo se implementó un mecanismo determinístico de sincronización entre el estado visual del canvas y el último plan validado.
+
+Problema resuelto:
+Anteriormente, el estado "PLAN: VALIDADO" dependía únicamente de estados en memoria (validationState), lo que generaba inconsistencias tras refrescar la página.
+
+Solución implementada:
+Se incorporó un sistema de verificación basado en hash estructural de infraestructura:
+
+• Se creó la función computeInfraHash(nodes, edges) en infraHash.js.
+• El hash se genera a partir del resultado de buildRoutingPreview, lo que garantiza que solo la infraestructura relevante impacte el cálculo.
+• Al validar un plan, se persiste en Firestore:
+  - planId
+  - planCanvasHash
+  - planValidationOk
+• Al restaurar el canvas tras un refresh, el sistema:
+  1. Reconstruye el hash actual desde nodes y edges.
+  2. Lo compara con planCanvasHash almacenado.
+  3. Deriva el estado visual sin depender de memoria de sesión.
+
+Reglas actuales de sincronización:
+• Si existe planCanvasHash y el hash coincide → estado visual: PLAN_VALIDATED.
+• Si existe planCanvasHash y el hash difiere → estado visual: PLAN_OUTDATED.
+• Si no existe planCanvasHash → estado visual: NO_PLAN.
+
+
+Este enfoque garantiza consistencia tras refresh, evita falsos "DESACTUALIZADO" y elimina dependencias frágiles de efectos React ejecutados antes de terminar la restauración del flujo.
+
+---
+
+3.1.2 Diagrama conceptual del ciclo de coherencia
+
+El ciclo lógico completo de coherencia entre el Canvas y el Plan validado puede representarse como:
+
+Canvas (nodes, edges)
+        ↓
+buildRoutingPreview()
+        ↓
+computeInfraHash()
+        ↓
+Persistencia en Firestore
+(planId + planCanvasHash + planValidationOk)
+        ↓
+Refresh / Restauración del flujo
+        ↓
+Re-cálculo de computeInfraHash()
+        ↓
+Comparación estructural
+        ↓
+Derivación de estado visual
+(PLAN_VALIDATED / PLAN_OUTDATED / NO_PLAN)
+
+Este flujo garantiza que el estado visual nunca dependa exclusivamente de memoria de sesión, sino de una comparación determinística basada en la infraestructura representada.
+
+El sistema se aproxima así a un modelo declarativo puro donde:
+
+Estado visual = f(Canvas actual, Plan persistido)
+
+Lo que refuerza la coherencia académica y técnica del sistema como herramienta educativa de Infraestructura como Código (IaC).
+
+---
 
 3.2 Backend (Django + Celery + Terraform)
 	•	Django maneja la API REST y la base de datos de planes (“plans”).
@@ -103,6 +167,24 @@ Se eliminaron botones y logs duplicados, dejando una única fuente de verdad par
 6. Estructura y flujo de datos
 
 6.1 Estructura JSON base enviada desde el canvas
+
+6.1.1 Persistencia y verificación de coherencia del Plan (Frontend)
+
+El frontend ahora implementa un mecanismo de coherencia basado en comparación estructural.
+
+Flujo resumido:
+1. El usuario valida un plan.
+2. El backend devuelve planId y el frontend calcula computeInfraHash.
+3. Ese hash se guarda en Firestore como planCanvasHash.
+4. En cada modificación del canvas (nodes o edges), el sistema recalcula el hash.
+5. Si el hash actual difiere del persistido, el canvas entra en estado PLAN_OUTDATED.
+
+Importante:
+• El estado "PLAN: VALIDADO" ya no depende de validationState en memoria.
+• El estado visual es derivado, no almacenado.
+• Esto permite que al recargar la página el sistema reconstruya correctamente el estado del plan sin intervención del usuario.
+
+Este diseño aproxima el comportamiento del sistema a un modelo declarativo puro donde la infraestructura validada es una función determinística del estado del canvas.
 
 {
   "name": "Test Network",

@@ -54,6 +54,7 @@ import useClickedNodeIdStore from './store/clickedNodeIdStore';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useWizard } from "../../contexts/WizardContext";
 import { computeInfraHash } from "./utils/infraHash";
+
 // Importar constantes
 import {
   DB_AMI_LIST,
@@ -292,19 +293,6 @@ function MainFlow() {
 
   }, [nodes, edges, validatedPlanHash, canvasPlanId, restorationDone, hasValidatedInSession]);
 
-  // 🔎 Re-evaluar estado dirty inmediatamente después de restaurar desde Firestore
-  useEffect(() => {
-    if (!restorationDone) return;
-    if (!canvasPlanId || !validatedPlanHash) return;
-
-    const current = computeInfraHash(nodes, edges);
-
-    if (current !== validatedPlanHash) {
-      setIsCanvasDirty(true);
-    } else {
-      setIsCanvasDirty(false);
-    }
-  }, [restorationDone, canvasPlanId, validatedPlanHash]);
 
   const guardBeforeEdit = (
     fn,
@@ -528,7 +516,19 @@ function MainFlow() {
     handleValidatePlan,
     handleApplyReal,
     handleOpenPlanDetails,
+    planValidationOk,
+    planCanvasHash,
   } = useDeployNetwork({ nodes, edges, allowCrossVpcPingUI, firestoreVpcId: vpcid })
+
+  // Estado de validación SOLO para UI (chip "PLAN: VALIDADO" tras refresh)
+  const validationStateForToolbar = (() => {
+    // Si existe un plan asociado + hash persistido y el canvas NO está dirty,
+    // mostramos "SUCCESS" para reflejar que el plan sigue representando el canvas.
+    if (canvasPlanId && validatedPlanHash && !isCanvasDirty) {
+      return "SUCCESS";
+    }
+    return validationState;
+  })();
 
   // =========================
   // Canvas State Machine (derivado, simplificado y consistente)
@@ -778,7 +778,7 @@ function MainFlow() {
                 }}
                 planStatus={canvasPlanInfo}
                 canvasState={canvasState}
-                validationState={validationState}
+                validationState={validationStateForToolbar}
               />
             </Box>
             <Box sx={{ flex: 1, minHeight: 0, position: "relative" }}>
