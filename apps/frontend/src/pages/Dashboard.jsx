@@ -1,34 +1,72 @@
 //#apps/frontend/src/pages/Dashboard.jsx
 import { Box, Button, Card, CardContent, Grid, Typography } from "@mui/material";
-import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { db } from "../firebase/firebaseConfig";
+import { DB_FIRESTORE_VPCS, USER_ROL_STUDENT } from "../constants";
+import { useAuth } from "../contexts/AuthContext";
 
 function Dashboard() {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [totalLaboratorios, setTotalLaboratorios] = useState(0);
+  const { user } = useAuth();
+
 
   useEffect(() => {
     let mounted = true;
 
-    async function loadPlans() {
+    async function loadData() {
       try {
-        const data = await api.listPlans();
+        // =========================
+        // 1️⃣ Cargar planes (backend)
+        // =========================
+        const plansData = await api.listPlans();
+
         if (mounted) {
-          setPlans(Array.isArray(data) ? data : []);
+          setPlans(Array.isArray(plansData) ? plansData : []);
         }
+
+        // =========================
+        // 2️⃣ Cargar VPCs (Firestore)
+        // =========================
+        if (user?.role) {
+          let vpcCount = 0;
+
+          if (user.role === USER_ROL_STUDENT) {
+            const q = query(
+              collection(db, DB_FIRESTORE_VPCS),
+              where("userId", "==", user.userId)
+            );
+            const snapshot = await getDocs(q);
+            vpcCount = snapshot.size;
+          } else {
+            const snapshot = await getDocs(
+              collection(db, DB_FIRESTORE_VPCS)
+            );
+            vpcCount = snapshot.size;
+          }
+
+          if (mounted) {
+            setTotalLaboratorios(vpcCount);
+          }
+        }
+
       } catch (err) {
-        console.error("Error loading plans:", err);
+        console.error("Error loading dashboard data:", err);
       } finally {
         if (mounted) setLoading(false);
       }
     }
 
-    loadPlans();
+    loadData();
+
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [user]);
 
   // Ordenar por fecha más reciente
   const sortedPlans = [...plans].sort((a, b) => {
@@ -39,15 +77,7 @@ function Dashboard() {
 
   const totalEjecuciones = sortedPlans.length;
 
-  // Contar laboratorios de forma más robusta
-  const totalLaboratorios = sortedPlans.reduce((acc, plan) => {
-    // Algunos planes pueden guardar el JSON en payload directamente
-    const payload = plan?.payload || plan;
-    if (payload?.vpc || payload?.vpcs || payload?.network) {
-      return acc + 1;
-    }
-    return acc;
-  }, 0);
+
 
   const ultimaActividad =
     sortedPlans.length > 0
