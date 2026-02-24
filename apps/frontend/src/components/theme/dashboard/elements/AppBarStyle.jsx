@@ -1,4 +1,4 @@
-import { styled } from '@mui/material'
+import { styled } from '@mui/material/styles'
 import { DRAWERWITH } from '../../../../constants'
 import MuiAppBar from '@mui/material/AppBar';
 

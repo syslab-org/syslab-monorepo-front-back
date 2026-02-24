@@ -40,7 +40,9 @@ function MainLayout() {
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [anchorElUser, setAnchorElUser] = useState(null);
 
-  const { user, logout } = useAuth();
+  const auth = useAuth();
+  const user = auth?.user;
+  const logout = auth?.logout || (() => { });
 
   const toggleDrawer = () => {
     setDrawerOpen((prev) => !prev);
