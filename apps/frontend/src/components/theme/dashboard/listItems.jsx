@@ -1,97 +1,134 @@
-// #apps/frontend/src/components/theme/dashboard/listItems.jsx
-import { CloudQueue, ViewStreamOutlined } from '@mui/icons-material';
-import AssignmentIcon from '@mui/icons-material/Assignment';
-import BarChartIcon from '@mui/icons-material/BarChart';
-import DashboardIcon from '@mui/icons-material/Dashboard';
-import LayersIcon from '@mui/icons-material/Layers';
-import PeopleIcon from '@mui/icons-material/People';
-import SettingsSuggestIcon from '@mui/icons-material/SettingsSuggest';
-import ListItemButton from '@mui/material/ListItemButton';
-import ListItemIcon from '@mui/material/ListItemIcon';
-import ListItemText from '@mui/material/ListItemText';
-import ListSubheader from '@mui/material/ListSubheader';
-import * as React from 'react';
-import { NavLink } from 'react-router-dom';
-import { USER_ROL_STUDENT, USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER } from '../../../constants';
-import { useAuth } from '../../../contexts/AuthContext';
+//#apps/frontend/src/pages/Dashboard.jsx
+import { Box, Button, Card, CardContent, Grid, Typography } from "@mui/material";
+import { Link } from "react-router-dom";
 
-export const MainListItems = () => {
-  const { user } = useAuth()
+function Dashboard() {
   return (
+    <Box>
+      {/* Header */}
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 4,
+        }}
+      >
+        <Box>
+          <Typography variant="h4" fontWeight={600}>
+            Dashboard
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Resumen general del entorno de laboratorios y ejecuciones.
+          </Typography>
+        </Box>
 
-    <React.Fragment>
-      <ListItemButton variant='whiteStyle' component={NavLink} to="/">
-        <ListItemIcon variant='whiteStyle'>
-          <DashboardIcon />
-        </ListItemIcon>
-        <ListItemText primary="Dashboard" />
-      </ListItemButton>
-      <ListItemButton variant='whiteStyle' component={NavLink} to="/admin/vpcs">
-        <ListItemIcon variant='whiteStyle'>
-          <CloudQueue />
-        </ListItemIcon>
-        <ListItemText primary="Virtual Private Cloud" />
-      </ListItemButton>
-      <ListItemButton variant='whiteStyle' component={NavLink} to="/admin/plans">
-        <ListItemIcon variant='whiteStyle'>
-          <PeopleIcon />
-        </ListItemIcon>
-        <ListItemText primary="Planes de red" />
-      </ListItemButton>
-      <ListItemButton variant='whiteStyle'>
-        <ListItemIcon variant='whiteStyle'>
-          <BarChartIcon />
-        </ListItemIcon>
-        <ListItemText primary="Reports" />
-      </ListItemButton>
-      <ListItemButton variant='whiteStyle'>
-        <ListItemIcon variant='whiteStyle'>
-          <LayersIcon />
-        </ListItemIcon>
-        <ListItemText primary="Integrations" />
-      </ListItemButton>
-    </React.Fragment>
-  )
+        <Button
+          component={Link}
+          to="/admin/vpcs"
+          variant="contained"
+          sx={{ textTransform: "none" }}
+        >
+          Crear laboratorio
+        </Button>
+      </Box>
+
+      {/* Stats Cards */}
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={4}>
+          <Card>
+            <CardContent>
+              <Typography variant="subtitle2" color="text.secondary">
+                Laboratorios
+              </Typography>
+              <Typography variant="h4" fontWeight={600}>
+                0
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={4}>
+          <Card>
+            <CardContent>
+              <Typography variant="subtitle2" color="text.secondary">
+                Ejecuciones totales
+              </Typography>
+              <Typography variant="h4" fontWeight={600}>
+                0
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={4}>
+          <Card>
+            <CardContent>
+              <Typography variant="subtitle2" color="text.secondary">
+                Última actividad
+              </Typography>
+              <Typography variant="h6" fontWeight={500}>
+                Sin ejecuciones recientes
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Quick Access */}
+      <Box sx={{ mt: 6 }}>
+        <Typography variant="h6" fontWeight={600} mb={2}>
+          Accesos rápidos
+        </Typography>
+
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <Card
+              sx={{
+                cursor: "pointer",
+                transition: "0.2s",
+                "&:hover": { boxShadow: 6 },
+              }}
+              component={Link}
+              to="/admin/vpcs"
+              style={{ textDecoration: "none" }}
+            >
+              <CardContent>
+                <Typography variant="h6" fontWeight={600}>
+                  Administrar Laboratorios
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Crear, editar y gestionar VPCs guiadas o avanzadas.
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Card
+              sx={{
+                cursor: "pointer",
+                transition: "0.2s",
+                "&:hover": { boxShadow: 6 },
+              }}
+              component={Link}
+              to="/admin/plans"
+              style={{ textDecoration: "none" }}
+            >
+              <CardContent>
+                <Typography variant="h6" fontWeight={600}>
+                  Ver Ejecuciones
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Revisar simulaciones, despliegues y estados de infraestructura.
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      </Box>
+    </Box>
+  );
 }
-  ;
 
-export const SecondaryListItems = () => {
-  const { user } = useAuth()
-  // console.log("RoleUSer: ", user.role);
-
-  return (
-    <React.Fragment >
-      <ListSubheader component="div" inset sx={{ backgroundColor: '#233044', color: '#ffffff' }}>
-        Settings
-      </ListSubheader>
-
-
-      {(user.role === USER_ROL_SUPER_ADMIN) && (
-        <ListItemButton variant='whiteStyle' component={NavLink} to="/admin/settings/amilist">
-          <ListItemIcon variant='whiteStyle'>
-            <ViewStreamOutlined />
-          </ListItemIcon>
-          <ListItemText primary="AMI List" />
-        </ListItemButton>)}
-
-      {(user.role === USER_ROL_SUPER_ADMIN || user.role === USER_ROL_TEACHER) && (
-        <ListItemButton variant='whiteStyle' component={NavLink} to="/admin/settings/usersmanagement">
-          <ListItemIcon variant='whiteStyle'  >
-            <AssignmentIcon />
-          </ListItemIcon>
-          <ListItemText primary="User Management" />
-        </ListItemButton>
-      )}
-
-      {(user.role === USER_ROL_STUDENT) && (
-        <ListItemButton variant='whiteStyle' component={NavLink} to="/admin/settings/general">
-          <ListItemIcon variant='whiteStyle'>
-            <SettingsSuggestIcon />
-          </ListItemIcon>
-          <ListItemText primary="General Settings" />
-        </ListItemButton>
-
-      )}
-
-    </React.Fragment>)
-};
+export default Dashboard;
