@@ -1,16 +1,50 @@
-# apps/backend/api/serializers.py
 from rest_framework import serializers
 from .models import Plan
 
 
 class PlanListSerializer(serializers.ModelSerializer):
+    simulate_only = serializers.SerializerMethodField()
+    can_destroy = serializers.SerializerMethodField()
+
     class Meta:
         model = Plan
-        fields = ("id", "name", "status", "applied", "last_action", "created_at")
+        fields = (
+            "id",
+            "name",
+            "status",
+            "applied",
+            "last_action",
+            "created_at",
+            "simulate_only",
+            "can_destroy",
+            "firestore_vpc_id",
+        )
         read_only_fields = fields
+
+    def get_simulate_only(self, obj):
+        payload = getattr(obj, "payload", None) or {}
+        if isinstance(payload, dict):
+            return bool(payload.get("simulate_only", True))
+        return True
+
+    def get_can_destroy(self, obj):
+        # Regla única: solo se puede destruir si el plan terminó OK, fue aplicado real,
+        # y NO está en modo simulación.
+        if getattr(obj, "status", None) != Plan.Status.SUCCESS:
+            return False
+        if not bool(getattr(obj, "applied", False)):
+            return False
+        if self.get_simulate_only(obj):
+            return False
+        if getattr(obj, "last_action", "") == "destroy":
+            return False
+        return True
 
 
 class PlanDetailSerializer(serializers.ModelSerializer):
+    simulate_only = serializers.SerializerMethodField()
+    can_destroy = serializers.SerializerMethodField()
+
     class Meta:
         model = Plan
         fields = (
@@ -22,13 +56,37 @@ class PlanDetailSerializer(serializers.ModelSerializer):
             "updated_at",
             "payload",
             "outputs",
-            "last_outputs",
             "applied",
             "last_action",
-            "s3_key",
             "error",
+            "simulate_only",
+            "can_destroy",
+            "last_deploy_task_id",
+            "last_destroy_task_id",
+            "firestore_vpc_id",
+            "canvas_hash",
+            "canvas_updated_at",
         )
         read_only_fields = fields
+
+    def get_simulate_only(self, obj):
+        payload = getattr(obj, "payload", None) or {}
+        if isinstance(payload, dict):
+            return bool(payload.get("simulate_only", True))
+        return True
+
+    def get_can_destroy(self, obj):
+        # Regla única: solo se puede destruir si el plan terminó OK, fue aplicado real,
+        # y NO está en modo simulación.
+        if getattr(obj, "status", None) != Plan.Status.SUCCESS:
+            return False
+        if not bool(getattr(obj, "applied", False)):
+            return False
+        if self.get_simulate_only(obj):
+            return False
+        if getattr(obj, "last_action", "") == "destroy":
+            return False
+        return True
 
 
 class SubnetSerializer(serializers.Serializer):
@@ -90,7 +148,6 @@ class LinkSerializer(serializers.Serializer):
     vpc_id = serializers.CharField(required=False)
     subnet_names = serializers.ListField(child=serializers.CharField(), required=False)
 
-    # --- Validación condicional ---
     def validate(self, data):
         t = data.get("type")
 
