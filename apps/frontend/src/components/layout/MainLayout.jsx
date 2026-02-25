@@ -196,7 +196,10 @@ function MainLayout() {
 
         <Box
           sx={{
-            maxWidth: "var(--Content-maxWidth)",
+            maxWidth: 1200,
+            mx: "auto",
+            px: 3,
+            py: 4,
             margin: "var(--Content-margin)",
             padding: "var(--Content-padding)",
             width: "var(--Content-width)",

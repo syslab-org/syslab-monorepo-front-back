@@ -1,5 +1,8 @@
 //#apps/frontend/src/pages/Dashboard.jsx
-import { Box, Button, Card, CardContent, Grid, Typography } from "@mui/material";
+import { Box, Button, Card, CardContent, Grid, Typography, Stack } from "@mui/material";
+import CloudQueueIcon from "@mui/icons-material/CloudQueue";
+import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
+import HistoryIcon from "@mui/icons-material/History";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
@@ -86,6 +89,14 @@ function Dashboard() {
       "Actividad registrada"
       : "Sin ejecuciones recientes";
 
+  const formattedUltimaActividad =
+    ultimaActividad && ultimaActividad !== "Sin ejecuciones recientes"
+      ? new Intl.DateTimeFormat("es-CL", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(ultimaActividad))
+      : ultimaActividad;
+
   return (
     <Box>
       {/* Header */}
@@ -119,40 +130,55 @@ function Dashboard() {
       {/* Stats Cards */}
       <Grid container spacing={3}>
         <Grid item xs={12} md={4}>
-          <Card>
+          <Card className="pt-panel">
             <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
-                Laboratorios
-              </Typography>
-              <Typography variant="h4" fontWeight={600}>
-                {loading ? "..." : totalLaboratorios}
-              </Typography>
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Box>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Laboratorios
+                  </Typography>
+                  <Typography variant="h3" fontWeight={700}>
+                    {loading ? "..." : totalLaboratorios}
+                  </Typography>
+                </Box>
+                <CloudQueueIcon color="primary" sx={{ fontSize: 36 }} />
+              </Stack>
             </CardContent>
           </Card>
         </Grid>
 
         <Grid item xs={12} md={4}>
-          <Card>
+          <Card className="pt-panel">
             <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
-                Ejecuciones totales
-              </Typography>
-              <Typography variant="h4" fontWeight={600}>
-                {loading ? "..." : totalEjecuciones}
-              </Typography>
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Box>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Ejecuciones
+                  </Typography>
+                  <Typography variant="h3" fontWeight={700}>
+                    {loading ? "..." : totalEjecuciones}
+                  </Typography>
+                </Box>
+                <PlayCircleOutlineIcon color="secondary" sx={{ fontSize: 36 }} />
+              </Stack>
             </CardContent>
           </Card>
         </Grid>
 
         <Grid item xs={12} md={4}>
-          <Card>
+          <Card className="pt-panel">
             <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
-                Última actividad
-              </Typography>
-              <Typography variant="h6" fontWeight={500}>
-                {loading ? "Cargando..." : ultimaActividad}
-              </Typography>
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Box>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Última actividad
+                  </Typography>
+                  <Typography variant="body1" fontWeight={500}>
+                    {loading ? "Cargando..." : formattedUltimaActividad}
+                  </Typography>
+                </Box>
+                <HistoryIcon color="success" sx={{ fontSize: 36 }} />
+              </Stack>
             </CardContent>
           </Card>
         </Grid>

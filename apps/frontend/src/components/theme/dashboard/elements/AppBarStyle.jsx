@@ -10,8 +10,10 @@ export const AppBarStyle = styled(MuiAppBar, {
         easing: theme.transitions.easing.sharp,
         duration: theme.transitions.duration.leavingScreen,
     }),
-    backgroundColor: '#233044',
-    color: '#ffffff',
+    backgroundColor: theme.palette.background.paper,
+    color: theme.palette.text.primary,
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    boxShadow: 'none',
 
     ...(open && {
         marginLeft: 260,
