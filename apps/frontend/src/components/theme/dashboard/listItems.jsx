@@ -31,7 +31,24 @@ export const MainListItems = () => {
 
   return (
     <React.Fragment>
-      <ListItemButton variant="whiteStyle" component={NavLink} to="/admin/dashboard">
+      <ListItemButton
+        variant="whiteStyle"
+        component={NavLink}
+        to="/admin/dashboard"
+        end
+        sx={(theme) => ({
+          "&.active": {
+            backgroundColor:
+              theme.palette.mode === "light"
+                ? "rgba(0,0,0,0.04)"
+                : "rgba(255,255,255,0.06)",
+            borderLeft: `4px solid ${theme.palette.primary.main}`,
+            "& .MuiListItemIcon-root": {
+              color: theme.palette.primary.main,
+            },
+          },
+        })}
+      >
         <ListItemIcon variant="whiteStyle">
           <DashboardIcon />
         </ListItemIcon>
@@ -41,6 +58,18 @@ export const MainListItems = () => {
         variant="whiteStyle"
         component={NavLink}
         to="/admin/vpcs"
+        sx={(theme) => ({
+          "&.active": {
+            backgroundColor:
+              theme.palette.mode === "light"
+                ? "rgba(0,0,0,0.04)"
+                : "rgba(255,255,255,0.06)",
+            borderLeft: `4px solid ${theme.palette.primary.main}`,
+            "& .MuiListItemIcon-root": {
+              color: theme.palette.primary.main,
+            },
+          },
+        })}
       >
         <ListItemIcon variant="whiteStyle">
           <CloudQueue />
@@ -51,6 +80,18 @@ export const MainListItems = () => {
         variant="whiteStyle"
         component={NavLink}
         to="/admin/plans"
+        sx={(theme) => ({
+          "&.active": {
+            backgroundColor:
+              theme.palette.mode === "light"
+                ? "rgba(0,0,0,0.04)"
+                : "rgba(255,255,255,0.06)",
+            borderLeft: `4px solid ${theme.palette.primary.main}`,
+            "& .MuiListItemIcon-root": {
+              color: theme.palette.primary.main,
+            },
+          },
+        })}
       >
         <ListItemIcon variant="whiteStyle">
           <PeopleIcon />
@@ -78,10 +119,16 @@ export const SecondaryListItems = () => {
         component="div"
         inset
         sx={(theme) => ({
-          backgroundColor: theme.palette.background.paper,
+          backgroundColor: "transparent",
           color: theme.palette.text.secondary,
-          borderTop: `1px solid ${theme.palette.divider}`,
-          borderBottom: `1px solid ${theme.palette.divider}`,
+          fontWeight: 600,
+          fontSize: 13,
+          letterSpacing: 0.5,
+          textTransform: "uppercase",
+          opacity: 0.7,
+          mt: 3,
+          mb: 1.5,
+          px: 2,
         })}
       >
         Settings
@@ -91,6 +138,18 @@ export const SecondaryListItems = () => {
           variant="whiteStyle"
           component={NavLink}
           to="/admin/settings/amilist"
+          sx={(theme) => ({
+            "&.active": {
+              backgroundColor:
+                theme.palette.mode === "light"
+                  ? "rgba(0,0,0,0.04)"
+                  : "rgba(255,255,255,0.06)",
+              borderLeft: `4px solid ${theme.palette.primary.main}`,
+              "& .MuiListItemIcon-root": {
+                color: theme.palette.primary.main,
+              },
+            },
+          })}
         >
           <ListItemIcon variant="whiteStyle">
             <ViewStreamOutlined />
@@ -104,6 +163,18 @@ export const SecondaryListItems = () => {
             variant="whiteStyle"
             component={NavLink}
             to="/admin/settings/usersmanagement"
+            sx={(theme) => ({
+              "&.active": {
+                backgroundColor:
+                  theme.palette.mode === "light"
+                    ? "rgba(0,0,0,0.04)"
+                    : "rgba(255,255,255,0.06)",
+                borderLeft: `4px solid ${theme.palette.primary.main}`,
+                "& .MuiListItemIcon-root": {
+                  color: theme.palette.primary.main,
+                },
+              },
+            })}
           >
             <ListItemIcon variant="whiteStyle">
               <AssignmentIcon />
@@ -117,6 +188,18 @@ export const SecondaryListItems = () => {
           variant="whiteStyle"
           component={NavLink}
           to="/admin/settings/general"
+          sx={(theme) => ({
+            "&.active": {
+              backgroundColor:
+                theme.palette.mode === "light"
+                  ? "rgba(0,0,0,0.04)"
+                  : "rgba(255,255,255,0.06)",
+              borderLeft: `4px solid ${theme.palette.primary.main}`,
+              "& .MuiListItemIcon-root": {
+                color: theme.palette.primary.main,
+              },
+            },
+          })}
         >
           <ListItemIcon variant="whiteStyle">
             <SettingsSuggestIcon />

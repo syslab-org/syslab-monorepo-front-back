@@ -130,7 +130,25 @@ function Dashboard() {
       {/* Stats Cards */}
       <Grid container spacing={3}>
         <Grid item xs={12} md={4}>
-          <Card className="pt-panel">
+          <Card
+            className="pt-panel"
+            component={Link}
+            to="/admin/vpcs"
+            sx={{
+              cursor: "pointer",
+              display: "block",
+              color: "inherit",
+              textDecoration: "none",
+              transition: "all .2s ease",
+              "&:hover": {
+                transform: "translateY(-3px)",
+                boxShadow: (theme) =>
+                  theme.palette.mode === "light"
+                    ? "0 8px 24px rgba(0,0,0,.08)"
+                    : "0 14px 32px rgba(0,0,0,.55)",
+              },
+            }}
+          >
             <CardContent>
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Box>
@@ -148,7 +166,25 @@ function Dashboard() {
         </Grid>
 
         <Grid item xs={12} md={4}>
-          <Card className="pt-panel">
+          <Card
+            className="pt-panel"
+            component={Link}
+            to="/admin/plans"
+            sx={{
+              cursor: "pointer",
+              display: "block",
+              color: "inherit",
+              textDecoration: "none",
+              transition: "all .2s ease",
+              "&:hover": {
+                transform: "translateY(-3px)",
+                boxShadow: (theme) =>
+                  theme.palette.mode === "light"
+                    ? "0 8px 24px rgba(0,0,0,.08)"
+                    : "0 14px 32px rgba(0,0,0,.55)",
+              },
+            }}
+          >
             <CardContent>
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Box>
@@ -193,44 +229,94 @@ function Dashboard() {
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
             <Card
-              sx={{
-                cursor: "pointer",
-                transition: "0.2s",
-                "&:hover": { boxShadow: 6 },
-              }}
+              className="pt-panel"
               component={Link}
               to="/admin/vpcs"
-              style={{ textDecoration: "none" }}
+              sx={{
+                cursor: "pointer",
+                display: "block",
+                color: "inherit",
+                textDecoration: "none",
+                textDecoration: "none",
+                transition: "all .2s ease",
+                borderLeft: (theme) => `4px solid ${theme.palette.primary.main}`,
+                "&:hover": {
+                  transform: "translateY(-3px)",
+                  boxShadow: (theme) =>
+                    theme.palette.mode === "light"
+                      ? "0 8px 24px rgba(0,0,0,.08)"
+                      : "0 14px 32px rgba(0,0,0,.55)",
+                  borderLeftWidth: "6px",
+                },
+                "&:active": {
+                  transform: "translateY(0px)",
+                }
+              }}
             >
               <CardContent>
-                <Typography variant="h6" fontWeight={600}>
-                  Administrar Laboratorios
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Crear, editar y gestionar VPCs guiadas o avanzadas.
-                </Typography>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <CloudQueueIcon
+                    sx={{
+                      fontSize: 42,
+                      color: (theme) => theme.palette.primary.main,
+                    }}
+                  />
+                  <Box>
+                    <Typography variant="h6" fontWeight={600}>
+                      Administrar Laboratorios
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Crear, editar y gestionar VPCs guiadas o avanzadas.
+                    </Typography>
+                  </Box>
+                </Stack>
               </CardContent>
             </Card>
           </Grid>
 
           <Grid item xs={12} md={6}>
             <Card
-              sx={{
-                cursor: "pointer",
-                transition: "0.2s",
-                "&:hover": { boxShadow: 6 },
-              }}
+              className="pt-panel"
               component={Link}
               to="/admin/plans"
-              style={{ textDecoration: "none" }}
+              sx={{
+                cursor: "pointer",
+                display: "block",
+                color: "inherit",
+                textDecoration: "none",
+                textDecoration: "none",
+                transition: "all .2s ease",
+                borderLeft: (theme) => `4px solid ${theme.palette.secondary.main}`,
+                "&:hover": {
+                  transform: "translateY(-3px)",
+                  boxShadow: (theme) =>
+                    theme.palette.mode === "light"
+                      ? "0 8px 24px rgba(0,0,0,.08)"
+                      : "0 14px 32px rgba(0,0,0,.55)",
+                  borderLeftWidth: "6px",
+                },
+                "&:active": {
+                  transform: "translateY(0px)",
+                }
+              }}
             >
               <CardContent>
-                <Typography variant="h6" fontWeight={600}>
-                  Ver Ejecuciones
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Revisar simulaciones, despliegues y estados de infraestructura.
-                </Typography>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <PlayCircleOutlineIcon
+                    sx={{
+                      fontSize: 42,
+                      color: (theme) => theme.palette.secondary.main,
+                    }}
+                  />
+                  <Box>
+                    <Typography variant="h6" fontWeight={600}>
+                      Ver Ejecuciones
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Revisar simulaciones, despliegues y estados de infraestructura.
+                    </Typography>
+                  </Box>
+                </Stack>
               </CardContent>
             </Card>
           </Grid>
