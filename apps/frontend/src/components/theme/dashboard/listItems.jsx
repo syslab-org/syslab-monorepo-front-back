@@ -77,7 +77,12 @@ export const SecondaryListItems = () => {
       <ListSubheader
         component="div"
         inset
-        sx={{ backgroundColor: "#233044", color: "#ffffff" }}
+        sx={(theme) => ({
+          backgroundColor: theme.palette.background.paper,
+          color: theme.palette.text.secondary,
+          borderTop: `1px solid ${theme.palette.divider}`,
+          borderBottom: `1px solid ${theme.palette.divider}`,
+        })}
       >
         Settings
       </ListSubheader>
