@@ -132,10 +132,14 @@ export default function PlanListPage() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box
+      sx={{
+        p: 3,
+      }}
+    >
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'flex-start' }} justifyContent="space-between" sx={{ mb: 2 }}>
         <Box>
-          <Typography variant="h5" fontWeight={700} sx={{ mb: 0.5 }}>
+          <Typography variant="h4" fontWeight={700} sx={{ mb: 0.5 }}>
             Planes de red
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -154,7 +158,19 @@ export default function PlanListPage() {
         </Alert>
       )}
 
-      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+      <Paper
+        elevation={0}
+        sx={{
+          p: 2.5,
+          mb: 3,
+          borderRadius: 2,
+          border: (theme) => `1px solid ${theme.palette.divider}`,
+          backgroundColor: (theme) =>
+            theme.palette.mode === "light"
+              ? theme.palette.grey[50]
+              : theme.palette.background.paper,
+        }}
+      >
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
           <TextField
             value={query}
@@ -191,15 +207,33 @@ export default function PlanListPage() {
         </Stack>
       </Paper>
 
-      <TableContainer component={Paper} variant="outlined">
+      <TableContainer
+        component={Paper}
+        elevation={0}
+        sx={{
+          borderRadius: 2,
+          border: (theme) => `1px solid ${theme.palette.divider}`,
+          backgroundColor: (theme) =>
+            theme.palette.mode === "light"
+              ? theme.palette.background.paper
+              : theme.palette.background.paper,
+        }}
+      >
         <Table size="small">
           <TableHead>
-            <TableRow sx={{ backgroundColor: 'action.hover' }}>
-              <TableCell sx={{ fontWeight: 700 }}>Plan</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Estado</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Modo</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Actualizado</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 700 }}>Acciones</TableCell>
+            <TableRow
+              sx={{
+                backgroundColor: (theme) =>
+                  theme.palette.mode === "light"
+                    ? theme.palette.grey[100]
+                    : theme.palette.background.paper,
+              }}
+            >
+              <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Plan</TableCell>
+              <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Estado</TableCell>
+              <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Modo</TableCell>
+              <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Actualizado</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 700, color: "text.primary" }}>Acciones</TableCell>
             </TableRow>
           </TableHead>
 
@@ -231,7 +265,19 @@ export default function PlanListPage() {
                 const mode = modeMeta(p);
 
                 return (
-                  <TableRow key={p.id} hover>
+                  <TableRow
+                    key={p.id}
+                    hover
+                    sx={{
+                      transition: "background-color .15s ease",
+                      "&:hover": {
+                        backgroundColor: (theme) =>
+                          theme.palette.mode === "light"
+                            ? theme.palette.grey[50]
+                            : "rgba(255,255,255,0.04)",
+                      },
+                    }}
+                  >
                     <TableCell sx={{ maxWidth: 420 }}>
                       <Typography variant="body2" fontWeight={700} noWrap>
                         {p.name || 'Sin nombre'}

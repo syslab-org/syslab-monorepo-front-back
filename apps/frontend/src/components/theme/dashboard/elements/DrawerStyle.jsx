@@ -15,7 +15,10 @@ export const DrawerStyle = styled(MuiDrawer, { shouldForwardProp: (prop) => prop
                 duration: theme.transitions.duration.enteringScreen,
             }),
             boxSizing: 'border-box',
-            backgroundColor: theme.palette.background.paper,
+            backgroundColor:
+                theme.palette.mode === "light"
+                    ? theme.palette.background.paper
+                    : theme.palette.background.paper,
             color: theme.palette.text.primary,
             borderRight: `1px solid ${theme.palette.divider}`,
 

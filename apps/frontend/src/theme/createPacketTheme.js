@@ -4,7 +4,7 @@ import { createTheme } from "@mui/material/styles";
 const palettes = {
   light: {
     bg: "#eef2f7",
-    panel: "#ffffff",
+    panel: "#f4f7fb",
     panel2: "#e6ebf2",
     border: "#d9dee6",
     text: "#1a1d29",
