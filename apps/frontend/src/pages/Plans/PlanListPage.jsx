@@ -140,7 +140,7 @@ export default function PlanListPage() {
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'flex-start' }} justifyContent="space-between" sx={{ mb: 2 }}>
         <Box>
           <Typography variant="h4" fontWeight={700} sx={{ mb: 0.5 }}>
-            Planes de red
+            Ejecuciones de infraestructura
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Lista de ejecuciones (simulación y reales). Usa <Box component="span" sx={{ fontFamily: 'monospace' }}>Outputs</Box> para depurar sin ir a la consola de AWS.

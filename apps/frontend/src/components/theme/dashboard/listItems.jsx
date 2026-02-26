@@ -97,7 +97,9 @@ export const MainListItems = () => {
           <PeopleIcon />
         </ListItemIcon>
         <ListItemText
-          primary="Ejecuciones de Infraestructura"
+          primary="Ejecuciones"
+          secondary="Infraestructura"
+          secondaryTypographyProps={{ noWrap: true }}
           primaryTypographyProps={{ noWrap: false }}
           sx={{ whiteSpace: "normal" }}
         />
