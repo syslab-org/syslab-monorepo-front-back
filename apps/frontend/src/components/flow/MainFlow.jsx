@@ -144,6 +144,14 @@ const connectionLineStyle = {
   strokeDasharray: "6 4",
 };
 
+const useBodyClass = (className, enabled = true) => {
+  useEffect(() => {
+    if (!enabled) return;
+    document.body.classList.add(className);
+    return () => document.body.classList.remove(className);
+  }, [className, enabled]);
+};
+
 // eslint-disable-next-line react-refresh/only-export-components
 function MainFlow() {
   const params = useParams();
@@ -151,6 +159,8 @@ function MainFlow() {
   const { vpcid } = useParams()
   const navigate = useNavigate();
   const theme = useTheme();
+  // Full-bleed layout for the Flow canvas (removes global content max-width/padding)
+  useBodyClass("flow-fullbleed", true);
   const dotColor = theme.palette.mode === 'light'
     ? 'rgba(90,98,117,0.15)'
     : 'rgba(200,210,230,0.12)';
