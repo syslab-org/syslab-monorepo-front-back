@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { Box } from '@mui/material';
 import {
-    TITLE_COMPUTER, TITLE_PRINT, TITLE_ROUTER, TITLE_SERVER, TITLE_SUBNETWORK,
-    TYPE_COMPUTER_NODE, TYPE_PRINTER_NODE, TYPE_ROUTER_NODE, TYPE_SERVER_NODE,
-    TYPE_SUBNETWORK_NODE, TYPE_VPC_NODE
+    TITLE_ROUTER,
+    TITLE_SUBNETWORK,
+    TYPE_ROUTER_NODE,
+    TYPE_SERVER_NODE,
+    TYPE_SUBNETWORK_NODE,
+    TYPE_VPC_NODE
 } from './utils/constants';
 import './styles/sidebar-pt.css';
 
@@ -11,16 +14,13 @@ import './styles/sidebar-pt.css';
 import CloudIcon from '@mui/icons-material/Cloud';
 import LanIcon from '@mui/icons-material/Lan';
 import DesktopWindowsIcon from '@mui/icons-material/DesktopWindows';
-import PrintIcon from '@mui/icons-material/Print';
-import DnsIcon from '@mui/icons-material/Dns';
 import RouterIcon from '@mui/icons-material/Router';
 
 const ITEMS = [
     { key: 'vpc', type: TYPE_VPC_NODE, label: 'VPC', icon: <CloudIcon /> },
     { key: 'subnetwork', type: TYPE_SUBNETWORK_NODE, label: TITLE_SUBNETWORK, icon: <LanIcon /> },
-    { key: 'computer', type: TYPE_COMPUTER_NODE, label: TITLE_COMPUTER, icon: <DesktopWindowsIcon /> },
-    { key: 'printer', type: TYPE_PRINTER_NODE, label: TITLE_PRINT, icon: <PrintIcon /> },
-    { key: 'server', type: TYPE_SERVER_NODE, label: TITLE_SERVER, icon: <DnsIcon /> },
+    // Nueva única instancia genérica
+    { key: 'instance', type: TYPE_SERVER_NODE, label: 'Instance', icon: <DesktopWindowsIcon /> },
     { key: 'router', type: TYPE_ROUTER_NODE, label: TITLE_ROUTER, icon: <RouterIcon /> },
 ];
 
