@@ -37,6 +37,7 @@ import { useWizard } from "../../../contexts/WizardContext";
 import { db } from "../../../firebase/firebaseConfig";
 import useCidrBlockVPCStore from '../store/cidrBlocksIp';
 import CreateVPCModal from "./CreateVPCModal";
+import { PageHeader } from "../../../components/layout/MainLayout.jsx";
 
 
 
@@ -240,93 +241,44 @@ const VPCList = () => {
     <Box sx={{ p: 3 }}>
       <Stack direction="column" spacing={3}>
         {/* Header (match PlanListPage) */}
-        <Stack
-          direction={{ xs: "column", sm: "row" }}
-          spacing={2}
-          alignItems={{ sm: "flex-start" }}
-          justifyContent="space-between"
-        >
-          <Box>
-            <Typography variant="h4" fontWeight={800} sx={{ mb: 0.5, letterSpacing: "-0.5px" }}>
-              Laboratorios
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Aquí puedes gestionar tus laboratorios de redes. Crea un entorno guiado para demostraciones y prácticas, o una VPC avanzada si ya dominas la configuración.
-            </Typography>
-          </Box>
-
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            spacing={1.25}
-            alignItems={{ xs: "stretch", sm: "center" }}
-            justifyContent={{ xs: "stretch", sm: "flex-end" }}
-            sx={{
-              mt: { xs: 1, sm: 0 },
-              minWidth: { sm: 520 },
-            }}
-          >
-            <Tooltip
-              title="Sigue un flujo paso a paso ideal para prácticas guiadas, clases y demostraciones académicas."
-              arrow
-            >
-              <Button
-                variant="contained"
-                color="primary"
-                startIcon={<AddIcon />}
-                onClick={handleCreateGuideLab}
-                disableElevation
-                sx={{
-                  height: 44,
-                  px: 2.2,
-                  borderRadius: 999,
-                  fontWeight: 700,
-                  boxShadow: (theme) =>
-                    theme.palette.mode === "light"
-                      ? "0 10px 22px rgba(59,130,246,.18)"
-                      : "0 12px 26px rgba(0,0,0,.55)",
-                  "&:hover": {
-                    boxShadow: (theme) =>
-                      theme.palette.mode === "light"
-                        ? "0 14px 28px rgba(59,130,246,.24)"
-                        : "0 14px 30px rgba(0,0,0,.65)",
-                  },
-                }}
+        <PageHeader
+          title="Laboratorios"
+          subtitle="Aquí puedes gestionar tus laboratorios de redes. Crea un entorno guiado para demostraciones y prácticas, o una VPC avanzada si ya dominas la configuración."
+          actions={
+            <>
+              <Tooltip
+                title="Sigue un flujo paso a paso ideal para prácticas guiadas, clases y demostraciones académicas."
+                arrow
               >
-                Crear laboratorio guiado
-              </Button>
-            </Tooltip>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<AddIcon />}
+                  onClick={handleCreateGuideLab}
+                  disableElevation
+                  sx={{ borderRadius: 999, fontWeight: 700 }}
+                >
+                  Crear laboratorio guiado
+                </Button>
+              </Tooltip>
 
-            <Tooltip
-              title="Configura manualmente todos los parámetros de red. Recomendado si ya dominas conceptos como CIDR, subredes, tablas de rutas y gateways."
-              arrow
-            >
-              <Button
-                variant="outlined"
-                color="primary"
-                startIcon={<AddIcon />}
-                onClick={handleCreateAdvancedVPC}
-                sx={{
-                  height: 44,
-                  px: 2.2,
-                  borderRadius: 999,
-                  fontWeight: 700,
-                  backgroundColor: (theme) =>
-                    theme.palette.mode === "light"
-                      ? "rgba(255,255,255,.55)"
-                      : "rgba(16,23,39,.35)",
-                  "&:hover": {
-                    backgroundColor: (theme) =>
-                      theme.palette.mode === "light"
-                        ? "rgba(59,130,246,.06)"
-                        : "rgba(52,198,243,.10)",
-                  },
-                }}
+              <Tooltip
+                title="Configura manualmente todos los parámetros de red. Recomendado si ya dominas conceptos como CIDR, subredes, tablas de rutas y gateways."
+                arrow
               >
-                Crear laboratorio avanzado
-              </Button>
-            </Tooltip>
-          </Stack>
-        </Stack>
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  startIcon={<AddIcon />}
+                  onClick={handleCreateAdvancedVPC}
+                  sx={{ borderRadius: 999, fontWeight: 700 }}
+                >
+                  Crear laboratorio avanzado
+                </Button>
+              </Tooltip>
+            </>
+          }
+        />
 
         {/* Filters / toolbar panel (match PlanListPage) */}
         <Paper

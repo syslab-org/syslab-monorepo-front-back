@@ -31,6 +31,60 @@ import {
 } from "../../components/theme/dashboard/listItems.jsx";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 
+export const PageHeader = ({ title, subtitle, actions }) => {
+  return (
+    <Box
+      sx={(theme) => ({
+        mb: 4,
+        pb: 2.5,
+        borderBottom: `1px solid ${theme.palette.divider}`,
+        display: "flex",
+        flexDirection: { xs: "column", sm: "row" },
+        justifyContent: "space-between",
+        alignItems: { xs: "flex-start", sm: "center" },
+        gap: 3,
+      })}
+    >
+      {/* Left side */}
+      <Box sx={{ flex: 1 }}>
+        <Typography
+          variant="h4"
+          fontWeight={800}
+          sx={{ letterSpacing: "-0.5px" }}
+        >
+          {title}
+        </Typography>
+
+        {subtitle && (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mt: 0.5, maxWidth: 720 }}
+          >
+            {subtitle}
+          </Typography>
+        )}
+      </Box>
+
+      {/* Right side (actions) */}
+      {actions && (
+        <Box
+          sx={{
+            display: "flex",
+            gap: 1.25,
+            flexDirection: { xs: "column", sm: "row" },
+            alignItems: "center",
+            justifyContent: { xs: "flex-start", sm: "flex-end" },
+            minWidth: { sm: "fit-content" },
+          }}
+        >
+          {actions}
+        </Box>
+      )}
+    </Box>
+  );
+};
+
 const settings = [
   { label: "Profile", url: "/admin/settings/profile" },
   { label: "Dashboard", url: "/admin/dashboard" },

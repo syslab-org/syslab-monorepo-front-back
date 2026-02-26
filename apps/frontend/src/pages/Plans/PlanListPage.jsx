@@ -24,6 +24,7 @@ import {
 } from '@mui/material';
 
 import { api } from '../../lib/api';
+import { PageHeader } from "../../components/layout/MainLayout.jsx";
 
 const statusChipColor = (status) => {
   switch ((status || '').toUpperCase()) {
@@ -137,23 +138,23 @@ export default function PlanListPage() {
         p: 3,
       }}
     >
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'flex-start' }} justifyContent="space-between" sx={{ mb: 2 }}>
-        <Box>
-          <Typography variant="h4"
-            fontWeight={800}
-            sx={{ mb: 0.5, letterSpacing: "-0.5px" }}
-          >
-            Ejecuciones de infraestructura
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Lista de ejecuciones (simulación y reales). Usa <Box component="span" sx={{ fontFamily: 'monospace' }}>Outputs</Box> para depurar sin ir a la consola de AWS.
-          </Typography>
-        </Box>
-
-        <Button variant="outlined" onClick={load} disabled={loading}>
-          {loading ? 'Actualizando…' : 'Refrescar'}
-        </Button>
-      </Stack>
+      <PageHeader
+        title="Ejecuciones de infraestructura"
+        subtitle={
+          <>
+            Lista de ejecuciones (simulación y reales). Usa{" "}
+            <Box component="span" sx={{ fontFamily: "monospace" }}>
+              Outputs
+            </Box>{" "}
+            para depurar sin ir a la consola de AWS.
+          </>
+        }
+        actions={
+          <Button variant="outlined" onClick={load} disabled={loading}>
+            {loading ? "Actualizando…" : "Refrescar"}
+          </Button>
+        }
+      />
 
       {err && (
         <Alert severity="error" sx={{ mb: 2 }}>
