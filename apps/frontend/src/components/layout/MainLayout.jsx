@@ -169,16 +169,30 @@ function MainLayout() {
 
         {/* Fixed logout button at bottom */}
         <Button
-          sx={{
+          sx={(theme) => ({
             position: "absolute",
-            bottom: 0,
-            width: "100%",
-            borderRadius: 0,
-          }}
+            bottom: 16,
+            left: 16,
+            right: 16,
+            borderRadius: 2,
+            fontWeight: 600,
+            textTransform: "none",
+            border: `1px solid ${theme.palette.divider}`,
+            backgroundColor:
+              theme.palette.mode === "light"
+                ? theme.palette.grey[50]
+                : "rgba(255,255,255,0.04)",
+            "&:hover": {
+              backgroundColor:
+                theme.palette.mode === "light"
+                  ? theme.palette.grey[100]
+                  : "rgba(255,255,255,0.08)",
+            },
+          })}
           startIcon={<LogoutIcon />}
           onClick={logout}
         >
-          Logout
+          Cerrar sesión
         </Button>
       </DrawerStyle>
 

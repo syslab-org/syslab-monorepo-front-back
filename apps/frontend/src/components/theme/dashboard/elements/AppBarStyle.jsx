@@ -13,6 +13,9 @@ export const AppBarStyle = styled(MuiAppBar, {
     backgroundColor: theme.palette.background.paper,
     color: theme.palette.text.primary,
     borderBottom: `1px solid ${theme.palette.divider}`,
+    boxShadow: theme.palette.mode === "light"
+        ? "0 1px 2px rgba(0,0,0,0.04)"
+        : "0 2px 8px rgba(0,0,0,0.6)",
 
 
     ...(open && {
