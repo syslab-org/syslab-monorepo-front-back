@@ -265,52 +265,66 @@ const VPCList = () => {
               minWidth: { sm: 520 },
             }}
           >
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<AddIcon />}
-              onClick={handleCreateGuideLab}
-              disableElevation
-              sx={{
-                height: 44,
-                px: 2.2,
-                borderRadius: 999,
-                fontWeight: 700,
-                boxShadow: (theme) =>
-                  theme.palette.mode === "light"
-                    ? "0 10px 22px rgba(59,130,246,.18)"
-                    : "0 12px 26px rgba(0,0,0,.55)",
-                "&:hover": {
+            <Tooltip
+              title="Sigue un flujo paso a paso ideal para prácticas guiadas, clases y demostraciones académicas."
+              arrow
+            >
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<AddIcon />}
+                onClick={handleCreateGuideLab}
+                disableElevation
+                sx={{
+                  height: 44,
+                  px: 2.2,
+                  borderRadius: 999,
+                  fontWeight: 700,
                   boxShadow: (theme) =>
                     theme.palette.mode === "light"
-                      ? "0 14px 28px rgba(59,130,246,.24)"
-                      : "0 14px 30px rgba(0,0,0,.65)",
-                },
-              }}
-            >
-              Crear laboratorio guiado
-            </Button>
+                      ? "0 10px 22px rgba(59,130,246,.18)"
+                      : "0 12px 26px rgba(0,0,0,.55)",
+                  "&:hover": {
+                    boxShadow: (theme) =>
+                      theme.palette.mode === "light"
+                        ? "0 14px 28px rgba(59,130,246,.24)"
+                        : "0 14px 30px rgba(0,0,0,.65)",
+                  },
+                }}
+              >
+                Crear laboratorio guiado
+              </Button>
+            </Tooltip>
 
-            <Button
-              variant="outlined"
-              color="primary"
-              startIcon={<AddIcon />}
-              onClick={handleCreateAdvancedVPC}
-              sx={{
-                height: 44,
-                px: 2.2,
-                borderRadius: 999,
-                fontWeight: 700,
-                backgroundColor: (theme) =>
-                  theme.palette.mode === "light" ? "rgba(255,255,255,.55)" : "rgba(16,23,39,.35)",
-                "&:hover": {
-                  backgroundColor: (theme) =>
-                    theme.palette.mode === "light" ? "rgba(59,130,246,.06)" : "rgba(52,198,243,.10)",
-                },
-              }}
+            <Tooltip
+              title="Configura manualmente todos los parámetros de red. Recomendado si ya dominas conceptos como CIDR, subredes, tablas de rutas y gateways."
+              arrow
             >
-              Crear VPC avanzada
-            </Button>
+              <Button
+                variant="outlined"
+                color="primary"
+                startIcon={<AddIcon />}
+                onClick={handleCreateAdvancedVPC}
+                sx={{
+                  height: 44,
+                  px: 2.2,
+                  borderRadius: 999,
+                  fontWeight: 700,
+                  backgroundColor: (theme) =>
+                    theme.palette.mode === "light"
+                      ? "rgba(255,255,255,.55)"
+                      : "rgba(16,23,39,.35)",
+                  "&:hover": {
+                    backgroundColor: (theme) =>
+                      theme.palette.mode === "light"
+                        ? "rgba(59,130,246,.06)"
+                        : "rgba(52,198,243,.10)",
+                  },
+                }}
+              >
+                Crear laboratorio avanzado
+              </Button>
+            </Tooltip>
           </Stack>
         </Stack>
 
