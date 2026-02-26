@@ -19,7 +19,7 @@
   --pt-inst-pr: #67c7f5;
   --pt-router: #ff9a6a;
 
-  --pt-radius: 14px;
+  --pt-radius: 6px;
   --pt-shadow: 0 6px 16px rgba(5, 12, 25, 0.28);
   --pt-shadow-strong: 0 12px 28px rgba(5, 12, 25, 0.45);
 }
@@ -55,7 +55,7 @@
   --pt-router: #ff9a6a;
   /* naranja */
 
-  --pt-radius: 10px;
+  --pt-radius: 6px;
   --pt-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
   --pt-shadow-strong: 0 10px 24px rgba(0, 0, 0, 0.1);
 }
@@ -330,7 +330,8 @@
   flex-wrap: nowrap;
   white-space: nowrap;
   width: 100%;
-  overflow-x: hidden;
+  overflow-x: auto; /* <-- clave */
+  scrollbar-width: thin; /* firefox */
 }
 
 .pt-toolbar__title {
