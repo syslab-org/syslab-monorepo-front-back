@@ -3,17 +3,17 @@ import { createTheme } from "@mui/material/styles";
 
 const palettes = {
   light: {
-    bg: "#eef2f7",
-    panel: "#f4f7fb",
-    panel2: "#e6ebf2",
-    border: "#d9dee6",
+    bg: "#f6f8fb",
+    panel: "#ffffff",
+    panel2: "#f2f5fa",
+    border: "#e5eaf2",
     text: "#1a1d29",
     subtext: "#5a6275",
-    blue: "#2f6fed",
-    cyan: "#26b4d7",
-    green: "#28a745",
-    yellow: "#f0b429",
-    red: "#e55353",
+    blue: "#3b82f6",
+    cyan: "#22d3ee",
+    green: "#16a34a",
+    yellow: "#f59e0b",
+    red: "#ef4444",
   },
   dark: {
     bg: "#0c1118",
@@ -45,7 +45,7 @@ export default function createPacketTheme(mode = "light") {
       error: { main: c.red },
       divider: c.border,
     },
-    shape: { borderRadius: 8 },
+    shape: { borderRadius: 12 },
     typography: {
       fontFamily: [
         "Inter",
@@ -70,8 +70,20 @@ export default function createPacketTheme(mode = "light") {
           .pt-panel {
             background: ${c.panel};
             border: 1px solid ${c.border};
-            border-radius: ${mode === "light" ? 8 : 14}px;
-            box-shadow: ${mode === "light" ? "0 4px 16px rgba(0,0,0,.06)" : "0 10px 28px rgba(5,12,25,.45)"};
+             box-shadow: ${
+               mode === "light"
+                 ? "0 1px 3px rgba(0,0,0,.04)"
+                 : "0 8px 24px rgba(0,0,0,.55)"
+             };
+            border-radius: 14px;
+            transition: all .18s ease;
+          }
+          .pt-panel:hover {
+            box-shadow: ${
+              mode === "light"
+                ? "0 6px 20px rgba(0,0,0,.06)"
+                : "0 16px 36px rgba(0,0,0,.65)"
+            };
           }
           .pt-ibtn { background: ${mode === "light" ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.06)"}; border: 1px solid ${c.border}; color: ${c.text}; border-radius: 10px; }
           .pt-ibtn:hover { border-color: ${c.cyan}; }

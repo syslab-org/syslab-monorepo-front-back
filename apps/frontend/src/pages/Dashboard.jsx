@@ -109,7 +109,7 @@ function Dashboard() {
         }}
       >
         <Box>
-          <Typography variant="h4" fontWeight={600}>
+          <Typography variant="h4" fontWeight={800} letterSpacing="-0.5px">
             Dashboard
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -213,7 +213,7 @@ function Dashboard() {
                     {loading ? "Cargando..." : formattedUltimaActividad}
                   </Typography>
                 </Box>
-                <HistoryIcon color="success" sx={{ fontSize: 36 }} />
+                <HistoryIcon color="success" sx={{ fontSize: 36, opacity: 0.6 }} />
               </Stack>
             </CardContent>
           </Card>

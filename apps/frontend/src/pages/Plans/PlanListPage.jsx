@@ -139,7 +139,10 @@ export default function PlanListPage() {
     >
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'flex-start' }} justifyContent="space-between" sx={{ mb: 2 }}>
         <Box>
-          <Typography variant="h4" fontWeight={700} sx={{ mb: 0.5 }}>
+          <Typography variant="h4"
+            fontWeight={800}
+            sx={{ mb: 0.5, letterSpacing: "-0.5px" }}
+          >
             Ejecuciones de infraestructura
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -160,15 +163,11 @@ export default function PlanListPage() {
 
       <Paper
         elevation={0}
+        className="pt-panel"
         sx={{
           p: 2.5,
           mb: 3,
           borderRadius: 2,
-          border: (theme) => `1px solid ${theme.palette.divider}`,
-          backgroundColor: (theme) =>
-            theme.palette.mode === "light"
-              ? theme.palette.grey[50]
-              : theme.palette.background.paper,
         }}
       >
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
