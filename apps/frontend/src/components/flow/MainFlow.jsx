@@ -719,8 +719,8 @@ function MainFlow() {
         container
         sx={{
           height: "calc(100vh - 64px)",
-          px: 3,
-          pb: 3,
+          px: 1,
+          pb: 1,
           boxSizing: "border-box",
         }}
       >
@@ -732,9 +732,9 @@ function MainFlow() {
             sx={{
               height: "100%",
               display: "flex",
-              borderRadius: 3,
+              borderRadius: 1,
               overflow: "hidden",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.06)",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
               backgroundColor: "background.paper",
             }}
           >
