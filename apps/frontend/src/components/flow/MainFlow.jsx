@@ -217,7 +217,7 @@ function MainFlow() {
   const [modalIsOpen, setModalIsOpen] = useState(false);
   const [selectedNode, setSelectedNode] = useState(null);
 
-  const { onDrop } = useHandleDrop(reactFlowInstance, setNodes);
+  const { onDrop } = useHandleDrop(reactFlowInstance, setNodes, setCanvasUiError);
   const { onNodeDragStop } = useRestrictMovement(reactFlowInstance, setNodes);
   const [allowCrossVpcPingUI, setAllowCrossVpcPingUI] = useState(null);
   // const [vpcData, setVPCData] = useState(null);
@@ -822,6 +822,45 @@ function MainFlow() {
                     t.palette.mode === "light" ? "#f4f6fa" : "#0f172a",
                 }}
               >
+                {nodes.length === 0 && (
+                  <Box
+                    sx={{
+                      position: "absolute",
+                      inset: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      pointerEvents: "none",
+                      zIndex: 10,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        background:
+                          theme.palette.mode === "light"
+                            ? "#ffffffdd"
+                            : "#0f172add",
+                        border: "1px dashed",
+                        borderColor: "divider",
+                        borderRadius: 2,
+                        px: 4,
+                        py: 3,
+                        textAlign: "center",
+                        backdropFilter: "blur(6px)",
+                        maxWidth: 420,
+                      }}
+                    >
+                      <Typography variant="h6" sx={{ mb: 1 }}>
+                        Comienza creando tu red
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        1. Arrastra una VPC desde la izquierda.
+                        2. Dentro de la VPC crea una Subnet.
+                        3. Luego agrega instancias.
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
                 <ReactFlow
                   nodes={nodes}
                   edges={edges.map(e => ({ ...e, style: connectionLineStyle, animated: false }))}
@@ -850,7 +889,9 @@ function MainFlow() {
                   nodeTypes={nodeTypes}
                   nodeOrigin={[0, 0]}
                   style={{
-                    background: "radial-gradient(circle at 25% 25%, #eef2f7 0%, #e6ecf3 40%, #dde4ee 100%)",
+                    background: theme.palette.mode === "light"
+                      ? "radial-gradient(circle at 20% 20%, #f8fafc 0%, #eef2f7 50%, #e6ecf3 100%)"
+                      : "radial-gradient(circle at 20% 20%, #0f172a 0%, #0b1220 50%, #070c16 100%)",
                     width: "100%",
                     height: "100%",
                   }}
