@@ -86,8 +86,8 @@ export default function PacketToolbar({
     <div
       className="pt-panel"
       style={{
-        padding: 8,
-        margin: 8,
+        padding: 6,
+        margin: 0,
         width: '100%',
         position: 'relative',
         zIndex: 60,
