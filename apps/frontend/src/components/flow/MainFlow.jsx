@@ -138,7 +138,11 @@ const styleModal = {
 
 
 
-const connectionLineStyle = { strokeWidth: 2, stroke: '#1a2438' };
+const connectionLineStyle = {
+  strokeWidth: 2.5,
+  stroke: "#2c3e50",
+  strokeDasharray: "6 4",
+};
 
 // eslint-disable-next-line react-refresh/only-export-components
 function MainFlow() {
@@ -768,7 +772,7 @@ function MainFlow() {
                 onZoomIn={handleZoomIn}
                 onZoomOut={handleZoomOut}
                 onFitView={handleFitView}
-                title="Logical"
+                title="Topology Builder"
                 onPreviewRoutes={() => {
                   const preview = buildRoutingPreview(nodes, edges);
                   setRoutesPreviewData(preview);
@@ -784,7 +788,7 @@ function MainFlow() {
             <Box sx={{ flex: 1, minHeight: 0, position: "relative" }}>
               <ReactFlow
                 nodes={nodes}
-                edges={edges.map(e => ({ ...e, style: connectionLineStyle, animated: true }))}
+                edges={edges.map(e => ({ ...e, style: connectionLineStyle, animated: false }))}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onNodeClick={onNodeClick}
@@ -810,7 +814,7 @@ function MainFlow() {
                 nodeTypes={nodeTypes}
                 nodeOrigin={[0, 0]}
                 style={{
-                  backgroundColor: "#D3D2E5",
+                  background: "radial-gradient(circle at 25% 25%, #eef2f7 0%, #e6ecf3 40%, #dde4ee 100%)",
                   width: "100%",
                   height: "100%",
                 }}
@@ -818,12 +822,8 @@ function MainFlow() {
                 onPaneClick={() => setNodes(nds => nds.map(n => ({ ...n, selected: false })))}
               >
                 <Controls />
-                <Background variant="dots" gap={24} size={1.2} color={dotColor} />
-                <Panel position="top-right">
-                  <Button variant="contained" size="small" onClick={() => setShowRoutePreview(true)}>
-                    Preview de rutas
-                  </Button>
-                </Panel>
+                <Background variant="dots" gap={24} size={1} color="rgba(80,100,140,0.15)" />
+
               </ReactFlow>
             </Box>
             <Snackbar
