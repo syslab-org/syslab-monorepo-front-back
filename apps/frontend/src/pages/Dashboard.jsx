@@ -10,6 +10,7 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../firebase/firebaseConfig";
 import { DB_FIRESTORE_VPCS, USER_ROL_STUDENT } from "../constants";
 import { useAuth } from "../contexts/AuthContext";
+import { PageHeader } from "../components/layout/MainLayout.jsx";
 
 function Dashboard() {
   const [plans, setPlans] = useState([]);
@@ -100,32 +101,19 @@ function Dashboard() {
   return (
     <Box>
       {/* Header */}
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mb: 4,
-        }}
-      >
-        <Box>
-          <Typography variant="h4" fontWeight={800} letterSpacing="-0.5px">
-            Dashboard
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Resumen general del entorno de laboratorios y ejecuciones.
-          </Typography>
-        </Box>
-
-        <Button
-          component={Link}
-          to="/admin/vpcs"
-          variant="contained"
-          sx={{ textTransform: "none" }}
-        >
-          Crear laboratorio
-        </Button>
-      </Box>
+      <PageHeader
+        title="Dashboard"
+        subtitle="Resumen general del entorno de laboratorios y ejecuciones."
+        actions={
+          <Button
+            component={Link}
+            to="/admin/vpcs"
+            variant="contained"
+          >
+            Crear laboratorio
+          </Button>
+        }
+      />
 
       {/* Stats Cards */}
       <Grid container spacing={3}>
