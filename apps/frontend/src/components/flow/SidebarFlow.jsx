@@ -37,9 +37,20 @@ const SidebarFlow = () => {
 
     return (
         <Box className="pt-sidebar">
-            <div className="pt-sidebar__header">End Devices</div>
+            <div className="pt-sidebar__header">
+                Topology Components
+                <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
+                    Arrastra al lienzo para construir la red
+                </div>
+            </div>
 
-            <div className="pt-sidebar__list">
+            <Box
+                className="pt-sidebar__list"
+                sx={{
+                    mt: 1,
+                    px: 1,
+                }}
+            >
                 {ITEMS.map(({ key, type, label, icon }) => (
                     <div
                         key={key}
@@ -56,7 +67,7 @@ const SidebarFlow = () => {
                         <span className="pt-sidebar__label">{label}</span>
                     </div>
                 ))}
-            </div>
+            </Box>
 
         </Box>
     );
