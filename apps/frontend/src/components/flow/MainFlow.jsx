@@ -715,195 +715,223 @@ function MainFlow() {
           </Typography>
         </Stack>
       </Backdrop>
-      <Grid container >
-        <Grid item xs={12} sm={2} md={2}>
+      <Grid
+        container
+        sx={{
+          height: "calc(100vh - 64px)",
+          px: 3,
+          pb: 3,
+          boxSizing: "border-box",
+        }}
+      >
 
-          <Card
-            sx={{
-              height: { sm: "60vh" },
-              my: { xs: 1, sm: 0 },
-              borderRadius: { xs: 2, sm: "16px 0 0 16px" },
-            }}
-          >
-            <SidebarFlow />
 
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={10} md={10}>
-          <Card
-            sx={{
-              width: "100%",
-              height: "100vh",
-              borderRadius: { xs: 2, sm: "0 16px 16px 0" },
-              display: "flex",
-              flexDirection: "column",
-              overflow: "hidden",
-            }}
+        <Grid item xs={12}>
+          <Box
             ref={reactFlowWrapper}
+            sx={{
+              height: "100%",
+              display: "flex",
+              borderRadius: 3,
+              overflow: "hidden",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.06)",
+              backgroundColor: "background.paper",
+            }}
           >
-            {isWizardEntry && (
-              <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider" }}>
-                <Typography variant="overline" color="text.secondary">
-                  LABORATORIO GUIADO
-                </Typography>
-                <Typography variant="h6" sx={{ mt: 0.5 }}>
-                  Paso 2: Construye tu topología
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Arrastra una VPC al lienzo, luego crea una subnet y una instancia. Después pasamos a ruteo y pruebas.
-                </Typography>
-              </Box>
-            )}
+            {/* Sidebar */}
             <Box
               sx={{
-                flexShrink: 0,
-                position: "sticky",
-                top: 0,
-                zIndex: 50,
-                backgroundColor: (t) => t.palette.background.paper,
+                width: { xs: 220, md: 260 },
+                borderRight: "1px solid",
+                borderColor: "divider",
+                display: "flex",
+                flexDirection: "column",
               }}
             >
-              <PacketToolbar
-                onSave={onSaveFlow}
-                onRestore={onRestoreFlow}
-                onRestoreInitial={restoreInitialNodes}
-                onDeploy={guardBeforeEdit(processJsonToCloud)}
-                onZoomIn={handleZoomIn}
-                onZoomOut={handleZoomOut}
-                onFitView={handleFitView}
-                title="Topology Builder"
-                onPreviewRoutes={() => {
-                  const preview = buildRoutingPreview(nodes, edges);
-                  setRoutesPreviewData(preview);
-                  setRoutesPreviewOpen(true);
-                  // si quieres ver en consola también:
-                  // console.log('ROUTES PREVIEW', preview);
-                }}
-                planStatus={canvasPlanInfo}
-                canvasState={canvasState}
-                validationState={validationStateForToolbar}
-              />
+              <SidebarFlow />
             </Box>
-            <Box sx={{ flex: 1, minHeight: 0, position: "relative" }}>
-              <ReactFlow
-                nodes={nodes}
-                edges={edges.map(e => ({ ...e, style: connectionLineStyle, animated: false }))}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                onNodeClick={onNodeClick}
-                onConnect={guardBeforeEdit((params) => onConnect(params, setEdges, () => reactFlowInstance?.getEdges?.() || []))}
-                onInit={setReactFlowInstance}
-                onDrop={guardBeforeEdit(onDrop)}
-                onNodeDragStart={onNodeDragStart}
-                onNodeDrag={onNodeDrag}
-                onNodeDragStop={onNodeDragStop}
-                onDragOver={onDragOver}
-                backgroundVariant="dots"
-                snapToGrid
-                snapGrid={[24, 24]}              // alineación limpia
-                selectionOnDrag={false}          // evita seleccionar “marco azul” al arrastrar
-                elevateNodesOnSelect
-                onConnectStart={onConnectStart}
-                onConnectEnd={onConnectEnd}
-                fitViewOptions={{
-                  padding: 0.2,
+
+            {/* Main Canvas Area */}
+            <Box
+              sx={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                minWidth: 0,
+              }}
+            >
+              {isWizardEntry && (
+                <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider" }}>
+                  <Typography variant="overline" color="text.secondary">
+                    LABORATORIO GUIADO
+                  </Typography>
+                  <Typography variant="h6" sx={{ mt: 0.5 }}>
+                    Paso 2: Construye tu topología
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Arrastra una VPC al lienzo, luego crea una subnet y una instancia. Después pasamos a ruteo y pruebas.
+                  </Typography>
+                </Box>
+              )}
+              <Box
+                sx={{
+                  flexShrink: 0,
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 50,
+                  backgroundColor: (t) => t.palette.background.paper,
                 }}
-                isValidConnection={(connection) => isValidConnection(connection, nodes)}
-                className="overview"
-                nodeTypes={nodeTypes}
-                nodeOrigin={[0, 0]}
-                style={{
-                  background: "radial-gradient(circle at 25% 25%, #eef2f7 0%, #e6ecf3 40%, #dde4ee 100%)",
-                  width: "100%",
-                  height: "100%",
-                }}
-                connectionLineStyle={connectionLineStyle}
-                onPaneClick={() => setNodes(nds => nds.map(n => ({ ...n, selected: false })))}
               >
-                <Controls />
-                <Background variant="dots" gap={24} size={1} color="rgba(80,100,140,0.15)" />
+                <PacketToolbar
+                  onSave={onSaveFlow}
+                  onRestore={onRestoreFlow}
+                  onRestoreInitial={restoreInitialNodes}
+                  onDeploy={guardBeforeEdit(processJsonToCloud)}
+                  onZoomIn={handleZoomIn}
+                  onZoomOut={handleZoomOut}
+                  onFitView={handleFitView}
+                  title="Topology Builder"
+                  onPreviewRoutes={() => {
+                    const preview = buildRoutingPreview(nodes, edges);
+                    setRoutesPreviewData(preview);
+                    setRoutesPreviewOpen(true);
+                    // si quieres ver en consola también:
+                    // console.log('ROUTES PREVIEW', preview);
+                  }}
+                  planStatus={canvasPlanInfo}
+                  canvasState={canvasState}
+                  validationState={validationStateForToolbar}
+                />
+              </Box>
+              <Box
+                sx={{
+                  flex: 1,
+                  minHeight: 0,
+                  position: "relative",
+                  backgroundColor: (t) =>
+                    t.palette.mode === "light" ? "#f4f6fa" : "#0f172a",
+                }}
+              >
+                <ReactFlow
+                  nodes={nodes}
+                  edges={edges.map(e => ({ ...e, style: connectionLineStyle, animated: false }))}
+                  onNodesChange={onNodesChange}
+                  onEdgesChange={onEdgesChange}
+                  onNodeClick={onNodeClick}
+                  onConnect={guardBeforeEdit((params) => onConnect(params, setEdges, () => reactFlowInstance?.getEdges?.() || []))}
+                  onInit={setReactFlowInstance}
+                  onDrop={guardBeforeEdit(onDrop)}
+                  onNodeDragStart={onNodeDragStart}
+                  onNodeDrag={onNodeDrag}
+                  onNodeDragStop={onNodeDragStop}
+                  onDragOver={onDragOver}
+                  backgroundVariant="dots"
+                  snapToGrid
+                  snapGrid={[24, 24]}              // alineación limpia
+                  selectionOnDrag={false}          // evita seleccionar “marco azul” al arrastrar
+                  elevateNodesOnSelect
+                  onConnectStart={onConnectStart}
+                  onConnectEnd={onConnectEnd}
+                  fitViewOptions={{
+                    padding: 0.2,
+                  }}
+                  isValidConnection={(connection) => isValidConnection(connection, nodes)}
+                  className="overview"
+                  nodeTypes={nodeTypes}
+                  nodeOrigin={[0, 0]}
+                  style={{
+                    background: "radial-gradient(circle at 25% 25%, #eef2f7 0%, #e6ecf3 40%, #dde4ee 100%)",
+                    width: "100%",
+                    height: "100%",
+                  }}
+                  connectionLineStyle={connectionLineStyle}
+                  onPaneClick={() => setNodes(nds => nds.map(n => ({ ...n, selected: false })))}
+                >
+                  <Controls />
+                  <Background variant="dots" gap={24} size={1} color="rgba(80,100,140,0.15)" />
 
-              </ReactFlow>
+                </ReactFlow>
+              </Box>
+              <Snackbar
+                open={!!canvasUiError}
+                autoHideDuration={6000}
+                onClose={(_e, reason) => {
+                  if (reason === 'clickaway') return;
+                  setCanvasUiError(null);
+                }}
+                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+              >
+                <Alert severity="warning" variant="filled" sx={{ width: '100%' }}>
+                  {canvasUiError}
+                </Alert>
+              </Snackbar>
+
+              <Dialog
+                open={editGuardOpen}
+                onClose={() => setEditGuardOpen(false)}
+                maxWidth="sm"
+                fullWidth
+              >
+                <DialogTitle>Canvas desactualizado vs Plan</DialogTitle>
+                <DialogContent>
+                  <Typography variant="body2" color="text.secondary">
+                    Este canvas cambió desde la última validación asociada al plan.
+                    Si sigues editando, el plan ya no representa exactamente lo que estás viendo.
+                  </Typography>
+                </DialogContent>
+                <DialogActions>
+                  <Button
+                    onClick={() => {
+                      setEditGuardOpen(false);
+                      if (canvasPlanId) navigate(`/admin/plans/${canvasPlanId}`);
+                    }}
+                  >
+                    Ver plan
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={() => {
+                      setEditGuardOpen(false);
+                      setIgnoreDirtyGuard(false);
+                      processJsonToCloud();
+                    }}
+                  >
+                    Re-validar
+                  </Button>
+                  <Button
+                    variant="contained"
+                    onClick={() => {
+                      setEditGuardOpen(false);
+                      // El usuario acepta el riesgo: no interrumpir más con el modal
+                      // mientras el canvas siga “desactualizado”.
+                      setIgnoreDirtyGuard(true);
+                      editGuardRef.current = { fn: null, args: null };
+                    }}
+                  >
+                    Seguir editando
+                  </Button>
+                </DialogActions>
+              </Dialog>
+
+
+              <ConfirmDeployDialog
+                open={showConfirmation && restorationDone}
+                onClose={handleCancelDeploy}
+                validationState={validationState}
+                canvasState={canvasState}
+                validationResult={validationResult}
+                transformedData={transformedData}
+                onValidate={handleValidatePlan}
+                onDeploy={handleApplyReal}
+                onViewPlan={() =>
+                  handleOpenPlanDetails(validationResult?.plan_id)
+                }
+                loadingFlow={loadingFlow}
+              />
+
             </Box>
-            <Snackbar
-              open={!!canvasUiError}
-              autoHideDuration={6000}
-              onClose={(_e, reason) => {
-                if (reason === 'clickaway') return;
-                setCanvasUiError(null);
-              }}
-              anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-            >
-              <Alert severity="warning" variant="filled" sx={{ width: '100%' }}>
-                {canvasUiError}
-              </Alert>
-            </Snackbar>
+          </Box>
 
-            <Dialog
-              open={editGuardOpen}
-              onClose={() => setEditGuardOpen(false)}
-              maxWidth="sm"
-              fullWidth
-            >
-              <DialogTitle>Canvas desactualizado vs Plan</DialogTitle>
-              <DialogContent>
-                <Typography variant="body2" color="text.secondary">
-                  Este canvas cambió desde la última validación asociada al plan.
-                  Si sigues editando, el plan ya no representa exactamente lo que estás viendo.
-                </Typography>
-              </DialogContent>
-              <DialogActions>
-                <Button
-                  onClick={() => {
-                    setEditGuardOpen(false);
-                    if (canvasPlanId) navigate(`/admin/plans/${canvasPlanId}`);
-                  }}
-                >
-                  Ver plan
-                </Button>
-                <Button
-                  variant="outlined"
-                  onClick={() => {
-                    setEditGuardOpen(false);
-                    setIgnoreDirtyGuard(false);
-                    processJsonToCloud();
-                  }}
-                >
-                  Re-validar
-                </Button>
-                <Button
-                  variant="contained"
-                  onClick={() => {
-                    setEditGuardOpen(false);
-                    // El usuario acepta el riesgo: no interrumpir más con el modal
-                    // mientras el canvas siga “desactualizado”.
-                    setIgnoreDirtyGuard(true);
-                    editGuardRef.current = { fn: null, args: null };
-                  }}
-                >
-                  Seguir editando
-                </Button>
-              </DialogActions>
-            </Dialog>
-
-
-            <ConfirmDeployDialog
-              open={showConfirmation && restorationDone}
-              onClose={handleCancelDeploy}
-              validationState={validationState}
-              canvasState={canvasState}
-              validationResult={validationResult}
-              transformedData={transformedData}
-              onValidate={handleValidatePlan}
-              onDeploy={handleApplyReal}
-              onViewPlan={() =>
-                handleOpenPlanDetails(validationResult?.plan_id)
-              }
-              loadingFlow={loadingFlow}
-            />
-
-          </Card>
         </Grid>
         <RoutePreviewPanel
           open={showRoutePreview}
