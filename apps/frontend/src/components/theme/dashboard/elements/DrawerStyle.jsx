@@ -21,6 +21,7 @@ export const DrawerStyle = styled(MuiDrawer, { shouldForwardProp: (prop) => prop
                     : theme.palette.background.paper,
             color: theme.palette.text.primary,
             borderRight: `1px solid ${theme.palette.divider}`,
+            paddingTop: theme.spacing(1),
 
             ...(!open && {
                 overflowX: 'hidden',
