@@ -20,7 +20,7 @@ export default function PacketToolbar({
   onZoomIn,
   onZoomOut,
   onFitView,
-  title = 'Logical',
+  title = 'Logical Topology',
   onPreviewRoutes,
   planStatus = null, // { status, last_action, simulate_only, updated_at }
   canvasState = "NO_PLAN",
@@ -112,10 +112,10 @@ export default function PacketToolbar({
 
         {/* Controles de vista */}
         <div className="pt-toolbar__group">
-          <Tooltip title="Zoom in"><IconButton size="small" className="pt-ibtn" onClick={onZoomIn}><ZoomInIcon fontSize="small" /></IconButton></Tooltip>
-          <Tooltip title="Zoom out"><IconButton size="small" className="pt-ibtn" onClick={onZoomOut}><ZoomOutIcon fontSize="small" /></IconButton></Tooltip>
-          <Tooltip title="Fit view"><IconButton size="small" className="pt-ibtn" onClick={onFitView}><CenterFocusStrongIcon fontSize="small" /></IconButton></Tooltip>
-          <Tooltip title={mode === 'light' ? 'Dark mode' : 'Light mode'}>
+          <Tooltip title="Acercar"><IconButton size="small" className="pt-ibtn" onClick={onZoomIn}><ZoomInIcon fontSize="small" /></IconButton></Tooltip>
+          <Tooltip title="Alejar"><IconButton size="small" className="pt-ibtn" onClick={onZoomOut}><ZoomOutIcon fontSize="small" /></IconButton></Tooltip>
+          <Tooltip title="Ajustar vista"><IconButton size="small" className="pt-ibtn" onClick={onFitView}><CenterFocusStrongIcon fontSize="small" /></IconButton></Tooltip>
+          <Tooltip title={mode === 'light' ? 'Modo oscuro' : 'Modo claro'}>
             <IconButton size="small" className="pt-ibtn" onClick={toggle}>
               {mode === 'light' ? <DarkModeIcon fontSize="small" /> : <LightModeIcon fontSize="small" />}
             </IconButton>
@@ -127,20 +127,76 @@ export default function PacketToolbar({
 
         {/* Botones de acción */}
         <div className="pt-toolbar__group">
-          <Button variant="outlined" className="pt-btn" startIcon={<SaveIcon />} onClick={onSave} size="small" disabled={canvasState === "PLAN_RUNNING"}>Save</Button>
-          <Button variant="outlined" className="pt-btn" startIcon={<RestoreIcon />} onClick={onRestore} size="small" disabled={canvasState === "PLAN_RUNNING"}>Restore</Button>
-          <Button variant="outlined" className="pt-btn pt-btn--yellow" startIcon={<RestartAltIcon />} onClick={onRestoreInitial} size="small" disabled={canvasState === "PLAN_RUNNING"}>Restore Initial</Button>
-          <Button
-            variant="outlined"
-            className="pt-btn pt-btn--green"
-            startIcon={<PlayArrowIcon />}
-            onClick={onDeploy}
-            size="small"
-            disabled={canvasState === "PLAN_RUNNING"}
-          >
-            Deploy
-          </Button>
-          <Button variant="outlined" className="pt-btn pt-btn--green" startIcon={<PlayArrowIcon />} onClick={onPreviewRoutes} size="small" disabled={canvasState === "PLAN_RUNNING"}>Preview</Button>
+          <Tooltip title="Guardar estado actual del canvas en Firestore">
+            <span>
+              <Button
+                variant="outlined"
+                className="pt-btn"
+                startIcon={<SaveIcon />}
+                onClick={onSave}
+                size="small"
+                disabled={canvasState === "PLAN_RUNNING"}
+              >
+                Save
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip title="Restaurar última versión guardada desde Firestore">
+            <span>
+              <Button
+                variant="outlined"
+                className="pt-btn"
+                startIcon={<RestoreIcon />}
+                onClick={onRestore}
+                size="small"
+                disabled={canvasState === "PLAN_RUNNING"}
+              >
+                Restore
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip title="Restablecer canvas al estado inicial de la plantilla">
+            <span>
+              <Button
+                variant="outlined"
+                className="pt-btn pt-btn--yellow"
+                startIcon={<RestartAltIcon />}
+                onClick={onRestoreInitial}
+                size="small"
+                disabled={canvasState === "PLAN_RUNNING"}
+              >
+                Restore Initial
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip title="Aplicar plan validado (ejecución real de Terraform)">
+            <span>
+              <Button
+                variant="outlined"
+                className="pt-btn pt-btn--green"
+                startIcon={<PlayArrowIcon />}
+                onClick={onDeploy}
+                size="small"
+                disabled={canvasState === "PLAN_RUNNING"}
+              >
+                Deploy
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip title="Generar y previsualizar plan de ruteo sin aplicar cambios">
+            <span>
+              <Button
+                variant="outlined"
+                className="pt-btn pt-btn--green"
+                startIcon={<PlayArrowIcon />}
+                onClick={onPreviewRoutes}
+                size="small"
+                disabled={canvasState === "PLAN_RUNNING"}
+              >
+                Preview
+              </Button>
+            </span>
+          </Tooltip>
         </div>
 
       </div>
@@ -165,4 +221,3 @@ export default function PacketToolbar({
     </div>
   );
 }
-

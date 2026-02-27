@@ -168,6 +168,22 @@ const VPCList = () => {
     const q = query.trim().toLowerCase();
 
     return (vpcs || [])
+      .slice() // avoid mutating original array
+      .sort((a, b) => {
+        const getDate = (v) => {
+          if (!v?.createdAt) return 0;
+
+          // Firestore Timestamp support
+          if (typeof v.createdAt === "object" && v.createdAt.seconds) {
+            return v.createdAt.seconds * 1000;
+          }
+
+          // JS Date or ISO string
+          return new Date(v.createdAt).getTime() || 0;
+        };
+
+        return getDate(b) - getDate(a); // most recent first
+      })
       .filter((v) => {
         if (typeFilter === "ALL") return true;
         const isWizard = v?.narrative === "wizard";
