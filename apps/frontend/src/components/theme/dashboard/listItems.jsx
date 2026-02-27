@@ -23,7 +23,24 @@ import {
 } from "../../../constants";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 
-
+const activeItemStyle = (theme) => ({
+  background:
+    theme.palette.mode === "light"
+      ? "linear-gradient(90deg, rgba(59,130,246,0.18) 0%, rgba(59,130,246,0.10) 100%)"
+      : "linear-gradient(90deg, rgba(59,130,246,0.30) 0%, rgba(59,130,246,0.18) 100%)",
+  boxShadow:
+    theme.palette.mode === "light"
+      ? "0 4px 12px rgba(59,130,246,0.15)"
+      : "0 6px 18px rgba(0,0,0,0.45)",
+  borderRadius: 12,
+  margin: "4px 8px",
+  "& .MuiListItemIcon-root": {
+    color: theme.palette.primary.main,
+  },
+  "& .MuiListItemText-primary": {
+    fontWeight: 700,
+  },
+});
 
 
 export const MainListItems = () => {
@@ -37,16 +54,16 @@ export const MainListItems = () => {
         to="/admin/dashboard"
         end
         sx={(theme) => ({
-          "&.active": {
+          borderRadius: 12,
+          margin: "2px 8px",
+          transition: "all .15s ease",
+          "&:hover": {
             backgroundColor:
               theme.palette.mode === "light"
-                ? "rgba(0,0,0,0.04)"
+                ? "rgba(0,0,0,0.035)"
                 : "rgba(255,255,255,0.06)",
-            borderLeft: `4px solid ${theme.palette.primary.main}`,
-            "& .MuiListItemIcon-root": {
-              color: theme.palette.primary.main,
-            },
           },
+          "&.active": activeItemStyle(theme),
         })}
       >
         <ListItemIcon variant="whiteStyle">
@@ -59,16 +76,16 @@ export const MainListItems = () => {
         component={NavLink}
         to="/admin/vpcs"
         sx={(theme) => ({
-          "&.active": {
+          borderRadius: 12,
+          margin: "2px 8px",
+          transition: "all .15s ease",
+          "&:hover": {
             backgroundColor:
               theme.palette.mode === "light"
-                ? "rgba(0,0,0,0.04)"
+                ? "rgba(0,0,0,0.035)"
                 : "rgba(255,255,255,0.06)",
-            borderLeft: `4px solid ${theme.palette.primary.main}`,
-            "& .MuiListItemIcon-root": {
-              color: theme.palette.primary.main,
-            },
           },
+          "&.active": activeItemStyle(theme),
         })}
       >
         <ListItemIcon variant="whiteStyle">
@@ -81,16 +98,16 @@ export const MainListItems = () => {
         component={NavLink}
         to="/admin/plans"
         sx={(theme) => ({
-          "&.active": {
+          borderRadius: 12,
+          margin: "2px 8px",
+          transition: "all .15s ease",
+          "&:hover": {
             backgroundColor:
               theme.palette.mode === "light"
-                ? "rgba(0,0,0,0.04)"
+                ? "rgba(0,0,0,0.035)"
                 : "rgba(255,255,255,0.06)",
-            borderLeft: `4px solid ${theme.palette.primary.main}`,
-            "& .MuiListItemIcon-root": {
-              color: theme.palette.primary.main,
-            },
           },
+          "&.active": activeItemStyle(theme),
         })}
       >
         <ListItemIcon variant="whiteStyle">
@@ -141,16 +158,16 @@ export const SecondaryListItems = () => {
           component={NavLink}
           to="/admin/settings/amilist"
           sx={(theme) => ({
-            "&.active": {
+            borderRadius: 12,
+            margin: "2px 8px",
+            transition: "all .15s ease",
+            "&:hover": {
               backgroundColor:
                 theme.palette.mode === "light"
-                  ? "rgba(0,0,0,0.04)"
+                  ? "rgba(0,0,0,0.035)"
                   : "rgba(255,255,255,0.06)",
-              borderLeft: `4px solid ${theme.palette.primary.main}`,
-              "& .MuiListItemIcon-root": {
-                color: theme.palette.primary.main,
-              },
             },
+            "&.active": activeItemStyle(theme),
           })}
         >
           <ListItemIcon variant="whiteStyle">
@@ -166,16 +183,16 @@ export const SecondaryListItems = () => {
             component={NavLink}
             to="/admin/settings/usersmanagement"
             sx={(theme) => ({
-              "&.active": {
+              borderRadius: 12,
+              margin: "2px 8px",
+              transition: "all .15s ease",
+              "&:hover": {
                 backgroundColor:
                   theme.palette.mode === "light"
-                    ? "rgba(0,0,0,0.04)"
+                    ? "rgba(0,0,0,0.035)"
                     : "rgba(255,255,255,0.06)",
-                borderLeft: `4px solid ${theme.palette.primary.main}`,
-                "& .MuiListItemIcon-root": {
-                  color: theme.palette.primary.main,
-                },
               },
+              "&.active": activeItemStyle(theme),
             })}
           >
             <ListItemIcon variant="whiteStyle">
@@ -191,16 +208,16 @@ export const SecondaryListItems = () => {
           component={NavLink}
           to="/admin/settings/general"
           sx={(theme) => ({
-            "&.active": {
+            borderRadius: 12,
+            margin: "2px 8px",
+            transition: "all .15s ease",
+            "&:hover": {
               backgroundColor:
                 theme.palette.mode === "light"
-                  ? "rgba(0,0,0,0.04)"
+                  ? "rgba(0,0,0,0.035)"
                   : "rgba(255,255,255,0.06)",
-              borderLeft: `4px solid ${theme.palette.primary.main}`,
-              "& .MuiListItemIcon-root": {
-                color: theme.palette.primary.main,
-              },
             },
+            "&.active": activeItemStyle(theme),
           })}
         >
           <ListItemIcon variant="whiteStyle">
