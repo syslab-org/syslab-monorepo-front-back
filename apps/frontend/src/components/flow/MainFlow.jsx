@@ -899,7 +899,12 @@ function MainFlow() {
                   onPaneClick={() => setNodes(nds => nds.map(n => ({ ...n, selected: false })))}
                 >
                   <Controls />
-                  <Background variant="dots" gap={24} size={1} color="rgba(80,100,140,0.15)" />
+                  <Background
+                    variant="dots"
+                    gap={32}
+                    size={0.8}
+                    color="rgba(100,116,139,0.08)"
+                  />
 
                 </ReactFlow>
               </Box>
