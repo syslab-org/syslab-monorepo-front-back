@@ -111,6 +111,11 @@ const VPCList = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [vpcToDelete, setVpcToDelete] = useState(null);
 
+  // Rename dialog state
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [vpcToRename, setVpcToRename] = useState(null);
+  const [newName, setNewName] = useState("");
+
   // UI filters (match PlanListPage look & feel)
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
@@ -267,6 +272,43 @@ const VPCList = () => {
     setVpcToDelete(vpc);
     setDeleteDialogOpen(true);
   }
+
+  const openRenameDialog = (vpc) => {
+    setVpcToRename(vpc);
+    setNewName(vpc?.name || "");
+    setRenameDialogOpen(true);
+  };
+
+  const closeRenameDialog = () => {
+    setVpcToRename(null);
+    setNewName("");
+    setRenameDialogOpen(false);
+  };
+
+  const handleRenameVPC = async () => {
+    if (!vpcToRename?.id || !newName.trim()) return;
+
+    try {
+      setLoadingFlow(true);
+
+      await setDoc(
+        doc(db, DB_FIRESTORE_VPCS, vpcToRename.id),
+        {
+          name: newName.trim(),
+          updatedAt: new Date(),
+        },
+        { merge: true }
+      );
+
+      await fetchVPCs();
+      closeRenameDialog();
+    } catch (error) {
+      console.error("Error renaming VPC:", error);
+      alert("No se pudo renombrar el laboratorio.");
+    } finally {
+      setLoadingFlow(false);
+    }
+  };
   const closeDeleteDialog = () => {
     setVpcToDelete(null);
     setDeleteDialogOpen(false);
@@ -354,7 +396,13 @@ const VPCList = () => {
           </Stack>
         </Paper>
 
-        <VPCsTable vpcs={filteredVpcs} onEdit={handleLinkToFlow} onDelete={openDeleteDialog} onDuplicate={handleDuplicateVPC} />
+        <VPCsTable
+          vpcs={filteredVpcs}
+          onEdit={handleLinkToFlow}
+          onDelete={openDeleteDialog}
+          onDuplicate={handleDuplicateVPC}
+          onRename={openRenameDialog}
+        />
       </Stack>
 
       <CreateVPCModal
@@ -386,11 +434,37 @@ const VPCList = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Dialog open={renameDialogOpen} onClose={closeRenameDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Renombrar laboratorio</DialogTitle>
+        <Divider />
+        <DialogContent sx={{ pt: 2 }}>
+          <TextField
+            fullWidth
+            label="Nuevo nombre"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            autoFocus
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={closeRenameDialog} variant="outlined">
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleRenameVPC}
+            variant="contained"
+            disabled={!newName.trim()}
+          >
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }
 
-const VPCsTable = ({ vpcs, onEdit, onDelete, onDuplicate }) => (
+const VPCsTable = ({ vpcs, onEdit, onDelete, onDuplicate, onRename }) => (
   <TableContainer
     component={Paper}
     elevation={0}
@@ -512,6 +586,14 @@ const VPCsTable = ({ vpcs, onEdit, onDelete, onDuplicate }) => (
                       onClick={() => onDuplicate(vpc)}
                     >
                       <ContentCopy fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Renombrar laboratorio" arrow>
+                    <IconButton
+                      size="small"
+                      onClick={() => onRename(vpc)}
+                    >
+                      <ModeEditOutlined fontSize="small" />
                     </IconButton>
                   </Tooltip>
                 </Stack>
