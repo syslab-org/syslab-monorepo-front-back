@@ -132,5 +132,52 @@ export function buildRoutingPreview(nodes, edges) {
     };
   });
 
-  return { vpcs: vpcPreviews };
+  // --- Detect asymmetric (one-way) routes ---
+  const warnings = [];
+
+  // Index rápido: vpcId -> routes
+  const routeIndex = new Map(
+    vpcPreviews.map((v) => [v.id, v.main_route_table || []]),
+  );
+
+  vpcPreviews.forEach((vpcA) => {
+    const routesA = routeIndex.get(vpcA.id) || [];
+
+    routesA
+      .filter(
+        (r) =>
+          r.target === "peering" &&
+          r.via_router_id &&
+          r.dest_cidr &&
+          r.dest_cidr !== vpcA.cidr,
+      )
+      .forEach((r) => {
+        const routerId = r.via_router_id;
+
+        // Intentamos encontrar la VPC B por CIDR
+        const vpcB = vpcPreviews.find((v) => v.cidr === r.dest_cidr);
+        if (!vpcB) return;
+
+        const routesB = routeIndex.get(vpcB.id) || [];
+
+        const hasReverse = routesB.some(
+          (rb) =>
+            rb.target === "peering" &&
+            rb.via_router_id === routerId &&
+            rb.dest_cidr === vpcA.cidr,
+        );
+
+        if (!hasReverse) {
+          warnings.push({
+            type: "ASYMMETRIC_ROUTE",
+            router_id: routerId,
+            from_vpc: vpcA.name,
+            to_vpc: vpcB.name,
+            message: `Ruta declarada ${vpcA.name} → ${vpcB.name} pero falta la ruta de retorno.`,
+          });
+        }
+      });
+  });
+
+  return { vpcs: vpcPreviews, warnings };
 }
