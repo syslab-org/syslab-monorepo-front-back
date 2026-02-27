@@ -8,7 +8,9 @@ import RouterIcon from '@mui/icons-material/Router';
 const RouterNodeInstance = ({ data = {}, isConnectable, selected }) => {
   const name = data.identifier || 'Router';
   // Router state based on routing configuration
-  const hasRoutes = Array.isArray(data.routeTable) && data.routeTable.length > 0;
+  const hasRoutes =
+    Array.isArray(data.routeTable) &&
+    data.routeTable.some(r => r.destCidr);
   const state = hasRoutes ? "up" : "warn";
 
   return (
