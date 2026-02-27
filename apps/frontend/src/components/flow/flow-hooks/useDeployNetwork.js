@@ -495,6 +495,20 @@ const useDeployNetwork = ({
       });
 
       const planId = syncRes?.plan_id;
+      const existingPlan = await api.getPlan(planId);
+
+      if (existingPlan?.applied && !existingPlan?.simulate_only) {
+        setValidationState(PLAN_STATES.ERROR);
+        setValidationError(
+          "Este plan ya fue aplicado en AWS. Debes destruirlo antes de volver a validar.",
+        );
+        setErrorMessage(
+          "Plan ya aplicado. Ve a Plan Detail y ejecuta Destroy primero.",
+        );
+        setLoadingFlow(false);
+        return;
+      }
+
       if (!planId) throw new Error("sync-from-canvas no devolvió plan_id");
       await persistPlanIdToCanvas({
         canvasId: firestoreVpcId,

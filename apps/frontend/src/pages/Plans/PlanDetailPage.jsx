@@ -36,17 +36,43 @@ function formatDateTime(value) {
 
 function computeLifecycle(plan) {
   const status = plan?.status;
-  const lastAction = plan?.last_action || plan?.lastAction || '';
-  const applied = Boolean(plan?.applied);
+  const lastAction = String(plan?.last_action || plan?.lastAction || '').toLowerCase();
+  const applied = plan?.applied === true;
+
   const simulateOnly = Boolean(
     plan?.simulate_only ??
     plan?.simulateOnly ??
     plan?.payload?.simulate_only ??
     plan?.payload?.simulateOnly ??
-    true
+    false
   );
 
-  // 1) Preview gana siempre si es simulate_only (no hay infraestructura real)
+  const isDestroyed = lastAction === 'destroy';
+  const hasRealInfra = applied && !isDestroyed;
+
+  // 1️⃣ ACTIVE (infra real viva)
+  if (hasRealInfra) {
+    return {
+      key: 'ACTIVE',
+      label: 'ACTIVE',
+      helper: 'Infraestructura activa en AWS.',
+      chip: { variant: 'filled', color: 'success' },
+      allowDestroy: true,
+    };
+  }
+
+  // 2️⃣ DESTROYED
+  if (isDestroyed) {
+    return {
+      key: 'DESTROYED',
+      label: 'DESTROYED',
+      helper: 'Infraestructura eliminada en AWS.',
+      chip: { variant: 'outlined', color: 'default' },
+      allowDestroy: false,
+    };
+  }
+
+  // 3️⃣ PREVIEW (solo si NO hay infra real)
   if (simulateOnly) {
     return {
       key: 'PREVIEW',
@@ -57,35 +83,14 @@ function computeLifecycle(plan) {
     };
   }
 
-  // 2) Si el último action fue destroy, está destruido
-  if (String(lastAction).toLowerCase() === 'destroy') {
-    return {
-      key: 'DESTROYED',
-      label: 'DESTROYED',
-      helper: 'Infraestructura eliminada en AWS.',
-      chip: { variant: 'outlined', color: 'default' },
-      allowDestroy: false,
-    };
-  }
-
-  // 3) Si está aplicado y SUCCESS, lo consideramos activo
-  if (applied && status === 'SUCCESS') {
-    return {
-      key: 'ACTIVE',
-      label: 'ACTIVE',
-      helper: 'Infraestructura activa en AWS.',
-      chip: { variant: 'filled', color: 'success' },
-      allowDestroy: true,
-    };
-  }
-
-  // 4) Caso base: existe plan real pero no aplicado
+  // 4️⃣ NOT APPLIED
   return {
     key: 'NOT_APPLIED',
     label: 'NOT APPLIED',
-    helper: String(lastAction).toLowerCase() === 'canvas_update'
-      ? 'Cambios detectados desde el canvas: listo para aplicar en AWS.'
-      : 'Plan real aún no aplicado.',
+    helper:
+      lastAction === 'canvas_update'
+        ? 'Cambios detectados desde el canvas: listo para aplicar en AWS.'
+        : 'Plan real aún no aplicado.',
     chip: { variant: 'outlined', color: 'warning' },
     allowDestroy: false,
   };
@@ -161,7 +166,10 @@ export default function PlanDetailPage() {
   const canDeploy = !isRunning;
 
   // Destroy permitido cuando está ACTIVE + SUCCESS (regla backend), y no está corriendo
-  const canDestroy = !isRunning && (plan?.can_destroy ?? lifecycle.allowDestroy) && plan?.status === 'SUCCESS';
+  const canDestroy =
+    !isRunning &&
+    plan?.applied === true &&
+    String(plan?.last_action || '').toLowerCase() !== 'destroy';
 
   const fetchPlan = useCallback(
     async ({ resetLoading = false } = {}) => {
