@@ -1,5 +1,5 @@
 // apps/frontend/src/components/flow/pages/VPCList.jsx
-import { DeleteOutline, ModeEditOutlined } from "@mui/icons-material";
+import { DeleteOutline, ModeEditOutlined, ContentCopy } from "@mui/icons-material";
 import AddIcon from '@mui/icons-material/Add';
 import {
   Box,
@@ -27,7 +27,7 @@ import {
   Typography,
   Tooltip,
 } from "@mui/material";
-import { collection, getDocs, query, where, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, query, where, deleteDoc, doc, setDoc } from 'firebase/firestore';
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DB_FIRESTORE_VPCS, USER_ROL_STUDENT } from "../../../constants";
@@ -105,6 +105,7 @@ const fetchAllVPCs = async () => {
 }
 
 
+
 const VPCList = () => {
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -123,7 +124,41 @@ const VPCList = () => {
 
   const { vpcs, fetchVPCs } = useFetchVPCs(setLoadingFlow)
   const { start, finish, setStep } = useWizard()
+  const handleDuplicateVPC = async (vpc) => {
+    if (!vpc?.id) return;
 
+    try {
+      setLoadingFlow(true);
+
+      const newId = crypto.randomUUID();
+
+      const duplicated = {
+        ...vpc,
+        name: `${vpc.name || "Laboratorio"} (copia)`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      delete duplicated.id;
+
+      // Reset deployment metadata so the copy starts clean
+      delete duplicated.planId;
+      delete duplicated.planValidationOk;
+      delete duplicated.planCreatedFromCanvas;
+      delete duplicated.planCanvasHash;
+      delete duplicated.planName;
+      delete duplicated.planUpdatedAt;
+
+      await setDoc(doc(db, DB_FIRESTORE_VPCS, newId), duplicated);
+
+      await fetchVPCs();
+    } catch (error) {
+      console.error("Error duplicating VPC:", error);
+      alert("No se pudo duplicar el laboratorio.");
+    } finally {
+      setLoadingFlow(false);
+    }
+  };
   const filteredVpcs = useMemo(() => {
     const q = query.trim().toLowerCase();
 
@@ -319,7 +354,7 @@ const VPCList = () => {
           </Stack>
         </Paper>
 
-        <VPCsTable vpcs={filteredVpcs} onEdit={handleLinkToFlow} onDelete={openDeleteDialog} />
+        <VPCsTable vpcs={filteredVpcs} onEdit={handleLinkToFlow} onDelete={openDeleteDialog} onDuplicate={handleDuplicateVPC} />
       </Stack>
 
       <CreateVPCModal
@@ -355,7 +390,7 @@ const VPCList = () => {
   )
 }
 
-const VPCsTable = ({ vpcs, onEdit, onDelete }) => (
+const VPCsTable = ({ vpcs, onEdit, onDelete, onDuplicate }) => (
   <TableContainer
     component={Paper}
     elevation={0}
@@ -471,6 +506,14 @@ const VPCsTable = ({ vpcs, onEdit, onDelete }) => (
                   <IconButton onClick={() => onDelete(vpc)} aria-label="delete" color="error" size="small">
                     <DeleteOutline fontSize="small" />
                   </IconButton>
+                  <Tooltip title="Duplicar laboratorio" arrow>
+                    <IconButton
+                      size="small"
+                      onClick={() => onDuplicate(vpc)}
+                    >
+                      <ContentCopy fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                 </Stack>
               </TableCell>
             </TableRow>
