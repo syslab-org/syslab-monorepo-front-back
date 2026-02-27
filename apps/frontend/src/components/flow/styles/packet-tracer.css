@@ -1,29 +1,3 @@
-/* Overrides para modo oscuro activando .theme-dark en <body> */
-.theme-dark {
-  --pt-bg: #0c1118;
-  --pt-card: #101727;
-  --pt-card-2: #0c1423;
-  --pt-border: #1a2438;
-  --pt-text: #e7ebf6;
-  --pt-subtext: #9fb0c9;
-
-  --pt-green: #2ecc71;
-  --pt-yellow: #f5c451;
-  --pt-red: #ff6b6b;
-  --pt-cyan: #34c6f3;
-
-  --pt-vpc: #4b82ff;
-  --pt-subnet: #16b39a;
-  --pt-inst-pc: #6f9bff;
-  --pt-inst-sv: #9aa2ff;
-  --pt-inst-pr: #67c7f5;
-  --pt-router: #ff9a6a;
-
-  --pt-radius: 6px;
-  --pt-shadow: 0 6px 16px rgba(5, 12, 25, 0.28);
-  --pt-shadow-strong: 0 12px 28px rgba(5, 12, 25, 0.45);
-}
-
 /* ---------- Packet Tracer inspired UI — LIGHT THEME ---------- */
 :root {
   /* Base (light) */
@@ -327,10 +301,10 @@
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  overflow-x: visible;
   white-space: nowrap;
   width: 100%;
-  overflow-x: auto; /* <-- clave */
   scrollbar-width: thin; /* firefox */
 }
 

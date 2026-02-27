@@ -17,8 +17,9 @@ body.flow-fullbleed {
 }
 
 /* Defensive: si algún contenedor hardcodea max-width, lo neutralizamos en Flow */
+body.flow-fullbleed .MuiContainer-root,
 body.flow-fullbleed .MuiBox-root {
-  max-width: none;
+  max-width: none !important;
 }
 .overview * {
   box-sizing: border-box;
