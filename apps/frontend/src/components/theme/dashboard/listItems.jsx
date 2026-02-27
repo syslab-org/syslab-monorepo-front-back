@@ -24,16 +24,21 @@ import {
 import { useAuth } from "../../../contexts/AuthContext.jsx";
 
 const activeItemStyle = (theme) => ({
+  position: "relative",
+  overflow: "hidden",
+
   background:
     theme.palette.mode === "light"
-      ? "linear-gradient(90deg, rgba(59,130,246,0.18) 0%, rgba(59,130,246,0.10) 100%)"
-      : "linear-gradient(90deg, rgba(59,130,246,0.30) 0%, rgba(59,130,246,0.18) 100%)",
-  boxShadow:
-    theme.palette.mode === "light"
-      ? "0 4px 12px rgba(59,130,246,0.15)"
-      : "0 6px 18px rgba(0,0,0,0.45)",
+      ? "linear-gradient(90deg, rgba(59,130,246,0.12) 0%, rgba(59,130,246,0.05) 100%)"
+      : "linear-gradient(90deg, rgba(59,130,246,0.22) 0%, rgba(59,130,246,0.10) 100%)",
+
+  boxShadow: `inset 0 0 0 1px ${theme.palette.mode === "light"
+      ? "rgba(59,130,246,0.16)"
+      : "rgba(59,130,246,0.20)"
+    }`,
+
   borderRadius: 12,
-  margin: "4px 8px",
+
   "& .MuiListItemIcon-root": {
     color: theme.palette.primary.main,
   },
