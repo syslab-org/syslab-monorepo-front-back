@@ -28,6 +28,12 @@ const palettes = {
     yellow: "#f5c451",
     red: "#ff6b6b",
   },
+  infrastructure: {
+    vpc: "#2f6fed",
+    subnet: "#26b4d7",
+    instance: "#4b8bff",
+    router: "#ff9a6a",
+  },
 };
 
 export default function createPacketTheme(mode = "light") {
