@@ -7,8 +7,11 @@ import RouterIcon from '@mui/icons-material/Router';
 
 const RouterNodeInstance = ({ data = {}, isConnectable, selected }) => {
   const name = data.identifier || 'Router';
-  // up (verde) si IGW; warn (naranja) si NAT; down no usado por ahora
-  const state = data.internetGateway ? 'up' : (data.natGateway ? 'warn' : 'up');
+  // Router state based on routing configuration
+  const hasRoutes =
+    Array.isArray(data.routeTable) &&
+    data.routeTable.some(r => r.destCidr);
+  const state = hasRoutes ? "up" : "warn";
 
   return (
     <div style={{ width: 120, height: 130, display: 'grid', placeItems: 'center' }}>
@@ -32,7 +35,7 @@ const RouterNodeInstance = ({ data = {}, isConnectable, selected }) => {
         {/* LED de estado (clases existentes controlan color) */}
         <div
           className={`pt-device__led ${state === 'down' ? 'pt-device__led--down' :
-              state === 'warn' ? 'pt-device__led--warn' : ''
+            state === 'warn' ? 'pt-device__led--warn' : ''
             }`}
         />
 

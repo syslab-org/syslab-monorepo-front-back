@@ -48,7 +48,7 @@ export default function PacketToolbar({
         <Chip
           size="small"
           variant="outlined"
-          label="PLAN: VALIDADO"
+          label="VALIDATED"
           color="success"
         />
       );
@@ -62,7 +62,7 @@ export default function PacketToolbar({
         <Chip
           size="small"
           variant="outlined"
-          label="PLAN: VALIDANDO..."
+          label="VALIDATING..."
           color="info"
         />
       );
@@ -73,7 +73,7 @@ export default function PacketToolbar({
         <Chip
           size="small"
           variant="outlined"
-          label="PLAN: ERROR"
+          label="ERROR"
           color="error"
         />
       );
@@ -86,8 +86,8 @@ export default function PacketToolbar({
     <div
       className="pt-panel"
       style={{
-        padding: 8,
-        margin: 8,
+        padding: 6,
+        margin: 0,
         width: '100%',
         position: 'relative',
         zIndex: 60,
@@ -103,7 +103,7 @@ export default function PacketToolbar({
               <Chip
                 size="small"
                 variant="outlined"
-                label="DESACTUALIZADO"
+                label="OUTDATED"
                 color="warning"
               />
             )}

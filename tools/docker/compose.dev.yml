@@ -22,7 +22,7 @@ services:
       - appnet
 
   backend:
-    user: app
+    user: "0:0"
     container_name: tesis-container-backend
     build:
       context: ../..
@@ -66,7 +66,7 @@ services:
       start_period: 10s
 
   celery:
-    user: app
+    user: "0:0"
     container_name: tesis-container-celery
     build:
       context: ../..

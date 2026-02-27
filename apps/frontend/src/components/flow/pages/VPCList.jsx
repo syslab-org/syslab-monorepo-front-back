@@ -4,8 +4,18 @@ import AddIcon from '@mui/icons-material/Add';
 import {
   Box,
   Button,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  FormControl,
   IconButton,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   Table,
   TableBody,
@@ -13,15 +23,12 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TextField,
   Typography,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Divider,
+  Tooltip,
 } from "@mui/material";
 import { collection, getDocs, query, where, deleteDoc, doc } from 'firebase/firestore';
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DB_FIRESTORE_VPCS, USER_ROL_STUDENT } from "../../../constants";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -30,6 +37,7 @@ import { useWizard } from "../../../contexts/WizardContext";
 import { db } from "../../../firebase/firebaseConfig";
 import useCidrBlockVPCStore from '../store/cidrBlocksIp';
 import CreateVPCModal from "./CreateVPCModal";
+import { PageHeader } from "../../../components/layout/MainLayout.jsx";
 
 
 
@@ -102,6 +110,10 @@ const VPCList = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [vpcToDelete, setVpcToDelete] = useState(null);
 
+  // UI filters (match PlanListPage look & feel)
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState("ALL");
+
   const [isCreateVPCModalOpen, setIsCreateVPCModalOpen] = useState(false)
   const [wizardMode, setWizardMode] = useState(false)
 
@@ -111,6 +123,23 @@ const VPCList = () => {
 
   const { vpcs, fetchVPCs } = useFetchVPCs(setLoadingFlow)
   const { start, finish, setStep } = useWizard()
+
+  const filteredVpcs = useMemo(() => {
+    const q = query.trim().toLowerCase();
+
+    return (vpcs || [])
+      .filter((v) => {
+        if (typeFilter === "ALL") return true;
+        const isWizard = v?.narrative === "wizard";
+        return typeFilter === "GUIDED" ? isWizard : !isWizard;
+      })
+      .filter((v) => {
+        if (!q) return true;
+        const name = (v?.name || "").toLowerCase();
+        const id = (v?.id || "").toLowerCase();
+        return name.includes(q) || id.includes(q);
+      });
+  }, [vpcs, query, typeFilter]);
 
 
   const deleteFirestoreOnly = async () => {
@@ -209,49 +238,88 @@ const VPCList = () => {
   }
 
   return (
-    <div>
-      <Stack direction="column" spacing={4} >
-        <Stack direction="row" alignItems="center">
-          <Box flexGrow={1} flexShrink={1} flexBasis="auto">
-            <Typography
-              variant="h4"
-              sx={{
-                color: (theme) => theme.palette.primary.main
-              }}>
-              Laboratorios y VPCs
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{
-                color: (theme) => theme.palette.text.secondary,
-                mt: 1,
-                maxWidth: 600
-              }}>
-              Aquí puedes gestionar tus laboratorios de redes. Crea un entorno guiado para demostraciones
-              y prácticas, o una VPC avanzada si ya dominas la configuración.
-            </Typography>
-          </Box>
-          <Stack direction="row" spacing={2}>
-            <Button
-              variant="contained"
-              color="secondary"
-              startIcon={<AddIcon />}
-              onClick={handleCreateGuideLab}
-            >
-              Crear Laboratorio Guiado
-            </Button>
-            <Button
-              variant="outlined"
-              color="primary"
-              startIcon={<AddIcon />}
-              onClick={handleCreateAdvancedVPC}
-            >
-              Crear VPC Avanzada
-            </Button>
-          </Stack>
+    <Box sx={{ p: 3 }}>
+      <Stack direction="column" spacing={3}>
+        {/* Header (match PlanListPage) */}
+        <PageHeader
+          title="Laboratorios"
+          subtitle="Aquí puedes gestionar tus laboratorios de redes. Crea un entorno guiado para demostraciones y prácticas, o una VPC avanzada si ya dominas la configuración."
+          actions={
+            <>
+              <Tooltip
+                title="Sigue un flujo paso a paso ideal para prácticas guiadas, clases y demostraciones académicas."
+                arrow
+              >
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<AddIcon />}
+                  onClick={handleCreateGuideLab}
+                  disableElevation
+                  sx={{ borderRadius: 999, fontWeight: 700 }}
+                >
+                  Crear laboratorio guiado
+                </Button>
+              </Tooltip>
 
-        </Stack>
-        <VPCsTable vpcs={vpcs} onEdit={handleLinkToFlow} onDelete={openDeleteDialog} />
+              <Tooltip
+                title="Configura manualmente todos los parámetros de red. Recomendado si ya dominas conceptos como CIDR, subredes, tablas de rutas y gateways."
+                arrow
+              >
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  startIcon={<AddIcon />}
+                  onClick={handleCreateAdvancedVPC}
+                  sx={{ borderRadius: 999, fontWeight: 700 }}
+                >
+                  Crear laboratorio avanzado
+                </Button>
+              </Tooltip>
+            </>
+          }
+        />
+
+        {/* Filters / toolbar panel (match PlanListPage) */}
+        <Paper
+          elevation={0}
+          className="pt-panel"
+          sx={{
+            p: 2.5,
+            borderRadius: 2,
+          }}
+        >
+          <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ md: "center" }}>
+            <TextField
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              label="Buscar"
+              placeholder="Por nombre o VPC ID…"
+              size="small"
+              fullWidth
+            />
+
+            <FormControl size="small" sx={{ minWidth: 200 }}>
+              <InputLabel id="type-filter-label">Tipo</InputLabel>
+              <Select
+                labelId="type-filter-label"
+                value={typeFilter}
+                label="Tipo"
+                onChange={(e) => setTypeFilter(e.target.value)}
+              >
+                <MenuItem value="ALL">Todos</MenuItem>
+                <MenuItem value="GUIDED">Guiado</MenuItem>
+                <MenuItem value="ADVANCED">Avanzado</MenuItem>
+              </Select>
+            </FormControl>
+
+            <Box sx={{ minWidth: 120, display: "flex", justifyContent: { xs: "flex-start", md: "flex-end" } }}>
+              <Chip label={`${filteredVpcs.length} / ${(vpcs || []).length}`} variant="outlined" size="small" />
+            </Box>
+          </Stack>
+        </Paper>
+
+        <VPCsTable vpcs={filteredVpcs} onEdit={handleLinkToFlow} onDelete={openDeleteDialog} />
       </Stack>
 
       <CreateVPCModal
@@ -283,50 +351,141 @@ const VPCList = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </div>
+    </Box>
   )
 }
 
 const VPCsTable = ({ vpcs, onEdit, onDelete }) => (
-
-  <TableContainer component={Paper} variant="lightPaper">
-    <Table sx={{ minWidth: 650 }} aria-label="vpcs table">
+  <TableContainer
+    component={Paper}
+    elevation={0}
+    sx={{
+      borderRadius: 2,
+      border: (theme) => `1px solid ${theme.palette.divider}`,
+      backgroundColor: (theme) => theme.palette.background.paper,
+    }}
+  >
+    <Table size="small" aria-label="vpcs table">
       <TableHead>
-        <TableRow>
-          <TableCell>VPC Name</TableCell>
-          <TableCell>VPC ID</TableCell>
-          <TableCell>VPC TYPE</TableCell>
-          <TableCell>VPC Status</TableCell>
-          <TableCell>Actions</TableCell>
+        <TableRow
+          sx={{
+            backgroundColor: (theme) =>
+              theme.palette.mode === "light" ? theme.palette.grey[100] : theme.palette.background.paper,
+          }}
+        >
+          <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Laboratorio / VPC</TableCell>
+          <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Tipo</TableCell>
+          <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Estado</TableCell>
+          <TableCell align="right" sx={{ fontWeight: 700, color: "text.primary" }}>Acciones</TableCell>
         </TableRow>
       </TableHead>
-      <TableBody>
-        {vpcs.map(vpc => (
-          <TableRow
-            key={vpc.id}
-            sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
-          >
-            <TableCell component="th" scope="row">
-              {vpc.name}
-            </TableCell>
-            <TableCell >{vpc.id}</TableCell>
-            <TableCell>
-              {(vpc?.narrative === "wizard" ? "Guiado" : "Avanzado") + " • " + (vpc?.cloudProvider || "AWS")}
-            </TableCell>
-            <TableCell >Active</TableCell>
-            <TableCell >
-              <Stack direction="row" spacing={1}>
-                <IconButton onClick={() => onEdit(vpc)} aria-label="edit" color="primary">
-                  <ModeEditOutlined />
-                </IconButton>
-                <IconButton onClick={() => onDelete(vpc)} aria-label="delete" color="error">
-                  <DeleteOutline />
-                </IconButton>
-              </Stack>
 
+      <TableBody>
+        {(vpcs || []).map((vpc) => {
+          const isWizard = vpc?.narrative === "wizard";
+          const typeLabel = (isWizard ? "Guiado" : "Avanzado") + " • " + (vpc?.cloudProvider || "AWS");
+
+          return (
+            <TableRow
+              key={vpc.id}
+              hover
+              sx={{
+                transition: "background-color .15s ease",
+                "&:hover": {
+                  backgroundColor: (theme) =>
+                    theme.palette.mode === "light" ? theme.palette.grey[50] : "rgba(255,255,255,0.04)",
+                },
+              }}
+            >
+              <TableCell sx={{ maxWidth: 520 }}>
+                <Typography variant="body2" fontWeight={700} noWrap>
+                  {vpc?.name || "Sin nombre"}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ fontFamily: "monospace" }}>
+                  {vpc?.id}
+                </Typography>
+              </TableCell>
+
+              <TableCell>
+                <Typography variant="body2" color="text.secondary">
+                  {typeLabel}
+                </Typography>
+              </TableCell>
+
+              <TableCell>
+                {(() => {
+                  // Derivar estado real basado en metadata del plan persistida en Firestore
+                  let derivedStatus = "CREATED";
+
+                  if (vpc?.planValidationOk === false) {
+                    derivedStatus = "ERROR";
+                  } else if (vpc?.planValidationOk === true) {
+                    derivedStatus = "VALIDATED";
+                  } else if (vpc?.planId) {
+                    derivedStatus = "SYNCED";
+                  }
+
+                  let color = "default";
+                  if (derivedStatus === "VALIDATED") color = "success";
+                  else if (derivedStatus === "SYNCED") color = "info";
+                  else if (derivedStatus === "ERROR") color = "error";
+                  else if (derivedStatus === "CREATED") color = "default";
+
+                  const statusDescriptionMap = {
+                    CREATED:
+                      "El laboratorio fue creado en Firestore, pero aún no se ha validado ni sincronizado con un plan de infraestructura.",
+                    SYNCED:
+                      "El laboratorio fue sincronizado con un plan en el backend, pero aún no se ha ejecutado una validación (Terraform plan).",
+                    VALIDATED:
+                      "La validación (Terraform plan) se ejecutó correctamente y la infraestructura es consistente.",
+                    ERROR:
+                      "La validación del plan falló. Revisa los detalles del plan para corregir la configuración.",
+                  };
+
+                  const description =
+                    statusDescriptionMap[derivedStatus] ||
+                    "Estado desconocido del laboratorio.";
+
+                  return (
+                    <Tooltip title={description} arrow>
+                      <Chip
+                        size="small"
+                        label={derivedStatus}
+                        color={color}
+                        variant={
+                          derivedStatus === "CREATED"
+                            ? "outlined"
+                            : "filled"
+                        }
+                      />
+                    </Tooltip>
+                  );
+                })()}
+              </TableCell>
+
+              <TableCell align="right">
+                <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                  <IconButton onClick={() => onEdit(vpc)} aria-label="edit" color="primary" size="small">
+                    <ModeEditOutlined fontSize="small" />
+                  </IconButton>
+                  <IconButton onClick={() => onDelete(vpc)} aria-label="delete" color="error" size="small">
+                    <DeleteOutline fontSize="small" />
+                  </IconButton>
+                </Stack>
+              </TableCell>
+            </TableRow>
+          );
+        })}
+
+        {(vpcs || []).length === 0 && (
+          <TableRow>
+            <TableCell colSpan={4}>
+              <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+                No hay laboratorios para mostrar.
+              </Typography>
             </TableCell>
           </TableRow>
-        ))}
+        )}
       </TableBody>
     </Table>
   </TableContainer>
