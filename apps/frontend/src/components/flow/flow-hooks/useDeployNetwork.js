@@ -79,6 +79,9 @@ function buildLinksFromEdges(nodes, edges) {
 
     const routerNode = idToNode.get(routerId);
     const routerData = routerNode?.data || {};
+    const routeTable = Array.isArray(routerData.routeTable)
+      ? routerData.routeTable
+      : [];
     const router = {
       id: routerId,
       name: routerData.name || routerNode.id,
@@ -110,23 +113,9 @@ function buildLinksFromEdges(nodes, edges) {
 
       // Para cada VPC conectada generamos:
       // - tgw-attach
-      // - rutas automáticas hacia las otras VPC del mismo router
       vpcs.forEach((vpcId) => {
         const subnetsForVpc = groupSubnetsByVpc(nodes, vpcId);
         const subnetNames = subnetsForVpc.map(resolveSubnetName);
-
-        // Rutas de salida de ESTA VPC hacia las demás VPC conectadas al mismo TGW
-        const toRouterRoutes = vpcs
-          .filter((otherId) => otherId !== vpcId)
-          .map((otherId) => {
-            const destCidr = vpcCidrs.get(otherId);
-            if (!destCidr) return null;
-            return {
-              dest_cidr: destCidr,
-              target: "tgw",
-            };
-          })
-          .filter(Boolean);
 
         const linkPayload = {
           type: "tgw-attach",
@@ -135,10 +124,17 @@ function buildLinksFromEdges(nodes, edges) {
           subnet_names: subnetNames,
         };
 
-        // Solo agregamos routes si hay algo que enrutar
-        if (toRouterRoutes.length) {
+        // Build routes from router.routeTable filtered by sourceVpcId
+        const manualRoutes = routeTable
+          .filter((rt) => rt.sourceVpcId === vpcId && rt.destCidr)
+          .map((rt) => ({
+            dest_cidr: rt.destCidr,
+            target: "tgw",
+          }));
+
+        if (manualRoutes.length) {
           linkPayload.routes = {
-            to_router: toRouterRoutes,
+            to_router: manualRoutes,
           };
         }
 
@@ -153,11 +149,24 @@ function buildLinksFromEdges(nodes, edges) {
     // ===================
     for (let i = 0; i < vpcs.length; i++) {
       for (let j = i + 1; j < vpcs.length; j++) {
+        const vpcA = vpcs[i];
+        const vpcB = vpcs[j];
+
+        // Only create peering if there is at least one route declared between them
+        const hasRoute = routeTable.some((rt) => {
+          if (!rt.sourceVpcId || !rt.destCidr) return false;
+          if (rt.sourceVpcId === vpcA && rt.destVpcId === vpcB) return true;
+          if (rt.sourceVpcId === vpcB && rt.destVpcId === vpcA) return true;
+          return false;
+        });
+
+        if (!hasRoute) continue;
+
         links.push({
           type: "peering",
           via_router_id: router.id,
-          vpc_a_id: vpcs[i],
-          vpc_b_id: vpcs[j],
+          vpc_a_id: vpcA,
+          vpc_b_id: vpcB,
         });
       }
     }
