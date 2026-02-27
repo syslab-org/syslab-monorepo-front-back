@@ -23,6 +23,10 @@ import {
   Typography,
 } from '@mui/material';
 
+import SettingsSuggestIcon from '@mui/icons-material/SettingsSuggest';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import PublicOutlinedIcon from '@mui/icons-material/PublicOutlined';
+
 import { api } from '../../lib/api';
 import { PageHeader } from "../../components/layout/MainLayout.jsx";
 
@@ -222,16 +226,48 @@ export default function PlanListPage() {
         <Table size="small">
           <TableHead>
             <TableRow
-              sx={{
-                backgroundColor: (theme) =>
-                  theme.palette.mode === "light"
-                    ? theme.palette.grey[100]
-                    : theme.palette.background.paper,
-              }}
+              sx={(theme) => ({
+                backgroundColor: "transparent",
+                borderBottom: `1px solid ${theme.palette.divider}`,
+              })}
             >
               <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Plan</TableCell>
-              <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Estado</TableCell>
-              <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Modo</TableCell>
+              <TableCell
+                sx={{
+                  fontWeight: 700,
+                  color: "text.primary",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <SettingsSuggestIcon fontSize="small" sx={{ opacity: 0.6 }} />
+                  <span>Resultado ejecución</span>
+                </Stack>
+              </TableCell>
+              <TableCell
+                sx={{
+                  fontWeight: 700,
+                  color: "text.primary",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Inventory2OutlinedIcon fontSize="small" sx={{ opacity: 0.6 }} />
+                  <span>Estado del plan</span>
+                </Stack>
+              </TableCell>
+              <TableCell
+                sx={{
+                  fontWeight: 700,
+                  color: "text.primary",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <PublicOutlinedIcon fontSize="small" sx={{ opacity: 0.6 }} />
+                  <span>Tipo de ejecución</span>
+                </Stack>
+              </TableCell>
               <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Actualizado</TableCell>
               <TableCell align="right" sx={{ fontWeight: 700, color: "text.primary" }}>Acciones</TableCell>
             </TableRow>
@@ -240,7 +276,7 @@ export default function PlanListPage() {
           <TableBody>
             {loading && (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={6}>
                   <Stack direction="row" spacing={1.5} alignItems="center" sx={{ py: 1 }}>
                     <CircularProgress size={18} />
                     <Typography variant="body2" color="text.secondary">Cargando…</Typography>
@@ -251,7 +287,7 @@ export default function PlanListPage() {
 
             {!loading && filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={6}>
                   <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
                     No hay planes para mostrar.
                   </Typography>
@@ -269,12 +305,17 @@ export default function PlanListPage() {
                     key={p.id}
                     hover
                     sx={{
-                      transition: "background-color .15s ease",
+                      transition: "all .15s ease",
                       "&:hover": {
                         backgroundColor: (theme) =>
                           theme.palette.mode === "light"
                             ? theme.palette.grey[50]
                             : "rgba(255,255,255,0.04)",
+                        transform: "translateY(-1px)",
+                        boxShadow: (theme) =>
+                          theme.palette.mode === "light"
+                            ? "0 4px 10px rgba(0,0,0,0.04)"
+                            : "0 4px 12px rgba(0,0,0,0.4)",
                       },
                     }}
                   >
@@ -289,28 +330,43 @@ export default function PlanListPage() {
 
                     <TableCell>
                       <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                        <Chip
-                          label={p.status}
-                          size="small"
-                          color={statusChipColor(p.status)}
-                          variant="filled"
-                        />
+                        <Tooltip title="Resultado del job de Terraform">
+                          <Chip
+                            label={p.status}
+                            size="small"
+                            color={statusChipColor(p.status)}
+                            variant="filled"
+                          />
+                        </Tooltip>
+
+                        {p.last_action && (
+                          <Typography variant="caption" color="text.secondary">
+                            last: {p.last_action}
+                          </Typography>
+                        )}
+                      </Stack>
+                    </TableCell>
+
+                    <TableCell>
+                      <Tooltip title="Estado lógico actual del plan">
                         <Chip
                           label={lifecycle.label}
                           size="small"
                           color={lifecycle.color}
                           variant={lifecycle.variant}
                         />
-                        {p.last_action ? (
-                          <Typography variant="caption" color="text.secondary">
-                            last: {p.last_action}
-                          </Typography>
-                        ) : null}
-                      </Stack>
+                      </Tooltip>
                     </TableCell>
 
                     <TableCell>
-                      <Chip label={mode.label} size="small" color={mode.color} variant={mode.variant} />
+                      <Tooltip title="Simulada (plan) o ejecución real en AWS">
+                        <Chip
+                          label={mode.label}
+                          size="small"
+                          color={mode.color}
+                          variant={mode.variant}
+                        />
+                      </Tooltip>
                     </TableCell>
 
                     <TableCell>

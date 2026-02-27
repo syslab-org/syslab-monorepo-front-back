@@ -17,7 +17,7 @@ import RouterIcon from '@mui/icons-material/Router';
 
 const ITEMS = [
     {
-        category: "Network Core",
+        category: "Networking",
         items: [
             {
                 key: 'vpc',

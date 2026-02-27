@@ -776,7 +776,7 @@ function MainFlow() {
                     LABORATORIO GUIADO
                   </Typography>
                   <Typography variant="h6" sx={{ mt: 0.5 }}>
-                    Paso 2: Construye tu topología
+                    Paso 2: Diseña tu arquitectura
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     Arrastra una VPC al lienzo, luego crea una subnet y una instancia. Después pasamos a ruteo y pruebas.
@@ -800,7 +800,7 @@ function MainFlow() {
                   onZoomIn={handleZoomIn}
                   onZoomOut={handleZoomOut}
                   onFitView={handleFitView}
-                  title="Topology Builder"
+                  title="Architecture Studio"
                   onPreviewRoutes={() => {
                     const preview = buildRoutingPreview(nodes, edges);
                     setRoutesPreviewData(preview);
