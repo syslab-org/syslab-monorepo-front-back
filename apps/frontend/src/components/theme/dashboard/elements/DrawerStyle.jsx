@@ -15,12 +15,18 @@ export const DrawerStyle = styled(MuiDrawer, { shouldForwardProp: (prop) => prop
                 duration: theme.transitions.duration.enteringScreen,
             }),
             boxSizing: 'border-box',
-            backgroundColor:
+            background:
                 theme.palette.mode === "light"
-                    ? theme.palette.background.default
-                    : theme.palette.background.paper,
+                    ? "linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%)"
+                    : "linear-gradient(180deg, #0f172a 0%, #111827 100%)",
+
+            backdropFilter: "blur(6px)",
+            WebkitBackdropFilter: "blur(6px)",
             color: theme.palette.text.primary,
-            borderRight: `1px solid ${theme.palette.divider}`,
+            borderRight:
+                theme.palette.mode === "light"
+                    ? "1px solid rgba(0,0,0,0.04)"
+                    : "1px solid rgba(255,255,255,0.06)",
             paddingTop: theme.spacing(1),
 
             ...(!open && {
