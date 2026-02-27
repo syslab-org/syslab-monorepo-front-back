@@ -81,14 +81,14 @@ export default function createPacketTheme(mode = "light") {
                  ? "0 1px 3px rgba(0,0,0,.04)"
                  : "0 8px 24px rgba(0,0,0,.55)"
              };
-            border-radius: 14px;
+            border-radius: 8px;
             transition: all .18s ease;
           }
           .pt-panel:hover {
             box-shadow: ${
               mode === "light"
-                ? "0 6px 20px rgba(0,0,0,.06)"
-                : "0 16px 36px rgba(0,0,0,.65)"
+                ? "0 4px 12px rgba(0,0,0,.05)"
+                : "0 10px 24px rgba(0,0,0,.6)"
             };
           }
           .pt-ibtn { background: ${mode === "light" ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.06)"}; border: 1px solid ${c.border}; color: ${c.text}; border-radius: 10px; }
