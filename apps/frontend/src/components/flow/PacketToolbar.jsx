@@ -137,7 +137,7 @@ export default function PacketToolbar({
                 size="small"
                 disabled={canvasState === "PLAN_RUNNING"}
               >
-                Save
+                Guardar
               </Button>
             </span>
           </Tooltip>
@@ -151,7 +151,7 @@ export default function PacketToolbar({
                 size="small"
                 disabled={canvasState === "PLAN_RUNNING"}
               >
-                Restore
+                Restaurar
               </Button>
             </span>
           </Tooltip>
@@ -165,7 +165,7 @@ export default function PacketToolbar({
                 size="small"
                 disabled={canvasState === "PLAN_RUNNING"}
               >
-                Restore Initial
+                Restaurar inicial
               </Button>
             </span>
           </Tooltip>
@@ -179,7 +179,7 @@ export default function PacketToolbar({
                 size="small"
                 disabled={canvasState === "PLAN_RUNNING"}
               >
-                Deploy
+                Desplegar
               </Button>
             </span>
           </Tooltip>
@@ -193,7 +193,7 @@ export default function PacketToolbar({
                 size="small"
                 disabled={canvasState === "PLAN_RUNNING"}
               >
-                Preview
+                Previsualizar
               </Button>
             </span>
           </Tooltip>

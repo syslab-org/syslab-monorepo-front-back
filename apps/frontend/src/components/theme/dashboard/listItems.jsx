@@ -1,11 +1,11 @@
 // #apps/frontend/src/components/theme/dashboard/listItems.jsx
-import { CloudQueue, ViewStreamOutlined } from "@mui/icons-material";
-import AssignmentIcon from "@mui/icons-material/Assignment";
+import { Hub, Storage } from "@mui/icons-material";
+import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import LayersIcon from "@mui/icons-material/Layers";
-import PeopleIcon from "@mui/icons-material/People";
-import SettingsSuggestIcon from "@mui/icons-material/SettingsSuggest";
+import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
+import SettingsIcon from "@mui/icons-material/Settings";
 
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
@@ -33,8 +33,8 @@ const activeItemStyle = (theme) => ({
       : "linear-gradient(90deg, rgba(59,130,246,0.22) 0%, rgba(59,130,246,0.10) 100%)",
 
   boxShadow: `inset 0 0 0 1px ${theme.palette.mode === "light"
-      ? "rgba(59,130,246,0.16)"
-      : "rgba(59,130,246,0.20)"
+    ? "rgba(59,130,246,0.16)"
+    : "rgba(59,130,246,0.20)"
     }`,
 
   borderRadius: 12,
@@ -94,7 +94,7 @@ export const MainListItems = () => {
         })}
       >
         <ListItemIcon variant="whiteStyle">
-          <CloudQueue />
+          <Hub />
         </ListItemIcon>
         <ListItemText primary="Laboratorios" />
       </ListItemButton>
@@ -116,7 +116,7 @@ export const MainListItems = () => {
         })}
       >
         <ListItemIcon variant="whiteStyle">
-          <PeopleIcon />
+          <PlayCircleOutlineIcon />
         </ListItemIcon>
         <ListItemText
           primary="Ejecuciones"
@@ -155,7 +155,7 @@ export const SecondaryListItems = () => {
           px: 2,
         })}
       >
-        Settings
+        Configuración
       </ListSubheader>
       {role === USER_ROL_SUPER_ADMIN && (
         <ListItemButton
@@ -176,7 +176,7 @@ export const SecondaryListItems = () => {
           })}
         >
           <ListItemIcon variant="whiteStyle">
-            <ViewStreamOutlined />
+            <Storage />
           </ListItemIcon>
           <ListItemText primary="AMI List" />
         </ListItemButton>
@@ -201,7 +201,7 @@ export const SecondaryListItems = () => {
             })}
           >
             <ListItemIcon variant="whiteStyle">
-              <AssignmentIcon />
+              <ManageAccountsIcon />
             </ListItemIcon>
             <ListItemText primary="User Management" />
           </ListItemButton>
@@ -226,7 +226,7 @@ export const SecondaryListItems = () => {
           })}
         >
           <ListItemIcon variant="whiteStyle">
-            <SettingsSuggestIcon />
+            <SettingsIcon />
           </ListItemIcon>
           <ListItemText primary="General Settings" />
         </ListItemButton>
