@@ -3,10 +3,10 @@ import { createTheme } from "@mui/material/styles";
 
 const palettes = {
   light: {
-    bg: "#f6f8fb",
+    bg: "#eef2f7",
     panel: "#ffffff",
-    panel2: "#f2f5fa",
-    border: "#e5eaf2",
+    panel2: "#f8fafc",
+    border: "#e2e8f0",
     text: "#1a1d29",
     subtext: "#5a6275",
     blue: "#3b82f6",
@@ -71,7 +71,9 @@ export default function createPacketTheme(mode = "light") {
     components: {
       MuiCssBaseline: {
         styleOverrides: `
-          html, body, #root { background: ${c.bg}; }
+          html, body, #root {
+            background: linear-gradient(180deg, ${c.bg} 0%, #e6edf5 100%);
+          }
           ::selection { background: ${mode === "light" ? "rgba(47,111,237,.15)" : "rgba(52,198,243,.22)"}; }
           .pt-panel {
             background: ${c.panel};
