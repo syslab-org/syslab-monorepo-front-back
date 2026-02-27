@@ -8,7 +8,6 @@ import {
     TYPE_SUBNETWORK_NODE,
     TYPE_VPC_NODE
 } from './utils/constants';
-import './styles/sidebar-pt.css';
 
 // Íconos MUI (puedes cambiar por lucide si prefieres)
 import CloudIcon from '@mui/icons-material/Cloud';
