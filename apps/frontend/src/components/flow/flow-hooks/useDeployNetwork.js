@@ -11,7 +11,11 @@ import { api } from "../../../lib/api";
 import { decideRouterMode } from "../../../utils/decideRouterMode";
 import useCidrBlockVPCStore from "../store/cidrBlocksIp";
 import { buildRoutingPreview } from "../utils/buildRoutingPreview";
-import { TYPE_ROUTER_NODE, TYPE_VPC_NODE } from "../utils/constants";
+import {
+  TYPE_ROUTER_NODE,
+  TYPE_SERVER_NODE,
+  TYPE_VPC_NODE,
+} from "../utils/constants";
 import {
   groupInstancesBySubnet,
   groupSubnetsByVpc,
@@ -420,15 +424,27 @@ const useDeployNetwork = ({
     }
 
     const anyLinks = links.length > 0;
-    const someRouterForcesPing = nodes
-      .filter((n) => n.type === TYPE_ROUTER_NODE)
-      .some((n) => n.data?.allowCrossVpcPing === true);
 
-    const autoAllowCrossVpcPing = someRouterForcesPing || anyLinks;
-    const allowCrossVpcPing =
+    // Detecta si existe al menos 1 instancia en el canvas.
+    // (En el MVP dejamos un solo tipo: Instance -> TYPE_SERVER_NODE)
+    const hasInstances = nodes.some((n) => n.type === TYPE_SERVER_NODE);
+
+    // Auto: solo si hay conectividad entre VPCs Y existen instancias.
+    // Eliminamos activación manual desde Router; el comportamiento ahora es 100% derivado del estado real del canvas.
+    const autoAllowCrossVpcPing = anyLinks && hasInstances;
+
+    let allowCrossVpcPing =
       allowCrossVpcPingUI !== null
-        ? allowCrossVpcPingUI
+        ? !!allowCrossVpcPingUI
         : autoAllowCrossVpcPing;
+
+    // Si el usuario lo fuerza sin instancias, lo apagamos y mostramos advertencia.
+    if (allowCrossVpcPing && !hasInstances) {
+      setErrorMessage(
+        "⚠️ ICMP cross-VPC (ping) requiere instancias para aplicarse. Agrega al menos 1 Instance o desactiva esta opción.",
+      );
+      allowCrossVpcPing = false;
+    }
 
     const built = {
       name: planDefaultName,
