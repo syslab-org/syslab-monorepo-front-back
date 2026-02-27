@@ -53,6 +53,22 @@ const sameRoute = (a, b) =>
 const isDuplicate = (routes, idx) =>
   routes.some((r, i) => i !== idx && sameRoute(r, routes[idx]));
 
+
+const isUnidirectional = (route, routes, connectedVpcs) => {
+  if (!route.sourceVpcId || !route.destVpcId) return false;
+
+  const destVpc = findVpcById(connectedVpcs, route.destVpcId);
+  const sourceVpc = findVpcById(connectedVpcs, route.sourceVpcId);
+  if (!destVpc || !sourceVpc) return false;
+
+  const reverseExists = routes.some(
+    (r) =>
+      r.sourceVpcId === route.destVpcId &&
+      normalizeCidr(r.destCidr) === normalizeCidr(sourceVpc.cidr)
+  );
+
+  return !reverseExists;
+};
 /**
  * Valida una fila de ruta:
  * - sourceVpc existente
@@ -302,6 +318,10 @@ export default function RouterNodeForm({
 
       {routes.map((r, idx) => {
         const err = rowErrors[idx];
+        const showUnidirectional =
+          !err &&
+          r.destVpcId &&
+          isUnidirectional(r, routes, connectedVpcs);
         return (
           <Stack
             key={idx}
@@ -362,7 +382,15 @@ export default function RouterNodeForm({
                 helperText={err || " "}
               />
             </Box>
-
+            {showUnidirectional && (
+              <Chip
+                size="small"
+                color="warning"
+                variant="outlined"
+                label="Unidirectional"
+                sx={{ mt: "26px" }}
+              />
+            )}
             <Box sx={{ pt: "26px" }}>
               <IconButton aria-label="delete" onClick={() => removeRoute(idx)}>
                 <DeleteOutline />
