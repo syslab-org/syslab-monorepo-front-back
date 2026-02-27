@@ -82,8 +82,10 @@ const SidebarFlow = () => {
                 px: 2,
                 py: 2,
                 gap: 2,
-                backgroundColor: (theme) =>
-                    theme.palette.mode === "light" ? "#f8fafc" : "#111827",
+                background: (theme) =>
+                    theme.palette.mode === "light"
+                        ? "linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%)"
+                        : "#111827",
                 color: (theme) =>
                     theme.palette.mode === "light" ? "#1e293b" : "#e5e7eb",
             }}

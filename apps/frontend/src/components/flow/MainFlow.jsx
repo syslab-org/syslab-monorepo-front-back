@@ -890,7 +890,7 @@ function MainFlow() {
                   nodeOrigin={[0, 0]}
                   style={{
                     background: theme.palette.mode === "light"
-                      ? "radial-gradient(circle at 20% 20%, #f8fafc 0%, #eef2f7 50%, #e6ecf3 100%)"
+                      ? "linear-gradient(180deg, #f8fafc 0%, #edf2f7 100%)"
                       : "radial-gradient(circle at 20% 20%, #0f172a 0%, #0b1220 50%, #070c16 100%)",
                     width: "100%",
                     height: "100%",
