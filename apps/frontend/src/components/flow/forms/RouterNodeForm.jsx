@@ -1,6 +1,7 @@
 /* eslint-disable react/prop-types */
 import { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -99,6 +100,14 @@ export default function RouterNodeForm({
     Array.isArray(nodeData.routeTable) ? nodeData.routeTable : []
   );
 
+  const [identifier, setIdentifier] = useState(nodeData.identifier || "");
+  const [mode, setMode] = useState(nodeData.mode || "peering");
+
+  useEffect(() => {
+    setIdentifier(nodeData.identifier || "");
+    setMode(nodeData.mode || "peering");
+  }, [nodeData.identifier, nodeData.mode]);
+
   // Si desconectas/renombras VPCs, limpiamos rutas que ya no aplican
   useEffect(() => {
     setRoutes((prev) =>
@@ -113,6 +122,38 @@ export default function RouterNodeForm({
   }, [connectedVpcs]);
 
   const canAdd = connectedVpcs.length >= 2;
+
+  // =========================
+  // Conceptual explanation (UI guidance only)
+  // =========================
+  const academicMode = (() => {
+    const count = connectedVpcs.length;
+
+    if (count < 2) {
+      return {
+        type: "info",
+        title: "Sin conectividad entre VPCs",
+        message:
+          "Este router necesita al menos 2 VPCs conectadas para poder enrutar tráfico entre ellas.",
+      };
+    }
+
+    if (count === 2) {
+      return {
+        type: "success",
+        title: "Topología punto a punto",
+        message:
+          "Con 2 VPCs conectadas, el router actuará como un intermediario simple. Solo habrá comunicación si defines rutas explícitas.",
+      };
+    }
+
+    return {
+      type: "warning",
+      title: "Topología multipunto",
+      message:
+        "Con más de 2 VPCs conectadas, este router centraliza el enrutamiento. Debes definir rutas claras para controlar qué VPC puede comunicarse con cuál.",
+    };
+  })();
 
   const addRoute = () => {
     if (!canAdd) return;
@@ -165,7 +206,11 @@ export default function RouterNodeForm({
     if (hasErrors) return;
     onSave({
       ...nodeData,
-      identifier: nodeData.identifier || (nodeData.label || "").replace(/^router-/, "") || "",
+      identifier:
+        identifier ||
+        (nodeData.label || "").replace(/^router-/, "") ||
+        "",
+      mode,
       routeTable: routes,
       region: nodeData.region || vlanRegion,
     });
@@ -180,8 +225,8 @@ export default function RouterNodeForm({
       <TextField
         fullWidth
         label="Identificador"
-        value={nodeData.identifier || ""}
-        onChange={(e) => onSave({ ...nodeData, identifier: e.target.value })}
+        value={identifier}
+        onChange={(e) => setIdentifier(e.target.value)}
         sx={{ mb: 2 }}
       />
 
@@ -204,12 +249,55 @@ export default function RouterNodeForm({
             </Typography>
           )}
         </Stack>
+        <Box sx={{ mt: 2 }}>
+          <Alert severity={academicMode.type} variant="outlined">
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+              {academicMode.title}
+            </Typography>
+            <Typography variant="body2" sx={{ mt: 0.5 }}>
+              {academicMode.message}
+            </Typography>
+          </Alert>
+        </Box>
+      </Box>
+
+      {/* Selector de modo real de despliegue */}
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="body2" sx={{ mb: 0.5 }}>
+          Cómo se construirá en AWS
+        </Typography>
+        <Select
+          size="small"
+          fullWidth
+          value={mode}
+          onChange={(e) => setMode(e.target.value)}
+        >
+          <MenuItem value="peering">
+            Peering (modo seguro por defecto)
+          </MenuItem>
+          <MenuItem value="tgw">
+            Transit Gateway (explícito)
+          </MenuItem>
+        </Select>
+
+        <Typography variant="caption" color="text.secondary">
+          Este selector define cómo se implementará la conectividad en AWS:
+          • Peering → conexiones directas entre pares de VPCs.
+          • Transit Gateway → un router administrado por AWS que interconecta múltiples VPCs.
+          La conectividad real dependerá de las rutas que configures abajo.
+        </Typography>
       </Box>
 
       <Divider sx={{ my: 2 }} />
 
       <Typography variant="subtitle1" sx={{ mb: 1 }}>
         Rutas del router
+      </Typography>
+
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Las rutas definen el alcance de la comunicación.
+        Conectar una VPC al router no implica acceso automático a otras VPCs:
+        debes declarar explícitamente cada CIDR permitido.
       </Typography>
 
       {routes.map((r, idx) => {
@@ -224,7 +312,7 @@ export default function RouterNodeForm({
           >
             {/* Source VPC */}
             <Box sx={{ minWidth: 200 }}>
-              <Typography variant="caption">Source</Typography>
+              <Typography variant="caption">VPC de origen</Typography>
               <Select
                 size="small"
                 value={r.sourceVpcId || ""}
@@ -241,7 +329,7 @@ export default function RouterNodeForm({
 
             {/* Dest VPC (opcional) */}
             <Box sx={{ minWidth: 220 }}>
-              <Typography variant="caption">Destination VPC (opcional)</Typography>
+              <Typography variant="caption">VPC destino (opcional)</Typography>
               <Select
                 size="small"
                 value={r.destVpcId || ""}
@@ -264,7 +352,7 @@ export default function RouterNodeForm({
 
             {/* Dest CIDR */}
             <Box sx={{ flex: 1, minWidth: 220 }}>
-              <Typography variant="caption">dest CIDR</Typography>
+              <Typography variant="caption">CIDR destino</Typography>
               <TextField
                 size="small"
                 fullWidth
