@@ -129,16 +129,25 @@ function MainLayout() {
             </IconButton>
           )}
 
-          <Typography
-            component={Link}
-            to="/admin/dashboard"
-            variant="h6"
-            color="inherit"
-            noWrap
-            sx={{ textDecoration: "none", flexGrow: 1 }}
-          >
-            SysLab
-          </Typography>
+          <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1 }}>
+            <Typography
+              component={Link}
+              to="/admin/dashboard"
+              variant="h6"
+              color="inherit"
+              sx={{ textDecoration: "none", fontWeight: 700 }}
+            >
+              Architecta
+            </Typography>
+
+            <Typography
+              variant="caption"
+              sx={{ opacity: 0.7, letterSpacing: 0.5 }}
+            >
+              {/* Multi-Cloud Orchestrator */}
+              Cloud Orchestrator
+            </Typography>
+          </Box>
 
           <Box sx={{ display: { md: "flex" } }}>
             <IconButton size="large" color="inherit">
