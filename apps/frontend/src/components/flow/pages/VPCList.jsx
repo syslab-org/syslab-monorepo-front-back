@@ -1,5 +1,5 @@
 // apps/frontend/src/components/flow/pages/VPCList.jsx
-import { DeleteOutline, ModeEditOutlined } from "@mui/icons-material";
+import { DeleteOutline, ModeEditOutlined, ContentCopy } from "@mui/icons-material";
 import AddIcon from '@mui/icons-material/Add';
 import {
   Box,
@@ -27,7 +27,7 @@ import {
   Typography,
   Tooltip,
 } from "@mui/material";
-import { collection, getDocs, query, where, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, query, where, deleteDoc, doc, setDoc } from 'firebase/firestore';
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DB_FIRESTORE_VPCS, USER_ROL_STUDENT } from "../../../constants";
@@ -105,10 +105,16 @@ const fetchAllVPCs = async () => {
 }
 
 
+
 const VPCList = () => {
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [vpcToDelete, setVpcToDelete] = useState(null);
+
+  // Rename dialog state
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [vpcToRename, setVpcToRename] = useState(null);
+  const [newName, setNewName] = useState("");
 
   // UI filters (match PlanListPage look & feel)
   const [query, setQuery] = useState("");
@@ -123,11 +129,61 @@ const VPCList = () => {
 
   const { vpcs, fetchVPCs } = useFetchVPCs(setLoadingFlow)
   const { start, finish, setStep } = useWizard()
+  const handleDuplicateVPC = async (vpc) => {
+    if (!vpc?.id) return;
 
+    try {
+      setLoadingFlow(true);
+
+      const newId = crypto.randomUUID();
+
+      const duplicated = {
+        ...vpc,
+        name: `${vpc.name || "Laboratorio"} (copia)`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      delete duplicated.id;
+
+      // Reset deployment metadata so the copy starts clean
+      delete duplicated.planId;
+      delete duplicated.planValidationOk;
+      delete duplicated.planCreatedFromCanvas;
+      delete duplicated.planCanvasHash;
+      delete duplicated.planName;
+      delete duplicated.planUpdatedAt;
+
+      await setDoc(doc(db, DB_FIRESTORE_VPCS, newId), duplicated);
+
+      await fetchVPCs();
+    } catch (error) {
+      console.error("Error duplicating VPC:", error);
+      alert("No se pudo duplicar el laboratorio.");
+    } finally {
+      setLoadingFlow(false);
+    }
+  };
   const filteredVpcs = useMemo(() => {
     const q = query.trim().toLowerCase();
 
     return (vpcs || [])
+      .slice() // avoid mutating original array
+      .sort((a, b) => {
+        const getDate = (v) => {
+          if (!v?.createdAt) return 0;
+
+          // Firestore Timestamp support
+          if (typeof v.createdAt === "object" && v.createdAt.seconds) {
+            return v.createdAt.seconds * 1000;
+          }
+
+          // JS Date or ISO string
+          return new Date(v.createdAt).getTime() || 0;
+        };
+
+        return getDate(b) - getDate(a); // most recent first
+      })
       .filter((v) => {
         if (typeFilter === "ALL") return true;
         const isWizard = v?.narrative === "wizard";
@@ -232,6 +288,43 @@ const VPCList = () => {
     setVpcToDelete(vpc);
     setDeleteDialogOpen(true);
   }
+
+  const openRenameDialog = (vpc) => {
+    setVpcToRename(vpc);
+    setNewName(vpc?.name || "");
+    setRenameDialogOpen(true);
+  };
+
+  const closeRenameDialog = () => {
+    setVpcToRename(null);
+    setNewName("");
+    setRenameDialogOpen(false);
+  };
+
+  const handleRenameVPC = async () => {
+    if (!vpcToRename?.id || !newName.trim()) return;
+
+    try {
+      setLoadingFlow(true);
+
+      await setDoc(
+        doc(db, DB_FIRESTORE_VPCS, vpcToRename.id),
+        {
+          name: newName.trim(),
+          updatedAt: new Date(),
+        },
+        { merge: true }
+      );
+
+      await fetchVPCs();
+      closeRenameDialog();
+    } catch (error) {
+      console.error("Error renaming VPC:", error);
+      alert("No se pudo renombrar el laboratorio.");
+    } finally {
+      setLoadingFlow(false);
+    }
+  };
   const closeDeleteDialog = () => {
     setVpcToDelete(null);
     setDeleteDialogOpen(false);
@@ -319,7 +412,13 @@ const VPCList = () => {
           </Stack>
         </Paper>
 
-        <VPCsTable vpcs={filteredVpcs} onEdit={handleLinkToFlow} onDelete={openDeleteDialog} />
+        <VPCsTable
+          vpcs={filteredVpcs}
+          onEdit={handleLinkToFlow}
+          onDelete={openDeleteDialog}
+          onDuplicate={handleDuplicateVPC}
+          onRename={openRenameDialog}
+        />
       </Stack>
 
       <CreateVPCModal
@@ -351,11 +450,37 @@ const VPCList = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Dialog open={renameDialogOpen} onClose={closeRenameDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Renombrar laboratorio</DialogTitle>
+        <Divider />
+        <DialogContent sx={{ pt: 2 }}>
+          <TextField
+            fullWidth
+            label="Nuevo nombre"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            autoFocus
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={closeRenameDialog} variant="outlined">
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleRenameVPC}
+            variant="contained"
+            disabled={!newName.trim()}
+          >
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }
 
-const VPCsTable = ({ vpcs, onEdit, onDelete }) => (
+const VPCsTable = ({ vpcs, onEdit, onDelete, onDuplicate, onRename }) => (
   <TableContainer
     component={Paper}
     elevation={0}
@@ -471,6 +596,22 @@ const VPCsTable = ({ vpcs, onEdit, onDelete }) => (
                   <IconButton onClick={() => onDelete(vpc)} aria-label="delete" color="error" size="small">
                     <DeleteOutline fontSize="small" />
                   </IconButton>
+                  <Tooltip title="Duplicar laboratorio" arrow>
+                    <IconButton
+                      size="small"
+                      onClick={() => onDuplicate(vpc)}
+                    >
+                      <ContentCopy fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Renombrar laboratorio" arrow>
+                    <IconButton
+                      size="small"
+                      onClick={() => onRename(vpc)}
+                    >
+                      <ModeEditOutlined fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                 </Stack>
               </TableCell>
             </TableRow>
