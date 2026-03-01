@@ -1,5 +1,9 @@
 // apps/frontend/src/components/flow/utils/buildRoutingPreview.js
-import { TYPE_ROUTER_NODE, TYPE_SUBNETWORK_NODE, TYPE_VPC_NODE } from "./constants";
+import {
+  TYPE_ROUTER_NODE,
+  TYPE_SUBNETWORK_NODE,
+  TYPE_VPC_NODE,
+} from "./constants";
 
 /**
  * Genera la tabla de rutas principal ("main") por VPC
@@ -31,8 +35,7 @@ export function buildRoutingPreview(nodes, edges) {
       (source.type === TYPE_ROUTER_NODE && target.type === TYPE_VPC_NODE) ||
       (target.type === TYPE_ROUTER_NODE && source.type === TYPE_VPC_NODE)
     ) {
-      const routerId =
-        source.type === TYPE_ROUTER_NODE ? source.id : target.id;
+      const routerId = source.type === TYPE_ROUTER_NODE ? source.id : target.id;
       const vpcId = source.type === TYPE_VPC_NODE ? source.id : target.id;
       if (!routerLinks[routerId]) routerLinks[routerId] = new Set();
       routerLinks[routerId].add(vpcId);
@@ -56,7 +59,7 @@ export function buildRoutingPreview(nodes, edges) {
     // Subnets dentro de esta VPC
     const vpcSubnets = subnets.filter((s) => s.parentNode === vpcId);
     const privateSubnets = vpcSubnets.filter(
-      (s) => (s.data?.subnetType || "").toLowerCase() === "private"
+      (s) => (s.data?.subnetType || "").toLowerCase() === "private",
     );
 
     // --- Rutas base ---
@@ -88,28 +91,34 @@ export function buildRoutingPreview(nodes, edges) {
       });
     }
 
-    // --- Peering entre VPCs conectadas por router ---
+    // --- Rutas explícitas declaradas en el Router (no auto full-mesh) ---
     const connectedRouters = Object.entries(routerLinks)
       .filter(([_, vpcSet]) => vpcSet.has(vpcId))
-      .map(([routerId, vpcSet]) => ({ routerId, vpcSet }));
+      .map(([routerId]) => routerId);
 
-    connectedRouters.forEach(({ routerId, vpcSet }) => {
-      vpcSet.forEach((otherVpcId) => {
-        if (otherVpcId === vpcId) return;
-        const otherVpc = vpcs.find((v) => v.id === otherVpcId);
-        if (!otherVpc) return;
+    connectedRouters.forEach((routerId) => {
+      const routerNode = routers.find((r) => r.id === routerId);
+      if (!routerNode) return;
 
-        const otherCidr =
-          otherVpc.data?.cidrBlock && otherVpc.data?.prefixLength
-            ? `${otherVpc.data.cidrBlock}/${otherVpc.data.prefixLength}`
-            : otherVpc.data?.cidr || "";
+      const routeTable = Array.isArray(routerNode.data?.routeTable)
+        ? routerNode.data.routeTable
+        : [];
 
-        routes.push({
-          dest_cidr: otherCidr,
-          target: "peering",
-          via_router_id: routerId,
+      // Solo rutas cuyo origen es esta VPC
+      routeTable
+        .filter(
+          (rt) =>
+            rt.sourceVpcId === vpcId &&
+            rt.destCidr &&
+            typeof rt.destCidr === "string",
+        )
+        .forEach((rt) => {
+          routes.push({
+            dest_cidr: rt.destCidr.trim(),
+            target: "peering",
+            via_router_id: routerId,
+          });
         });
-      });
     });
 
     return {
@@ -117,10 +126,58 @@ export function buildRoutingPreview(nodes, edges) {
       name: vpcName,
       region,
       cidr,
-      connectedRouters: connectedRouters.map((r) => r.routerId),
+      // connectedRouters ya es un array de routerId (strings)
+      connectedRouters: connectedRouters,
       main_route_table: routes,
     };
   });
 
-  return { vpcs: vpcPreviews };
+  // --- Detect asymmetric (one-way) routes ---
+  const warnings = [];
+
+  // Index rápido: vpcId -> routes
+  const routeIndex = new Map(
+    vpcPreviews.map((v) => [v.id, v.main_route_table || []]),
+  );
+
+  vpcPreviews.forEach((vpcA) => {
+    const routesA = routeIndex.get(vpcA.id) || [];
+
+    routesA
+      .filter(
+        (r) =>
+          r.target === "peering" &&
+          r.via_router_id &&
+          r.dest_cidr &&
+          r.dest_cidr !== vpcA.cidr,
+      )
+      .forEach((r) => {
+        const routerId = r.via_router_id;
+
+        // Intentamos encontrar la VPC B por CIDR
+        const vpcB = vpcPreviews.find((v) => v.cidr === r.dest_cidr);
+        if (!vpcB) return;
+
+        const routesB = routeIndex.get(vpcB.id) || [];
+
+        const hasReverse = routesB.some(
+          (rb) =>
+            rb.target === "peering" &&
+            rb.via_router_id === routerId &&
+            rb.dest_cidr === vpcA.cidr,
+        );
+
+        if (!hasReverse) {
+          warnings.push({
+            type: "ASYMMETRIC_ROUTE",
+            router_id: routerId,
+            from_vpc: vpcA.name,
+            to_vpc: vpcB.name,
+            message: `Ruta declarada ${vpcA.name} → ${vpcB.name} pero falta la ruta de retorno.`,
+          });
+        }
+      });
+  });
+
+  return { vpcs: vpcPreviews, warnings };
 }

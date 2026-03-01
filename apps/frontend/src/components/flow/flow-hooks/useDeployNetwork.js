@@ -1,5 +1,8 @@
 // apps/frontend/src/components/flow/flow-hooks/useDeployNetwork.js
-import { useContext, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
+import { doc, setDoc } from "firebase/firestore";
+import { db } from "../../../firebase/firebaseConfig";
+import { DB_FIRESTORE_VPCS } from "../../../constants";
 import { useNavigate } from "react-router-dom";
 import { RouterPolicy } from "../../../config/networking";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -8,7 +11,11 @@ import { api } from "../../../lib/api";
 import { decideRouterMode } from "../../../utils/decideRouterMode";
 import useCidrBlockVPCStore from "../store/cidrBlocksIp";
 import { buildRoutingPreview } from "../utils/buildRoutingPreview";
-import { TYPE_ROUTER_NODE, TYPE_VPC_NODE } from "../utils/constants";
+import {
+  TYPE_ROUTER_NODE,
+  TYPE_SERVER_NODE,
+  TYPE_VPC_NODE,
+} from "../utils/constants";
 import {
   groupInstancesBySubnet,
   groupSubnetsByVpc,
@@ -76,6 +83,9 @@ function buildLinksFromEdges(nodes, edges) {
 
     const routerNode = idToNode.get(routerId);
     const routerData = routerNode?.data || {};
+    const routeTable = Array.isArray(routerData.routeTable)
+      ? routerData.routeTable
+      : [];
     const router = {
       id: routerId,
       name: routerData.name || routerNode.id,
@@ -102,28 +112,14 @@ function buildLinksFromEdges(nodes, edges) {
           const prefix = vpcData.prefixLength;
           const cidr = block && prefix ? `${block}/${prefix}` : block || "";
           return [vpcId, cidr];
-        })
+        }),
       );
 
       // Para cada VPC conectada generamos:
       // - tgw-attach
-      // - rutas automáticas hacia las otras VPC del mismo router
       vpcs.forEach((vpcId) => {
         const subnetsForVpc = groupSubnetsByVpc(nodes, vpcId);
         const subnetNames = subnetsForVpc.map(resolveSubnetName);
-
-        // Rutas de salida de ESTA VPC hacia las demás VPC conectadas al mismo TGW
-        const toRouterRoutes = vpcs
-          .filter((otherId) => otherId !== vpcId)
-          .map((otherId) => {
-            const destCidr = vpcCidrs.get(otherId);
-            if (!destCidr) return null;
-            return {
-              dest_cidr: destCidr,
-              target: "tgw",
-            };
-          })
-          .filter(Boolean);
 
         const linkPayload = {
           type: "tgw-attach",
@@ -132,10 +128,17 @@ function buildLinksFromEdges(nodes, edges) {
           subnet_names: subnetNames,
         };
 
-        // Solo agregamos routes si hay algo que enrutar
-        if (toRouterRoutes.length) {
+        // Build routes from router.routeTable filtered by sourceVpcId
+        const manualRoutes = routeTable
+          .filter((rt) => rt.sourceVpcId === vpcId && rt.destCidr)
+          .map((rt) => ({
+            dest_cidr: rt.destCidr,
+            target: "tgw",
+          }));
+
+        if (manualRoutes.length) {
           linkPayload.routes = {
-            to_router: toRouterRoutes,
+            to_router: manualRoutes,
           };
         }
 
@@ -150,11 +153,24 @@ function buildLinksFromEdges(nodes, edges) {
     // ===================
     for (let i = 0; i < vpcs.length; i++) {
       for (let j = i + 1; j < vpcs.length; j++) {
+        const vpcA = vpcs[i];
+        const vpcB = vpcs[j];
+
+        // Only create peering if there is at least one route declared between them
+        const hasRoute = routeTable.some((rt) => {
+          if (!rt.sourceVpcId || !rt.destCidr) return false;
+          if (rt.sourceVpcId === vpcA && rt.destVpcId === vpcB) return true;
+          if (rt.sourceVpcId === vpcB && rt.destVpcId === vpcA) return true;
+          return false;
+        });
+
+        if (!hasRoute) continue;
+
         links.push({
           type: "peering",
           via_router_id: router.id,
-          vpc_a_id: vpcs[i],
-          vpc_b_id: vpcs[j],
+          vpc_a_id: vpcA,
+          vpc_b_id: vpcB,
         });
       }
     }
@@ -178,6 +194,42 @@ const useDeployNetwork = ({
   const [errorMessage, setErrorMessage] = useState(null);
   const { setLoadingFlow } = useContext(LoadingFlowContext);
   const [simulateOnly, setSimulateOnly] = useState(true);
+  // Máquina de estados explícita del plan
+  const PLAN_STATES = {
+    IDLE: "IDLE",
+    SYNCING: "SYNCING",
+    PLANNING: "PLANNING",
+    SUCCESS: "SUCCESS",
+    ERROR: "ERROR",
+  };
+
+  const [validationState, setValidationState] = useState(PLAN_STATES.IDLE);
+  const [validationError, setValidationError] = useState(null);
+  const [validationResult, setValidationResult] = useState(null);
+  // Ahora representa hash de infraestructura real (payload Terraform), no del canvas visual
+  const [validatedCanvasHash, setValidatedCanvasHash] = useState(null);
+
+  // =========================
+  // Stable plan name (inmutable once first resolved)
+  // =========================
+  const planNameRef = useRef("");
+
+  // Si el usuario escribe un nombre manual, lo fijamos una sola vez.
+  useEffect(() => {
+    if (!planNameRef.current && planName) {
+      planNameRef.current = planName;
+    }
+  }, [planName]);
+
+  const ensurePlanName = () => {
+    if (!planNameRef.current) {
+      const fallback = transformedData?.name || `plan-${Date.now()}`;
+      planNameRef.current = planName || fallback;
+      // Si aún no hay planName visible en UI, lo seteamos una sola vez.
+      if (!planName) setPlanName(planNameRef.current);
+    }
+    return planNameRef.current;
+  };
 
   const { vlanName, vlanRegion, cidrBlockVPC, prefixLength } =
     useCidrBlockVPCStore((s) => [
@@ -187,12 +239,44 @@ const useDeployNetwork = ({
       s.prefixLength,
     ]);
 
-  const processJsonToCloud = () => {
+  // persist planId in the canvas Firestore doc
+  const persistPlanIdToCanvas = async ({
+    canvasId,
+    planId,
+    name,
+    created,
+    validationOk,
+    canvasHash,
+  }) => {
+    if (!canvasId || !planId) return;
+    try {
+      const docRef = doc(db, DB_FIRESTORE_VPCS, canvasId);
+      const payload = {
+        planId,
+        planName: name || "",
+        planCreatedFromCanvas: !!created,
+        planValidationOk:
+          typeof validationOk === "boolean" ? validationOk : null,
+        planUpdatedAt: new Date(),
+      };
+
+      // Solo persistimos hash cuando viene explícitamente definido
+      if (typeof canvasHash === "string") {
+        payload.planCanvasHash = canvasHash;
+      }
+
+      await setDoc(docRef, payload, { merge: true });
+    } catch (e) {
+      console.warn("No se pudo persistir planId en Firestore:", e);
+    }
+  };
+
+  const processJsonToCloud = async () => {
     const { errors, warnings } = validateTopology(nodes, edges);
     if (errors.length > 0) {
       setErrorMessage(
         "No se puede desplegar. Corrige estos errores:\n" +
-          errors.map((e) => `• ${e}`).join("\n")
+          errors.map((e) => `• ${e}`).join("\n"),
       );
       return;
     }
@@ -254,10 +338,10 @@ const useDeployNetwork = ({
       });
 
       const hasPublic = subnetsRaw.some(
-        (s) => (s.subnet_type || "").toLowerCase() === "public"
+        (s) => (s.subnet_type || "").toLowerCase() === "public",
       );
       const hasPrivate = subnetsRaw.some(
-        (s) => (s.subnet_type || "").toLowerCase() === "private"
+        (s) => (s.subnet_type || "").toLowerCase() === "private",
       );
 
       const pv = preview.vpcs.find((p) => p.id === vpcNode.id);
@@ -274,7 +358,7 @@ const useDeployNetwork = ({
 
       const publicRoutes = [];
       const hasIgwInPreview = previewRoutes.some(
-        (r) => String(r.target).toLowerCase() === "igw"
+        (r) => String(r.target).toLowerCase() === "igw",
       );
       if (hasPublic || hasIgwInPreview) {
         publicRoutes.push({
@@ -331,20 +415,17 @@ const useDeployNetwork = ({
       vlanName || vpcsPayload[0]?.name || `VLAN-${Date.now()}`;
     const vlanRegionFinal = vlanRegion || vpcsPayload[0]?.region || "us-east-1";
 
-    const planDefaultName = vpcsPayload[0]?.name || `plan-${Date.now()}`;
-    setPlanName(planDefaultName);
+    // Use existing planName (laboratory name) if present.
+    // Do NOT derive from first VPC anymore.
+    const planDefaultName = planName || vlanNameFinal || `plan-${Date.now()}`;
 
-    const anyLinks = links.length > 0;
-    const someRouterForcesPing = nodes
-      .filter((n) => n.type === TYPE_ROUTER_NODE)
-      .some((n) => n.data?.allowCrossVpcPing === true);
+    // Solo sugerimos nombre si aún no hay uno definido.
+    // No volvemos a sincronizarlo con la VPC.
+    if (!planName) {
+      setPlanName(planDefaultName);
+    }
 
-    const autoAllowCrossVpcPing = someRouterForcesPing || anyLinks;
-    const allowCrossVpcPing =
-      allowCrossVpcPingUI !== null
-        ? allowCrossVpcPingUI
-        : autoAllowCrossVpcPing;
-
+    // Construimos el payload final que el backend espera para crear el plan.
     const built = {
       name: planDefaultName,
       cloud: "aws",
@@ -359,7 +440,6 @@ const useDeployNetwork = ({
       vpcs: vpcsPayload,
       links,
       routers,
-      allow_cross_vpc_ping: !!allowCrossVpcPing,
     };
 
     setTransformedData(built);
@@ -367,45 +447,175 @@ const useDeployNetwork = ({
       cloud: "aws",
       ...built,
     });
+
+    // Abrimos el modal inmediatamente (UX reactiva)
     setShowConfirmation(true);
+
+    // No sincronizamos ni creamos plan aquí.
+    // El plan se crea / sincroniza únicamente cuando el usuario presiona "Validar".
+    setValidationState(PLAN_STATES.IDLE);
   };
 
-  const handleConfirmDeploy = async () => {
-    setShowConfirmation(false);
+  const pollPlanUntilDone = async (
+    planId,
+    { intervalMs = 1200, timeoutMs = 60000 } = {},
+  ) => {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const plan = await api.getPlan(planId);
+      const st = String(plan?.status || "");
+      if (st && st !== "RUNNING" && st !== "PENDING") return plan;
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+    throw new Error("Timeout esperando resultado del plan");
+  };
+
+  const handleValidatePlan = async () => {
+    setLoadingFlow(true);
+    setSuccessMessage(null);
+    setErrorMessage(null);
+    setValidationError(null);
+
+    try {
+      if (!transformedData) {
+        setLoadingFlow(false);
+        setValidationState(PLAN_STATES.ERROR);
+        setValidationError("No hay datos transformados para validar.");
+        setErrorMessage("No hay datos transformados para validar.");
+        return;
+      }
+
+      setValidationState(PLAN_STATES.SYNCING);
+      const stableName = ensurePlanName();
+
+      // sync_from_canvas SOLO crea/actualiza el Plan (no ejecuta Terraform)
+      const syncRes = await api.syncPlanFromCanvas({
+        name: stableName,
+        ...transformedData,
+      });
+
+      const planId = syncRes?.plan_id;
+      const existingPlan = await api.getPlan(planId);
+
+      if (existingPlan?.applied && !existingPlan?.simulate_only) {
+        setValidationState(PLAN_STATES.ERROR);
+        setValidationError(
+          "Este plan ya fue aplicado en AWS. Debes destruirlo antes de volver a validar.",
+        );
+        setErrorMessage(
+          "Plan ya aplicado. Ve a Plan Detail y ejecuta Destroy primero.",
+        );
+        setLoadingFlow(false);
+        return;
+      }
+
+      if (!planId) throw new Error("sync-from-canvas no devolvió plan_id");
+      await persistPlanIdToCanvas({
+        canvasId: firestoreVpcId,
+        planId,
+        name: stableName,
+        created: !!syncRes?.created,
+        validationOk: null, // aún no sabemos
+      });
+
+      setValidationResult({ plan_id: planId, created: !!syncRes?.created });
+      setValidationState(PLAN_STATES.PLANNING);
+
+      await api.deployPlan(planId, { simulateOnly: true });
+
+      const finalPlan = await pollPlanUntilDone(planId);
+      const finalStatus = String(finalPlan?.status || "");
+
+      if (finalStatus === "SUCCESS") {
+        setValidationState(PLAN_STATES.SUCCESS);
+        setSuccessMessage("Validación OK (Terraform plan)");
+        await persistPlanIdToCanvas({
+          canvasId: firestoreVpcId,
+          planId,
+          name: stableName,
+          created: !!syncRes?.created,
+          validationOk: true,
+        });
+      } else {
+        const msg = finalPlan?.error || "Validación fallida";
+        setValidationState(PLAN_STATES.ERROR);
+        setValidationError(msg);
+        setErrorMessage(msg);
+        await persistPlanIdToCanvas({
+          canvasId: firestoreVpcId,
+          planId,
+          name: stableName,
+          created: !!syncRes?.created,
+          validationOk: false,
+        });
+      }
+
+      setLoadingFlow(false);
+    } catch (error) {
+      const msg = error?.message || "Error desconocido";
+      setLoadingFlow(false);
+      setValidationState(PLAN_STATES.ERROR);
+      setValidationError(msg);
+      setErrorMessage(msg);
+    }
+  };
+
+  const handleOpenPlanDetails = (planIdOverride) => {
+    const planId = planIdOverride || validationResult?.plan_id;
+    if (planId) navigate(`/admin/plans/${planId}`);
+  };
+
+  const handleApplyReal = async () => {
+    const planId = validationResult?.plan_id;
+    if (!planId) {
+      setErrorMessage("Primero valida el plan.");
+      return;
+    }
+
+    if (!transformedData) {
+      setErrorMessage("No hay datos transformados para aplicar.");
+      return;
+    }
+
+    const txt = window.prompt("Para confirmar escribe: DEPLOY");
+    if (txt !== "DEPLOY") {
+      setErrorMessage("Deploy cancelado por el usuario.");
+      return;
+    }
+
     setLoadingFlow(true);
     setSuccessMessage(null);
     setErrorMessage(null);
 
     try {
-      if (!simulateOnly) {
-        const txt = window.prompt("Para confirmar escribe: DEPLOY");
-        if (txt !== "DEPLOY") {
-          setLoadingFlow(false);
-          setErrorMessage("Deploy cancelado por el usuario.");
-          return;
-        }
-      }
-    console.log("firestoreVpcId", firestoreVpcId);
-      const res = await api.createPlan({
-        name: planName || "plan-" + Date.now(),
+      const stableName = ensurePlanName();
+
+      // 1) Re-sync antes de aplicar para garantizar que el backend tiene el payload más reciente.
+      await api.syncPlanFromCanvas({
+        name: stableName,
         ...transformedData,
-        simulate_only: simulateOnly,
       });
 
+      // 2) Apply real (Terraform apply)
+      await api.deployPlan(planId, { simulateOnly: false, applyMode: true });
+
       setLoadingFlow(false);
-      setSuccessMessage(`Plan creado. task_id=${res.task_id || "?"}`);
-      navigate(`/admin/plans/${res.plan_id || "?"}`);
+      navigate(`/admin/plans/${planId}`);
     } catch (error) {
       setLoadingFlow(false);
-      setErrorMessage(
-        `Fallo al crear el Plan: ${error?.message || "Error desconocido"}`
-      );
+      setErrorMessage(error?.message || "Error desconocido");
     }
+  };
+
+  const handleConfirmDeploy = async () => {
+    await handleValidatePlan();
   };
 
   const handleCancelDeploy = () => {
     setShowConfirmation(false);
     setTransformedData(null);
+    // Nota: NO reseteamos validationState/validationResult aquí.
+    // Eso permite reabrir el modal y seguir teniendo disponible el plan_id.
   };
 
   const handleCloseSnackbar = (_e, reason) => {
@@ -427,6 +637,13 @@ const useDeployNetwork = ({
     handleCancelDeploy,
     handleConfirmDeploy,
     handleCloseSnackbar,
+    validationState,
+    validationError,
+    validationResult,
+    handleValidatePlan,
+    handleApplyReal,
+    handleOpenPlanDetails,
+    PLAN_STATES,
   };
 };
 

@@ -1,11 +1,32 @@
 // apps/frontend/src/utils/decideRouterMode.js
-import { RouterPolicy } from "../config/networking";
 
+/**
+ * Decide router mode ("peering" | "tgw").
+ *
+ * IMPORTANT:
+ * We do NOT auto-select TGW anymore because many AWS accounts
+ * (especially student/dev) hit the Transit Gateway quota limit
+ * and Terraform apply fails with TransitGatewayLimitExceeded.
+ *
+ * Rule:
+ * - If the router explicitly requests "tgw", use it.
+ * - Otherwise, always default to "peering".
+ */
 export function decideRouterMode(router) {
-  if (router.mode === "peering" || router.mode === "tgw") {
-    return router.mode; // Si el usuario lo definió manualmente
+  const raw = String(router?.mode || "")
+    .trim()
+    .toLowerCase();
+
+  // Explicit TGW only
+  if (
+    raw === "tgw" ||
+    raw === "transit" ||
+    raw === "transit_gateway" ||
+    raw === "transit-gateway"
+  ) {
+    return "tgw";
   }
 
-  const count = router.connectedVpcIds?.length || 0;
-  return count <= RouterPolicy.peeringMaxVpcs ? "peering" : "tgw";
+  // Default (safe mode)
+  return "peering";
 }

@@ -1,10 +1,26 @@
 :root {
   --Content-maxWidth: 1440px;
   --Content-margin: 0 auto;
-  --Content-padding: 64px 24px; 
+  --Content-padding: 64px 24px;
+  --Content-width: 100%;
+}
+/* ===============================
+   Flow canvas: full-bleed override
+   El layout usa variables Content-* para max-width/padding.
+   Para el Flow queremos ancho completo tipo “console”.
+   =============================== */
+body.flow-fullbleed {
+  --Content-maxWidth: 100%;
+  --Content-margin: 0;
+  --Content-padding: 0;
   --Content-width: 100%;
 }
 
+/* Defensive: si algún contenedor hardcodea max-width, lo neutralizamos en Flow */
+body.flow-fullbleed .MuiContainer-root,
+body.flow-fullbleed .MuiBox-root {
+  max-width: none !important;
+}
 .overview * {
   box-sizing: border-box;
 }
@@ -191,7 +207,7 @@
 }
 
 .gradient:before {
-  content: '';
+  content: "";
   position: absolute;
   padding-bottom: calc(100% * 1.41421356237);
   width: calc(100% * 1.41421356237);
@@ -232,20 +248,14 @@
   display: none;
 }
 
-
-
 /* Definición de dimensiones y estilos para CircleNode */
-
 
 .circle-node .inner {
   z-index: 1;
 }
 
-
-
-
 .gradient:before {
-  content: '';
+  content: "";
   position: absolute;
   padding-bottom: calc(50% * 1.41421356237);
   width: calc(50% * 1.41421356237);

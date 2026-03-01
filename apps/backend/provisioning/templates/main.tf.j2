@@ -151,12 +151,20 @@ resource "aws_security_group" "vm_sg" {
   }
 
   # SSH desde tu IP (usa allowed_ssh_cidr del payload)
-  ingress {
-    description = "SSH from allowed_ssh_cidr"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [try(each.value.allowed_ssh_cidr, "0.0.0.0/32")]
+  dynamic "ingress" {
+    for_each = (
+      try(length(trimspace(each.value.allowed_ssh_cidr)) > 0, false)
+      ? [trimspace(each.value.allowed_ssh_cidr)]
+      : []
+    )
+
+    content {
+      description = "SSH from allowed_ssh_cidr"
+      from_port   = 22
+      to_port     = 22
+      protocol    = "tcp"
+      cidr_blocks = [ingress.value]
+    }
   }
 
   # SSH desde dentro de la misma VPC
@@ -184,7 +192,7 @@ resource "aws_security_group_rule" "cross_vpc_ping_peering_a" {
   for_each = {
     for l in [for x in local.links : x if try(lower(x.type), "") == "peering"] :
     "${l.vpc_a_id}--${l.vpc_b_id}" => l
-    if local.allow_cross_vpc_ping
+    if local.allow_cross_vpc_ping && contains(keys(aws_security_group.vm_sg), l.vpc_a_id)
   }
 
   type              = "ingress"
@@ -200,7 +208,7 @@ resource "aws_security_group_rule" "cross_vpc_ping_peering_b" {
   for_each = {
     for l in [for x in local.links : x if try(lower(x.type), "") == "peering"] :
     "${l.vpc_b_id}--${l.vpc_a_id}" => l
-    if local.allow_cross_vpc_ping
+    if local.allow_cross_vpc_ping && contains(keys(aws_security_group.vm_sg), l.vpc_b_id)
   }
 
   type              = "ingress"
@@ -234,7 +242,7 @@ resource "aws_security_group_rule" "cross_vpc_ping_tgw_a" {
   for_each = {
     for p in local.tgw_pairs :
     "${p.a}--${p.b}" => p
-    if local.allow_cross_vpc_ping
+    if local.allow_cross_vpc_ping && contains(keys(aws_security_group.vm_sg), p.a)
   }
 
   type              = "ingress"
@@ -250,7 +258,7 @@ resource "aws_security_group_rule" "cross_vpc_ping_tgw_b" {
   for_each = {
     for p in local.tgw_pairs :
     "${p.b}--${p.a}" => p
-    if local.allow_cross_vpc_ping
+    if local.allow_cross_vpc_ping && contains(keys(aws_security_group.vm_sg), p.b)
   }
 
   type              = "ingress"

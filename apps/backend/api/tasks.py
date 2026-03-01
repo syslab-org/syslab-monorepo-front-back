@@ -1,6 +1,13 @@
-# apps/backend/api/tasks.py
 from celery import shared_task
-import os, tempfile, subprocess, json, pathlib, glob
+import os, tempfile, subprocess, json, pathlib
+
+import boto3
+from botocore.exceptions import (
+    ProfileNotFound,
+    NoCredentialsError,
+    NoRegionError,
+    ClientError,
+)
 from django.utils import timezone
 from django.db import transaction
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
@@ -10,27 +17,12 @@ from provisioning.terraform_runner import cleanup  # solo usamos cleanup aquí
 
 # === CONFIGURACIONES GLOBALES ===
 TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "provisioning" / "templates"
-S3_BUCKET = os.getenv("S3_PLANS_BUCKET", "")
 
 
 # === FUNCIONES AUXILIARES ===
 def run(cmd, cwd):
     """Ejecuta un comando y captura stdout/stderr sin levantar excepción."""
     return subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, check=False)
-
-
-def _maybe_upload_to_s3(key: str, content: str):
-    """Sube logs a S3 si está configurado."""
-    if not S3_BUCKET:
-        return
-    try:
-        import boto3
-
-        boto3.client("s3").put_object(
-            Bucket=S3_BUCKET, Key=key, Body=content.encode("utf-8")
-        )
-    except Exception:
-        pass
 
 
 def normalize_payload(payload: dict) -> dict:
@@ -87,6 +79,65 @@ def read_terraform_outputs_json(cwd: str) -> dict:
     return simplified
 
 
+def aws_creds_diagnostics() -> dict:
+    """Devuelve un diagnóstico simple sobre credenciales AWS dentro del container.
+
+    Soporta:
+    - ECS task role (AWS_EXECUTION_ENV / metadata)
+    - Static creds por env vars
+    - Shared config/credentials (AWS_PROFILE + ~/.aws montado)
+
+    Nota: esto NO imprime secretos; solo estado y errores.
+    """
+    profile = os.getenv("AWS_PROFILE")
+    region = os.getenv("AWS_DEFAULT_REGION") or os.getenv("AWS_REGION")
+    allow_local = os.getenv("ALLOW_LOCAL_APPLY") == "1"
+
+    running_in_ecs = bool(
+        os.getenv("ECS_TASK_DEFINITION")
+        or os.getenv("ECS_CONTAINER_METADATA_URI")
+        or os.getenv("ECS_CONTAINER_METADATA_URI_V4")
+        or os.getenv("AWS_EXECUTION_ENV")
+    )
+
+    has_static_creds = bool(
+        os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY")
+    )
+
+    return {
+        "running_in_ecs": running_in_ecs,
+        "allow_local_apply": allow_local,
+        "has_static_creds": has_static_creds,
+        "aws_profile": profile or "",
+        "aws_region": region or "",
+    }
+
+
+def can_call_aws_sts() -> tuple[bool, str]:
+    """Chequeo REAL: intenta llamar STS GetCallerIdentity.
+
+    Esto valida que boto3/botocore pueden resolver credenciales en el container.
+    """
+    profile = os.getenv("AWS_PROFILE")
+
+    try:
+        # Si hay profile, lo usamos. Si no, boto3 decide (env/role/etc).
+        session = boto3.Session(profile_name=profile) if profile else boto3.Session()
+        sts = session.client("sts")
+        _ = sts.get_caller_identity()
+        return True, "sts_ok"
+    except ProfileNotFound as e:
+        return False, f"profile_not_found: {e}"
+    except NoRegionError as e:
+        return False, f"no_region: {e}"
+    except NoCredentialsError as e:
+        return False, f"no_credentials: {e}"
+    except ClientError as e:
+        return False, f"client_error: {e}"
+    except Exception as e:
+        return False, f"unknown_error: {e}"
+
+
 # === TAREAS CELERY ===
 @shared_task(name="api.tasks.prueba_larga")
 def prueba_larga(n: int = 3):
@@ -117,20 +168,14 @@ def process_network_plan(self, plan_id: str, payload: dict):
     payload = normalize_payload(payload if isinstance(payload, dict) else {})
     simulate_only = payload["simulate_only"]
 
-    # --- Detecta entorno (para permitir apply real solo si hay credenciales válidas) ---
-    running_in_ecs = bool(
-        os.getenv("ECS_TASK_DEFINITION")
-        or os.getenv("ECS_CONTAINER_METADATA_URI")
-        or os.getenv("ECS_CONTAINER_METADATA_URI_V4")
-        or os.getenv("AWS_EXECUTION_ENV")
-    )
-    has_static_creds = bool(
-        os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY")
-    )
-    ALLOW_LOCAL = os.getenv("ALLOW_LOCAL_APPLY") == "1"
+    # --- Detecta entorno/credenciales (soporta AWS_PROFILE + ~/.aws montado) ---
+    diag = aws_creds_diagnostics()
+    ALLOW_LOCAL = diag["allow_local_apply"]
 
     # Solo exigimos credenciales si se va a hacer apply real.
-    creds_ok_for_apply = running_in_ecs or (ALLOW_LOCAL and has_static_creds)
+    # En ECS: ok por task role. En local: requiere ALLOW_LOCAL_APPLY=1 y credenciales resolubles.
+    sts_ok, sts_reason = can_call_aws_sts()
+    creds_ok_for_apply = bool(diag["running_in_ecs"] or (ALLOW_LOCAL and sts_ok))
 
     try:
         # === 1) Actualiza estado del Plan ===
@@ -148,8 +193,24 @@ def process_network_plan(self, plan_id: str, payload: dict):
 
             plan_obj.status = Plan.Status.RUNNING
             plan_obj.task_id = self.request.id
+            # ✅ Persistimos el task_id específico del último deploy (plan/apply)
+            plan_obj.last_deploy_task_id = self.request.id
             plan_obj.updated_at = timezone.now()
-            plan_obj.save(update_fields=["status", "task_id", "payload", "updated_at"])
+            plan_obj.last_log = ""
+            plan_obj.last_log_updated_at = timezone.now()
+            plan_obj.last_action = "apply" if not simulate_only else "plan"
+            plan_obj.save(
+                update_fields=[
+                    "status",
+                    "task_id",
+                    "last_deploy_task_id",
+                    "payload",
+                    "updated_at",
+                    "last_log",
+                    "last_log_updated_at",
+                    "last_action",
+                ]
+            )
 
         # === 2) Renderiza main.tf (Jinja) ===
         env = Environment(
@@ -213,7 +274,7 @@ def process_network_plan(self, plan_id: str, payload: dict):
 
         full_log += f"workdir={workdir}\n"
         full_log += f"simulate_only={simulate_only}\n"
-        full_log += f"running_in_ecs={running_in_ecs} has_static_creds={has_static_creds} ALLOW_LOCAL_APPLY={ALLOW_LOCAL}\n\n"
+        full_log += f"aws_diag={diag} sts_ok={sts_ok} sts_reason={sts_reason} ALLOW_LOCAL_APPLY={ALLOW_LOCAL}\n\n"
 
         # === 6) Terraform init ===
         proc = run(["terraform", "init", "-input=false", "-no-color"], cwd=workdir)
@@ -243,12 +304,15 @@ def process_network_plan(self, plan_id: str, payload: dict):
         if not simulate_only:
             if not creds_ok_for_apply:
                 msg = (
-                    "Terraform apply BLOQUEADO: sin credenciales IAM detectadas. "
-                    "Ejecuta en ECS (task role) o exporta ALLOW_LOCAL_APPLY=1 y "
-                    "AWS_ACCESS_KEY_ID/SECRET_ACCESS_KEY."
+                    "Terraform apply BLOQUEADO: no hay credenciales AWS resolubles en este container. "
+                    "En ECS se resuelve por task role. En local requiere ALLOW_LOCAL_APPLY=1 y credenciales disponibles "
+                    "(env vars o AWS_PROFILE + ~/.aws montado). "
+                    f"Diagnóstico: {diag} / sts_reason={sts_reason}"
                 )
                 full_log += f"\n[SEGURIDAD] {msg}\n"
-
+                # Persistimos logs en DB para depuración desde el frontend
+                plan_obj.last_log = full_log
+                plan_obj.last_log_updated_at = timezone.now()
                 # Marca el plan como FAILURE (apply intentado sin credenciales)
                 plan_obj.status = Plan.Status.FAILURE
                 plan_obj.error = msg
@@ -261,6 +325,8 @@ def process_network_plan(self, plan_id: str, payload: dict):
                         "error",
                         "applied",
                         "last_action",
+                        "last_log",
+                        "last_log_updated_at",
                         "updated_at",
                     ]
                 )
@@ -285,16 +351,16 @@ def process_network_plan(self, plan_id: str, payload: dict):
             try:
                 tf_outputs = read_terraform_outputs_json(workdir)
                 plan_obj.outputs = tf_outputs
-                plan_obj.last_outputs = tf_outputs
             except Exception as oe:
                 full_log += f"\n[outputs] No pude leer terraform output -json: {oe}\n"
 
         # === 9) Guarda logs y marca SUCCESS ===
-        s3_key = f"plans/{plan_obj.id}.log"
-        _maybe_upload_to_s3(s3_key, full_log)
+        # Persistimos logs en DB para depuración desde el frontend
+        plan_obj.last_log = full_log
+        plan_obj.last_log_updated_at = timezone.now()
 
         plan_obj.status = Plan.Status.SUCCESS
-        plan_obj.s3_key = s3_key if S3_BUCKET else ""
+        plan_obj.s3_key = ""
         plan_obj.error = ""
         plan_obj.applied = applied
         plan_obj.last_action = "apply" if applied else "plan"
@@ -305,7 +371,6 @@ def process_network_plan(self, plan_id: str, payload: dict):
             try:
                 tf_outputs = read_terraform_outputs_json(workdir)
                 plan_obj.outputs = tf_outputs
-                plan_obj.last_outputs = tf_outputs
             except Exception:
                 pass
 
@@ -317,7 +382,8 @@ def process_network_plan(self, plan_id: str, payload: dict):
                 "applied",
                 "last_action",
                 "outputs",
-                "last_outputs",
+                "last_log",
+                "last_log_updated_at",
                 "updated_at",
             ]
         )
@@ -326,26 +392,28 @@ def process_network_plan(self, plan_id: str, payload: dict):
             "ok": True,
             "plan_id": str(plan_obj.id),
             "applied": applied,
-            "s3_key": plan_obj.s3_key,
+            "s3_key": "",
             "log": full_log,
         }
 
     except Exception as e:
         # === Error general ===
-        try:
-            if full_log:
-                _maybe_upload_to_s3(
-                    f"plans/{str(plan_obj.id) if plan_obj else 'no-plan'}.error.log",
-                    full_log + f"\n\nERROR: {e}\n",
-                )
-        except Exception:
-            pass
-
         if plan_obj:
+            # Persistimos logs en DB incluso en fallo
+            plan_obj.last_log = full_log + f"\n\nERROR: {e}\n"
+            plan_obj.last_log_updated_at = timezone.now()
             plan_obj.status = Plan.Status.FAILURE
             plan_obj.error = str(e)
             plan_obj.updated_at = timezone.now()
-            plan_obj.save(update_fields=["status", "error", "updated_at"])
+            plan_obj.save(
+                update_fields=[
+                    "status",
+                    "error",
+                    "last_log",
+                    "last_log_updated_at",
+                    "updated_at",
+                ]
+            )
 
         return {
             "ok": False,
@@ -371,26 +439,42 @@ def destroy_last_deploy(self, plan_id: str):
     plan = Plan.objects.get(id=plan_id)
     payload = plan.payload or {}
 
-    # --- Detecta entorno (para permitir destroy real solo si hay credenciales válidas) ---
-    running_in_ecs = bool(
-        os.getenv("ECS_TASK_DEFINITION")
-        or os.getenv("ECS_CONTAINER_METADATA_URI")
-        or os.getenv("ECS_CONTAINER_METADATA_URI_V4")
-        or os.getenv("AWS_EXECUTION_ENV")
-    )
-    has_static_creds = bool(
-        os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY")
-    )
-    ALLOW_LOCAL = os.getenv("ALLOW_LOCAL_APPLY") == "1"
-    creds_ok_for_apply = running_in_ecs or (ALLOW_LOCAL and has_static_creds)
+    # 🔒 Regla de dominio: solo destruir si fue aplicado realmente
+    if not plan.applied:
+        msg = "Destroy bloqueado: el plan nunca fue aplicado (applied=false)."
+        plan.error = msg
+        plan.last_log = full_log + msg
+        plan.last_log_updated_at = timezone.now()
+        plan.updated_at = timezone.now()
+        plan.save(
+            update_fields=["error", "last_log", "last_log_updated_at", "updated_at"]
+        )
+        return {
+            "ok": False,
+            "error": msg,
+            "log": "",
+            "state_path": None,
+            "plan_id": str(plan.id),
+        }
+
+    # --- Detecta entorno/credenciales (soporta AWS_PROFILE + ~/.aws montado) ---
+    diag = aws_creds_diagnostics()
+    ALLOW_LOCAL = diag["allow_local_apply"]
+
+    sts_ok, sts_reason = can_call_aws_sts()
+    creds_ok_for_apply = bool(diag["running_in_ecs"] or (ALLOW_LOCAL and sts_ok))
 
     if payload.get("simulate_only", True):
         # No es un fallo del sistema: es un NO-OP (no hay nada que destruir).
         msg = "Plan en modo simulación: no hay infraestructura que destruir."
         plan.error = msg
+        plan.last_log = full_log + msg
+        plan.last_log_updated_at = timezone.now()
         plan.updated_at = timezone.now()
         # OJO: NO cambiamos status a FAILURE
-        plan.save(update_fields=["error", "updated_at"])
+        plan.save(
+            update_fields=["error", "last_log", "last_log_updated_at", "updated_at"]
+        )
         return {
             "ok": False,
             "error": msg,
@@ -400,11 +484,26 @@ def destroy_last_deploy(self, plan_id: str):
         }
 
     if not creds_ok_for_apply:
-        msg = "Terraform destroy BLOQUEADO: sin credenciales IAM detectadas."
+        msg = (
+            "Terraform destroy BLOQUEADO: no hay credenciales AWS resolubles en este container. "
+            "En ECS se resuelve por task role. En local requiere ALLOW_LOCAL_APPLY=1 y credenciales disponibles "
+            "(env vars o AWS_PROFILE + ~/.aws montado). "
+            f"Diagnóstico: {diag} / sts_reason={sts_reason}"
+        )
         plan.status = Plan.Status.FAILURE
         plan.error = msg
+        plan.last_log = full_log + msg
+        plan.last_log_updated_at = timezone.now()
         plan.updated_at = timezone.now()
-        plan.save(update_fields=["status", "error", "updated_at"])
+        plan.save(
+            update_fields=[
+                "status",
+                "error",
+                "last_log",
+                "last_log_updated_at",
+                "updated_at",
+            ]
+        )
         return {
             "ok": False,
             "error": msg,
@@ -423,7 +522,11 @@ def destroy_last_deploy(self, plan_id: str):
     plan.error = ""
     plan.s3_key = ""
     plan.task_id = self.request.id
+    # ✅ Persistimos el task_id específico del último destroy
+    plan.last_destroy_task_id = self.request.id
     plan.last_action = "destroy"
+    plan.last_log = ""
+    plan.last_log_updated_at = timezone.now()
     plan.updated_at = timezone.now()
     plan.save(
         update_fields=[
@@ -431,7 +534,10 @@ def destroy_last_deploy(self, plan_id: str):
             "error",
             "s3_key",
             "task_id",
+            "last_destroy_task_id",
             "last_action",
+            "last_log",
+            "last_log_updated_at",
             "updated_at",
         ]
     )
@@ -441,6 +547,7 @@ def destroy_last_deploy(self, plan_id: str):
         workdir = tempfile.mkdtemp(prefix="tf-destroy-")
 
         full_log += f"[destroy] workdir={workdir}\n"
+        full_log += f"aws_diag={diag} sts_ok={sts_ok} sts_reason={sts_reason} ALLOW_LOCAL_APPLY={ALLOW_LOCAL}\n"
 
         # 2) backend estable por plan_id (primero, para construir backend.tf)
         state_dir = f"/tfstate/{plan_id}"
@@ -488,15 +595,15 @@ def destroy_last_deploy(self, plan_id: str):
         if p.returncode != 0:
             raise RuntimeError("terraform destroy failed")
 
-        s3_key = f"plans/{plan.id}.destroy.log"
-        _maybe_upload_to_s3(s3_key, full_log)
-
+        plan.last_log = full_log
+        plan.last_log_updated_at = timezone.now()
         plan.status = Plan.Status.SUCCESS
-        plan.s3_key = s3_key if S3_BUCKET else ""
+        plan.s3_key = ""
         plan.error = ""
         plan.applied = False
-        plan.last_outputs = plan.outputs or {}  # guarda outputs previos
-        plan.outputs = {}
+        # Importante: NO borramos outputs en destroy.
+        # Se conservan como "últimos outputs cuando estuvo ACTIVE" para auditoría/debug.
+        plan.last_action = "destroy"
         plan.updated_at = timezone.now()
         plan.save(
             update_fields=[
@@ -504,9 +611,10 @@ def destroy_last_deploy(self, plan_id: str):
                 "s3_key",
                 "error",
                 "applied",
-                "outputs",
+                "last_action",
+                "last_log",
+                "last_log_updated_at",
                 "updated_at",
-                "last_outputs",
             ]
         )
 
@@ -515,24 +623,26 @@ def destroy_last_deploy(self, plan_id: str):
             "log": full_log,
             "state_path": state_path,
             "plan_id": str(plan.id),
-            "s3_key": plan.s3_key,
+            "s3_key": "",
         }
 
     except Exception as e:
-        try:
-            if full_log:
-                _maybe_upload_to_s3(
-                    f"plans/{str(plan.id)}.destroy.error.log",
-                    full_log + f"\n\nERROR: {e}\n",
-                )
-        except Exception:
-            pass
-
+        plan.last_log = full_log + f"\n\nERROR: {e}\n"
+        plan.last_log_updated_at = timezone.now()
         plan.status = Plan.Status.FAILURE
         plan.error = str(e)
         plan.last_action = "destroy"
         plan.updated_at = timezone.now()
-        plan.save(update_fields=["status", "error", "last_action", "updated_at"])
+        plan.save(
+            update_fields=[
+                "status",
+                "error",
+                "last_action",
+                "last_log",
+                "last_log_updated_at",
+                "updated_at",
+            ]
+        )
         return {"ok": False, "error": str(e), "log": full_log}
 
     finally:
