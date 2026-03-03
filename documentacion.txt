@@ -322,6 +322,7 @@ Además, la estructura es escalable y educativa: cada paso del despliegue es vis
 
 ⸻
 
+
 11. Estado técnico validado (enero 2026)
 
 
@@ -339,3 +340,156 @@ Para enero de 2026, se ha validado que el sistema cumple con los siguientes aspe
 - La experiencia de usuario fue refinada para eliminar ambigüedades: existe un único log por plan (última ejecución), botones de acción contextuales (Deploy o Destroy) y una representación clara del estado real de la infraestructura.
 
 Este estado técnico validado confirma que la plataforma es apta para uso académico y experimental, con un diseño robusto que puede ser base para futuras extensiones y mejoras.
+
+⸻
+
+12. Síntesis estructural del proyecto (Base para libro técnico)
+
+12.1 ¿Qué hace este proyecto?
+
+Este proyecto es una plataforma web que permite modelar redes virtuales en AWS de forma visual y transformarlas automáticamente en infraestructura real utilizando Terraform.
+
+El sistema:
+• Permite diseñar topologías de red mediante un canvas interactivo.
+• Valida la coherencia estructural de la red antes del despliegue.
+• Genera dinámicamente código Terraform basado en la topología.
+• Ejecuta terraform plan / apply / destroy desde un backend controlado.
+• Persiste estado, logs y outputs para trazabilidad.
+• Permite diferenciar entre simulación (plan) y despliegue real (apply).
+
+No es un simulador estático. Es un sistema de Infraestructura como Código (IaC) asistido por interfaz gráfica.
+
+⸻
+
+12.2 Tecnologías utilizadas
+
+Frontend:
+• React
+• React Flow (canvas de topologías)
+• Material UI
+• Zustand (gestión de estado)
+• Hash estructural determinístico (computeInfraHash)
+
+Backend:
+• Django REST Framework
+• Celery (orquestación asíncrona)
+• Redis (broker)
+• PostgreSQL (persistencia de planes)
+• Jinja2 (renderizado dinámico de main.tf.j2)
+
+Infraestructura:
+• Terraform (motor declarativo)
+• AWS (VPC, Subnet, IGW, NAT, TGW, Peering, EC2)
+• Backend local de estado Terraform en volumen /tfstate
+• Docker Compose para entorno DEV
+
+⸻
+
+12.3 Reglas fundamentales del sistema
+
+1. 1 Plan = 1 Stack
+   Cada Plan corresponde a un único estado Terraform persistido en:
+   /tfstate/<plan_id>/terraform.tfstate
+
+2. No hay ejecuciones concurrentes
+   Si un Plan está en RUNNING → HTTP 409.
+
+3. Estado visual derivado
+   PLAN_VALIDATED / PLAN_OUTDATED / NO_PLAN se deriva de:
+   computeInfraHash(canvas) vs planCanvasHash persistido.
+
+4. No existe conectividad implícita
+   Toda ruta debe declararse explícitamente.
+   Las rutas asimétricas generan advertencia.
+
+5. simulate_only controla el comportamiento:
+   • true  → terraform plan
+   • false → terraform apply real
+
+6. Destroy solo opera sobre el mismo state del Plan.
+
+⸻
+
+12.4 Funcionamiento de los escenarios principales
+
+Escenario 1 — VPC pública
+• Se declara 0.0.0.0/0 → igw.
+• Backend genera IGW + route table pública.
+• Subnet con map_public_ip_on_launch = true.
+• Terraform crea conectividad real a Internet.
+
+Escenario 2 — Peering entre VPCs
+• Se declaran rutas simétricas.
+• Backend genera aws_vpc_peering_connection.
+• Se crean rutas cruzadas automáticamente.
+
+Escenario 3 — Ruta asimétrica
+• Solo una VPC declara ruta.
+• Preview genera warning ASYMMETRIC_ROUTE.
+• Se evita despliegue inconsistente.
+
+Escenario 4 — Router lógico (TGW conceptual)
+• Se modela hub-and-spoke.
+• Links tipo tgw-attach.
+• Backend traduce intención en recursos TGW (cuando está habilitado).
+• Escalable a múltiples VPCs.
+
+⸻
+
+12.5 ¿Dónde se guarda cada cosa?
+
+Canvas (Frontend):
+• nodes + edges → Firestore.
+• planCanvasHash → Firestore.
+• planId persistido por laboratorio.
+
+Planes (Backend):
+• Tabla Plan en PostgreSQL.
+• Plan.last_log → último log terraform.
+• Plan.outputs → resultado de terraform output -json.
+• Plan.status → SUCCESS / FAILURE / RUNNING.
+• Plan.applied → indica si stack está activo.
+
+Terraform:
+• Código generado → directorio temporal /tmp/tf-multi-*.
+• Estado persistente → /tfstate/<plan_id>/terraform.tfstate.
+
+Docker DEV:
+• /tfstate y /tfwork montados como volúmenes.
+• ~/.aws montado en contenedor (solo lectura).
+
+⸻
+
+12.6 Lógica arquitectónica seguida
+
+El sistema sigue una lógica declarativa y determinística:
+
+1. El usuario diseña infraestructura.
+2. Se genera preview estructural.
+3. Se calcula hash de infraestructura.
+4. Se valida coherencia.
+5. Se persiste plan.
+6. Celery ejecuta Terraform.
+7. Se capturan outputs.
+8. Se actualiza estado del Plan.
+9. El estado visual se deriva del hash comparado.
+
+Modelo conceptual:
+
+Infraestructura real = f(Canvas validado)
+
+El estado no depende de memoria de sesión, sino de comparación estructural persistida.
+
+⸻
+
+12.7 Nivel actual del sistema
+
+El sistema se encuentra en estado MVP funcional avanzado:
+
+• Deploy y Destroy real validados end-to-end.
+• Persistencia determinística del estado.
+• Validación topológica previa al despliegue.
+• Arquitectura extensible.
+• Separación clara entre lógica visual, backend de control e infraestructura declarativa.
+
+Es técnicamente apto para defensa de tesis y sirve como base sólida para evolucionar hacia un producto enterprise.
