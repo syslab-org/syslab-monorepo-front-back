@@ -36,24 +36,25 @@ import '../../App.css';
 import './styles/packet-tracer.css';
 //Custom compoonents and hooks
 import SidebarFlow from './SidebarFlow';
-import { useFlowState } from './flow-hooks/useFlowState';
-import useNodeClick from './flow-hooks/useNodeClick';
-import useNodeDrag from './flow-hooks/useNodeDrag';
-import useRestoreFlow from './flow-hooks/useRestoreFlow';
-import useSaveFlow from './flow-hooks/useSaveFlow';
+import { useFlowState } from './hooks/useFlowState';
+import useNodeClick from './hooks/useNodeClick';
+import useNodeDrag from './hooks/useNodeDrag';
+import useRestoreFlow from './hooks/useRestoreFlow';
+import useSaveFlow from './hooks/useSaveFlow';
 import InstanceNodeForm from './forms/InstanceNodeForm';
 import RouterNodeForm from './forms/RouterNodeForm';
 import SubNetworkNodeForm from './forms/SubNetworkNodeForm';
 import VPCNodeForm from './forms/VPCNodeForm';
-import InstanceNode from "./node-types/InstanceNode";
-import RouterNodeInstance from "./node-types/RouterNodeInstance";
-import SubNetworkNodeInstance from './node-types/SubNetworkNodeInstance';
-import VPCNodeInstance from "./node-types/VPCNodeInstance";
+import InstanceNode from "./nodes/InstanceNode";
+import RouterNodeInstance from "./nodes/RouterNodeInstance";
+import SubNetworkNodeInstance from './nodes/SubNetworkNodeInstance';
+import VPCNodeInstance from "./nodes/VPCNodeInstance";
 import useCidrBlockVPCStore from './store/cidrBlocksIp';
 import useClickedNodeIdStore from './store/clickedNodeIdStore';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useWizard } from "@/features/networkCanvas/context/WizardContext"
 import { computeInfraHash } from "./utils/infraHash";
+import { usePlanValidationSync } from "./core/usePlanValidationSync";
 
 // Importar constantes
 import {
@@ -72,17 +73,19 @@ import { useTheme } from "@mui/material/styles";
 import { collection, doc, getDoc, getDocs, setDoc } from "firebase/firestore";
 import { useContext } from "react";
 import { LoadingFlowContext } from "../../contexts/LoadingFlowContext";
-import { NetworkProvider } from "../../contexts/NetworkNodesContext";
+import { NetworkProvider } from "./context/NetworkNodesContext";
 import { db } from "../../firebase/firebaseConfig";
 import ConfirmDeployDialog from "./ConfirmDeployDialog";
 import { api } from "../../lib/api";
 import { DB_FIRESTORE_VPCS } from "../../constants";
-import useDeployNetwork from "./flow-hooks/useDeployNetwork";
-import useHandleDrop from "./flow-hooks/useHandleDrop";
-import useRestrictMovement from "./flow-hooks/useRestrictMovement";
-import { useRestrictSubnetsInsideVPC } from "./flow-hooks/useRestrictSubnetsInsideVPC";
+import useDeployNetwork from "./hooks/useDeployNetwork";
+import useHandleDrop from "./hooks/useHandleDrop";
+import useRestrictMovement from "./hooks/useRestrictMovement";
+import { useRestrictSubnetsInsideVPC } from "./hooks/useRestrictSubnetsInsideVPC";
 import RoutePreviewPanel from "./panels/RoutePreviewPanel";
 import { buildRoutingPreview } from "./utils/buildRoutingPreview";
+import { computeCanvasState } from "./domain/canvasStateMachine";
+import { usePlanPolling } from "./core/usePlanPolling";
 
 
 const nodeTypes = {
@@ -332,60 +335,14 @@ function MainFlow() {
 
   const onNodeClickBase = useNodeClick(setSelectedNode, setModalIsOpen);
   const onNodeClick = onNodeClickBase;
-  useEffect(() => {
-    let alive = true;
-    let timer = null;
 
-    const load = async () => {
-      if (!canvasPlanId) {
-        if (alive) {
-          setCanvasPlanInfo(null);
-          setIsCanvasLocked(false);
-        }
-        return;
-      }
-
-      try {
-        const plan = await api.getPlan(canvasPlanId);
-        if (!alive) return;
-
-        setCanvasPlanInfo(plan || null);
-        setIsCanvasLocked(isPlanRunning(plan?.status));
-
-        // Poll solo si está corriendo
-        if (isPlanRunning(plan?.status)) {
-          timer = window.setInterval(async () => {
-            try {
-              const p = await api.getPlan(canvasPlanId);
-              if (!alive) return;
-              setCanvasPlanInfo(p || null);
-              const running = isPlanRunning(p?.status);
-              setIsCanvasLocked(running);
-              if (!running && timer) {
-                window.clearInterval(timer);
-                timer = null;
-              }
-            } catch (_e) {
-              // Si falla el polling, no bloqueamos indefinidamente
-              if (!alive) return;
-              setIsCanvasLocked(false);
-            }
-          }, 1500);
-        }
-      } catch (_e) {
-        if (!alive) return;
-        setCanvasPlanInfo(null);
-        setIsCanvasLocked(false);
-      }
-    };
-
-    load();
-
-    return () => {
-      alive = false;
-      if (timer) window.clearInterval(timer);
-    };
-  }, [canvasPlanId]);
+  // Hook para mantener el canvas sincronizado con el estado del plan en backend
+  usePlanPolling({
+    canvasPlanId,
+    setCanvasPlanInfo,
+    setIsCanvasLocked,
+    isPlanRunning
+  });
 
 
   const closeModal = () => {
@@ -547,57 +504,25 @@ function MainFlow() {
   // =========================
   // Canvas State Machine (derivado, simplificado y consistente)
   // =========================
-  const canvasState = (() => {
-    if (!canvasPlanId) return "NO_PLAN";
 
-    if (isCanvasLocked) return "PLAN_RUNNING";
-
-    // Si existe plan asociado y el hash actual no coincide con el validado,
-    // el canvas está desactualizado, independientemente del validationState actual.
-    if (isCanvasDirty) {
-      return "PLAN_OUTDATED";
-    }
-
-    // Si ya hubo validación exitosa en esta sesión y no está dirty,
-    // lo marcamos como validado.
-    if (validationState === "SUCCESS") {
-      return "PLAN_VALIDATED";
-    }
-
-    return "PLAN_SYNCED";
-  })();
+  const canvasState = computeCanvasState({
+    canvasPlanId,
+    isCanvasLocked,
+    isCanvasDirty,
+    validationState
+  });
   // Mantener el canvas sincronizado con el último plan validado, sin recargar
-  useEffect(() => {
-    if (validationState === 'SUCCESS' && validationResult?.plan_id) {
-      const pid = validationResult.plan_id;
-      setCanvasPlanId(pid);
-
-      const okHash = computeInfraHash(nodes, edges);
-      setValidatedPlanHash(okHash);
-
-      // Persistir planId y hash validado en Firestore para que sobreviva a refresh
-      (async () => {
-        try {
-          const ref = doc(db, DB_FIRESTORE_VPCS, vpcid);
-          await setDoc(
-            ref,
-            {
-              planId: pid,
-              planCanvasHash: okHash,
-            },
-            { merge: true }
-          );
-        } catch (_e) {
-          console.warn("No se pudo persistir planCanvasHash:", _e);
-        }
-      })();
-
-      // El canvas acaba de validarse, así que no está desactualizado
-      setIsCanvasDirty(false);
-      setHasValidatedInSession(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [validationState, validationResult?.plan_id]);
+  usePlanValidationSync({
+    validationState,
+    validationResult,
+    nodes,
+    edges,
+    vpcid,
+    setCanvasPlanId,
+    setValidatedPlanHash,
+    setIsCanvasDirty,
+    setHasValidatedInSession,
+  });
 
   const location = useLocation();
   const isWizardEntry = new URLSearchParams(location.search).get("wizard") === "1";
@@ -874,7 +799,6 @@ function MainFlow() {
                   onNodeDrag={onNodeDrag}
                   onNodeDragStop={onNodeDragStop}
                   onDragOver={onDragOver}
-                  backgroundVariant="dots"
                   snapToGrid
                   snapGrid={[24, 24]}              // alineación limpia
                   selectionOnDrag={false}          // evita seleccionar “marco azul” al arrastrar

@@ -8,7 +8,7 @@ import { db } from '../../firebase/firebaseConfig'
 import { Box, Button, IconButton, List, ListItem, ListItemText } from '@mui/material'
 import { DeleteOutlineOutlined } from '@mui/icons-material'
 import AddAmiModal from './modals/AddAmiModal'
-import { DB_AMI_LIST } from '../flow/utils/constants'
+import { DB_AMI_LIST } from '@/features/networkCanvas/utils/constants';
 
 const AMIList = ({ amilist }) => (
     <Box sx={{ width: '100%', maxWidth: 360, bgcolor: 'background.paper', marginTop: 3 }}>
