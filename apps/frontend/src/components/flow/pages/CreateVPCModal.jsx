@@ -6,7 +6,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { LoadingFlowContext } from '../../../contexts/LoadingFlowContext';
 import { db } from '../../../firebase/firebaseConfig';
 import NewVLANForm from '../forms/NewVLANForm';
-import { useWizard } from '../../../contexts/WizardContext';
+import { useWizard } from "@/features/networkCanvas/context/WizardContext"
 import WizardModalLayout from '../components/WizardModalLayout';
 
 const style = {

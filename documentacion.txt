@@ -493,3 +493,30 @@ El sistema se encuentra en estado MVP funcional avanzado:
 • Separación clara entre lógica visual, backend de control e infraestructura declarativa.
 
 Es técnicamente apto para defensa de tesis y sirve como base sólida para evolucionar hacia un producto enterprise.
+
+### 🧠 Sección: Tareas Pendientes (To-Do)
+
+A continuación se detallan las tareas y mejoras planificadas que están pendientes de implementación para avanzar el MVP hacia un producto más robusto y listo para producción:
+
+#### 🔐 Manejo seguro de credenciales
+- Implementar autenticación y autorización robusta para despliegues en nube sin depender de credenciales locales.
+- Migrar de claves estáticas a *IAM roles* y mecanismos de *assume role* o federación de identidades para asegurar la segregación de permisos por usuario o proyecto.
+
+#### ☁️ Backend remoto para estado de Terraform
+- Configurar un backend remoto (como S3 con bloqueo de estado o Terraform Cloud/Enterprise) para almacenar de forma segura el estado de Terraform, habilitar bloqueo/colaboración y evitar corrupción de estado local.  [oai_citation:0‡AWS Documentation](https://docs.aws.amazon.com/es_es/prescriptive-guidance/latest/terraform-aws-provider-best-practices/backend.html?utm_source=chatgpt.com)
+
+#### 👥 Control de acceso multiusuario
+- Añadir capacidades de control de acceso en backend (RBAC), de forma que solo usuarios autorizados puedan ver/ejecutar planes y despliegues.
+- Integrar permisos por rol (p.ej., profesor, super-admin, estudiante) para visualizar e interactuar con recursos desplegados.
+
+#### 📊 Observabilidad y logging avanzado
+- Añadir trazabilidad de acciones (deploy/destroy) en backend con logs persistentes.
+- Integrar dashboard o almacenamiento de logs con CloudWatch/ELK para auditar eventos de despliegue.
+
+#### 🛡️ Soporte ampliado de redes
+- Agregar soporte para configuraciones avanzadas:
+  - NAT Gateways (detectar y crear según intenciones).
+  - Security Groups y Network ACLs explícitas por subred/instancia.
+  - Soporte completo para Transit Gateway (TGW real) en topologías complejas.
+
+> Estas tareas reflejan áreas clave de robustez, seguridad y escalabilidad que se han dejado como pendientes para transición del MVP a un producto más completo y listo para entornos de producción.

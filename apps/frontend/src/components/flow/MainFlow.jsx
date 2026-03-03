@@ -52,7 +52,7 @@ import VPCNodeInstance from "./node-types/VPCNodeInstance";
 import useCidrBlockVPCStore from './store/cidrBlocksIp';
 import useClickedNodeIdStore from './store/clickedNodeIdStore';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useWizard } from "../../contexts/WizardContext";
+import { useWizard } from "@/features/networkCanvas/context/WizardContext"
 import { computeInfraHash } from "./utils/infraHash";
 
 // Importar constantes
