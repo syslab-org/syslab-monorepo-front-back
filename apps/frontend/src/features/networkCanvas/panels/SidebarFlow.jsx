@@ -7,7 +7,7 @@ import {
     TYPE_SERVER_NODE,
     TYPE_SUBNETWORK_NODE,
     TYPE_VPC_NODE
-} from './utils/constants';
+} from '@/features/networkCanvas/utils/constants';
 
 // Íconos MUI (puedes cambiar por lucide si prefieres)
 import CloudIcon from '@mui/icons-material/Cloud';
