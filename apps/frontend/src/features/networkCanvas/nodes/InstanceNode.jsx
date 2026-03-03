@@ -3,7 +3,7 @@
 import { memo } from 'react';
 import NodeChrome from './NodeChrome';
 import '../styles/packet-tracer.css';
-import { getIconByInstanceType } from '../services/iconHelper';
+import { getIconByInstanceType } from '@/features/networkCanvas/utils/iconHelper';
 import { TYPE_COMPUTER_NODE, TYPE_PRINTER_NODE, TYPE_SERVER_NODE } from '../utils/constants';
 
 const InstanceNode = ({ data = {}, type }) => {

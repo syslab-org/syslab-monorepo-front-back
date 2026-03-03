@@ -1,7 +1,7 @@
 // apps/frontend/src/features/networkCanvas/core/usePlanPolling.js
 
 import { useEffect, useRef } from "react";
-import { api } from "@/lib/api";
+import { api } from "@/infraestructure/http/api";
 
 export const usePlanPolling = ({
   canvasPlanId,

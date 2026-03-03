@@ -5,7 +5,7 @@ import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
 import HistoryIcon from "@mui/icons-material/History";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "@/lib/api";
+import { api } from "@/infraestructure/http/api";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from '@/infraestructure/firebase/firebaseConfig';
 import { DB_FIRESTORE_VPCS, USER_ROL_STUDENT } from '@/shared/constants';

@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { RouterPolicy } from "../../../config/networking";
 import { useAuth } from "@/app/providers/AuthContext";
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
-import { api } from "../../../lib/api";
+import { api } from "@/infraestructure/http/api";
 import { decideRouterMode } from "@/features/networkCanvas/domain/decideRouterMode";
 import useCidrBlockVPCStore from "../store/cidrBlocksIp";
 import { buildRoutingPreview } from "../utils/buildRoutingPreview";

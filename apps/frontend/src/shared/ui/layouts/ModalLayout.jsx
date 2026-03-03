@@ -14,8 +14,8 @@ const style = {
 };
 
 
-export const ModalLayout = ({ open, closeModal, form }) => {
-   
+export const ModalLayout = ({ open, closeModal, children }) => {
+
 
     return (
         <Modal
@@ -28,7 +28,7 @@ export const ModalLayout = ({ open, closeModal, form }) => {
             <Box
                 sx={{ ...style, width: 400 }}
             >
-               {form}
+                {children}
             </Box>
 
         </Modal>
