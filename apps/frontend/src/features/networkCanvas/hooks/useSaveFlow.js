@@ -1,9 +1,12 @@
 // frontend/src/components/flow/flow-hooks/useSaveFlow.js
 import { doc, setDoc } from "firebase/firestore";
 import { useCallback, useContext } from "react";
-import { DB_FIRESTORE_VPCS, ERROR_SAVING_FLOW_FIREBASE } from "../../../constants";
-import { LoadingFlowContext } from "../../../contexts/LoadingFlowContext";
-import { db } from "../../../firebase/firebaseConfig";
+import {
+  DB_FIRESTORE_VPCS,
+  ERROR_SAVING_FLOW_FIREBASE,
+} from "../../../constants";
+import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
+import { db } from "../../../infraestructure/firebase/firebaseConfig";
 
 /**
  * Sanea cualquier objeto para Firestore:

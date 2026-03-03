@@ -1,10 +1,10 @@
 /* eslint-disable react/prop-types */
 import { useContext } from 'react'
 import { useState } from 'react'
-import { LoadingFlowContext } from '../../contexts/LoadingFlowContext'
+import { LoadingFlowContext } from '@/app/providers/LoadingFlowContext'
 import { useEffect } from 'react'
 import { addDoc, collection, getDocs } from 'firebase/firestore'
-import { db } from '../../firebase/firebaseConfig'
+import { db } from '@/infraestructure/firebase/firebaseConfig'
 import { Box, Button, IconButton, List, ListItem, ListItemText } from '@mui/material'
 import { DeleteOutlineOutlined } from '@mui/icons-material'
 import AddAmiModal from './modals/AddAmiModal'

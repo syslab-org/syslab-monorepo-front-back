@@ -1,12 +1,12 @@
 import * as yup from 'yup';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '@/app/providers/AuthContext';
 import { useContext, useEffect, useState } from 'react';
-import { LoadingFlowContext } from '../../contexts/LoadingFlowContext';
+import { LoadingFlowContext } from '@/app/providers/LoadingFlowContext';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
-import { auth, db, storage } from '../../firebase/firebaseConfig';
-import { DB_FIRESTORE_USERS } from '../../constants';
+import { auth, db, storage } from '@/infraestructure/firebase/firebaseConfig';
+import { DB_FIRESTORE_USERS } from '@/shared/constants';
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 import { Avatar, Button, IconButton, Paper, Stack, TextField, Typography } from '@mui/material';
 import { PhotoCamera } from '@mui/icons-material';

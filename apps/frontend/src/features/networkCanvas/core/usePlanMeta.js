@@ -1,7 +1,7 @@
 // apps/frontend/src/features/networkCanvas/core/usePlanMeta.js
 import { useEffect } from "react";
 import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/firebase/firebaseConfig";
+import { db } from "@/infraestructure/firebase/firebaseConfig";
 import { DB_FIRESTORE_VPCS } from "@/constants";
 
 export const usePlanMeta = ({

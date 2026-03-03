@@ -1,4 +1,4 @@
-// apps/frontend/src/components/flow/pages/VPCList.jsx
+// apps/frontend/src/features/vpcs/pages/VPCList.jsx
 import { DeleteOutline, ModeEditOutlined, ContentCopy } from "@mui/icons-material";
 import AddIcon from '@mui/icons-material/Add';
 import {
@@ -31,9 +31,9 @@ import { collection, getDocs, query, where, deleteDoc, doc, setDoc } from 'fireb
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DB_FIRESTORE_VPCS, USER_ROL_STUDENT } from "../../../constants";
-import { useAuth } from "@/app/providers/AuthContext.jsx";
-import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext.jsx";
-import { useWizard } from "@/features/networkCanvas/context/WizardContext"
+import { useAuth } from '@/app/providers/AuthContext';
+import { LoadingFlowContext } from "../../../app/providers/LoadingFlowContext.jsx";
+import { useWizard } from "../../networkCanvas/context/WizardContext.jsx";
 import { db } from "@/infraestructure/firebase/firebaseConfig.js";
 import useCidrBlockVPCStore from '../store/cidrBlocksIp';
 import CreateVPCModal from "./CreateVPCModal";

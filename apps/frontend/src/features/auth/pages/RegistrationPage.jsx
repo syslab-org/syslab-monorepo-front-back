@@ -1,13 +1,13 @@
-import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { useUserRegistration } from "../../../services/authServices";
-import { Alert, Avatar, Box, Button, CssBaseline, Grid, Link, Paper, Snackbar, TextField, Typography } from "@mui/material";
+import { auth } from "@/infraestructure/firebase/firebaseConfig";
+import { yupResolver } from "@hookform/resolvers/yup";
 import { LockClockOutlined } from "@mui/icons-material";
 import GoogleIcon from "@mui/icons-material/Google";
+import { Alert, Avatar, Box, Button, CssBaseline, Grid, Link, Paper, Snackbar, TextField, Typography } from "@mui/material";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { yupResolver } from "@hookform/resolvers/yup";
-import { useRegistrationUserFormValidation } from "../../../utils/hooks/useRegistrationUserFormValidation";
-import { auth } from "../../../firebase/firebaseConfig";
+import { useNavigate, useParams } from "react-router-dom";
+import { useUserRegistration } from '@/features/auth/services/authService';
+import { useRegistrationUserFormValidation } from '@/features/auth/hooks/useRegistrationUserFormValidation';
 
 const RegistrationPage = () => {
     const { userId } = useParams();

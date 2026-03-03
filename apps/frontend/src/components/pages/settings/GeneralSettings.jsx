@@ -1,8 +1,8 @@
 import { Box, Button, Paper, TextField, Typography } from "@mui/material"
 import { useForm } from "react-hook-form"
-import { useAuth } from "../../../contexts/AuthContext"
+import { useAuth } from '@/app/providers/AuthContext'
 import { doc, getDoc, updateDoc } from "firebase/firestore"
-import { db } from "../../../firebase/firebaseConfig"
+import { db } from "@/infraestructure/firebase/firebaseConfig"
 import { DB_FIRESTORE_USERS } from "../../../constants"
 import { useEffect } from "react"
 

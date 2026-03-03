@@ -1,4 +1,4 @@
-// src/constants.js
+// src/shared/constants/index.js
 export const DRAWERWITH = 240;
 export const FIRESTORE_COLLECTION = "vpcs";
 export const NO_DOC_WARNING = "No document found in Firebase for vpcid:";

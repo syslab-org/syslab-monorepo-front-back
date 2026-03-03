@@ -1,7 +1,7 @@
 import { doc, getDoc } from "firebase/firestore";
 import { useCallback } from "react";
 import { useParams } from "react-router-dom";
-import { db } from "../../../firebase/firebaseConfig";
+import { db } from "../../../infraestructure/firebase/firebaseConfig";
 import {
   FETCHING_ERROR,
   FIRESTORE_COLLECTION,
@@ -12,7 +12,7 @@ import {
   UNKNOWN_EXPIRATION_FORMAT,
 } from "../../../constants";
 import { useContext } from "react";
-import { LoadingFlowContext } from "../../../contexts/LoadingFlowContext";
+import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
 import useCidrBlockVPCStore from "../store/cidrBlocksIp";
 
 // Aux function to get firestore data
