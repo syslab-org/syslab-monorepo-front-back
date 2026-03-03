@@ -33,7 +33,7 @@ import { useNavigate } from "react-router-dom";
 import { DB_FIRESTORE_VPCS, USER_ROL_STUDENT } from "../../../constants";
 import { useAuth } from "../../../contexts/AuthContext";
 import { LoadingFlowContext } from "../../../contexts/LoadingFlowContext";
-import { useWizard } from "../../../contexts/WizardContext";
+import { useWizard } from "@/features/networkCanvas/context/WizardContext"
 import { db } from "../../../firebase/firebaseConfig";
 import useCidrBlockVPCStore from '../store/cidrBlocksIp';
 import CreateVPCModal from "./CreateVPCModal";

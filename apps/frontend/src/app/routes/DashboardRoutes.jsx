@@ -1,29 +1,26 @@
 // #apps/frontend/src/components/common/DashboardRoutes.jsx
 import { ReactFlowProvider } from "@xyflow/react";
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { USER_ROL_STUDENT, USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER } from '../../constants';
-import { useAuth } from '../../contexts/AuthContext';
-import { LoadingFlowProvider } from '../../contexts/LoadingFlowContext';
-import Dashboard from '../../pages/Dashboard';
-import PlanDetailPage from '../../pages/Plans/PlanDetailPage';
-import PlanListPage from '../../pages/Plans/PlanListPage';
-import MainFlow from '../flow/MainFlow';
-import VPCList from '../flow/pages/VPCList';
-import MainLayout from '../layout/MainLayout';
-import PanelAdmin from '../pages/PanelAdmin';
-import ProfilePage from '../pages/ProfilePage';
-import SettingsPage from '../pages/SettingsPage';
-import TestComponent from '../pages/TestComponent';
-import GeneralSettings from '../pages/settings/GeneralSettings';
-import { UsersManagement } from '../pages/settings/UsersManagement';
-import LoadingFlow from './LoadingFlow';
-import ProtectedRoute from './ProtectedRoute';
+import { USER_ROL_STUDENT, USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER } from '@/constants';
+import { LoadingFlowProvider } from '@/contexts/LoadingFlowContext';
+import Dashboard from '@/pages/Dashboard';
+import PlanDetailPage from '@/pages/Plans/PlanDetailPage';
+import PlanListPage from '@/pages/Plans/PlanListPage';
+import MainFlow from '@/components/flow/MainFlow';
+import VPCList from '@/components/flow/pages/VPCList';
+import MainLayout from '@/components/layout/MainLayout';
+import PanelAdmin from '@/components/pages/PanelAdmin';
+import ProfilePage from '@/components/pages/ProfilePage';
+import SettingsPage from '@/components/pages/SettingsPage';
+import TestComponent from '@/components/pages/TestComponent';
+import GeneralSettings from '@/components/pages/settings/GeneralSettings';
+import { UsersManagement } from '@/components/pages/settings/UsersManagement';
+import LoadingFlow from '@/components/common/LoadingFlow';
+import ProtectedRoute from '@/components/common/ProtectedRoute';
+import { WizardProvider } from "../../features/networkCanvas/context/WizardContext";
 
 
 const DashboardRoutes = () => {
-
-  const { user } = useAuth()
-
   return (
     <LoadingFlowProvider>
       <Routes>
@@ -64,19 +61,26 @@ const DashboardRoutes = () => {
           }
           />
 
-          {/* Encapsulating specific routes */}
-          <Route path='vpcs' element={
-            <>
-              <LoadingFlow />
-              <VPCList />
-            </>
-          } />
 
-          <Route path='vpcs/:vpcid/mainflow' element={
-            <>
+          {/* Encapsulating specific routes */}
+          <Route path='vpcs/*' element={
+            <WizardProvider>
               <LoadingFlow />
-              <ReactFlowProvider><MainFlow /></ReactFlowProvider>
-            </>
+              <Routes>
+                <Route
+                  index
+                  element={<VPCList />}
+                />
+                <Route
+                  path=':vpcid/mainflow'
+                  element={
+                    <ReactFlowProvider>
+                      <MainFlow />
+                    </ReactFlowProvider>
+                  }
+                />
+              </Routes>
+            </WizardProvider>
           } />
 
           <Route path='settings/general' element={

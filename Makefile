@@ -53,7 +53,7 @@ SLEEP             ?= 5
 
 .PHONY: \
   help \
-  up down restart start stop up-nobuild recreate ps ps-healthy logs \
+  up down restart restart-frontend start stop up-nobuild recreate ps ps-healthy logs \
   logs-backend logs-frontend logs-celery logs-flower logs-redis \
   rm-stopped ps-paused unpause build build-nc pull prune nuke \
   setup lint test migrate makemigrations-api migrate-all migrate-api createsuperuser sh-backend sh-frontend sh-celery sh-flower sh-redis \
@@ -108,9 +108,13 @@ up:        ## Levanta dev stack (build si hace falta)
 down:      ## Baja dev stack
 	$(COMPOSE) down
 
+
 restart:   ## Reinicia dev stack (con build)
 	$(COMPOSE) down
 	$(COMPOSE) up -d --build
+
+restart-frontend: ## Reinicia SOLO el servicio frontend
+	$(COMPOSE) restart $(SVC_FRONTEND)
 
 start:     ## Arranca contenedores existentes (sin build)
 	$(COMPOSE) start
