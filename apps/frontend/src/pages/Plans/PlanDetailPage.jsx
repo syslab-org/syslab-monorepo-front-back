@@ -441,7 +441,7 @@ export default function PlanDetailPage() {
         <Typography variant="h4" sx={{ fontWeight: 700 }}>
           {plan?.name || 'Plan'}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography component="div" variant="body2" color="text.secondary">
           ID: <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{id}</Box>
         </Typography>
       </Box>
@@ -543,10 +543,10 @@ export default function PlanDetailPage() {
 
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
             <Stack spacing={0.5} sx={{ flex: 1 }}>
-              <Typography variant="body2" color="text.secondary">
+              <Typography component="div" variant="body2" color="text.secondary">
                 Actualizado: <b>{formatDateTime(plan?.updated_at)}</b>
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography component="div" variant="body2" color="text.secondary">
                 Última acción: <b>{plan?.last_action || plan?.lastAction || '—'}</b>
               </Typography>
               {String(plan?.last_action || plan?.lastAction || '').toLowerCase() === 'canvas_update' && (
@@ -554,7 +554,7 @@ export default function PlanDetailPage() {
                   El canvas cambió: la infraestructura desplegada (si existía) ya no coincide con este plan.
                 </Typography>
               )}
-              <Typography variant="body2" color="text.secondary">
+              <Typography component="div" variant="body2" color="text.secondary">
                 task_id: <b>{plan?.task_id || '—'}</b>
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -604,7 +604,7 @@ export default function PlanDetailPage() {
           {isRunning && (
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
               <CircularProgress size={16} />
-              <Typography variant="body2" color="text.secondary">
+              <Typography component="div" variant="body2" color="text.secondary">
                 Procesando… (se actualiza automáticamente)
               </Typography>
             </Stack>
@@ -637,7 +637,7 @@ export default function PlanDetailPage() {
                 <Chip size="small" label={lifecycle.label} {...lifecycle.chip} />
               </Stack>
 
-              <Typography variant="body2" color="text.secondary">
+              <Typography component="div" variant="body2" color="text.secondary">
                 Este detalle sirve para entender <b>qué pasó</b> (status), <b>qué existe hoy</b> (lifecycle) y
                 <b> qué acciones son válidas</b> (deploy/destroy).
               </Typography>
@@ -655,7 +655,7 @@ export default function PlanDetailPage() {
                 <Divider sx={{ mb: 1 }} />
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                   <Stack spacing={0.5}>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography component="div" variant="body2" color="text.secondary">
                       Última acción:{' '}
                       <b>{plan?.last_action || plan?.lastAction || '—'}</b>
                     </Typography>
@@ -664,11 +664,11 @@ export default function PlanDetailPage() {
                         El canvas cambió: la infraestructura desplegada (si existía) ya no coincide con este plan.
                       </Typography>
                     )}
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography component="div" variant="body2" color="text.secondary">
                       Resultado:{' '}
                       <Chip size="small" {...statusChipProps(plan?.status)} />
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography component="div" variant="body2" color="text.secondary">
                       Fecha:{' '}
                       <b>{formatDateTime(plan?.updated_at)}</b>
                     </Typography>
@@ -684,7 +684,7 @@ export default function PlanDetailPage() {
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
                 <Box sx={{ flex: 1 }}>
                   <Typography variant="h6">Outputs</Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography component="div" variant="body2" color="text.secondary">
                     Útil para depurar sin ir a la consola de AWS.
                   </Typography>
                 </Box>
@@ -750,7 +750,7 @@ export default function PlanDetailPage() {
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
                 <Box sx={{ flex: 1 }}>
                   <Typography variant="h6">Logs del plan</Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography component="div" variant="body2" color="text.secondary">
                     El log corresponde siempre a la última ejecución (deploy o destroy).
                   </Typography>
                 </Box>

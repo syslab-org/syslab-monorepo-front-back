@@ -3,7 +3,7 @@
 import { memo } from 'react';
 import NodeChrome from './NodeChrome';
 import '../styles/packet-tracer.css';
-import { getIconByInstanceType } from '../helper/iconHelper';
+import { getIconByInstanceType } from '../services/iconHelper';
 import { TYPE_COMPUTER_NODE, TYPE_PRINTER_NODE, TYPE_SERVER_NODE } from '../utils/constants';
 
 const InstanceNode = ({ data = {}, type }) => {
@@ -17,7 +17,7 @@ const InstanceNode = ({ data = {}, type }) => {
   if (type === TYPE_PRINTER_NODE) kind = 'printer';
 
   return (
-    <div style={{ width:'100%', height:'100%' }}>
+    <div style={{ width: '100%', height: '100%' }}>
       <NodeChrome
         type={`inst ${kind}`}             // << añade la subclase
         title={name}
@@ -25,10 +25,10 @@ const InstanceNode = ({ data = {}, type }) => {
         status="up"
         rightArea={<span className="pt-badge">{ami}</span>}
       >
-        <div className="pt-badges" style={{ display:'flex', alignItems:'center', gap:8 }}>
+        <div className="pt-badges" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="pt-badge">ENI-0</span>
           <span className="pt-badge">SSH {data?.sshAccess ? 'Yes' : 'No'}</span>
-          <div style={{ marginLeft:'auto' }}>{getIconByInstanceType?.(type)}</div>
+          <div style={{ marginLeft: 'auto' }}>{getIconByInstanceType?.(type)}</div>
         </div>
       </NodeChrome>
     </div>

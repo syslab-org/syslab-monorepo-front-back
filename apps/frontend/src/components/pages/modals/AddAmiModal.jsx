@@ -1,7 +1,7 @@
 /* eslint-disable react/prop-types */
 import { Box, Button, Modal, TextField } from '@mui/material'
 import { useFormValidationsSettings } from '../validations/useFormValidationsSettings';
-import { TYPE_FORM_AMI } from '../../flow/utils/constants';
+import { TYPE_FORM_AMI } from '@/features/networkCanvas/utils/constants';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 
@@ -21,14 +21,14 @@ const AddAmiModal = ({ open, closeModal }) => {
 
     const validationSchema = useFormValidationsSettings(TYPE_FORM_AMI)
 
-    const {register,handleSubmit,formState:{errors}} = useForm({
-        resolver:yupResolver(validationSchema),
-        defaultValues:{
-            amiCode:''
+    const { register, handleSubmit, formState: { errors } } = useForm({
+        resolver: yupResolver(validationSchema),
+        defaultValues: {
+            amiCode: ''
         }
     })
 
-    const onSubmit = (data)=>{
+    const onSubmit = (data) => {
         // console.log('onSubmit AddAmiMOdal: ',data);
         closeModal(data)
     }
@@ -42,20 +42,20 @@ const AddAmiModal = ({ open, closeModal }) => {
         >
 
             <Box sx={{ ...style, width: 400 }}>
-                    <form onSubmit={handleSubmit(onSubmit)}>
-                       <TextField
-                       label="AMI Code"
+                <form onSubmit={handleSubmit(onSubmit)}>
+                    <TextField
+                        label="AMI Code"
                         {...register("amiCode")}
                         error={!!errors.amiCode}
                         helperText={errors.amiCode?.message}
                         fullWidth
                         margin='normal'
-                       />
+                    />
 
-                       <Button type='submit' variant='contained' color='primary'>
-                            Add AMI
-                       </Button>
-                    </form>
+                    <Button type='submit' variant='contained' color='primary'>
+                        Add AMI
+                    </Button>
+                </form>
             </Box>
 
         </Modal>

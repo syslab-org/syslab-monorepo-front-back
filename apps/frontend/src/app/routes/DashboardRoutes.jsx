@@ -6,8 +6,7 @@ import { LoadingFlowProvider } from '@/contexts/LoadingFlowContext';
 import Dashboard from '@/pages/Dashboard';
 import PlanDetailPage from '@/pages/Plans/PlanDetailPage';
 import PlanListPage from '@/pages/Plans/PlanListPage';
-import MainFlow from '@/components/flow/MainFlow';
-import VPCList from '@/components/flow/pages/VPCList';
+import { MainFlow, VPCList, WizardProvider } from '@/features/networkCanvas';
 import MainLayout from '@/components/layout/MainLayout';
 import PanelAdmin from '@/components/pages/PanelAdmin';
 import ProfilePage from '@/components/pages/ProfilePage';
@@ -17,7 +16,6 @@ import GeneralSettings from '@/components/pages/settings/GeneralSettings';
 import { UsersManagement } from '@/components/pages/settings/UsersManagement';
 import LoadingFlow from '@/components/common/LoadingFlow';
 import ProtectedRoute from '@/components/common/ProtectedRoute';
-import { WizardProvider } from "../../features/networkCanvas/context/WizardContext";
 
 
 const DashboardRoutes = () => {
