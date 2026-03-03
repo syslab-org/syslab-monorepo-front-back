@@ -1,12 +1,12 @@
 import { Button, IconButton, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow } from '@mui/material'
 import { useState } from 'react'
-import { ModalLayout } from '../../../features/ModalLayout'
+import { ModalLayout } from '../../ModalLayout'
 import InviteUserForm from '@/features/auth/components/InviteUserForm'
 import { useContext } from 'react'
 import { LoadingFlowContext } from '@/app/providers/LoadingFlowContext'
 import { useEffect } from 'react'
 import { ModeEditOutlined } from '@mui/icons-material'
-import { useUsersFetch } from '../../../utils/hooks/useUsersFetch'
+import { useUsersFetch } from '@/features/settings/hooks/useUsersFetch'
 
 const columns = [
     { id: 'name', label: 'Name', minWidth: 170, align: 'left' },

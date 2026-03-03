@@ -8,7 +8,7 @@ import { RouterPolicy } from "../../../config/networking";
 import { useAuth } from "@/app/providers/AuthContext";
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
 import { api } from "../../../lib/api";
-import { decideRouterMode } from "../../../utils/decideRouterMode";
+import { decideRouterMode } from "@/features/networkCanvas/domain/decideRouterMode";
 import useCidrBlockVPCStore from "../store/cidrBlocksIp";
 import { buildRoutingPreview } from "../utils/buildRoutingPreview";
 import {

@@ -10,20 +10,6 @@ apps/frontend/src
 ├── assets
 │   ├── background.cbcde707.jpg
 │   └── react.svg
-├── components
-│   ├── TaskDemo.jsx
-│   ├── common
-│   ├── layout
-│   └── pages
-│       ├── SettingsPage.jsx
-│       ├── TestComponent.jsx
-│       ├── modals
-│       │   └── AddAmiModal.jsx
-│       ├── settings
-│       │   ├── GeneralSettings.jsx
-│       │   └── UsersManagement.jsx
-│       └── validations
-│           └── useFormValidationsSettings.jsx
 ├── config
 │   └── networking.js
 ├── features
@@ -47,6 +33,10 @@ apps/frontend/src
 │   │   │   └── RegistrationPage.jsx
 │   │   └── services
 │   │       └── authService.js
+│   ├── devtools
+│   │   ├── index.js
+│   │   └── pages
+│   │       └── TaskDemo.jsx
 │   ├── networkCanvas
 │   │   ├── ConfirmDeployDialog.jsx
 │   │   ├── MainFlow.jsx
@@ -62,7 +52,8 @@ apps/frontend/src
 │   │   │   ├── usePlanPolling.js
 │   │   │   └── usePlanValidationSync.js
 │   │   ├── domain
-│   │   │   └── canvasStateMachine.js
+│   │   │   ├── canvasStateMachine.js
+│   │   │   └── decideRouterMode.js
 │   │   ├── forms
 │   │   │   ├── InstanceNodeForm.jsx
 │   │   │   ├── NewVLANForm.jsx
@@ -89,6 +80,8 @@ apps/frontend/src
 │   │   │   ├── useRestrictSubnetsInsideVPC.js
 │   │   │   └── useSaveFlow.js
 │   │   ├── index.js
+│   │   ├── modals
+│   │   │   └── AddAmiModal.jsx
 │   │   ├── nodes
 │   │   │   ├── CustomResizerNode.jsx
 │   │   │   ├── InstanceNode.jsx
@@ -127,9 +120,20 @@ apps/frontend/src
 │   │       ├── initials-elements.js
 │   │       ├── networkUtils.js
 │   │       └── topologyValidation.js
+│   ├── plans
+│   │   └── pages
+│   │       ├── PlanDetailPage.jsx
+│   │       └── PlanListPage.jsx
 │   ├── settings
+│   │   ├── components
+│   │   ├── hooks
+│   │   │   ├── useFormValidationsSettings.jsx
+│   │   │   └── useUsersFetch.jsx
 │   │   ├── index.js
 │   │   └── pages
+│   │       ├── GeneralSettings.jsx
+│   │       ├── SettingsPage.jsx
+│   │       └── UsersManagement.jsx
 │   └── vpcs
 │       └── pages
 │           └── VPCList.jsx
@@ -145,10 +149,6 @@ apps/frontend/src
 │   ├── Untitled-2024-03-23-1000.excalidraw
 │   ├── Untitled-2024-03-23-1000.png
 │   └── schema.text
-├── pages
-│   └── Plans
-│       ├── PlanDetailPage.jsx
-│       └── PlanListPage.jsx
 ├── shared
 │   ├── constants
 │   │   └── index.js
@@ -168,13 +168,9 @@ apps/frontend/src
 │   ├── palettle.js
 │   ├── theme.js
 │   └── typografy.js
-├── theme
-│   ├── AppThemeProvider.jsx
-│   ├── createPacketTheme.js
-│   └── packetTracerTheme.js
-└── utils
-    ├── decideRouterMode.js
-    └── hooks
-        └── useUsersFetch.jsx
+└── theme
+    ├── AppThemeProvider.jsx
+    ├── createPacketTheme.js
+    └── packetTracerTheme.js
 
-62 directories, 116 files
+58 directories, 116 files

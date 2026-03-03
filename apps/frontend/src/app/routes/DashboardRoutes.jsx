@@ -10,10 +10,9 @@ import { MainFlow, VPCList, WizardProvider } from '@/features/networkCanvas';
 import MainLayout from '@/shared/ui/layouts/MainLayout';
 import PanelAdmin from '@/features/admin/pages/PanelAdmin';
 import ProfilePage from '@/features/admin/pages/ProfilePage';
-import SettingsPage from '@/components/pages/SettingsPage';
-import TestComponent from '@/components/pages/TestComponent';
-import GeneralSettings from '@/components/pages/settings/GeneralSettings';
-import { UsersManagement } from '@/components/pages/settings/UsersManagement';
+import { SettingsPage } from "@/features/settings";
+import GeneralSettings from '@/features/settings/pages/GeneralSettings';
+import { UsersManagement } from '@/features/settings/pages/UsersManagement';
 import LoadingFlow from '@/shared/ui/organisms/LoadingFlow';
 import ProtectedRoute from '@/shared/ui/organisms/ProtectedRoute'
 import { LoginPage, RegistrationPage } from "@/features/auth";
@@ -26,8 +25,6 @@ const DashboardRoutes = () => {
         <Route path="/" element={<MainLayout />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path='dashboard' element={<Dashboard />} />
-
-          <Route path="overview" element={<TestComponent />} />
 
           <Route path='paneladmin' element={<PanelAdmin />} />
 

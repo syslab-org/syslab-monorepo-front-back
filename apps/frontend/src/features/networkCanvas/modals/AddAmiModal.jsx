@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 import { Box, Button, Modal, TextField } from '@mui/material'
-import { useFormValidationsSettings } from '../validations/useFormValidationsSettings';
+import { useFormValidationsSettings } from '@/features/settings/hooks/useFormValidationsSettings';
 import { TYPE_FORM_AMI } from '@/features/networkCanvas/utils/constants';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
