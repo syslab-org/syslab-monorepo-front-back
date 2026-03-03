@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { TASK_STATE_FAILURE, TASK_STATE_SUCCESS } from "@/shared/constants";
-import { api } from "./api";
+import { api } from "@/infraestructure/http/api";
 
 export function useTaskPoller(taskId, { intervalMs = 1500 } = {}) {
   const [state, setState] = useState(null);

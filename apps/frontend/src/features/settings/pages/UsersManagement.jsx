@@ -1,12 +1,10 @@
-import { Button, IconButton, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow } from '@mui/material'
-import { useState } from 'react'
-import { ModalLayout } from '../../ModalLayout'
-import InviteUserForm from '@/features/auth/components/InviteUserForm'
-import { useContext } from 'react'
 import { LoadingFlowContext } from '@/app/providers/LoadingFlowContext'
-import { useEffect } from 'react'
-import { ModeEditOutlined } from '@mui/icons-material'
+import InviteUserForm from '@/features/auth/components/InviteUserForm'
 import { useUsersFetch } from '@/features/settings/hooks/useUsersFetch'
+import { ModalLayout } from '@/shared/ui/layouts/ModalLayout'
+import { ModeEditOutlined } from '@mui/icons-material'
+import { Button, IconButton, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow } from '@mui/material'
+import { useContext, useEffect, useState } from 'react'
 
 const columns = [
     { id: 'name', label: 'Name', minWidth: 170, align: 'left' },
@@ -53,78 +51,7 @@ export const UsersManagement = () => {
         setIsCreateModalLayoutOpen(true)
     }
 
-    // const handleModalLayoutUsersManagementClose = useCallback(async (data) => {
 
-    //     if (data) {
-    //         setLoadingFlow(true)
-
-    //         //Create document in Firestore with timestamp
-    //         try {
-
-    //             if (selectedUser) {
-    //                 //Update only the status of user selected
-    //                 // console.log("handleModalLayoutUsersManagementClose: ", data);
-
-    //                 await updateDoc(doc(db, DB_FIRESTORE_USERS, selectedUser.id),
-    //                     {
-    //                         status: data.status
-    //                     }
-    //                 )
-    //                 alert("User status updated successfully.")
-    //             } else {
-    //                 const userRef = await addDoc(collection(db, DB_FIRESTORE_USERS), {
-    //                     email: data.email,
-    //                     role: data.role,
-    //                     status: data.status,
-    //                     invitationSent: true,
-    //                     createdAt: Timestamp.now(), //Marck temporaly
-    //                     expirationTime: 48 * 60 * 60 * 10000 // 48 hours 
-    //                 })
-
-    //                 // Send link to verification email
-    //                 const sendEmailVerificationLink = `https://miapp.com/register?userId=${userRef.id}`;
-
-    //                 //FUnction to send email
-    //                 //await sendEmailVerificationLink(email, verificationLink);
-    //                 alert("Invitación enviada con éxito: ", sendEmailVerificationLink)
-    //             }
-
-    //             //Refresh the user list after update/creatation
-
-    //             const usersCollection = collection(db, DB_FIRESTORE_USERS);
-    //             const usersSnapshot = await getDocs(usersCollection);
-    //             setUsersList(usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-
-
-
-    //         } catch (error) {
-    //             // console.log("Error fetiching User: ", error);
-
-    //         } finally {
-    //             setLoadingFlow(false)
-    //             // console.log(usersList);
-
-    //         }
-
-    //     }
-
-
-    //     setIsCreateModalLayoutOpen(false)
-    //     setSelectedUser(null)
-    // }, [setLoadingFlow, selectedUser, usersList])
-
-    // const handleModalLayoutUsersManagementOpen = () => {
-    //     setSelectedUser(null)
-    //     setIsCreateModalLayoutOpen(true)
-
-    // }
-
-    // const handleEditUserRegister = (user) => {
-    //     setSelectedUser(user)
-    //     // console.log(user.id);
-    //     setIsCreateModalLayoutOpen(true);
-
-    // }
 
     return (
         <div>

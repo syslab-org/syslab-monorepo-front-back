@@ -13,7 +13,6 @@ apps/frontend/src
 ├── config
 │   └── networking.js
 ├── features
-│   ├── ModalLayout.jsx
 │   ├── admin
 │   │   └── pages
 │   │       ├── Dashboard.jsx
@@ -44,9 +43,12 @@ apps/frontend/src
 │   │   │   ├── NetworkNodesContext.jsx
 │   │   │   └── WizardContext.jsx
 │   │   ├── core
+│   │   │   ├── useDeployNetwork.js
 │   │   │   ├── usePlanMeta.js
 │   │   │   ├── usePlanPolling.js
-│   │   │   └── usePlanValidationSync.js
+│   │   │   ├── usePlanValidationSync.js
+│   │   │   ├── useRestoreFlow.js
+│   │   │   └── useSaveFlow.js
 │   │   ├── domain
 │   │   │   ├── canvasStateMachine.js
 │   │   │   └── decideRouterMode.js
@@ -64,17 +66,14 @@ apps/frontend/src
 │   │   │       ├── cidrUtils.js
 │   │   │       └── useFormValidations.jsx
 │   │   ├── hooks
-│   │   │   ├── useDeployNetwork.js
 │   │   │   ├── useFlowState.js
 │   │   │   ├── useHandleDrop.js
 │   │   │   ├── useNodeClick.js
 │   │   │   ├── useNodeDrag.js
 │   │   │   ├── useNodeDragStart.js
 │   │   │   ├── useNodeDragStop.js
-│   │   │   ├── useRestoreFlow.js
 │   │   │   ├── useRestrictMovement.js
-│   │   │   ├── useRestrictSubnetsInsideVPC.js
-│   │   │   └── useSaveFlow.js
+│   │   │   └── useRestrictSubnetsInsideVPC.js
 │   │   ├── index.js
 │   │   ├── modals
 │   │   │   ├── AddAmiModal.jsx
@@ -154,7 +153,8 @@ apps/frontend/src
 │   │   └── index.js
 │   └── ui
 │       ├── layouts
-│       │   └── MainLayout.jsx
+│       │   ├── MainLayout.jsx
+│       │   └── ModalLayout.jsx
 │       ├── organisms
 │       │   ├── LoadingFlow.jsx
 │       │   └── ProtectedRoute.jsx

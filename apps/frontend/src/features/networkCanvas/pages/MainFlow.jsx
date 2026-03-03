@@ -42,8 +42,8 @@ import VPCNodeForm from '@/features/networkCanvas/forms/VPCNodeForm';
 import { useFlowState } from '@/features/networkCanvas/hooks/useFlowState';
 import useNodeClick from '@/features/networkCanvas/hooks/useNodeClick';
 import useNodeDrag from '@/features/networkCanvas/hooks/useNodeDrag';
-import useRestoreFlow from '@/features/networkCanvas/hooks/useRestoreFlow';
-import useSaveFlow from '@/features/networkCanvas/hooks/useSaveFlow';
+import useRestoreFlow from '@/features/networkCanvas/core/useRestoreFlow';
+import useSaveFlow from '@/features/networkCanvas/core/useSaveFlow';
 import InstanceNode from "@/features/networkCanvas/nodes/InstanceNode";
 import RouterNodeInstance from "@/features/networkCanvas/nodes/RouterNodeInstance";
 import SubNetworkNodeInstance from '@/features/networkCanvas/nodes/SubNetworkNodeInstance';
@@ -69,7 +69,7 @@ import {
 
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext.jsx";
 import { NetworkProvider } from "@/features/networkCanvas/context/NetworkNodesContext";
-import useDeployNetwork from "@/features/networkCanvas/hooks/useDeployNetwork";
+import useDeployNetwork from "@/features/networkCanvas/core/useDeployNetwork";
 import useHandleDrop from "@/features/networkCanvas/hooks/useHandleDrop";
 import useRestrictMovement from "@/features/networkCanvas/hooks/useRestrictMovement";
 import { useRestrictSubnetsInsideVPC } from "@/features/networkCanvas/hooks/useRestrictSubnetsInsideVPC";

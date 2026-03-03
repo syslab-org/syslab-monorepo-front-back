@@ -19,7 +19,7 @@ import {
 } from '@mui/material';
 
 import { TASK_STATE_PENDING, TASK_STATE_RUNNING } from '@/shared/constants';
-import { api } from '@/lib/api';
+import { api } from '@/infraestructure/http/api';
 
 const POLL_MS = 2000;
 
