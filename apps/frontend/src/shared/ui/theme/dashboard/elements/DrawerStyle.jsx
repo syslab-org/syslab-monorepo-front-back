@@ -1,5 +1,5 @@
 import { styled } from '@mui/material/styles'
-import { DRAWERWITH } from '../../../../constants'
+import { DRAWERWITH } from '@/shared/constants'
 import MuiDrawer from '@mui/material/Drawer';
 
 

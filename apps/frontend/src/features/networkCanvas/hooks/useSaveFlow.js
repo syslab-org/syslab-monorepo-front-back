@@ -4,7 +4,7 @@ import { useCallback, useContext } from "react";
 import {
   DB_FIRESTORE_VPCS,
   ERROR_SAVING_FLOW_FIREBASE,
-} from "../../../constants";
+} from "@/shared/constants";
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
 import { db } from "../../../infraestructure/firebase/firebaseConfig";
 

@@ -1,6 +1,6 @@
 // apps/frontend/src/App.jsx
 import DashboardRoutes from '@/app/routes/DashboardRoutes'
-import ProtectedRoute from '@/components/common/ProtectedRoute'
+import ProtectedRoute from '@/shared/ui/organisms/ProtectedRoute'
 import { LoginPage } from '@/features/auth'
 import { RegistrationPage } from '@/features/auth'
 import TaskDemo from '@/components/TaskDemo'

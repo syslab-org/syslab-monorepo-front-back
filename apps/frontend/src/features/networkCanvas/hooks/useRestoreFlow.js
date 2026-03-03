@@ -10,7 +10,7 @@ import {
   NO_DOC_WARNING,
   SAVING_ERROR,
   UNKNOWN_EXPIRATION_FORMAT,
-} from "../../../constants";
+} from "@/shared/constants";
 import { useContext } from "react";
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
 import useCidrBlockVPCStore from "../store/cidrBlocksIp";

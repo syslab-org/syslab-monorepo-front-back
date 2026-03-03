@@ -1,21 +1,21 @@
-// #apps/frontend/src/components/common/DashboardRoutes.jsx
+// apps/frontend/src/app/routes/DashboardRoutes.jsx
 import { ReactFlowProvider } from "@xyflow/react";
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { USER_ROL_STUDENT, USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER } from '@/shared/constants';
 import { LoadingFlowProvider } from '@/app/providers/LoadingFlowContext';
-import Dashboard from '@/pages/Dashboard';
-import PlanDetailPage from '@/pages/Plans/PlanDetailPage';
-import PlanListPage from '@/pages/Plans/PlanListPage';
+import Dashboard from '@/features/admin/pages/Dashboard';
+import PlanDetailPage from '@/features/plans/pages/PlanDetailPage';
+import PlanListPage from '@/features/plans/pages/PlanListPage';
 import { MainFlow, VPCList, WizardProvider } from '@/features/networkCanvas';
-import MainLayout from '@/components/layout/MainLayout';
+import MainLayout from '@/shared/ui/layouts/MainLayout';
 import PanelAdmin from '@/features/admin/pages/PanelAdmin';
 import ProfilePage from '@/features/admin/pages/ProfilePage';
 import SettingsPage from '@/components/pages/SettingsPage';
 import TestComponent from '@/components/pages/TestComponent';
 import GeneralSettings from '@/components/pages/settings/GeneralSettings';
 import { UsersManagement } from '@/components/pages/settings/UsersManagement';
-import LoadingFlow from '@/components/common/LoadingFlow';
-import ProtectedRoute from '@/components/common/ProtectedRoute';
+import LoadingFlow from '@/shared/ui/organisms/LoadingFlow';
+import ProtectedRoute from '@/shared/ui/organisms/ProtectedRoute'
 import { LoginPage, RegistrationPage } from "@/features/auth";
 
 

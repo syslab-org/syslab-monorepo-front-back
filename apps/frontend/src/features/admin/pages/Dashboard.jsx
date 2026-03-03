@@ -1,16 +1,16 @@
-//#apps/frontend/src/pages/Dashboard.jsx
+// apps/frontend/src/features/admin/pages/Dashboard.jsx
 import { Box, Button, Card, CardContent, Grid, Typography, Stack } from "@mui/material";
 import CloudQueueIcon from "@mui/icons-material/CloudQueue";
 import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
 import HistoryIcon from "@mui/icons-material/History";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../lib/api";
+import { api } from "@/lib/api";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from '@/infraestructure/firebase/firebaseConfig';
 import { DB_FIRESTORE_VPCS, USER_ROL_STUDENT } from '@/shared/constants';
 import { useAuth } from '@/app/providers/AuthContext';
-import { PageHeader } from "../components/layout/MainLayout.jsx";
+import { PageHeader } from '@/shared/ui/layouts/MainLayout';
 
 function Dashboard() {
   const [plans, setPlans] = useState([]);
