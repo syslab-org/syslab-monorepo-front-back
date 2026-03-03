@@ -29,7 +29,7 @@ import {
   MainListItems,
   SecondaryListItems,
 } from "../../components/theme/dashboard/listItems.jsx";
-import { useAuth } from "../../contexts/AuthContext.jsx";
+import { useAuth } from '@/app/providers/AuthContext';
 
 export const PageHeader = ({ title, subtitle, actions }) => {
   return (

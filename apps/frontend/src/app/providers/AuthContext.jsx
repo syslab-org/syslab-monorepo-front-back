@@ -1,8 +1,8 @@
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useEffect, useState, createContext, useContext } from "react";
-import { auth, db } from "../firebase/firebaseConfig";
+import { auth, db } from "@/infraestructure/firebase/firebaseConfig";
+import { DB_FIRESTORE_USERS } from "@/shared/constants";
 import { collection, getDocs, query, where } from "firebase/firestore";
-import { DB_FIRESTORE_USERS } from "../constants";
 import { useNavigate } from "react-router-dom";
 
 const AuthContext = createContext();

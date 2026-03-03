@@ -72,12 +72,12 @@ import {
 import { useTheme } from "@mui/material/styles";
 import { collection, doc, getDoc, getDocs, setDoc } from "firebase/firestore";
 import { useContext } from "react";
-import { LoadingFlowContext } from "../../contexts/LoadingFlowContext";
+import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext.jsx";
 import { NetworkProvider } from "./context/NetworkNodesContext";
-import { db } from "../../firebase/firebaseConfig";
+import { db } from "@/infraestructure/firebase/firebaseConfig";
 import ConfirmDeployDialog from "./ConfirmDeployDialog";
 import { api } from "../../lib/api";
-import { DB_FIRESTORE_VPCS } from "../../constants";
+import { DB_FIRESTORE_VPCS } from "@/shared/constants";
 import useDeployNetwork from "./hooks/useDeployNetwork";
 import useHandleDrop from "./hooks/useHandleDrop";
 import useRestrictMovement from "./hooks/useRestrictMovement";

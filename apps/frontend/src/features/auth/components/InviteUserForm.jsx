@@ -1,11 +1,11 @@
 /* eslint-disable react/prop-types */
-import { useInviteUserFormValidation } from '../../utils/hooks/useInviteUserFormValidation';
+import { useInviteUserFormValidation } from '@/features/auth/hooks/useInviteUserFormValidation';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import { Button, FormControl, InputLabel, MenuItem, Select, Stack, TextField } from '@mui/material';
-import { STATUS_USER_PENDING, USER_ROL_STUDENT, USER_ROL_SUPER_ADMIN, USER_ROLES_ARRAY, USER_STATUS_ARRAY } from '../../constants';
+import { STATUS_USER_PENDING, USER_ROL_STUDENT, USER_ROL_SUPER_ADMIN, USER_ROLES_ARRAY, USER_STATUS_ARRAY } from '../../../constants';
 import { useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext'
+import { useAuth } from '@/app/providers/AuthContext'
 
 // eslint-disable-next-line react/prop-types
 const InviteUserForm = ({ closeModal, userData }) => {

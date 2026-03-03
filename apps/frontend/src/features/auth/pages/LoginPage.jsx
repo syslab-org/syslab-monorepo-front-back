@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { loginWithEmail, loginWithGoogle } from '../../../services/authServices'
+import { loginWithEmail, loginWithGoogle } from '@/features/auth/services/authService'
 import { Avatar, Box, Button, Checkbox, CssBaseline, FormControlLabel, Grid, Link, Paper, TextField, Typography } from '@mui/material'
 import { LockClockOutlined } from '@mui/icons-material'
 import GoogleIcon from '@mui/icons-material/Google';
@@ -64,7 +64,7 @@ const LoginPage = () => {
                         <LockClockOutlined />
                     </Avatar>
                     <Typography component="h1" variant="h5">
-                        Sign In 
+                        Sign In
                     </Typography>
                     <Box component="form" noValidate onSubmit={handleLogin} sx={{ mt: 1 }}>
                         <TextField
@@ -104,7 +104,7 @@ const LoginPage = () => {
                             Login
                         </Button>
                         <Button
-                            startIcon={<GoogleIcon/>}
+                            startIcon={<GoogleIcon />}
                             fullWidth
                             variant="contained"
                             sx={{ mt: 3, mb: 2 }}
@@ -112,7 +112,7 @@ const LoginPage = () => {
                         >
                             Sign In With Google
                         </Button>
-                     
+
                         <Grid container>
                             <Grid item xs>
                                 <Link href="#" variant="body2">

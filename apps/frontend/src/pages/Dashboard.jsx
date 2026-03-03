@@ -7,9 +7,9 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "../firebase/firebaseConfig";
-import { DB_FIRESTORE_VPCS, USER_ROL_STUDENT } from "../constants";
-import { useAuth } from "../contexts/AuthContext";
+import { db } from '@/infraestructure/firebase/firebaseConfig';
+import { DB_FIRESTORE_VPCS, USER_ROL_STUDENT } from '@/shared/constants';
+import { useAuth } from '@/app/providers/AuthContext';
 import { PageHeader } from "../components/layout/MainLayout.jsx";
 
 function Dashboard() {

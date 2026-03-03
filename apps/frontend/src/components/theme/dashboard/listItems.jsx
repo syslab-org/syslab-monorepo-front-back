@@ -21,7 +21,7 @@ import {
   USER_ROL_SUPER_ADMIN,
   USER_ROL_TEACHER,
 } from "../../../constants";
-import { useAuth } from "../../../contexts/AuthContext.jsx";
+import { useAuth } from '@/app/providers/AuthContext';
 
 const activeItemStyle = (theme) => ({
   position: "relative",

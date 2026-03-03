@@ -1,21 +1,22 @@
 // #apps/frontend/src/components/common/DashboardRoutes.jsx
 import { ReactFlowProvider } from "@xyflow/react";
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { USER_ROL_STUDENT, USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER } from '@/constants';
-import { LoadingFlowProvider } from '@/contexts/LoadingFlowContext';
+import { USER_ROL_STUDENT, USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER } from '@/shared/constants';
+import { LoadingFlowProvider } from '@/app/providers/LoadingFlowContext';
 import Dashboard from '@/pages/Dashboard';
 import PlanDetailPage from '@/pages/Plans/PlanDetailPage';
 import PlanListPage from '@/pages/Plans/PlanListPage';
 import { MainFlow, VPCList, WizardProvider } from '@/features/networkCanvas';
 import MainLayout from '@/components/layout/MainLayout';
-import PanelAdmin from '@/components/pages/PanelAdmin';
-import ProfilePage from '@/components/pages/ProfilePage';
+import PanelAdmin from '@/features/admin/pages/PanelAdmin';
+import ProfilePage from '@/features/admin/pages/ProfilePage';
 import SettingsPage from '@/components/pages/SettingsPage';
 import TestComponent from '@/components/pages/TestComponent';
 import GeneralSettings from '@/components/pages/settings/GeneralSettings';
 import { UsersManagement } from '@/components/pages/settings/UsersManagement';
 import LoadingFlow from '@/components/common/LoadingFlow';
 import ProtectedRoute from '@/components/common/ProtectedRoute';
+import { LoginPage, RegistrationPage } from "@/features/auth";
 
 
 const DashboardRoutes = () => {

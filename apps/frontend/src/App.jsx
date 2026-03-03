@@ -1,10 +1,10 @@
 // apps/frontend/src/App.jsx
 import DashboardRoutes from '@/app/routes/DashboardRoutes'
 import ProtectedRoute from '@/components/common/ProtectedRoute'
-import LoginPage from '@/components/pages/authentication/LoginPage'
-import RegistrationPage from '@/components/pages/authentication/RegistrationPage'
+import { LoginPage } from '@/features/auth'
+import { RegistrationPage } from '@/features/auth'
 import TaskDemo from '@/components/TaskDemo'
-import { AuthProvider } from '@/contexts/AuthContext'
+import { AuthProvider } from '@/app/providers/AuthContext';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import './App.css'
 

@@ -1,7 +1,7 @@
 // apps/frontend/src/components/common/ProtectedRoute.jsx
 /* eslint-disable react/prop-types */
 import { Navigate, useLocation } from "react-router-dom";
-import { useAuth } from "../../contexts/AuthContext";
+import { useAuth } from "@/app/providers/AuthContext";
 
 // eslint-disable-next-line react/prop-types
 const ProtectedRoute = ({ children, allowedRoles }) => {

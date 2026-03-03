@@ -3,6 +3,8 @@ apps/frontend/src
 ├── App.jsx
 ├── app
 │   ├── providers
+│   │   ├── AuthContext.jsx
+│   │   └── LoadingFlowContext.jsx
 │   └── routes
 │       └── DashboardRoutes.jsx
 ├── assets
@@ -16,13 +18,8 @@ apps/frontend/src
 │   ├── layout
 │   │   └── MainLayout.jsx
 │   ├── pages
-│   │   ├── PanelAdmin.jsx
-│   │   ├── ProfilePage.jsx
 │   │   ├── SettingsPage.jsx
 │   │   ├── TestComponent.jsx
-│   │   ├── authentication
-│   │   │   ├── LoginPage.jsx
-│   │   │   └── RegistrationPage.jsx
 │   │   ├── modals
 │   │   │   └── AddAmiModal.jsx
 │   │   ├── settings
@@ -39,14 +36,26 @@ apps/frontend/src
 ├── config
 │   └── networking.js
 ├── constants.js
-├── contexts
-│   ├── AuthContext.jsx
-│   └── LoadingFlowContext.jsx
 ├── features
-│   ├── Authentications
-│   │   ├── InviteUserForm.jsx
-│   │   └── RegistrationForm.jsx
 │   ├── ModalLayout.jsx
+│   ├── admin
+│   │   └── pages
+│   │       ├── PanelAdmin.jsx
+│   │       └── ProfilePage.jsx
+│   ├── auth
+│   │   ├── components
+│   │   │   ├── InviteUserForm.jsx
+│   │   │   └── RegistrationForm.jsx
+│   │   ├── forms
+│   │   ├── hooks
+│   │   │   ├── useInviteUserFormValidation.jsx
+│   │   │   └── useRegistrationUserFormValidation.jsx
+│   │   ├── index.js
+│   │   ├── pages
+│   │   │   ├── LoginPage.jsx
+│   │   │   └── RegistrationPage.jsx
+│   │   └── services
+│   │       └── authService.js
 │   ├── networkCanvas
 │   │   ├── ConfirmDeployDialog.jsx
 │   │   ├── MainFlow.jsx
@@ -57,6 +66,12 @@ apps/frontend/src
 │   │   ├── context
 │   │   │   ├── NetworkNodesContext.jsx
 │   │   │   └── WizardContext.jsx
+│   │   ├── core
+│   │   │   ├── usePlanMeta.js
+│   │   │   ├── usePlanPolling.js
+│   │   │   └── usePlanValidationSync.js
+│   │   ├── domain
+│   │   │   └── canvasStateMachine.js
 │   │   ├── forms
 │   │   │   ├── InstanceNodeForm.jsx
 │   │   │   ├── NewVLANForm.jsx
@@ -121,11 +136,16 @@ apps/frontend/src
 │   │       ├── initials-elements.js
 │   │       ├── networkUtils.js
 │   │       └── topologyValidation.js
+│   ├── settings
+│   │   ├── index.js
+│   │   └── pages
 │   └── vpcs
 │       └── pages
-├── firebase
-│   └── firebaseConfig.js
+│           └── VPCList.jsx
 ├── index.css
+├── infraestructure
+│   └── firebase
+│       └── firebaseConfig.js
 ├── lib
 │   ├── api.js
 │   └── useTaskPoller.js
@@ -139,8 +159,9 @@ apps/frontend/src
 │   └── Plans
 │       ├── PlanDetailPage.jsx
 │       └── PlanListPage.jsx
-├── services
-│   └── authServices.js
+├── shared
+│   └── constants
+│       └── index.js
 ├── styles
 │   ├── palettle.js
 │   ├── theme.js
@@ -152,8 +173,6 @@ apps/frontend/src
 └── utils
     ├── decideRouterMode.js
     └── hooks
-        ├── useInviteUserFormValidation.jsx
-        ├── useRegistrationUserFormValidation.jsx
         └── useUsersFetch.jsx
 
-48 directories, 109 files
+59 directories, 117 files
