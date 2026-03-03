@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form"
 import { useAuth } from '@/app/providers/AuthContext'
 import { doc, getDoc, updateDoc } from "firebase/firestore"
 import { db } from "@/infraestructure/firebase/firebaseConfig"
-import { DB_FIRESTORE_USERS } from "../../../constants"
+import { DB_FIRESTORE_USERS } from "@/shared/constants"
 import { useEffect } from "react"
 
 

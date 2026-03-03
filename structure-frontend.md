@@ -13,33 +13,24 @@ apps/frontend/src
 ├── components
 │   ├── TaskDemo.jsx
 │   ├── common
-│   │   ├── LoadingFlow.jsx
-│   │   └── ProtectedRoute.jsx
 │   ├── layout
-│   │   └── MainLayout.jsx
-│   ├── pages
-│   │   ├── SettingsPage.jsx
-│   │   ├── TestComponent.jsx
-│   │   ├── modals
-│   │   │   └── AddAmiModal.jsx
-│   │   ├── settings
-│   │   │   ├── GeneralSettings.jsx
-│   │   │   └── UsersManagement.jsx
-│   │   └── validations
-│   │       └── useFormValidationsSettings.jsx
-│   └── theme
-│       └── dashboard
-│           ├── elements
-│           │   ├── AppBarStyle.jsx
-│           │   └── DrawerStyle.jsx
-│           └── listItems.jsx
+│   └── pages
+│       ├── SettingsPage.jsx
+│       ├── TestComponent.jsx
+│       ├── modals
+│       │   └── AddAmiModal.jsx
+│       ├── settings
+│       │   ├── GeneralSettings.jsx
+│       │   └── UsersManagement.jsx
+│       └── validations
+│           └── useFormValidationsSettings.jsx
 ├── config
 │   └── networking.js
-├── constants.js
 ├── features
 │   ├── ModalLayout.jsx
 │   ├── admin
 │   │   └── pages
+│   │       ├── Dashboard.jsx
 │   │       ├── PanelAdmin.jsx
 │   │       └── ProfilePage.jsx
 │   ├── auth
@@ -155,13 +146,24 @@ apps/frontend/src
 │   ├── Untitled-2024-03-23-1000.png
 │   └── schema.text
 ├── pages
-│   ├── Dashboard.jsx
 │   └── Plans
 │       ├── PlanDetailPage.jsx
 │       └── PlanListPage.jsx
 ├── shared
-│   └── constants
-│       └── index.js
+│   ├── constants
+│   │   └── index.js
+│   └── ui
+│       ├── layouts
+│       │   └── MainLayout.jsx
+│       ├── organisms
+│       │   ├── LoadingFlow.jsx
+│       │   └── ProtectedRoute.jsx
+│       └── theme
+│           └── dashboard
+│               ├── elements
+│               │   ├── AppBarStyle.jsx
+│               │   └── DrawerStyle.jsx
+│               └── listItems.jsx
 ├── styles
 │   ├── palettle.js
 │   ├── theme.js
@@ -175,4 +177,4 @@ apps/frontend/src
     └── hooks
         └── useUsersFetch.jsx
 
-59 directories, 117 files
+62 directories, 116 files

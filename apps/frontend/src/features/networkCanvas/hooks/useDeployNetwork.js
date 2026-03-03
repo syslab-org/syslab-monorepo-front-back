@@ -2,7 +2,7 @@
 import { useContext, useEffect, useRef, useState } from "react";
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "../../../infraestructure/firebase/firebaseConfig";
-import { DB_FIRESTORE_VPCS } from "../../../constants";
+import { DB_FIRESTORE_VPCS } from "@/shared/constants";
 import { useNavigate } from "react-router-dom";
 import { RouterPolicy } from "../../../config/networking";
 import { useAuth } from "@/app/providers/AuthContext";

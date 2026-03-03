@@ -1,3 +1,4 @@
+// apps/frontend/src/features/plans/pages/PlanListPage.jsx
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -27,8 +28,8 @@ import SettingsSuggestIcon from '@mui/icons-material/SettingsSuggest';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import PublicOutlinedIcon from '@mui/icons-material/PublicOutlined';
 
-import { api } from '../../lib/api';
-import { PageHeader } from "../../components/layout/MainLayout.jsx";
+import { api } from '@/lib/api';
+import { PageHeader } from '@/shared/ui/layouts/MainLayout';
 
 const statusChipColor = (status) => {
   switch ((status || '').toUpperCase()) {

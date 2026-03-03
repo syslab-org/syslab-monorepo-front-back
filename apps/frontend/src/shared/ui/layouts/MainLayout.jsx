@@ -1,4 +1,4 @@
-// apps/frontend/src/components/layout/MainLayout.jsx
+// apps/frontend/src/shared/ui/layouts/MainLayout.jsx
 import { useState } from "react";
 import { Link, Outlet } from "react-router-dom";
 import {
@@ -22,13 +22,13 @@ import MenuIcon from "@mui/icons-material/Menu";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import LogoutIcon from "@mui/icons-material/Logout";
 
-import "../../App.css";
-import { AppBarStyle } from "../../components/theme/dashboard/elements/AppBarStyle.jsx";
-import { DrawerStyle } from "../../components/theme/dashboard/elements/DrawerStyle.jsx";
+import "@/App.css";
+import { AppBarStyle } from "@/shared/ui/theme/dashboard/elements/AppBarStyle.jsx";
+import { DrawerStyle } from "@/shared/ui/theme/dashboard/elements/DrawerStyle.jsx";
 import {
   MainListItems,
   SecondaryListItems,
-} from "../../components/theme/dashboard/listItems.jsx";
+} from "@/shared/ui/theme/dashboard/listItems.jsx";
 import { useAuth } from '@/app/providers/AuthContext';
 
 export const PageHeader = ({ title, subtitle, actions }) => {

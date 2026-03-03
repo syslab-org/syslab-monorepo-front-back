@@ -2,7 +2,7 @@
 import { useEffect } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/infraestructure/firebase/firebaseConfig";
-import { DB_FIRESTORE_VPCS } from "@/constants";
+import { DB_FIRESTORE_VPCS } from "@/shared/constants";
 
 export const usePlanMeta = ({
   vpcid,

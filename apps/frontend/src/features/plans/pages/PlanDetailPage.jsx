@@ -1,4 +1,4 @@
-// apps/frontend/src/pages/Plans/PlanDetailPage.jsx
+// apps/frontend/src/features/plans/pages/PlanDetailPage.jsx
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -18,8 +18,8 @@ import {
   Typography,
 } from '@mui/material';
 
-import { TASK_STATE_PENDING, TASK_STATE_RUNNING } from '../../constants';
-import { api } from '../../lib/api';
+import { TASK_STATE_PENDING, TASK_STATE_RUNNING } from '@/shared/constants';
+import { api } from '@/lib/api';
 
 const POLL_MS = 2000;
 

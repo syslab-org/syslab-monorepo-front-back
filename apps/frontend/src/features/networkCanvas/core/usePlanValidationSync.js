@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { doc, setDoc } from "firebase/firestore";
 import { computeInfraHash } from "../utils/infraHash";
 import { db } from "../../../infraestructure/firebase/firebaseConfig";
-import { DB_FIRESTORE_VPCS } from "../../../constants";
+import { DB_FIRESTORE_VPCS } from "@/shared/constants";
 
 export const usePlanValidationSync = ({
   validationState,

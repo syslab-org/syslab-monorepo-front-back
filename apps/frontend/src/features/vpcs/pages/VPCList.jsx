@@ -30,14 +30,14 @@ import {
 import { collection, getDocs, query, where, deleteDoc, doc, setDoc } from 'firebase/firestore';
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { DB_FIRESTORE_VPCS, USER_ROL_STUDENT } from "../../../constants";
+import { DB_FIRESTORE_VPCS, USER_ROL_STUDENT } from "@/shared/constants";
 import { useAuth } from '@/app/providers/AuthContext';
 import { LoadingFlowContext } from "../../../app/providers/LoadingFlowContext.jsx";
 import { useWizard } from "../../networkCanvas/context/WizardContext.jsx";
 import { db } from "@/infraestructure/firebase/firebaseConfig.js";
 import useCidrBlockVPCStore from '../store/cidrBlocksIp';
 import CreateVPCModal from "./CreateVPCModal";
-import { PageHeader } from "../../../components/layout/MainLayout.jsx";
+import { PageHeader } from '@/shared/ui/layouts/MainLayout';
 
 
 

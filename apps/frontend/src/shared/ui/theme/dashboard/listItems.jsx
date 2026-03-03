@@ -20,7 +20,7 @@ import {
   USER_ROL_STUDENT,
   USER_ROL_SUPER_ADMIN,
   USER_ROL_TEACHER,
-} from "../../../constants";
+} from "@/shared/constants";
 import { useAuth } from '@/app/providers/AuthContext';
 
 const activeItemStyle = (theme) => ({

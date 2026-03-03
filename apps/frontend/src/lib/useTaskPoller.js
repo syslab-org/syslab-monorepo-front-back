@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { TASK_STATE_FAILURE, TASK_STATE_SUCCESS } from "../constants";
+import { TASK_STATE_FAILURE, TASK_STATE_SUCCESS } from "@/shared/constants";
 import { api } from "./api";
 
 export function useTaskPoller(taskId, { intervalMs = 1500 } = {}) {
@@ -21,7 +21,6 @@ export function useTaskPoller(taskId, { intervalMs = 1500 } = {}) {
         if (data.state === TASK_STATE_SUCCESS) {
           setResult(data.result ?? true);
           clearInterval(timer.current);
-
         } else if (data.state === TASK_STATE_FAILURE) {
           setError(data.error || "Task failed");
           clearInterval(timer.current);
@@ -30,7 +29,7 @@ export function useTaskPoller(taskId, { intervalMs = 1500 } = {}) {
         if (!cancelled) setError(e.message);
         clearInterval(timer.current);
       }
-    }
+    };
 
     tick();
     timer.current = setInterval(tick, intervalMs);
@@ -38,7 +37,6 @@ export function useTaskPoller(taskId, { intervalMs = 1500 } = {}) {
       cancelled = true;
       clearInterval(timer.current);
     };
-
   }, [taskId, intervalMs]);
   return { state, result, error };
 }
