@@ -7,7 +7,7 @@ import { addDoc, collection, getDocs } from 'firebase/firestore'
 import { db } from '@/infraestructure/firebase/firebaseConfig'
 import { Box, Button, IconButton, List, ListItem, ListItemText } from '@mui/material'
 import { DeleteOutlineOutlined } from '@mui/icons-material'
-import AddAmiModal from './modals/AddAmiModal'
+import AddAmiModal from '@/features/networkCanvas/modals/AddAmiModal'
 import { DB_AMI_LIST } from '@/features/networkCanvas/utils/constants';
 
 const AMIList = ({ amilist }) => (

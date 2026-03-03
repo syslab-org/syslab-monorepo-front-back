@@ -3,7 +3,7 @@ import DashboardRoutes from '@/app/routes/DashboardRoutes'
 import ProtectedRoute from '@/shared/ui/organisms/ProtectedRoute'
 import { LoginPage } from '@/features/auth'
 import { RegistrationPage } from '@/features/auth'
-import TaskDemo from '@/components/TaskDemo'
+import { TaskDemo } from '@/features/devtools';
 import { AuthProvider } from '@/app/providers/AuthContext';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import './App.css'
