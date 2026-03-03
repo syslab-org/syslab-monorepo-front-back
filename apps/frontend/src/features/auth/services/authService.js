@@ -1,4 +1,4 @@
-import { auth, db } from "@/infraestructure/firebase/firebaseConfig";
+import { auth, db } from "@/infrastructure/firebase/firebaseConfig";
 import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,

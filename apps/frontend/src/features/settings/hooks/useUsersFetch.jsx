@@ -1,7 +1,7 @@
 import { addDoc, collection, doc, getDocs, Timestamp, updateDoc } from 'firebase/firestore'
 import { useCallback } from 'react'
 import { useState } from 'react'
-import { db } from "@/infraestructure/firebase/firebaseConfig"
+import { db } from "@/infrastructure/firebase/firebaseConfig"
 import { DB_FIRESTORE_USERS } from '@/shared/constants'
 
 export const useUsersFetch = (setLoadingFlow) => {

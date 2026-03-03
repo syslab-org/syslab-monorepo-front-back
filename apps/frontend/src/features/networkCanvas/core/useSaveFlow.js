@@ -6,7 +6,7 @@ import {
   ERROR_SAVING_FLOW_FIREBASE,
 } from "@/shared/constants";
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
-import { db } from "../../../infraestructure/firebase/firebaseConfig";
+import { db } from "../../../infrastructure/firebase/firebaseConfig";
 
 /**
  * Sanea cualquier objeto para Firestore:

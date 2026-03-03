@@ -4,7 +4,7 @@ import { addDoc, collection } from 'firebase/firestore';
 import { useContext } from 'react';
 import { useAuth } from '@/app/providers/AuthContext';
 import { LoadingFlowContext } from '@/app/providers/LoadingFlowContext';
-import { db } from '@/infraestructure/firebase/firebaseConfig';
+import { db } from '@/infrastructure/firebase/firebaseConfig';
 import NewVLANForm from '../forms/NewVLANForm';
 import { useWizard } from "@/features/networkCanvas/context/WizardContext"
 import WizardModalLayout from '../components/WizardModalLayout';

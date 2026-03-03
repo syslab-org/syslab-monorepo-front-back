@@ -74,7 +74,7 @@ import useHandleDrop from "@/features/networkCanvas/hooks/useHandleDrop";
 import useRestrictMovement from "@/features/networkCanvas/hooks/useRestrictMovement";
 import { useRestrictSubnetsInsideVPC } from "@/features/networkCanvas/hooks/useRestrictSubnetsInsideVPC";
 import ConfirmDeployDialog from "@/features/networkCanvas/modals/ConfirmDeployDialog";
-import { db } from "@/infraestructure/firebase/firebaseConfig";
+import { db } from "@/infrastructure/firebase/firebaseConfig";
 import { useTheme } from "@mui/material/styles";
 import { collection, getDocs } from "firebase/firestore";
 import { useContext } from "react";

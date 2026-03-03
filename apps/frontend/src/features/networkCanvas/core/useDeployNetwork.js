@@ -1,13 +1,13 @@
 // apps/frontend/src/components/flow/flow-hooks/useDeployNetwork.js
 import { useContext, useEffect, useRef, useState } from "react";
 import { doc, setDoc } from "firebase/firestore";
-import { db } from "../../../infraestructure/firebase/firebaseConfig";
+import { db } from "../../../infrastructure/firebase/firebaseConfig";
 import { DB_FIRESTORE_VPCS } from "@/shared/constants";
 import { useNavigate } from "react-router-dom";
 import { RouterPolicy } from "../../../config/networking";
 import { useAuth } from "@/app/providers/AuthContext";
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
-import { api } from "@/infraestructure/http/api";
+import { api } from "@/infrastructure/http/api";
 import { decideRouterMode } from "@/features/networkCanvas/domain/decideRouterMode";
 import useCidrBlockVPCStore from "../store/cidrBlocksIp";
 import { buildRoutingPreview } from "../utils/buildRoutingPreview";

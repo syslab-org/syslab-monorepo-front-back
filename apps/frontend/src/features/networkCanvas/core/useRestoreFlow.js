@@ -1,7 +1,7 @@
 import { doc, getDoc } from "firebase/firestore";
 import { useCallback } from "react";
 import { useParams } from "react-router-dom";
-import { db } from "../../../infraestructure/firebase/firebaseConfig";
+import { db } from "../../../infrastructure/firebase/firebaseConfig";
 import {
   FETCHING_ERROR,
   FIRESTORE_COLLECTION,
