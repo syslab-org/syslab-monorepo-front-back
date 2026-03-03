@@ -38,10 +38,6 @@ apps/frontend/src
 │   │   └── pages
 │   │       └── TaskDemo.jsx
 │   ├── networkCanvas
-│   │   ├── ConfirmDeployDialog.jsx
-│   │   ├── MainFlow.jsx
-│   │   ├── PacketToolbar.jsx
-│   │   ├── SidebarFlow.jsx
 │   │   ├── components
 │   │   │   └── WizardModalLayout.jsx
 │   │   ├── context
@@ -81,7 +77,8 @@ apps/frontend/src
 │   │   │   └── useSaveFlow.js
 │   │   ├── index.js
 │   │   ├── modals
-│   │   │   └── AddAmiModal.jsx
+│   │   │   ├── AddAmiModal.jsx
+│   │   │   └── ConfirmDeployDialog.jsx
 │   │   ├── nodes
 │   │   │   ├── CustomResizerNode.jsx
 │   │   │   ├── InstanceNode.jsx
@@ -98,10 +95,13 @@ apps/frontend/src
 │   │   │       └── VPCNode.css
 │   │   ├── pages
 │   │   │   ├── CreateVPCModal.jsx
+│   │   │   ├── MainFlow.jsx
 │   │   │   └── VPCList.jsx
 │   │   ├── panels
 │   │   │   ├── DeployConfirmationRoutes.jsx
-│   │   │   └── RoutePreviewPanel.jsx
+│   │   │   ├── PacketToolbar.jsx
+│   │   │   ├── RoutePreviewPanel.jsx
+│   │   │   └── SidebarFlow.jsx
 │   │   ├── services
 │   │   │   ├── deployNetworkToCloud.jsx
 │   │   │   └── iconHelper.jsx

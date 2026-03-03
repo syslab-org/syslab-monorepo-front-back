@@ -1,8 +1,8 @@
 // apps/frontend/src/components/flow/MainFlow.jsx
+import PacketToolbar from "@/features/networkCanvas/panels/PacketToolbar";
 import {
   Background,
   Controls,
-  Panel,
   ReactFlow,
   useEdgesState,
   useNodesState,
@@ -10,15 +10,13 @@ import {
 } from "@xyflow/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import PacketToolbar from "./PacketToolbar";
-import { initialNodes } from './utils/initials-elements';
+import { initialNodes } from '../utils/initials-elements';
 // mui
 import {
   Alert,
   Backdrop,
   Box,
   Button,
-  Card,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -28,33 +26,33 @@ import {
   Modal,
   Snackbar,
   Stack,
-  Typography,
+  Typography
 } from "@mui/material";
 // import Modal from 'react-modal';
 import '@xyflow/react/dist/style.css';
-import '../../App.css';
-import './styles/packet-tracer.css';
+import '../../../App.css';
+import '../styles/packet-tracer.css';
 //Custom compoonents and hooks
-import SidebarFlow from './SidebarFlow';
-import { useFlowState } from './hooks/useFlowState';
-import useNodeClick from './hooks/useNodeClick';
-import useNodeDrag from './hooks/useNodeDrag';
-import useRestoreFlow from './hooks/useRestoreFlow';
-import useSaveFlow from './hooks/useSaveFlow';
-import InstanceNodeForm from './forms/InstanceNodeForm';
-import RouterNodeForm from './forms/RouterNodeForm';
-import SubNetworkNodeForm from './forms/SubNetworkNodeForm';
-import VPCNodeForm from './forms/VPCNodeForm';
-import InstanceNode from "./nodes/InstanceNode";
-import RouterNodeInstance from "./nodes/RouterNodeInstance";
-import SubNetworkNodeInstance from './nodes/SubNetworkNodeInstance';
-import VPCNodeInstance from "./nodes/VPCNodeInstance";
-import useCidrBlockVPCStore from './store/cidrBlocksIp';
-import useClickedNodeIdStore from './store/clickedNodeIdStore';
+import { useWizard } from "@/features/networkCanvas/context/WizardContext";
+import { usePlanValidationSync } from "@/features/networkCanvas/core/usePlanValidationSync";
+import InstanceNodeForm from '@/features/networkCanvas/forms/InstanceNodeForm';
+import RouterNodeForm from '@/features/networkCanvas/forms/RouterNodeForm';
+import SubNetworkNodeForm from '@/features/networkCanvas/forms/SubNetworkNodeForm';
+import VPCNodeForm from '@/features/networkCanvas/forms/VPCNodeForm';
+import { useFlowState } from '@/features/networkCanvas/hooks/useFlowState';
+import useNodeClick from '@/features/networkCanvas/hooks/useNodeClick';
+import useNodeDrag from '@/features/networkCanvas/hooks/useNodeDrag';
+import useRestoreFlow from '@/features/networkCanvas/hooks/useRestoreFlow';
+import useSaveFlow from '@/features/networkCanvas/hooks/useSaveFlow';
+import InstanceNode from "@/features/networkCanvas/nodes/InstanceNode";
+import RouterNodeInstance from "@/features/networkCanvas/nodes/RouterNodeInstance";
+import SubNetworkNodeInstance from '@/features/networkCanvas/nodes/SubNetworkNodeInstance';
+import VPCNodeInstance from "@/features/networkCanvas/nodes/VPCNodeInstance";
+import SidebarFlow from '@/features/networkCanvas/panels/SidebarFlow';
+import useCidrBlockVPCStore from '@/features/networkCanvas/store/cidrBlocksIp';
+import useClickedNodeIdStore from '@/features/networkCanvas/store/clickedNodeIdStore';
+import { computeInfraHash } from "@/features/networkCanvas/utils/infraHash";
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useWizard } from "@/features/networkCanvas/context/WizardContext"
-import { computeInfraHash } from "./utils/infraHash";
-import { usePlanValidationSync } from "./core/usePlanValidationSync";
 
 // Importar constantes
 import {
@@ -67,26 +65,24 @@ import {
   TYPE_SERVER_NODE,
   TYPE_SUBNETWORK_NODE,
   TYPE_VPC_NODE
-} from './utils/constants';
+} from '@/features/networkCanvas/utils/constants';
 
-import { useTheme } from "@mui/material/styles";
-import { collection, doc, getDoc, getDocs, setDoc } from "firebase/firestore";
-import { useContext } from "react";
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext.jsx";
-import { NetworkProvider } from "./context/NetworkNodesContext";
+import { NetworkProvider } from "@/features/networkCanvas/context/NetworkNodesContext";
+import useDeployNetwork from "@/features/networkCanvas/hooks/useDeployNetwork";
+import useHandleDrop from "@/features/networkCanvas/hooks/useHandleDrop";
+import useRestrictMovement from "@/features/networkCanvas/hooks/useRestrictMovement";
+import { useRestrictSubnetsInsideVPC } from "@/features/networkCanvas/hooks/useRestrictSubnetsInsideVPC";
+import ConfirmDeployDialog from "@/features/networkCanvas/modals/ConfirmDeployDialog";
 import { db } from "@/infraestructure/firebase/firebaseConfig";
-import ConfirmDeployDialog from "./ConfirmDeployDialog";
-import { api } from "../../lib/api";
-import { DB_FIRESTORE_VPCS } from "@/shared/constants";
-import useDeployNetwork from "./hooks/useDeployNetwork";
-import useHandleDrop from "./hooks/useHandleDrop";
-import useRestrictMovement from "./hooks/useRestrictMovement";
-import { useRestrictSubnetsInsideVPC } from "./hooks/useRestrictSubnetsInsideVPC";
-import RoutePreviewPanel from "./panels/RoutePreviewPanel";
-import { buildRoutingPreview } from "./utils/buildRoutingPreview";
-import { computeCanvasState } from "./domain/canvasStateMachine";
-import { usePlanPolling } from "./core/usePlanPolling";
-import { usePlanMeta } from "./core/usePlanMeta";
+import { useTheme } from "@mui/material/styles";
+import { collection, getDocs } from "firebase/firestore";
+import { useContext } from "react";
+import { usePlanMeta } from "@/features/networkCanvas/core/usePlanMeta";
+import { usePlanPolling } from "@/features/networkCanvas/core/usePlanPolling";
+import { computeCanvasState } from "@/features/networkCanvas/domain/canvasStateMachine";
+import RoutePreviewPanel from "@/features/networkCanvas/panels/RoutePreviewPanel";
+import { buildRoutingPreview } from "@/features/networkCanvas/utils/buildRoutingPreview";
 
 
 const nodeTypes = {
