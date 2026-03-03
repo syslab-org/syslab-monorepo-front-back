@@ -144,30 +144,29 @@ apps/frontend/src
 │   ├── Untitled-2024-03-23-1000.excalidraw
 │   ├── Untitled-2024-03-23-1000.png
 │   └── schema.text
-├── shared
-│   ├── constants
-│   │   └── index.js
-│   ├── hooks
-│   │   └── useTaskPoller.js
-│   └── ui
-│       ├── layouts
-│       │   ├── MainLayout.jsx
-│       │   └── ModalLayout.jsx
-│       ├── organisms
-│       │   ├── LoadingFlow.jsx
-│       │   └── ProtectedRoute.jsx
-│       └── theme
-│           ├── dashboard
-│           │   ├── elements
-│           │   │   ├── AppBarStyle.jsx
-│           │   │   └── DrawerStyle.jsx
-│           │   └── listItems.jsx
-│           ├── palettle.js
-│           ├── theme.js
-│           └── typografy.js
-└── theme
-    ├── AppThemeProvider.jsx
-    ├── createPacketTheme.js
-    └── packetTracerTheme.js
+└── shared
+    ├── constants
+    │   └── index.js
+    ├── hooks
+    │   └── useTaskPoller.js
+    └── ui
+        ├── layouts
+        │   ├── MainLayout.jsx
+        │   └── ModalLayout.jsx
+        ├── organisms
+        │   ├── LoadingFlow.jsx
+        │   └── ProtectedRoute.jsx
+        └── theme
+            ├── AppThemeProvider.jsx
+            ├── createPacketTheme.js
+            ├── dashboard
+            │   ├── elements
+            │   │   ├── AppBarStyle.jsx
+            │   │   └── DrawerStyle.jsx
+            │   └── listItems.jsx
+            ├── packetTracerTheme.js
+            ├── palettle.js
+            ├── theme.js
+            └── typografy.js
 
-56 directories, 115 files
+55 directories, 115 files
