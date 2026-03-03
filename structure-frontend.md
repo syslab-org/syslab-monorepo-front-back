@@ -102,8 +102,7 @@ apps/frontend/src
 │   │   │   ├── RoutePreviewPanel.jsx
 │   │   │   └── SidebarFlow.jsx
 │   │   ├── services
-│   │   │   ├── deployNetworkToCloud.jsx
-│   │   │   └── iconHelper.jsx
+│   │   │   └── deployNetworkToCloud.jsx
 │   │   ├── store
 │   │   │   ├── cidrBlocksIp.js
 │   │   │   └── clickedNodeIdStore.js
@@ -115,6 +114,7 @@ apps/frontend/src
 │   │       ├── cidr.js
 │   │       ├── constants.js
 │   │       ├── getNodeTitle.js
+│   │       ├── iconHelper.js
 │   │       ├── infraHash.js
 │   │       ├── initials-elements.js
 │   │       ├── networkUtils.js
@@ -138,11 +138,10 @@ apps/frontend/src
 │           └── VPCList.jsx
 ├── index.css
 ├── infraestructure
-│   └── firebase
-│       └── firebaseConfig.js
-├── lib
-│   ├── api.js
-│   └── useTaskPoller.js
+│   ├── firebase
+│   │   └── firebaseConfig.js
+│   └── http
+│       └── api.js
 ├── main.jsx
 ├── mocks
 │   ├── Untitled-2024-03-23-1000.excalidraw
@@ -151,6 +150,8 @@ apps/frontend/src
 ├── shared
 │   ├── constants
 │   │   └── index.js
+│   ├── hooks
+│   │   └── useTaskPoller.js
 │   └── ui
 │       ├── layouts
 │       │   ├── MainLayout.jsx
@@ -173,4 +174,4 @@ apps/frontend/src
     ├── createPacketTheme.js
     └── packetTracerTheme.js
 
-58 directories, 116 files
+59 directories, 116 files
