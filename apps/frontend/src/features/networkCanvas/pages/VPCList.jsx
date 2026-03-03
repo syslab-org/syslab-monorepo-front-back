@@ -34,7 +34,7 @@ import { DB_FIRESTORE_VPCS, USER_ROL_STUDENT } from "@/shared/constants";
 import { useAuth } from "@/app/providers/AuthContext.jsx";
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext.jsx";
 import { useWizard } from "@/features/networkCanvas/context/WizardContext"
-import { db } from "@/infraestructure/firebase/firebaseConfig.js";
+import { db } from "@/infrastructure/firebase/firebaseConfig.js";
 import useCidrBlockVPCStore from '../store/cidrBlocksIp';
 import CreateVPCModal from "./CreateVPCModal";
 import { PageHeader } from '@/shared/ui/layouts/MainLayout';

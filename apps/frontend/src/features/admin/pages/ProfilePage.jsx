@@ -5,7 +5,7 @@ import { LoadingFlowContext } from '@/app/providers/LoadingFlowContext';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
-import { auth, db, storage } from '@/infraestructure/firebase/firebaseConfig';
+import { auth, db, storage } from '@/infrastructure/firebase/firebaseConfig';
 import { DB_FIRESTORE_USERS } from '@/shared/constants';
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 import { Avatar, Button, IconButton, Paper, Stack, TextField, Typography } from '@mui/material';

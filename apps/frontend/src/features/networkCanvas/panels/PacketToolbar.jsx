@@ -9,7 +9,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import { Alert, Box, Button, Chip, IconButton, Tooltip } from '@mui/material';
-import { useThemeMode } from '@/theme/AppThemeProvider';
+import { useThemeMode } from '@/shared/ui/theme/AppThemeProvider';
 
 
 export default function PacketToolbar({

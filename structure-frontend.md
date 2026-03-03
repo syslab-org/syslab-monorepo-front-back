@@ -123,21 +123,18 @@ apps/frontend/src
 │   │   └── pages
 │   │       ├── PlanDetailPage.jsx
 │   │       └── PlanListPage.jsx
-│   ├── settings
-│   │   ├── components
-│   │   ├── hooks
-│   │   │   ├── useFormValidationsSettings.jsx
-│   │   │   └── useUsersFetch.jsx
-│   │   ├── index.js
-│   │   └── pages
-│   │       ├── GeneralSettings.jsx
-│   │       ├── SettingsPage.jsx
-│   │       └── UsersManagement.jsx
-│   └── vpcs
+│   └── settings
+│       ├── components
+│       ├── hooks
+│       │   ├── useFormValidationsSettings.jsx
+│       │   └── useUsersFetch.jsx
+│       ├── index.js
 │       └── pages
-│           └── VPCList.jsx
+│           ├── GeneralSettings.jsx
+│           ├── SettingsPage.jsx
+│           └── UsersManagement.jsx
 ├── index.css
-├── infraestructure
+├── infrastructure
 │   ├── firebase
 │   │   └── firebaseConfig.js
 │   └── http
@@ -160,18 +157,17 @@ apps/frontend/src
 │       │   ├── LoadingFlow.jsx
 │       │   └── ProtectedRoute.jsx
 │       └── theme
-│           └── dashboard
-│               ├── elements
-│               │   ├── AppBarStyle.jsx
-│               │   └── DrawerStyle.jsx
-│               └── listItems.jsx
-├── styles
-│   ├── palettle.js
-│   ├── theme.js
-│   └── typografy.js
+│           ├── dashboard
+│           │   ├── elements
+│           │   │   ├── AppBarStyle.jsx
+│           │   │   └── DrawerStyle.jsx
+│           │   └── listItems.jsx
+│           ├── palettle.js
+│           ├── theme.js
+│           └── typografy.js
 └── theme
     ├── AppThemeProvider.jsx
     ├── createPacketTheme.js
     └── packetTracerTheme.js
 
-59 directories, 116 files
+56 directories, 115 files

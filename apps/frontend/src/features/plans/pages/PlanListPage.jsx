@@ -28,7 +28,7 @@ import SettingsSuggestIcon from '@mui/icons-material/SettingsSuggest';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import PublicOutlinedIcon from '@mui/icons-material/PublicOutlined';
 
-import { api } from '@/infraestructure/http/api';
+import { api } from '@/infrastructure/http/api';
 import { PageHeader } from '@/shared/ui/layouts/MainLayout';
 
 const statusChipColor = (status) => {

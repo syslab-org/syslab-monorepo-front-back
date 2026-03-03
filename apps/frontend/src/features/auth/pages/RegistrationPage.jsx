@@ -1,4 +1,4 @@
-import { auth } from "@/infraestructure/firebase/firebaseConfig";
+import { auth } from "@/infrastructure/firebase/firebaseConfig";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { LockClockOutlined } from "@mui/icons-material";
 import GoogleIcon from "@mui/icons-material/Google";

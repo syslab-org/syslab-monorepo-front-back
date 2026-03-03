@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, createContext, useContext } from 'react';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import createPacketTheme from './createPacketTheme';
 
-const ThemeModeCtx = createContext({ mode: 'light', toggle: () => {} });
+const ThemeModeCtx = createContext({ mode: 'light', toggle: () => { } });
 
 export function useThemeMode() {
   return useContext(ThemeModeCtx);
