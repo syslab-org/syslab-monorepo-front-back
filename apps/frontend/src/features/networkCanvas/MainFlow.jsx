@@ -86,6 +86,7 @@ import RoutePreviewPanel from "./panels/RoutePreviewPanel";
 import { buildRoutingPreview } from "./utils/buildRoutingPreview";
 import { computeCanvasState } from "./domain/canvasStateMachine";
 import { usePlanPolling } from "./core/usePlanPolling";
+import { usePlanMeta } from "./core/usePlanMeta";
 
 
 const nodeTypes = {
@@ -242,31 +243,14 @@ function MainFlow() {
     return s === 'RUNNING' || s === 'PENDING' || s === 'STARTED';
   };
 
-  // Load plan metadata (planId + planCanvasHash) from Firestore
-  useEffect(() => {
-    let alive = true;
+  // Load plan metadata (planId + planCanvasHash) from Firestore and keep it actualizado en 
+  // el estado del canvas. Esto es clave para la lógica de "dirty" y validación.
 
-    const loadPlanMeta = async () => {
-      try {
-        if (!vpcid) return;
-        const ref = doc(db, DB_FIRESTORE_VPCS, vpcid);
-        const snap = await getDoc(ref);
-        if (!alive) return;
-
-        const data = snap.exists() ? snap.data() : null;
-        setCanvasPlanId(data?.planId || null);
-        setValidatedPlanHash(data?.planCanvasHash || null);
-      } catch (_e) {
-        if (!alive) return;
-        setValidatedPlanHash(null);
-      }
-    };
-
-    loadPlanMeta();
-    return () => {
-      alive = false;
-    };
-  }, [vpcid]);
+  usePlanMeta({
+    vpcid,
+    setCanvasPlanId,
+    setValidatedPlanHash
+  });
 
   useEffect(() => {
     setIgnoreDirtyGuard(false);
