@@ -4,7 +4,7 @@ import { doc, setDoc } from "firebase/firestore";
 import { db } from "../../../infrastructure/firebase/firebaseConfig";
 import { DB_FIRESTORE_VPCS } from "@/shared/constants";
 import { useNavigate } from "react-router-dom";
-import { RouterPolicy } from "../../../config/networking";
+import { RouterPolicy } from "@/features/networkCanvas/utils/networking";
 import { useAuth } from "@/app/providers/AuthContext";
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
 import { api } from "@/infrastructure/http/api";
