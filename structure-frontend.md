@@ -10,8 +10,6 @@ apps/frontend/src
 ├── assets
 │   ├── background.cbcde707.jpg
 │   └── react.svg
-├── config
-│   └── networking.js
 ├── features
 │   ├── admin
 │   │   └── pages
@@ -118,6 +116,7 @@ apps/frontend/src
 │   │       ├── infraHash.js
 │   │       ├── initials-elements.js
 │   │       ├── networkUtils.js
+│   │       ├── networking.js
 │   │       └── topologyValidation.js
 │   ├── plans
 │   │   └── pages
@@ -169,4 +168,4 @@ apps/frontend/src
             ├── theme.js
             └── typografy.js
 
-55 directories, 115 files
+54 directories, 115 files
