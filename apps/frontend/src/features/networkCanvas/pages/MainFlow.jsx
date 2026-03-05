@@ -32,6 +32,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import '../../../App.css';
 import '../styles/packet-tracer.css';
+import ReactFlowCanvas from "@/features/networkCanvas/canvas/ReactFlowCanvas";
 //Custom compoonents and hooks
 import { useWizard } from "@/features/networkCanvas/context/WizardContext";
 import { usePlanValidationSync } from "@/features/networkCanvas/core/usePlanValidationSync";
@@ -767,51 +768,30 @@ function MainFlow() {
                     </Box>
                   </Box>
                 )}
-                <ReactFlow
+                <ReactFlowCanvas
                   nodes={nodes}
-                  edges={edges.map(e => ({ ...e, style: connectionLineStyle, animated: false }))}
+                  edges={edges}
+                  nodeTypes={nodeTypes}
                   onNodesChange={onNodesChange}
                   onEdgesChange={onEdgesChange}
                   onNodeClick={onNodeClick}
-                  onConnect={guardBeforeEdit((params) => onConnect(params, setEdges, () => reactFlowInstance?.getEdges?.() || []))}
+                  onConnect={guardBeforeEdit((params) =>
+                    onConnect(params, setEdges, () => reactFlowInstance?.getEdges?.() || [])
+                  )}
                   onInit={setReactFlowInstance}
                   onDrop={guardBeforeEdit(onDrop)}
                   onNodeDragStart={onNodeDragStart}
                   onNodeDrag={onNodeDrag}
                   onNodeDragStop={onNodeDragStop}
                   onDragOver={onDragOver}
-                  snapToGrid
-                  snapGrid={[24, 24]}              // alineación limpia
-                  selectionOnDrag={false}          // evita seleccionar “marco azul” al arrastrar
-                  elevateNodesOnSelect
                   onConnectStart={onConnectStart}
                   onConnectEnd={onConnectEnd}
-                  fitViewOptions={{
-                    padding: 0.2,
-                  }}
                   isValidConnection={(connection) => isValidConnection(connection, nodes)}
-                  className="overview"
-                  nodeTypes={nodeTypes}
-                  nodeOrigin={[0, 0]}
-                  style={{
-                    background: theme.palette.mode === "light"
-                      ? "linear-gradient(180deg, #f8fafc 0%, #edf2f7 100%)"
-                      : "radial-gradient(circle at 20% 20%, #0f172a 0%, #0b1220 50%, #070c16 100%)",
-                    width: "100%",
-                    height: "100%",
-                  }}
                   connectionLineStyle={connectionLineStyle}
-                  onPaneClick={() => setNodes(nds => nds.map(n => ({ ...n, selected: false })))}
-                >
-                  <Controls />
-                  <Background
-                    variant="dots"
-                    gap={32}
-                    size={0.8}
-                    color="rgba(100,116,139,0.08)"
-                  />
-
-                </ReactFlow>
+                  setNodes={setNodes}
+                  reactFlowInstance={reactFlowInstance}
+                  theme={theme}
+                />
               </Box>
               <Snackbar
                 open={!!canvasUiError}
