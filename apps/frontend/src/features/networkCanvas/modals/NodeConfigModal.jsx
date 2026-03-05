@@ -38,6 +38,120 @@ const styleModal = {
     p: 4
 };
 
+function getInstanceNodeProps(selectedNode, nodes, restrictedNodes) {
+    const parentSubnet = nodes.find(n => n.id === selectedNode.parentId);
+    const parentSubnetCidr = parentSubnet?.data?.cidrBlock || "";
+
+    const siblingIpsInSameSubnet = nodes
+        .filter(n =>
+            restrictedNodes.includes(n.type) &&
+            n.parentId === parentSubnet?.id &&
+            n.id !== selectedNode.id
+        )
+        .map(n => n.data?.ipAddress)
+        .filter(Boolean);
+
+    return { parentSubnetCidr, siblingIpsInSameSubnet };
+}
+
+function getSubnetNodeProps(selectedNode, nodes) {
+    const parentVpcNode = nodes.find(n => n.id === selectedNode.parentId);
+    const parentVpcData = parentVpcNode?.data || {};
+
+    const hasParentCidr =
+        typeof parentVpcData.cidrBlock === "string" &&
+        String(parentVpcData.prefixLength || "") !== "" &&
+        /^\d+$/.test(String(parentVpcData.prefixLength));
+
+    const parentVpcCidr = hasParentCidr
+        ? `${parentVpcData.cidrBlock}/${parentVpcData.prefixLength}`
+        : "";
+
+    const siblingSubnetCidrsInSameVpc = nodes
+        .filter(n =>
+            n.type === TYPE_SUBNETWORK_NODE &&
+            n.parentId === parentVpcNode?.id &&
+            n.id !== selectedNode.id
+        )
+        .map(n => n.data?.cidrBlock)
+        .filter(Boolean);
+
+    return { parentVpcCidr, siblingSubnetCidrsInSameVpc };
+}
+
+function getRouterNodeProps(selectedNode, nodes, edges) {
+    const idToNode = new Map(nodes.map(n => [n.id, n]));
+    const connectedVpcsSet = new Set();
+
+    edges.forEach(e => {
+        const touchesRouter =
+            e.source === selectedNode.id || e.target === selectedNode.id;
+
+        if (!touchesRouter) return;
+
+        const otherId = e.source === selectedNode.id ? e.target : e.source;
+        const other = idToNode.get(otherId);
+
+        if (other?.type === TYPE_VPC_NODE) {
+            const base = other.data?.cidrBlock;
+            const pref = other.data?.prefixLength;
+
+            const cidr = base && pref ? `${base}/${pref}` : null;
+
+            connectedVpcsSet.add(JSON.stringify({
+                id: other.id,
+                name: other.data?.vpcName || other.data?.title || other.id,
+                cidr
+            }));
+        }
+    });
+
+    const connectedVpcs = Array.from(connectedVpcsSet).map(JSON.parse);
+
+    const allVpcCidrs = nodes
+        .filter(n => n.type === TYPE_VPC_NODE)
+        .map(n => {
+            const base = n.data?.cidrBlock;
+            const pref = n.data?.prefixLength;
+            return {
+                id: n.id,
+                name: n.data?.vpcName || n.data?.title || n.id,
+                cidr: base && pref ? `${base}/${pref}` : null
+            };
+        });
+
+    return { connectedVpcs, allVpcCidrs };
+}
+
+function getVpcNodeProps(selectedNode, nodes, cidrBlockVPC, prefixLength) {
+    const vlanCidr =
+        cidrBlockVPC && prefixLength
+            ? `${cidrBlockVPC}/${prefixLength}`
+            : "";
+
+    const siblingVpcCidrs = nodes
+        .filter(n => n.type === TYPE_VPC_NODE && n.id !== selectedNode.id)
+        .map(n => {
+            const base = n.data?.cidrBlock;
+            const pref = n.data?.prefixLength;
+            return base && pref ? `${base}/${pref}` : null;
+        })
+        .filter(Boolean);
+
+    const publicSubnetNames = nodes
+        .filter(n =>
+            n.type === TYPE_SUBNETWORK_NODE &&
+            n.parentId === selectedNode.id &&
+            String(n.data?.subnetType || "").toLowerCase() === "public"
+        )
+        .map(n => n.data?.subnetName)
+        .filter(Boolean);
+
+    return { vlanCidr, siblingVpcCidrs, publicSubnetNames };
+}
+
+
+
 function NodeConfigModal({
     modalIsOpen,
     closeModal,
@@ -64,27 +178,15 @@ function NodeConfigModal({
 
                 {/* If selected node is restricted, show warning */}
                 {selectedNode && restrictedNodes.includes(selectedNode.type) && (() => {
-                    // Subnet padre de la instancia seleccionada
-                    const parentSubnet = nodes.find(n => n.id === selectedNode.parentId);
-                    const parentSubnetCidr = parentSubnet?.data?.cidrBlock || "";
-
-                    // IPs ya usadas en la misma Subnet (excluye la instancia actual)
-                    const siblingIpsInSameSubnet = nodes
-                        .filter(n =>
-                            restrictedNodes.includes(n.type) &&
-                            n.parentId === parentSubnet?.id &&
-                            n.id !== selectedNode.id
-                        )
-                        .map(n => n.data?.ipAddress)
-                        .filter(Boolean);
-
+                    const { parentSubnetCidr, siblingIpsInSameSubnet } =
+                        getInstanceNodeProps(selectedNode, nodes, restrictedNodes);
                     return (
                         <InstanceNodeForm
                             nodeData={selectedNode.data}
                             onSave={saveNodeData}
                             deleteNode={deleteNodeInstance}
-                            parentSubnetCidr={parentSubnetCidr}                // <-- clave
-                            siblingIpsInSameSubnet={siblingIpsInSameSubnet}    // <-- clave
+                            parentSubnetCidr={parentSubnetCidr}
+                            siblingIpsInSameSubnet={siblingIpsInSameSubnet}
                             amiList={amiList}
                         />
                     );
@@ -93,32 +195,15 @@ function NodeConfigModal({
 
                 {/* If node type is Subnetwork, show SubNetworkNodeForm */}
                 {selectedNode && selectedNode.type === TYPE_SUBNETWORK_NODE && (() => {
-                    //VPC-hija padre de la Subnet seleccionada
-                    const parentVpcNode = nodes.find(n => n.id === selectedNode.parentId);
-
-                    const parentVpcData = parentVpcNode?.data || {};
-                    const hasParentCidr =
-                        typeof parentVpcData.cidrBlock === 'string' &&
-                        String(parentVpcData.prefixLength || '') !== '' &&
-                        /^\d+$/.test(String(parentVpcData.prefixLength))
-
-                    const parentVpcCidr = hasParentCidr
-                        ? `${parentVpcData.cidrBlock}/${parentVpcData.prefixLength}`
-                        : ""; // sin padre válido, no mostramos "undefined/.."
-
-                    // CIDRs de subredes hermanas (misma VPC) excluyendo la actual
-                    const siblingSubnetCidrsInSameVpc = nodes
-                        .filter(n => n.type === TYPE_SUBNETWORK_NODE && n.parentId === parentVpcNode?.id && n.id !== selectedNode.id)
-                        .map(n => n.data?.cidrBlock)
-                        .filter(Boolean);
-
+                    const { parentVpcCidr, siblingSubnetCidrsInSameVpc } =
+                        getSubnetNodeProps(selectedNode, nodes);
                     return (
                         <SubNetworkNodeForm
                             nodeData={selectedNode.data}
                             onSave={saveNodeData}
                             deleteNode={deleteNodeInstance}
-                            parentVpcCidr={parentVpcCidr}                               // <-- clave
-                            siblingSubnetCidrsInSameVpc={siblingSubnetCidrsInSameVpc}   // <-- clave
+                            parentVpcCidr={parentVpcCidr}
+                            siblingSubnetCidrsInSameVpc={siblingSubnetCidrsInSameVpc}
                         />
                     )
                 })()}
@@ -126,42 +211,9 @@ function NodeConfigModal({
 
                 {/* If node type is Router, show RouterNodeForm */}
                 {selectedNode && selectedNode.type === TYPE_ROUTER_NODE && (() => {
-                    const idToNode = new Map(nodes.map(n => [n.id, n]));
-                    const idToType = new Map(nodes.map(n => [n.id, n.type]));
-
-                    const connectedVpcsSet = new Set();
-                    edges.forEach(e => {
-                        const touchesRouter = e.source === selectedNode.id || e.target === selectedNode.id;
-                        if (!touchesRouter) return;
-                        const otherId = e.source === selectedNode.id ? e.target : e.source;
-                        const other = idToNode.get(otherId);
-                        if (other?.type === TYPE_VPC_NODE) {
-                            const base = other.data?.cidrBlock;
-                            const pref = other.data?.prefixLength;
-                            const cidr = base && pref ? `${base}/${pref}` : null;
-                            connectedVpcsSet.add(JSON.stringify({
-                                id: other.id,
-                                name: other.data?.vpcName || other.data?.title || other.id,
-                                cidr
-                            }));
-                        }
-                    });
-                    const connectedVpcs = Array.from(connectedVpcsSet).map(JSON.parse);
-
-                    const allVpcCidrs = nodes
-                        .filter(n => n.type === TYPE_VPC_NODE)
-                        .map(n => {
-                            const base = n.data?.cidrBlock;
-                            const pref = n.data?.prefixLength;
-                            return {
-                                id: n.id,
-                                name: n.data?.vpcName || n.data?.title || n.id,
-                                cidr: base && pref ? `${base}/${pref}` : null
-                            };
-                        });
-
+                    const { connectedVpcs, allVpcCidrs } =
+                        getRouterNodeProps(selectedNode, nodes, edges);
                     const vlanRegion = "us-east-1";
-
                     return (
                         <RouterNodeForm
                             node={selectedNode}
@@ -177,29 +229,8 @@ function NodeConfigModal({
 
                 {/* If node type is VPC, show VPCNodeForm */}
                 {selectedNode && selectedNode.type === TYPE_VPC_NODE && (() => {
-                    const vlanCidr = (cidrBlockVPC && prefixLength)
-                        ? `${cidrBlockVPC}/${prefixLength}`
-                        : "";
-
-                    const siblingVpcCidrs = nodes
-                        .filter(n => n.type === TYPE_VPC_NODE && n.id !== selectedNode.id)
-                        .map(n => {
-                            const base = n.data?.cidrBlock;
-                            const pref = n.data?.prefixLength;
-                            return base && pref ? `${base}/${pref}` : null;
-                        })
-                        .filter(Boolean);
-
-                    // 👇 NUEVO: nombres de subnets públicas dentro de esta VPC
-                    const publicSubnetNames = nodes
-                        .filter(n =>
-                            n.type === TYPE_SUBNETWORK_NODE &&
-                            n.parentId === selectedNode.id &&
-                            String(n.data?.subnetType || "").toLowerCase() === "public"
-                        )
-                        .map(n => n.data?.subnetName)
-                        .filter(Boolean);
-
+                    const { vlanCidr, siblingVpcCidrs, publicSubnetNames } =
+                        getVpcNodeProps(selectedNode, nodes, cidrBlockVPC, prefixLength);
                     return (
                         <VPCNodeForm
                             nodeData={selectedNode.data}
