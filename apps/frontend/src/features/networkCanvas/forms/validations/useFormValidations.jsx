@@ -10,7 +10,7 @@ import {
   VLAN_FORM,
   VPC_CHILD_FORM,
   VPC_FORM,
-} from '../../utils/constants';
+} from '@/features/networkCanvas/utils/constants';
 import { INSTANCE_TYPE_OPTIONS } from '../options/instanceTypes';
 import { cidrsOverlap, isSubnetOf } from './cidrUtils';
 

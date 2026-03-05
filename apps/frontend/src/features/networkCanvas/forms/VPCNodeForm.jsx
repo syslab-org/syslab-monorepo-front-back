@@ -18,11 +18,9 @@ import {
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import {
-  CLOUD_AWS_LABEL,
-  CLOUD_AWS_VALUE,
-  VPC_CHILD_FORM,
-} from "../utils/constants";
+
+import { VPC_CHILD_FORM, } from "@/features/networkCanvas/utils/constants";
+import { CLOUD_AWS_LABEL, CLOUD_AWS_VALUE } from '@/shared/constants';
 import { useFormValidationSchema } from "./validations/useFormValidations";
 
 const VPCNodeForm = ({

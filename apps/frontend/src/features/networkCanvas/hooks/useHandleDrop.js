@@ -13,8 +13,8 @@ import {
   colorBgInstanceNode,
   colorsBgSubnetworksNodes,
   TYPE_ROUTER_NODE,
-} from "../utils/constants";
-import getNodeTitle from "../utils/getNodeTitle";
+} from "@/features/networkCanvas/utils/constants";
+import getNodeTitle from "@/features/networkCanvas/utils/getNodeTitle";
 
 const getRandomColor = () =>
   colorsBgSubnetworksNodes[

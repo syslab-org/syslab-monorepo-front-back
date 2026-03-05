@@ -3,7 +3,7 @@ import {
   TYPE_ROUTER_NODE,
   TYPE_SUBNETWORK_NODE,
   TYPE_VPC_NODE,
-} from "@/shared/constants";
+} from "@/features/networkCanvas/utils/constants";
 
 /**
  * Genera la tabla de rutas principal ("main") por VPC

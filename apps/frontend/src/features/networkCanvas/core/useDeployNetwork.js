@@ -15,12 +15,12 @@ import {
   TYPE_ROUTER_NODE,
   TYPE_SERVER_NODE,
   TYPE_VPC_NODE,
-} from "../utils/constants";
+} from "@/features/networkCanvas/utils/constants";
 import {
   groupInstancesBySubnet,
   groupSubnetsByVpc,
   validateTopology,
-} from "../utils/topologyValidation";
+} from "@/features/networkCanvas/utils/topologyValidation";
 
 function s(v) {
   if (v === null || v === undefined) return "";

@@ -7,7 +7,7 @@ import {
   TYPE_SERVER_NODE,
   TYPE_SUBNETWORK_NODE,
   TYPE_VPC_NODE,
-} from "@/shared/constants";
+} from "@/features/networkCanvas/utils/constants";
 
 /* ---------- helpers CIDR ---------- */
 const isValidCidr = (cidr) => {

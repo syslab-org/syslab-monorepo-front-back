@@ -1,5 +1,5 @@
 import * as yup from 'yup';
-import { TYPE_FORM_AMI } from '@/features/networkCanvas/utils/constants';
+import { TYPE_FORM_AMI } from '@/shared/constants';
 
 export const useFormValidationsSettings = (formType) => {
 

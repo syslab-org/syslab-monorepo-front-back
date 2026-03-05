@@ -56,7 +56,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 // Importar constantes
 import {
-  DB_AMI_LIST,
   flowKey,
   TYPE_COMPUTER_NODE,
   TYPE_DEFAULT_NODE,
@@ -66,6 +65,8 @@ import {
   TYPE_SUBNETWORK_NODE,
   TYPE_VPC_NODE
 } from '@/features/networkCanvas/utils/constants';
+
+import { DB_AMI_LIST } from "@/shared/constants";
 
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext.jsx";
 import { NetworkProvider } from "@/features/networkCanvas/context/NetworkNodesContext";

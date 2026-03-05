@@ -1,13 +1,6 @@
 // src/shared/constants/index.js
 export const DRAWERWITH = 240;
 
-// NODE TYPES
-export const TYPE_ROUTER_NODE = "routerNode";
-export const TYPE_SUBNETWORK_NODE = "subnetworkNode";
-export const TYPE_COMPUTER_NODE = "computerNode";
-export const TYPE_PRINTER_NODE = "printerNode";
-export const TYPE_SERVER_NODE = "serverNode";
-export const TYPE_VPC_NODE = "vpcNode";
 export const FIRESTORE_COLLECTION = "vpcs";
 export const NO_DOC_WARNING = "No document found in Firebase for vpcid:";
 export const LOADING_ERROR = "Error loading data from localStorage:";
@@ -64,3 +57,15 @@ export const TASK_STATES_ARRAY = [
   TASK_STATE_RETRY,
   TASK_STATE_REVOKED,
 ];
+
+// CLOUD PROVIDERS
+export const CLOUD_AWS_VALUE = "aws";
+export const CLOUD_GCP_VALUE = "gcp";
+export const CLOUD_AWS_LABEL = "AWS";
+export const CLOUD_GCP_LABEL = "GCP";
+
+// FORMS
+export const TYPE_FORM_AMI = "amilistform";
+
+// DATABASE COLLECTIONS (feature-shared)
+export const DB_AMI_LIST = "amilist";
