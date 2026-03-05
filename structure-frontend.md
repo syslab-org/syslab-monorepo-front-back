@@ -74,7 +74,6 @@ apps/frontend/src
 │   │   │   └── useRestrictSubnetsInsideVPC.js
 │   │   ├── index.js
 │   │   ├── modals
-│   │   │   ├── AddAmiModal.jsx
 │   │   │   └── ConfirmDeployDialog.jsx
 │   │   ├── nodes
 │   │   │   ├── CustomResizerNode.jsx
@@ -128,6 +127,8 @@ apps/frontend/src
 │       │   ├── useFormValidationsSettings.jsx
 │       │   └── useUsersFetch.jsx
 │       ├── index.js
+│       ├── modals
+│       │   └── AddAmiModal.jsx
 │       └── pages
 │           ├── GeneralSettings.jsx
 │           ├── SettingsPage.jsx
@@ -168,4 +169,4 @@ apps/frontend/src
             ├── theme.js
             └── typografy.js
 
-54 directories, 115 files
+55 directories, 115 files

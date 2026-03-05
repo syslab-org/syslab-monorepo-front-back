@@ -7,8 +7,8 @@ import { addDoc, collection, getDocs } from 'firebase/firestore'
 import { db } from '@/infrastructure/firebase/firebaseConfig'
 import { Box, Button, IconButton, List, ListItem, ListItemText } from '@mui/material'
 import { DeleteOutlineOutlined } from '@mui/icons-material'
-import AddAmiModal from '@/features/networkCanvas/modals/AddAmiModal'
-import { DB_AMI_LIST } from '@/features/networkCanvas/utils/constants';
+import AddAmiModal from '@/features/settings/modals/AddAmiModal'
+import { DB_AMI_LIST } from "@/shared/constants";
 
 const AMIList = ({ amilist }) => (
     <Box sx={{ width: '100%', maxWidth: 360, bgcolor: 'background.paper', marginTop: 3 }}>

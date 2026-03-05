@@ -15,7 +15,8 @@ import {
 } from '@mui/material';
 import { useMemo } from 'react';
 import { useForm } from 'react-hook-form';
-import { CLOUD_AWS_LABEL, CLOUD_AWS_VALUE, VLAN_FORM } from '../utils/constants';
+import { VLAN_FORM } from "@/features/networkCanvas/utils/constants";
+import { CLOUD_AWS_LABEL, CLOUD_AWS_VALUE } from '@/shared/constants';
 import { useFormValidationSchema } from './validations/useFormValidations';
 
 const LAB_TEMPLATES = [
@@ -106,9 +107,9 @@ const NewVLANForm = ({ onSave, wizardMode = false }) => {
       // wizard-only metadata (no rompe backend si lo ignoran)
       ...(wizardMode
         ? {
-            labTemplate: data.labTemplate,
-            narrative: 'wizard',
-          }
+          labTemplate: data.labTemplate,
+          narrative: 'wizard',
+        }
         : {}),
     });
   };
