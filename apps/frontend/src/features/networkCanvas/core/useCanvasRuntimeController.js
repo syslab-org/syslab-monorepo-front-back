@@ -7,7 +7,13 @@ import useRestrictMovement from "../hooks/useRestrictMovement";
 import { useNodeSelection } from "../domain/useNodeSelection";
 import { useNodeActions } from "../domain/useNodeActions";
 
-export function useCanvasRuntimeController({ initialNodes, setCanvasUiError }) {
+export function useCanvasRuntimeController({
+  initialNodes,
+  setCanvasUiError,
+  reactFlowInstance,
+  setTarget,
+  TYPE_SUBNETWORK_NODE,
+}) {
   const reactFlow = useReactFlow();
 
   const {
@@ -22,18 +28,23 @@ export function useCanvasRuntimeController({ initialNodes, setCanvasUiError }) {
     handleFitView,
   } = useCanvasController(initialNodes);
 
-  const flowState = useFlowState();
+  const { isValidConnection, onConnectStart, onConnect, onConnectEnd } =
+    useFlowState();
 
   const nodeSelection = useNodeSelection();
 
   const nodeDrag = useNodeDrag({
     nodes,
-    setNodes,
+    setTarget,
+    TYPE_SUBNETWORK_NODE,
   });
 
-  const movement = useRestrictMovement(reactFlow, setNodes);
+  const movement = useRestrictMovement(
+    reactFlowInstance || reactFlow,
+    setNodes,
+  );
 
-  const drop = useHandleDrop(null, setNodes, setCanvasUiError);
+  const drop = useHandleDrop(reactFlowInstance, setNodes, setCanvasUiError);
 
   return {
     nodes,
@@ -45,7 +56,10 @@ export function useCanvasRuntimeController({ initialNodes, setCanvasUiError }) {
     handleZoomIn,
     handleZoomOut,
     handleFitView,
-    ...flowState,
+    isValidConnection,
+    onConnectStart,
+    onConnect,
+    onConnectEnd,
     ...nodeSelection,
     ...nodeDrag,
     ...movement,

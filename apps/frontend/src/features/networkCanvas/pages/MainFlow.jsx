@@ -148,9 +148,14 @@ function MainFlow() {
 
   const { loadingFlow } = useContext(LoadingFlowContext);
 
+  const [target, setTarget] = useState(null);
+  const [reactFlowInstance, setReactFlowInstance] = useState(null);
   const canvas = useCanvasRuntimeController({
     initialNodes,
-    setCanvasUiError
+    setCanvasUiError,
+    reactFlowInstance,
+    setTarget,
+    TYPE_SUBNETWORK_NODE
   });
 
   const {
@@ -162,7 +167,14 @@ function MainFlow() {
     onEdgesChange,
     handleZoomIn,
     handleZoomOut,
-    handleFitView
+    handleFitView,
+    isValidConnection,
+    onConnectStart,
+    onConnect,
+    onConnectEnd,
+    onDrop,
+    onNodeDrag,
+    onNodeDragStop
   } = canvas;
 
   useRestrictSubnetsInsideVPC();
@@ -175,8 +187,6 @@ function MainFlow() {
 
   const reactFlow = useReactFlow();
 
-  // eslint-disable-next-line no-unused-vars
-  const [target, setTarget] = useState(null);
   const amiList = useAmiList();
 
   const {
@@ -212,7 +222,6 @@ function MainFlow() {
 
   // eslint-disable-next-line no-unused-vars
   const [nodeName, setNodeName] = useState("Node - 1")
-  const [reactFlowInstance, setReactFlowInstance] = useState(null);
   const { setViewport } = useReactFlow();
 
   const {
@@ -224,8 +233,6 @@ function MainFlow() {
     setModalIsOpen
   } = useNodeSelection();
 
-  const { onDrop } = useHandleDrop(reactFlowInstance, setNodes, setCanvasUiError);
-  const { onNodeDragStop } = useRestrictMovement(reactFlowInstance, setNodes);
   const [allowCrossVpcPingUI, setAllowCrossVpcPingUI] = useState(null);
   // const [vpcData, setVPCData] = useState(null);
 
@@ -233,7 +240,6 @@ function MainFlow() {
   const dragRef = useRef(null);
   //const connectionCreated = useRef(true)
 
-  const { isValidConnection, onConnectStart, onConnect, onConnectEnd } = useFlowState()
 
   const onDragOver = useCallback((event) => {
     event.preventDefault();
@@ -276,7 +282,6 @@ function MainFlow() {
     setNodes(nds => nds.map(n => ({ ...n, selected: n.id === node.id })));
   }, [setNodes]);
 
-  const onNodeDrag = useNodeDrag({ nodes, setTarget, TYPE_SUBNETWORK_NODE });
   //const onNodeDragStop = useNodeDragStop({ nodes, setNodes, reactFlow, TYPE_SUBNETWORK_NODE, TYPE_VPC_NODE });
   const onSaveFlow = useSaveFlow({ reactFlowInstance, flowKey, vpcid });
   const onRestoreFlow = useRestoreFlow({ setNodes, setEdges, setViewport, flowKey, getId, setCanvasPlanId });
