@@ -59,7 +59,7 @@ import {
   TYPE_SUBNETWORK_NODE,
   TYPE_VPC_NODE
 } from '@/features/networkCanvas/utils/constants';
-
+import { useNodeSelection } from "@/features/networkCanvas/domain/useNodeSelection";
 
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext.jsx";
 import { NetworkProvider } from "@/features/networkCanvas/context/NetworkNodesContext";
@@ -211,8 +211,14 @@ function MainFlow() {
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
   const { setViewport } = useReactFlow();
 
-  const [modalIsOpen, setModalIsOpen] = useState(false);
-  const [selectedNode, setSelectedNode] = useState(null);
+  const {
+    modalIsOpen,
+    selectedNode,
+    openNodeModal,
+    closeNodeModal,
+    setSelectedNode,
+    setModalIsOpen
+  } = useNodeSelection();
 
   const { onDrop } = useHandleDrop(reactFlowInstance, setNodes, setCanvasUiError);
   const { onNodeDragStop } = useRestrictMovement(reactFlowInstance, setNodes);
@@ -246,7 +252,7 @@ function MainFlow() {
   });
 
 
-  const onNodeClickBase = useNodeClick(setSelectedNode, setModalIsOpen);
+  const onNodeClickBase = useNodeClick(openNodeModal, setModalIsOpen);
   const onNodeClick = onNodeClickBase;
 
   // Hook para mantener el canvas sincronizado con el estado del plan en backend
@@ -258,10 +264,7 @@ function MainFlow() {
   });
 
 
-  const closeModal = () => {
-    setModalIsOpen(false)
-    setSelectedNode(null)
-  }
+  const closeModal = closeNodeModal;
 
 
 
