@@ -5,6 +5,7 @@ import {
   useNodesState,
   useReactFlow
 } from "@xyflow/react";
+import { useRoutingPreview } from "@/features/networkCanvas/core/useRoutingPreview";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { initialNodes } from '../utils/initials-elements';
@@ -170,8 +171,6 @@ function MainFlow() {
   // eslint-disable-next-line no-unused-vars
   const [target, setTarget] = useState(null);
   const [amiList, setAmiList] = useState([]);
-  const [routesPreviewOpen, setRoutesPreviewOpen] = useState(false);
-  const [routesPreviewData, setRoutesPreviewData] = useState(null);
 
   // eslint-disable-next-line no-unused-vars
   const [clickedNodeId, setClickedNodeId] = useClickedNodeIdStore(state => [state.clickedNodeId, state.setClickedNodeId])
@@ -347,6 +346,12 @@ function MainFlow() {
     planCanvasHash,
   } = useDeployNetwork({ nodes, edges, allowCrossVpcPingUI, firestoreVpcId: vpcid });
 
+  const {
+    routesPreviewOpen,
+    routesPreviewData,
+    openRoutesPreview,
+    closeRoutesPreview
+  } = useRoutingPreview(nodes, edges);
 
   const { canvasState, validationStateForToolbar } = useCanvasPlanState({
     canvasPlanId,
@@ -566,13 +571,7 @@ function MainFlow() {
                   onZoomOut={handleZoomOut}
                   onFitView={handleFitView}
                   title="Architecture Studio"
-                  onPreviewRoutes={() => {
-                    const preview = buildRoutingPreview(nodes, edges);
-                    setRoutesPreviewData(preview);
-                    setRoutesPreviewOpen(true);
-                    // si quieres ver en consola también:
-                    // console.log('ROUTES PREVIEW', preview);
-                  }}
+                  onPreviewRoutes={openRoutesPreview}
                   planStatus={canvasPlanInfo}
                   canvasState={canvasState}
                   validationState={validationStateForToolbar}
@@ -755,7 +754,7 @@ function MainFlow() {
 
         <Modal
           open={routesPreviewOpen}
-          onClose={() => setRoutesPreviewOpen(false)}
+          onClose={closeRoutesPreview}
           aria-labelledby="routes-preview-title"
           aria-describedby="routes-preview-description"
         >
@@ -790,7 +789,7 @@ function MainFlow() {
             </Box>
 
             <Stack mt={3} direction="row" spacing={2} flexWrap="wrap">
-              <Button variant="contained" onClick={() => setRoutesPreviewOpen(false)}>
+              <Button variant="contained" onClick={closeRoutesPreview}>
                 Cerrar
               </Button>
             </Stack>
