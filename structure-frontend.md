@@ -35,21 +35,36 @@ apps/frontend/src
 │   │   └── pages
 │   │       └── TaskDemo.jsx
 │   ├── networkCanvas
+│   │   ├── canvas
+│   │   │   ├── ReactFlowCanvas.jsx
+│   │   │   └── canvasConfig.js
 │   │   ├── components
 │   │   │   └── WizardModalLayout.jsx
 │   │   ├── context
 │   │   │   ├── NetworkNodesContext.jsx
 │   │   │   └── WizardContext.jsx
 │   │   ├── core
+│   │   │   ├── useAmiList.js
+│   │   │   ├── useCanvasController.js
+│   │   │   ├── useCanvasDirtyState.js
+│   │   │   ├── useCanvasInitialization.js
+│   │   │   ├── useCanvasInteractionController.js
+│   │   │   ├── useCanvasPlanState.js
+│   │   │   ├── useCanvasRuntimeController.js
 │   │   │   ├── useDeployNetwork.js
+│   │   │   ├── useNetworkPlanController.js
 │   │   │   ├── usePlanMeta.js
 │   │   │   ├── usePlanPolling.js
 │   │   │   ├── usePlanValidationSync.js
 │   │   │   ├── useRestoreFlow.js
-│   │   │   └── useSaveFlow.js
+│   │   │   ├── useRoutingPreview.js
+│   │   │   ├── useSaveFlow.js
+│   │   │   └── useVpcRouterSync.js
 │   │   ├── domain
 │   │   │   ├── canvasStateMachine.js
-│   │   │   └── decideRouterMode.js
+│   │   │   ├── decideRouterMode.js
+│   │   │   ├── useNodeActions.js
+│   │   │   └── useNodeSelection.js
 │   │   ├── forms
 │   │   │   ├── InstanceNodeForm.jsx
 │   │   │   ├── NewVLANForm.jsx
@@ -73,8 +88,11 @@ apps/frontend/src
 │   │   │   ├── useRestrictMovement.js
 │   │   │   └── useRestrictSubnetsInsideVPC.js
 │   │   ├── index.js
+│   │   ├── layout
+│   │   │   └── FlowWorkspace.jsx
 │   │   ├── modals
-│   │   │   └── ConfirmDeployDialog.jsx
+│   │   │   ├── ConfirmDeployDialog.jsx
+│   │   │   └── NodeConfigModal.jsx
 │   │   ├── nodes
 │   │   │   ├── CustomResizerNode.jsx
 │   │   │   ├── InstanceNode.jsx
@@ -106,6 +124,8 @@ apps/frontend/src
 │   │   ├── styles
 │   │   │   ├── device-icons.css
 │   │   │   └── packet-tracer.css
+│   │   ├── ui
+│   │   │   └── CanvasFeedbackLayer.jsx
 │   │   └── utils
 │   │       ├── buildRoutingPreview.js
 │   │       ├── cidr.js
@@ -169,4 +189,4 @@ apps/frontend/src
             ├── theme.js
             └── typografy.js
 
-55 directories, 115 files
+58 directories, 132 files
