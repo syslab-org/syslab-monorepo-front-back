@@ -41,6 +41,7 @@ import useSaveFlow from '@/features/networkCanvas/core/useSaveFlow';
 import { useFlowState } from '@/features/networkCanvas/hooks/useFlowState';
 import useNodeClick from '@/features/networkCanvas/hooks/useNodeClick';
 import useNodeDrag from '@/features/networkCanvas/hooks/useNodeDrag';
+import { useVpcRouterSync } from "@/features/networkCanvas/core/useVpcRouterSync";
 import InstanceNode from "@/features/networkCanvas/nodes/InstanceNode";
 import RouterNodeInstance from "@/features/networkCanvas/nodes/RouterNodeInstance";
 import SubNetworkNodeInstance from '@/features/networkCanvas/nodes/SubNetworkNodeInstance';
@@ -158,6 +159,11 @@ function MainFlow() {
 
   const { loadingFlow } = useContext(LoadingFlowContext);
   useRestrictSubnetsInsideVPC()
+  useVpcRouterSync({
+    nodes,
+    edges,
+    setNodes
+  });
   const reactFlow = useReactFlow();
 
   const rf = useReactFlow();
@@ -361,56 +367,7 @@ function MainFlow() {
     handleFlowRestore();
   }, [onRestoreFlow]);
 
-  // helper para comparar arrays simples sin ordenar
-  const shallowArrEq = (a = [], b = []) =>
-    a.length === b.length && a.every(x => b.includes(x));
-
-  useEffect(() => {
-    // 1) Mapa VPC -> routers conectados (derivado SOLO de edges)
-    const idToType = new Map(nodes.map(n => [n.id, n.type])); // solo lectura
-    const vpcToRouters = new Map();
-
-    edges.forEach(e => {
-      const sType = idToType.get(e.source);
-      const tType = idToType.get(e.target);
-      const isVpcRouter =
-        (sType === TYPE_VPC_NODE && tType === TYPE_ROUTER_NODE) ||
-        (sType === TYPE_ROUTER_NODE && tType === TYPE_VPC_NODE);
-
-      if (!isVpcRouter) return;
-
-      const vpcId = (sType === TYPE_VPC_NODE) ? e.source : e.target;
-      const routerId = (sType === TYPE_ROUTER_NODE) ? e.source : e.target;
-
-      if (!vpcToRouters.has(vpcId)) vpcToRouters.set(vpcId, new Set());
-      vpcToRouters.get(vpcId).add(routerId);
-    });
-
-    // 2) Detectar cambios reales
-    const updates = [];
-    for (const n of nodes) {
-      if (n.type !== TYPE_VPC_NODE) continue;
-      const newList = Array.from(vpcToRouters.get(n.id) || []);
-      const prevList = Array.isArray(n.data?.connectedRouters) ? n.data.connectedRouters : [];
-      if (!shallowArrEq(newList, prevList)) {
-        updates.push({ id: n.id, newList });
-      }
-    }
-
-    // 3) Si no hay cambios, no setear (evita re-render en bucle)
-    if (updates.length === 0) return;
-
-    setNodes(curr =>
-      curr.map(n => {
-        const u = updates.find(x => x.id === n.id);
-        return u
-          ? { ...n, data: { ...n.data, connectedRouters: u.newList } }
-          : n;
-      })
-    );
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [edges]);
+  // Función para restaurar los nodos a su estado inicial
 
 
 
