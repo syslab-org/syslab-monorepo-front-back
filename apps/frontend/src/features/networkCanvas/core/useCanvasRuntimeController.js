@@ -6,6 +6,8 @@ import useHandleDrop from "../hooks/useHandleDrop";
 import useRestrictMovement from "../hooks/useRestrictMovement";
 import { useNodeSelection } from "../domain/useNodeSelection";
 import { useNodeActions } from "../domain/useNodeActions";
+import { useVpcRouterSync } from "../core/useVpcRouterSync";
+import { useRestrictSubnetsInsideVPC } from "../hooks/useRestrictSubnetsInsideVPC";
 
 export function useCanvasRuntimeController({
   initialNodes,
@@ -45,6 +47,16 @@ export function useCanvasRuntimeController({
   );
 
   const drop = useHandleDrop(reactFlowInstance, setNodes, setCanvasUiError);
+
+  // Ensure subnets remain inside their VPC boundaries
+  useRestrictSubnetsInsideVPC();
+
+  // Keep router/subnet relationships synchronized
+  useVpcRouterSync({
+    nodes,
+    edges,
+    setNodes,
+  });
 
   return {
     nodes,

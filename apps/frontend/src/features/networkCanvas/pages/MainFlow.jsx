@@ -31,7 +31,7 @@ import useSaveFlow from '@/features/networkCanvas/core/useSaveFlow';
 import { useFlowState } from '@/features/networkCanvas/hooks/useFlowState';
 import useNodeClick from '@/features/networkCanvas/hooks/useNodeClick';
 import useNodeDrag from '@/features/networkCanvas/hooks/useNodeDrag';
-import { useVpcRouterSync } from "@/features/networkCanvas/core/useVpcRouterSync";
+import { useCanvasInteractionController } from "@/features/networkCanvas/core/useCanvasInteractionController";
 import InstanceNode from "@/features/networkCanvas/nodes/InstanceNode";
 import RouterNodeInstance from "@/features/networkCanvas/nodes/RouterNodeInstance";
 import SubNetworkNodeInstance from '@/features/networkCanvas/nodes/SubNetworkNodeInstance';
@@ -60,7 +60,6 @@ import { usePlanMeta } from "@/features/networkCanvas/core/usePlanMeta";
 import { usePlanPolling } from "@/features/networkCanvas/core/usePlanPolling";
 import useHandleDrop from "@/features/networkCanvas/hooks/useHandleDrop";
 import useRestrictMovement from "@/features/networkCanvas/hooks/useRestrictMovement";
-import { useRestrictSubnetsInsideVPC } from "@/features/networkCanvas/hooks/useRestrictSubnetsInsideVPC";
 import RoutePreviewPanel from "@/features/networkCanvas/panels/RoutePreviewPanel";
 // import { buildRoutingPreview } from "@/features/networkCanvas/utils/buildRoutingPreview";
 // import { db } from "@/infrastructure/firebase/firebaseConfig";
@@ -177,13 +176,6 @@ function MainFlow() {
     onNodeDragStop
   } = canvas;
 
-  useRestrictSubnetsInsideVPC();
-
-  useVpcRouterSync({
-    nodes,
-    edges,
-    setNodes
-  });
 
   const reactFlow = useReactFlow();
 
@@ -241,10 +233,6 @@ function MainFlow() {
   //const connectionCreated = useRef(true)
 
 
-  const onDragOver = useCallback((event) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-  }, []);
 
 
   const isPlanRunning = (st) => {
@@ -278,9 +266,6 @@ function MainFlow() {
 
 
 
-  const onNodeDragStart = useCallback((_, node) => {
-    setNodes(nds => nds.map(n => ({ ...n, selected: n.id === node.id })));
-  }, [setNodes]);
 
   //const onNodeDragStop = useNodeDragStop({ nodes, setNodes, reactFlow, TYPE_SUBNETWORK_NODE, TYPE_VPC_NODE });
   const onSaveFlow = useSaveFlow({ reactFlowInstance, flowKey, vpcid });
@@ -385,10 +370,10 @@ function MainFlow() {
 
 
 
-  // Función para restaurar los nodos a su estado inicial
-  const restoreInitialNodes = () => {
-    setNodes(initialNodes);
-  };
+  const { onDragOver, onNodeDragStart, restoreInitialNodes } = useCanvasInteractionController({
+    setNodes,
+    initialNodes
+  });
   return (
     <NetworkProvider>
       <Backdrop
