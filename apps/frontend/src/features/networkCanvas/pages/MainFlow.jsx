@@ -58,7 +58,6 @@ import {
   TYPE_VPC_NODE
 } from '@/features/networkCanvas/utils/constants';
 
-import { DB_AMI_LIST } from "@/shared/constants";
 
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext.jsx";
 import { NetworkProvider } from "@/features/networkCanvas/context/NetworkNodesContext";
@@ -70,10 +69,10 @@ import useRestrictMovement from "@/features/networkCanvas/hooks/useRestrictMovem
 import { useRestrictSubnetsInsideVPC } from "@/features/networkCanvas/hooks/useRestrictSubnetsInsideVPC";
 import ConfirmDeployDialog from "@/features/networkCanvas/modals/ConfirmDeployDialog";
 import RoutePreviewPanel from "@/features/networkCanvas/panels/RoutePreviewPanel";
-import { buildRoutingPreview } from "@/features/networkCanvas/utils/buildRoutingPreview";
-import { db } from "@/infrastructure/firebase/firebaseConfig";
+// import { buildRoutingPreview } from "@/features/networkCanvas/utils/buildRoutingPreview";
+// import { db } from "@/infrastructure/firebase/firebaseConfig";
 import { useTheme } from "@mui/material/styles";
-import { collection, getDocs } from "firebase/firestore";
+// import { collection, getDocs } from "firebase/firestore";
 import { useContext } from "react";
 import { useAmiList } from "@/features/networkCanvas/core/useAmiList";
 
@@ -719,8 +718,8 @@ function MainFlow() {
 
         </Grid>
         <RoutePreviewPanel
-          open={showRoutePreview}
-          onClose={() => setShowRoutePreview(false)}
+          open={routesPreviewOpen}
+          onClose={closeRoutesPreview}
           nodes={nodes}
           edges={edges}
         />
