@@ -75,7 +75,7 @@ import { db } from "@/infrastructure/firebase/firebaseConfig";
 import { useTheme } from "@mui/material/styles";
 import { collection, getDocs } from "firebase/firestore";
 import { useContext } from "react";
-
+import { useAmiList } from "@/features/networkCanvas/core/useAmiList";
 
 const nodeTypes = {
   vpc: VPCNodeInstance,
@@ -173,7 +173,7 @@ function MainFlow() {
 
   // eslint-disable-next-line no-unused-vars
   const [target, setTarget] = useState(null);
-  const [amiList, setAmiList] = useState([]);
+  const amiList = useAmiList();
 
   // eslint-disable-next-line no-unused-vars
   const [clickedNodeId, setClickedNodeId] = useClickedNodeIdStore(state => [state.clickedNodeId, state.setClickedNodeId])
@@ -403,24 +403,8 @@ function MainFlow() {
 
 
 
-  const fetchAmiList = async () => {
-    try {
-      const amiListCollection = collection(db, DB_AMI_LIST)
-      const amiListSnapshot = await getDocs(amiListCollection)
-      const amiListResponse = amiListSnapshot.docs.map(doc => ({
-        id: doc.id, ...doc.data()
-      }))
-      // console.log("amiListResponse: ", amiListResponse);
-
-      setAmiList(amiListResponse)
-    } catch (error) {
-      console.error('Error fetching AMI list:', error);
-    }
-  }
-
   useEffect(() => {
     const handleFlowRestore = async () => {
-      fetchAmiList()
       await onRestoreFlow();
       setRestorationDone(true);
     }
