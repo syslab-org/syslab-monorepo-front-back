@@ -1,7 +1,7 @@
 // apps/frontend/src/components/flow/MainFlow.jsx
 import PacketToolbar from "@/features/networkCanvas/panels/PacketToolbar";
 import { useReactFlow } from "@xyflow/react";
-import { useCanvasController } from "@/features/networkCanvas/core/useCanvasController";
+import { useCanvasRuntimeController } from "@/features/networkCanvas/core/useCanvasRuntimeController";
 import { useRoutingPreview } from "@/features/networkCanvas/core/useRoutingPreview";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -148,6 +148,11 @@ function MainFlow() {
 
   const { loadingFlow } = useContext(LoadingFlowContext);
 
+  const canvas = useCanvasRuntimeController({
+    initialNodes,
+    setCanvasUiError
+  });
+
   const {
     nodes,
     edges,
@@ -158,7 +163,7 @@ function MainFlow() {
     handleZoomIn,
     handleZoomOut,
     handleFitView
-  } = useCanvasController(initialNodes);
+  } = canvas;
 
   useRestrictSubnetsInsideVPC();
 
