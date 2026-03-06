@@ -4,7 +4,7 @@ import { useCanvasRuntimeController } from "@/features/networkCanvas/core/useCan
 import { useRoutingPreview } from "@/features/networkCanvas/core/useRoutingPreview";
 import PacketToolbar from "@/features/networkCanvas/panels/PacketToolbar";
 import { useReactFlow } from "@xyflow/react";
-import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { initialNodes } from '../utils/initials-elements';
 // mui
@@ -36,6 +36,7 @@ import SidebarFlow from '@/features/networkCanvas/panels/SidebarFlow';
 import useCidrBlockVPCStore from '@/features/networkCanvas/store/cidrBlocksIp';
 import useClickedNodeIdStore from '@/features/networkCanvas/store/clickedNodeIdStore';
 import CanvasFeedbackLayer from "@/features/networkCanvas/ui/CanvasFeedbackLayer";
+import FlowWorkspace from "@/features/networkCanvas/layout/FlowWorkspace";
 
 import { useLocation, useNavigate } from 'react-router-dom';
 // Importar constantes
@@ -158,7 +159,6 @@ function MainFlow() {
     [isValidConnection, nodes]
   );
 
-  const memoNodeTypes = useMemo(() => nodeTypes, []);
 
 
 
@@ -383,177 +383,70 @@ function MainFlow() {
 
 
         <Grid item xs={12}>
-          <Box
-            ref={reactFlowWrapper}
-            sx={{
-              height: "100%",
-              display: "flex",
-              borderRadius: 1,
-              overflow: "hidden",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-              backgroundColor: "background.paper",
+          <FlowWorkspace
+            reactFlowWrapper={reactFlowWrapper}
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onNodeClick={onNodeClick}
+            onConnect={guardBeforeEdit((params) =>
+              onConnect(params, setEdges, () => reactFlowInstance?.getEdges?.() || [])
+            )}
+            onInit={setReactFlowInstance}
+            onDrop={guardBeforeEdit(onDrop)}
+            onNodeDragStart={onNodeDragStart}
+            onNodeDrag={onNodeDrag}
+            onNodeDragStop={onNodeDragStop}
+            onDragOver={onDragOver}
+            onConnectStart={onConnectStart}
+            onConnectEnd={onConnectEnd}
+            isValidConnection={isValidConnectionMemo}
+            connectionLineStyle={connectionLineStyle}
+            setNodes={setNodes}
+            reactFlowInstance={reactFlowInstance}
+            theme={theme}
+            toolbarProps={{
+              onSave: onSaveFlow,
+              onRestore: onRestoreFlow,
+              onRestoreInitial: restoreInitialNodes,
+              onDeploy: guardBeforeEdit(processJsonToCloud),
+              onZoomIn: handleZoomIn,
+              onZoomOut: handleZoomOut,
+              onFitView: handleFitView,
+              title: "Architecture Studio",
+              onPreviewRoutes: openRoutesPreview,
+              planStatus: canvasPlanInfo,
+              canvasState,
+              validationState: validationStateForToolbar
             }}
-          >
-            {/* Sidebar */}
-            <Box
-              sx={{
-                width: { xs: 220, md: 260 },
-                borderRight: "1px solid",
-                borderColor: "divider",
-                display: "flex",
-                flexDirection: "column",
-              }}
-            >
-              <SidebarFlow />
-            </Box>
-
-            {/* Main Canvas Area */}
-            <Box
-              sx={{
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                minWidth: 0,
-              }}
-            >
-              {isWizardEntry && (
-                <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider" }}>
-                  <Typography variant="overline" color="text.secondary">
-                    LABORATORIO GUIADO
-                  </Typography>
-                  <Typography variant="h6" sx={{ mt: 0.5 }}>
-                    Paso 2: Diseña tu arquitectura
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Arrastra una VPC al lienzo, luego crea una subnet y una instancia. Después pasamos a ruteo y pruebas.
-                  </Typography>
-                </Box>
-              )}
-              <Box
-                sx={{
-                  flexShrink: 0,
-                  position: "sticky",
-                  top: 0,
-                  zIndex: 50,
-                  backgroundColor: (t) => t.palette.background.paper,
-                }}
-              >
-                <PacketToolbar
-                  onSave={onSaveFlow}
-                  onRestore={onRestoreFlow}
-                  onRestoreInitial={restoreInitialNodes}
-                  onDeploy={guardBeforeEdit(processJsonToCloud)}
-                  onZoomIn={handleZoomIn}
-                  onZoomOut={handleZoomOut}
-                  onFitView={handleFitView}
-                  title="Architecture Studio"
-                  onPreviewRoutes={openRoutesPreview}
-                  planStatus={canvasPlanInfo}
-                  canvasState={canvasState}
-                  validationState={validationStateForToolbar}
-                />
-              </Box>
-              <Box
-                sx={{
-                  flex: 1,
-                  minHeight: 0,
-                  position: "relative",
-                  backgroundColor: (t) =>
-                    t.palette.mode === "light" ? "#f4f6fa" : "#0f172a",
-                }}
-              >
-                {nodes.length === 0 && (
-                  <Box
-                    sx={{
-                      position: "absolute",
-                      inset: 0,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      pointerEvents: "none",
-                      zIndex: 10,
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        background:
-                          theme.palette.mode === "light"
-                            ? "#ffffffdd"
-                            : "#0f172add",
-                        border: "1px dashed",
-                        borderColor: "divider",
-                        borderRadius: 2,
-                        px: 4,
-                        py: 3,
-                        textAlign: "center",
-                        backdropFilter: "blur(6px)",
-                        maxWidth: 420,
-                      }}
-                    >
-                      <Typography variant="h6" sx={{ mb: 1 }}>
-                        Comienza creando tu red
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        1. Arrastra una VPC desde la izquierda.
-                        2. Dentro de la VPC crea una Subnet.
-                        3. Luego agrega instancias.
-                      </Typography>
-                    </Box>
-                  </Box>
-                )}
-                <ReactFlowCanvas
-                  nodes={nodes}
-                  edges={edges}
-                  nodeTypes={memoNodeTypes}
-                  onNodesChange={onNodesChange}
-                  onEdgesChange={onEdgesChange}
-                  onNodeClick={onNodeClick}
-                  onConnect={guardBeforeEdit((params) =>
-                    onConnect(params, setEdges, () => reactFlowInstance?.getEdges?.() || [])
-                  )}
-                  onInit={setReactFlowInstance}
-                  onDrop={guardBeforeEdit(onDrop)}
-                  onNodeDragStart={onNodeDragStart}
-                  onNodeDrag={onNodeDrag}
-                  onNodeDragStop={onNodeDragStop}
-                  onDragOver={onDragOver}
-                  onConnectStart={onConnectStart}
-                  onConnectEnd={onConnectEnd}
-                  isValidConnection={isValidConnectionMemo}
-                  connectionLineStyle={connectionLineStyle}
-                  setNodes={setNodes}
-                  reactFlowInstance={reactFlowInstance}
-                  theme={theme}
-                />
-              </Box>
-              <CanvasFeedbackLayer
-                canvasUiError={canvasUiError}
-                setCanvasUiError={setCanvasUiError}
-                editGuardOpen={editGuardOpen}
-                setEditGuardOpen={setEditGuardOpen}
-                canvasPlanId={canvasPlanId}
-                navigate={navigate}
-                processJsonToCloud={processJsonToCloud}
-                setIgnoreDirtyGuard={setIgnoreDirtyGuard}
-                editGuardRef={editGuardRef}
-                showConfirmation={showConfirmation}
-                restorationDone={restorationDone}
-                handleCancelDeploy={handleCancelDeploy}
-                validationState={validationState}
-                canvasState={canvasState}
-                validationResult={validationResult}
-                transformedData={transformedData}
-                handleValidatePlan={handleValidatePlan}
-                handleApplyReal={handleApplyReal}
-                handleOpenPlanDetails={handleOpenPlanDetails}
-                loadingFlow={loadingFlow}
-                successMessage={successMessage}
-                errorMessage={errorMessage}
-                handleCloseSnackbar={handleCloseSnackbar}
-              />
-
-            </Box>
-          </Box>
+            feedbackProps={{
+              canvasUiError,
+              setCanvasUiError,
+              editGuardOpen,
+              setEditGuardOpen,
+              canvasPlanId,
+              navigate,
+              processJsonToCloud,
+              setIgnoreDirtyGuard,
+              editGuardRef,
+              showConfirmation,
+              restorationDone,
+              handleCancelDeploy,
+              validationState,
+              canvasState,
+              validationResult,
+              transformedData,
+              handleValidatePlan,
+              handleApplyReal,
+              handleOpenPlanDetails,
+              loadingFlow,
+              successMessage,
+              errorMessage,
+              handleCloseSnackbar
+            }}
+          />
 
         </Grid>
         <RoutePreviewPanel
