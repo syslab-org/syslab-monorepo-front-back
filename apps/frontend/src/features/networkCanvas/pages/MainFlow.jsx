@@ -1,12 +1,12 @@
 // apps/frontend/src/components/flow/MainFlow.jsx
-import PacketToolbar from "@/features/networkCanvas/panels/PacketToolbar";
-import { useReactFlow } from "@xyflow/react";
+import { useCanvasInitialization } from "@/features/networkCanvas/core/useCanvasInitialization";
 import { useCanvasRuntimeController } from "@/features/networkCanvas/core/useCanvasRuntimeController";
 import { useRoutingPreview } from "@/features/networkCanvas/core/useRoutingPreview";
-import { useCallback, useEffect, useRef, useState } from "react";
+import PacketToolbar from "@/features/networkCanvas/panels/PacketToolbar";
+import { useReactFlow } from "@xyflow/react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { initialNodes } from '../utils/initials-elements';
-import { useCanvasInitialization } from "@/features/networkCanvas/core/useCanvasInitialization";
 // mui
 import NodeConfigModal from "@/features/networkCanvas/modals/NodeConfigModal";
 import {
@@ -25,13 +25,12 @@ import '../../../App.css';
 import '../styles/packet-tracer.css';
 //Custom compoonents and hooks
 import { useWizard } from "@/features/networkCanvas/context/WizardContext";
+import { useCanvasDirtyState } from "@/features/networkCanvas/core/useCanvasDirtyState";
+import { useCanvasInteractionController } from "@/features/networkCanvas/core/useCanvasInteractionController";
 import { useCanvasPlanState } from "@/features/networkCanvas/core/useCanvasPlanState";
 import useRestoreFlow from '@/features/networkCanvas/core/useRestoreFlow';
 import useSaveFlow from '@/features/networkCanvas/core/useSaveFlow';
-import { useFlowState } from '@/features/networkCanvas/hooks/useFlowState';
 import useNodeClick from '@/features/networkCanvas/hooks/useNodeClick';
-import useNodeDrag from '@/features/networkCanvas/hooks/useNodeDrag';
-import { useCanvasInteractionController } from "@/features/networkCanvas/core/useCanvasInteractionController";
 import InstanceNode from "@/features/networkCanvas/nodes/InstanceNode";
 import RouterNodeInstance from "@/features/networkCanvas/nodes/RouterNodeInstance";
 import SubNetworkNodeInstance from '@/features/networkCanvas/nodes/SubNetworkNodeInstance';
@@ -39,34 +38,28 @@ import VPCNodeInstance from "@/features/networkCanvas/nodes/VPCNodeInstance";
 import SidebarFlow from '@/features/networkCanvas/panels/SidebarFlow';
 import useCidrBlockVPCStore from '@/features/networkCanvas/store/cidrBlocksIp';
 import useClickedNodeIdStore from '@/features/networkCanvas/store/clickedNodeIdStore';
-import { computeInfraHash } from "@/features/networkCanvas/utils/infraHash";
-import { useCanvasDirtyState } from "@/features/networkCanvas/core/useCanvasDirtyState";
 import CanvasFeedbackLayer from "@/features/networkCanvas/ui/CanvasFeedbackLayer";
 
 import { useLocation, useNavigate } from 'react-router-dom';
 // Importar constantes
+import { useNodeSelection } from "@/features/networkCanvas/domain/useNodeSelection";
 import {
   flowKey,
-  TYPE_ROUTER_NODE,
-  TYPE_SUBNETWORK_NODE,
-  TYPE_VPC_NODE
+  TYPE_SUBNETWORK_NODE
 } from '@/features/networkCanvas/utils/constants';
-import { useNodeSelection } from "@/features/networkCanvas/domain/useNodeSelection";
 
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext.jsx";
 import { NetworkProvider } from "@/features/networkCanvas/context/NetworkNodesContext";
 import { useNetworkPlanController } from "@/features/networkCanvas/core/useNetworkPlanController";
 import { usePlanMeta } from "@/features/networkCanvas/core/usePlanMeta";
 import { usePlanPolling } from "@/features/networkCanvas/core/usePlanPolling";
-import useHandleDrop from "@/features/networkCanvas/hooks/useHandleDrop";
-import useRestrictMovement from "@/features/networkCanvas/hooks/useRestrictMovement";
 import RoutePreviewPanel from "@/features/networkCanvas/panels/RoutePreviewPanel";
 // import { buildRoutingPreview } from "@/features/networkCanvas/utils/buildRoutingPreview";
 // import { db } from "@/infrastructure/firebase/firebaseConfig";
 import { useTheme } from "@mui/material/styles";
 // import { collection, getDocs } from "firebase/firestore";
-import { useContext } from "react";
 import { useAmiList } from "@/features/networkCanvas/core/useAmiList";
+import { useContext } from "react";
 
 const nodeTypes = {
   vpc: VPCNodeInstance,
@@ -175,6 +168,11 @@ function MainFlow() {
     onNodeDrag,
     onNodeDragStop
   } = canvas;
+
+  const isValidConnectionMemo = useCallback(
+    (connection) => isValidConnection(connection, nodes),
+    [isValidConnection, nodes]
+  );
 
 
   const reactFlow = useReactFlow();
@@ -536,7 +534,7 @@ function MainFlow() {
                   onDragOver={onDragOver}
                   onConnectStart={onConnectStart}
                   onConnectEnd={onConnectEnd}
-                  isValidConnection={(connection) => isValidConnection(connection, nodes)}
+                  isValidConnection={isValidConnectionMemo}
                   connectionLineStyle={connectionLineStyle}
                   setNodes={setNodes}
                   reactFlowInstance={reactFlowInstance}
