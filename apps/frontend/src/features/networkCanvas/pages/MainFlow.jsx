@@ -1,10 +1,7 @@
 // apps/frontend/src/components/flow/MainFlow.jsx
 import PacketToolbar from "@/features/networkCanvas/panels/PacketToolbar";
-import {
-  useEdgesState,
-  useNodesState,
-  useReactFlow
-} from "@xyflow/react";
+import { useReactFlow } from "@xyflow/react";
+import { useCanvasController } from "@/features/networkCanvas/core/useCanvasController";
 import { useRoutingPreview } from "@/features/networkCanvas/core/useRoutingPreview";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -145,9 +142,6 @@ function MainFlow() {
     ? 'rgba(90,98,117,0.15)'
     : 'rgba(200,210,230,0.12)';
 
-  const initialEdges = [];
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [restorationDone, setRestorationDone] = useState(false);
   const [canvasPlanId, setCanvasPlanId] = useState(null);
   const [showRoutePreview, setShowRoutePreview] = useState(false);
@@ -158,18 +152,28 @@ function MainFlow() {
   const [hasValidatedInSession, setHasValidatedInSession] = useState(false);
 
   const { loadingFlow } = useContext(LoadingFlowContext);
-  useRestrictSubnetsInsideVPC()
+
+  const {
+    nodes,
+    edges,
+    setNodes,
+    setEdges,
+    onNodesChange,
+    onEdgesChange,
+    handleZoomIn,
+    handleZoomOut,
+    handleFitView
+  } = useCanvasController(initialNodes);
+
+  useRestrictSubnetsInsideVPC();
+
   useVpcRouterSync({
     nodes,
     edges,
     setNodes
   });
-  const reactFlow = useReactFlow();
 
-  const rf = useReactFlow();
-  const handleZoomIn = () => rf.zoomIn();
-  const handleZoomOut = () => rf.zoomOut();
-  const handleFitView = () => rf.fitView({ padding: .2 });
+  const reactFlow = useReactFlow();
 
   // eslint-disable-next-line no-unused-vars
   const [target, setTarget] = useState(null);
