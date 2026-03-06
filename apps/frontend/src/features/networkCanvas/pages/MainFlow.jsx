@@ -131,8 +131,11 @@ const useBodyClass = (className, enabled = true) => {
 // eslint-disable-next-line react-refresh/only-export-components
 function MainFlow() {
   const params = useParams();
-  console.log("ROUTE PARAMS", params);
-  const { vpcid } = useParams()
+  const { vpcid } = params;
+
+  useEffect(() => {
+    console.log("ROUTE PARAMS", params);
+  }, [params]);
   const navigate = useNavigate();
   const theme = useTheme();
   // Full-bleed layout for the Flow canvas (removes global content max-width/padding)
