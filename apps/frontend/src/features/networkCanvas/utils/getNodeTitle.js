@@ -5,6 +5,7 @@ import {
   TYPE_SERVER_NODE,
   TYPE_SUBNETWORK_NODE,
 } from "@/features/networkCanvas/utils/constants";
+import { TYPE_VPC_NODE } from "./constants";
 
 const getNodeTitle = ({ type }) => {
   switch (type) {
@@ -18,6 +19,8 @@ const getNodeTitle = ({ type }) => {
       return "SubNetwork";
     case TYPE_ROUTER_NODE:
       return "Router";
+    case TYPE_VPC_NODE:
+      return "VPC";
     default:
       return "Instance";
   }

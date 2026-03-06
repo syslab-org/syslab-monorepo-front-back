@@ -2,7 +2,6 @@
 import { useCanvasInitialization } from "@/features/networkCanvas/core/useCanvasInitialization";
 import { useCanvasRuntimeController } from "@/features/networkCanvas/core/useCanvasRuntimeController";
 import { useRoutingPreview } from "@/features/networkCanvas/core/useRoutingPreview";
-import PacketToolbar from "@/features/networkCanvas/panels/PacketToolbar";
 import { useReactFlow } from "@xyflow/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -11,14 +10,12 @@ import { initialNodes } from '../utils/initials-elements';
 import NodeConfigModal from "@/features/networkCanvas/modals/NodeConfigModal";
 import {
   Backdrop,
-  Box,
   CircularProgress,
   Grid,
   Stack,
   Typography
 } from "@mui/material";
 // import Modal from 'react-modal';
-import ReactFlowCanvas from "@/features/networkCanvas/canvas/ReactFlowCanvas";
 import { useNodeActions } from "@/features/networkCanvas/domain/useNodeActions";
 import '@xyflow/react/dist/style.css';
 import '../../../App.css';
@@ -32,11 +29,9 @@ import { useCanvasPlanState } from "@/features/networkCanvas/core/useCanvasPlanS
 import useRestoreFlow from '@/features/networkCanvas/core/useRestoreFlow';
 import useSaveFlow from '@/features/networkCanvas/core/useSaveFlow';
 import useNodeClick from '@/features/networkCanvas/hooks/useNodeClick';
-import SidebarFlow from '@/features/networkCanvas/panels/SidebarFlow';
+import FlowWorkspace from "@/features/networkCanvas/layout/FlowWorkspace";
 import useCidrBlockVPCStore from '@/features/networkCanvas/store/cidrBlocksIp';
 import useClickedNodeIdStore from '@/features/networkCanvas/store/clickedNodeIdStore';
-import CanvasFeedbackLayer from "@/features/networkCanvas/ui/CanvasFeedbackLayer";
-import FlowWorkspace from "@/features/networkCanvas/layout/FlowWorkspace";
 
 import { useLocation, useNavigate } from 'react-router-dom';
 // Importar constantes
@@ -59,10 +54,6 @@ import { useTheme } from "@mui/material/styles";
 import { useAmiList } from "@/features/networkCanvas/core/useAmiList";
 import { useContext } from "react";
 
-
-
-
-
 const makeRandomId = (length) => {
   let result = ''
   const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
@@ -80,15 +71,6 @@ const getId = {
   setId: (newId) => { id = newId; }
 };
 
-
-
-
-
-
-
-
-
-
 const useBodyClass = (className, enabled = true) => {
   useEffect(() => {
     if (!enabled) return;
@@ -96,7 +78,6 @@ const useBodyClass = (className, enabled = true) => {
     return () => document.body.classList.remove(className);
   }, [className, enabled]);
 };
-
 
 // eslint-disable-next-line react-refresh/only-export-components
 function MainFlow() {
@@ -159,9 +140,6 @@ function MainFlow() {
     [isValidConnection, nodes]
   );
 
-
-
-
   const amiList = useAmiList();
 
   const {
@@ -194,7 +172,6 @@ function MainFlow() {
     state.setPrefixLength
   ]);
 
-
   // eslint-disable-next-line no-unused-vars
   const [nodeName, setNodeName] = useState("Node - 1")
   const { setViewport } = useReactFlow();
@@ -214,9 +191,6 @@ function MainFlow() {
   const reactFlowWrapper = useRef(null);
   const dragRef = useRef(null);
   //const connectionCreated = useRef(true)
-
-
-
 
   const isPlanRunning = (st) => {
     const s = String(st || '').toUpperCase();
@@ -246,9 +220,6 @@ function MainFlow() {
 
 
   const closeModal = closeNodeModal;
-
-
-
 
   //const onNodeDragStop = useNodeDragStop({ nodes, setNodes, reactFlow, TYPE_SUBNETWORK_NODE, TYPE_VPC_NODE });
   const onSaveFlow = useSaveFlow({ reactFlowInstance, flowKey, vpcid });
@@ -476,9 +447,6 @@ function MainFlow() {
 
       </Grid>
     </NetworkProvider>
-
-
-
 
   )
 }
