@@ -6,6 +6,7 @@ import { useRoutingPreview } from "@/features/networkCanvas/core/useRoutingPrevi
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { initialNodes } from '../utils/initials-elements';
+import { useCanvasInitialization } from "@/features/networkCanvas/core/useCanvasInitialization";
 // mui
 import NodeConfigModal from "@/features/networkCanvas/modals/NodeConfigModal";
 import {
@@ -60,7 +61,7 @@ import { useNodeSelection } from "@/features/networkCanvas/domain/useNodeSelecti
 
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext.jsx";
 import { NetworkProvider } from "@/features/networkCanvas/context/NetworkNodesContext";
-import useDeployNetwork from "@/features/networkCanvas/core/useDeployNetwork";
+import { useNetworkPlanController } from "@/features/networkCanvas/core/useNetworkPlanController";
 import { usePlanMeta } from "@/features/networkCanvas/core/usePlanMeta";
 import { usePlanPolling } from "@/features/networkCanvas/core/usePlanPolling";
 import useHandleDrop from "@/features/networkCanvas/hooks/useHandleDrop";
@@ -310,7 +311,12 @@ function MainFlow() {
     handleOpenPlanDetails,
     planValidationOk,
     planCanvasHash,
-  } = useDeployNetwork({ nodes, edges, allowCrossVpcPingUI, firestoreVpcId: vpcid });
+  } = useNetworkPlanController({
+    nodes,
+    edges,
+    allowCrossVpcPingUI,
+    firestoreVpcId: vpcid
+  });
 
   const {
     routesPreviewOpen,
@@ -365,14 +371,11 @@ function MainFlow() {
   }, [restorationDone, cidrBlockVPC, prefixLength]);
 
 
-
-  useEffect(() => {
-    const handleFlowRestore = async () => {
-      await onRestoreFlow();
-      setRestorationDone(true);
-    }
-    handleFlowRestore();
-  }, [onRestoreFlow]);
+  // Hook para inicializar el canvas restaurando el flow guardado en backend (si existe)
+  useCanvasInitialization({
+    onRestoreFlow,
+    setRestorationDone
+  });
 
   // Función para restaurar los nodos a su estado inicial
 
