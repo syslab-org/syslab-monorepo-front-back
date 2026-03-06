@@ -11,7 +11,7 @@
       "id": "lvbm3g52",
       "name": "VPC-A",
       "region": "us-east-1",
-      "cidr_block": "10.10.0.0/16",
+      "cidr_block": "10.10.0.0/17",
       "internet_gateway": true,
       "nat_gateway": {
         "enabled": false,
@@ -57,7 +57,7 @@
       "id": "4e5x3hos",
       "name": "VPC-B",
       "region": "us-east-1",
-      "cidr_block": "10.11.0.0/16",
+      "cidr_block": "10.10.128.0/17",
       "internet_gateway": true,
       "nat_gateway": {
         "enabled": false,
@@ -79,7 +79,7 @@
       "subnets": [
         {
           "name": "public-b",
-          "cidr_block": "10.11.1.0/24",
+          "cidr_block": "10.10.129.0/24",
           "availability_zone": "us-east-1a",
           "map_public_ip_on_launch": true,
           "subnet_type": "public",
@@ -90,7 +90,7 @@
               "name": "bastion-b",
               "ami": "ami-0ebfd941bbafe70c6",
               "instance_type": "t2.micro",
-              "ip_address": "10.11.1.10",
+              "ip_address": "10.10.129.10",
               "ssh_access": "tesis-key",
               "associate_public_ip": true
             }

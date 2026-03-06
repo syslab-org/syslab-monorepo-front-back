@@ -1,9 +1,6 @@
 // apps/frontend/src/components/flow/MainFlow.jsx
 import PacketToolbar from "@/features/networkCanvas/panels/PacketToolbar";
 import {
-  Background,
-  Controls,
-  ReactFlow,
   useEdgesState,
   useNodesState,
   useReactFlow
@@ -12,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { initialNodes } from '../utils/initials-elements';
 // mui
+import NodeConfigModal from "@/features/networkCanvas/modals/NodeConfigModal";
 import {
   Alert,
   Backdrop,
@@ -28,24 +26,20 @@ import {
   Stack,
   Typography
 } from "@mui/material";
-import NodeConfigModal from "@/features/networkCanvas/modals/NodeConfigModal";
 // import Modal from 'react-modal';
+import ReactFlowCanvas from "@/features/networkCanvas/canvas/ReactFlowCanvas";
 import '@xyflow/react/dist/style.css';
+import { useNodeActions } from "@/features/networkCanvas/domain/useNodeActions";
 import '../../../App.css';
 import '../styles/packet-tracer.css';
-import ReactFlowCanvas from "@/features/networkCanvas/canvas/ReactFlowCanvas";
 //Custom compoonents and hooks
 import { useWizard } from "@/features/networkCanvas/context/WizardContext";
 import { usePlanValidationSync } from "@/features/networkCanvas/core/usePlanValidationSync";
-import InstanceNodeForm from '@/features/networkCanvas/forms/InstanceNodeForm';
-import RouterNodeForm from '@/features/networkCanvas/forms/RouterNodeForm';
-import SubNetworkNodeForm from '@/features/networkCanvas/forms/SubNetworkNodeForm';
-import VPCNodeForm from '@/features/networkCanvas/forms/VPCNodeForm';
+import useRestoreFlow from '@/features/networkCanvas/core/useRestoreFlow';
+import useSaveFlow from '@/features/networkCanvas/core/useSaveFlow';
 import { useFlowState } from '@/features/networkCanvas/hooks/useFlowState';
 import useNodeClick from '@/features/networkCanvas/hooks/useNodeClick';
 import useNodeDrag from '@/features/networkCanvas/hooks/useNodeDrag';
-import useRestoreFlow from '@/features/networkCanvas/core/useRestoreFlow';
-import useSaveFlow from '@/features/networkCanvas/core/useSaveFlow';
 import InstanceNode from "@/features/networkCanvas/nodes/InstanceNode";
 import RouterNodeInstance from "@/features/networkCanvas/nodes/RouterNodeInstance";
 import SubNetworkNodeInstance from '@/features/networkCanvas/nodes/SubNetworkNodeInstance';
@@ -73,19 +67,19 @@ import { DB_AMI_LIST } from "@/shared/constants";
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext.jsx";
 import { NetworkProvider } from "@/features/networkCanvas/context/NetworkNodesContext";
 import useDeployNetwork from "@/features/networkCanvas/core/useDeployNetwork";
+import { usePlanMeta } from "@/features/networkCanvas/core/usePlanMeta";
+import { usePlanPolling } from "@/features/networkCanvas/core/usePlanPolling";
+import { computeCanvasState } from "@/features/networkCanvas/domain/canvasStateMachine";
 import useHandleDrop from "@/features/networkCanvas/hooks/useHandleDrop";
 import useRestrictMovement from "@/features/networkCanvas/hooks/useRestrictMovement";
 import { useRestrictSubnetsInsideVPC } from "@/features/networkCanvas/hooks/useRestrictSubnetsInsideVPC";
 import ConfirmDeployDialog from "@/features/networkCanvas/modals/ConfirmDeployDialog";
+import RoutePreviewPanel from "@/features/networkCanvas/panels/RoutePreviewPanel";
+import { buildRoutingPreview } from "@/features/networkCanvas/utils/buildRoutingPreview";
 import { db } from "@/infrastructure/firebase/firebaseConfig";
 import { useTheme } from "@mui/material/styles";
 import { collection, getDocs } from "firebase/firestore";
 import { useContext } from "react";
-import { usePlanMeta } from "@/features/networkCanvas/core/usePlanMeta";
-import { usePlanPolling } from "@/features/networkCanvas/core/usePlanPolling";
-import { computeCanvasState } from "@/features/networkCanvas/domain/canvasStateMachine";
-import RoutePreviewPanel from "@/features/networkCanvas/panels/RoutePreviewPanel";
-import { buildRoutingPreview } from "@/features/networkCanvas/utils/buildRoutingPreview";
 
 
 const nodeTypes = {
@@ -98,7 +92,6 @@ const nodeTypes = {
 }
 
 
-const restrictedNodes = [TYPE_DEFAULT_NODE, TYPE_COMPUTER_NODE, TYPE_PRINTER_NODE, TYPE_SERVER_NODE]
 
 
 const makeRandomId = (length) => {
@@ -122,21 +115,6 @@ const getId = {
 
 
 
-const styleModal = {
-  position: 'absolute',
-  top: '50%',
-  left: '50%',
-  transform: 'translate(-50%, -50%)',
-  width: 880,           // << sube a 880px
-  maxWidth: '95vw',
-  maxHeight: '85vh',
-  overflowY: 'auto',
-  bgcolor: 'background.paper',
-  border: '2px solid #000',
-  borderRadius: 2,
-  boxShadow: 24,
-  p: 4,
-};
 
 
 
@@ -333,113 +311,6 @@ function MainFlow() {
     setSelectedNode(null)
   }
 
-  const saveNodeData = (data) => {
-    console.log("saveNodeData - data recibido:", data);
-
-    // 🧩 Normaliza nombres si el nodo es una VPC
-    let normalized = { ...data };
-    if (selectedNode?.type === TYPE_VPC_NODE) {
-      normalized = {
-        ...data,
-        // Nombres posibles
-        vpcName: data.vpcName || data.name || data.title,
-        // CIDR (acepta camelCase o snake_case)
-        cidrBlock: data.cidrBlock || data.cidr_block,
-        prefixLength: data.prefixLength ?? data.prefix_length,
-        // Booleans correctos
-        internetGateway: data.internetGateway ?? data.internet_gateway,
-        enableNatGateway:
-          data.enableNatGateway ??
-          (data.nat_gateway && data.nat_gateway.enabled),
-        // Mantén objetos si vienen anidados
-        nat_gateway: data.nat_gateway,
-        allowedSshCidr: data.allowedSshCidr || data.allowed_ssh_cidr,
-        // Genera el título visible
-        title: data.vpcName || data.name || "VPC",
-      };
-
-      // Si vino CIDR completo (ej: 10.0.0.0/16), sepáralo
-      if (typeof normalized.cidrBlock === "string" && normalized.cidrBlock.includes("/")) {
-        const [base, pref] = normalized.cidrBlock.split("/");
-        normalized.cidrBlock = base.trim();
-        normalized.prefixLength = Number(pref);
-      }
-    }
-
-    // 🔹 Mezcla en el nodo correspondiente
-    setNodes((nds) =>
-      nds.map((node) => {
-        if (node.id !== selectedNode.id) return node;
-
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            ...normalized,
-          },
-        };
-      })
-    );
-
-    // 🔸 Guarda y cierra modal
-    onSaveFlow();
-    closeModal();
-  };
-
-  const deleteNodeInstance = () => {
-
-    setNodes((nds) => {
-      const nodeToDelete = nds.find((node) => node.id === clickedNodeId);
-      // console.log("nodeToDelete: ", nodeToDelete.type);
-
-      if (!nodeToDelete) {
-        // console.log("Node not found");
-        return nds;
-      }
-
-      // ---- Borrado recursivo desde nodo tipo VPC ----
-      if (nodeToDelete.type === TYPE_VPC_NODE) {
-
-        //1. Encontrar todo los nodos subnets de la VPC
-        const subnetworksToDelete = nds.filter((node) => node.parentNode === nodeToDelete.id && node.type === TYPE_SUBNETWORK_NODE);
-
-        //2. Encuentra todas las Instancias e hijos de las subnets
-        const subnetIds = subnetworksToDelete.map((subnet) => subnet.id);
-        const instancesToDelete = nds.filter((node) => subnetIds.includes(node.parentNode));
-
-
-        //3. Filtrar fuera: la VPC, sus Subnets y todas las Instancias hijas
-        return nds.filter((n) =>
-          n.id !== nodeToDelete.id && // Quita la VPC
-          !subnetIds.includes(n.id) && // Quita las subnets hijas
-          !instancesToDelete.some((inst) => inst.id === n.id) // Quita instancias hijas de las subnets
-        )
-      }
-
-
-      // ---- Borrado recursivo desde nodo tipo Subnet ----
-      if (nodeToDelete.type === TYPE_SUBNETWORK_NODE) {
-        // 1. Encuentra todas las Instancias dentro de la Subnet
-        const instancesToDelete = nds.filter((n) => n.parentNode === nodeToDelete.id);
-        // 2. Filtra fuera la Subnet y sus hijos
-        return nds.filter(
-          (n) =>
-            n.id !== nodeToDelete.id &&
-            !instancesToDelete.some((inst) => inst.id === n.id)
-        );
-      }
-
-      return nds.filter((node) => node.id !== clickedNodeId);
-
-    })
-
-
-    // setNodes((nds) => nds.filter((node) => node.id !== clickedNodeId))
-    // // console.log(`Node with ID: ${clickedNodeId} has been deleted`);
-    closeModal()
-
-  }
-
 
 
   const onNodeDragStart = useCallback((_, node) => {
@@ -450,6 +321,14 @@ function MainFlow() {
   //const onNodeDragStop = useNodeDragStop({ nodes, setNodes, reactFlow, TYPE_SUBNETWORK_NODE, TYPE_VPC_NODE });
   const onSaveFlow = useSaveFlow({ reactFlowInstance, flowKey, vpcid });
   const onRestoreFlow = useRestoreFlow({ setNodes, setEdges, setViewport, flowKey, getId, setCanvasPlanId });
+  const { saveNodeData, deleteNodeInstance } = useNodeActions({
+    nodes,
+    setNodes,
+    selectedNode,
+    clickedNodeId,
+    closeModal,
+    onSaveFlow
+  });
 
   const {
     showConfirmation,
