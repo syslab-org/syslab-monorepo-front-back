@@ -10,18 +10,10 @@ import { useCanvasInitialization } from "@/features/networkCanvas/core/useCanvas
 // mui
 import NodeConfigModal from "@/features/networkCanvas/modals/NodeConfigModal";
 import {
-  Alert,
   Backdrop,
   Box,
-  Button,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Grid,
-  Modal,
-  Snackbar,
   Stack,
   Typography
 } from "@mui/material";
@@ -69,7 +61,6 @@ import { usePlanPolling } from "@/features/networkCanvas/core/usePlanPolling";
 import useHandleDrop from "@/features/networkCanvas/hooks/useHandleDrop";
 import useRestrictMovement from "@/features/networkCanvas/hooks/useRestrictMovement";
 import { useRestrictSubnetsInsideVPC } from "@/features/networkCanvas/hooks/useRestrictSubnetsInsideVPC";
-import ConfirmDeployDialog from "@/features/networkCanvas/modals/ConfirmDeployDialog";
 import RoutePreviewPanel from "@/features/networkCanvas/panels/RoutePreviewPanel";
 // import { buildRoutingPreview } from "@/features/networkCanvas/utils/buildRoutingPreview";
 // import { db } from "@/infrastructure/firebase/firebaseConfig";
@@ -608,49 +599,6 @@ function MainFlow() {
         />
 
 
-        <Modal
-          open={routesPreviewOpen}
-          onClose={closeRoutesPreview}
-          aria-labelledby="routes-preview-title"
-          aria-describedby="routes-preview-description"
-        >
-          <Box sx={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: '60%',
-            height: '70%',
-            bgcolor: 'background.paper',
-            boxShadow: 24,
-            p: 4,
-            overflow: 'hidden',
-          }}>
-            <Typography id="routes-preview-title" variant="h6" component="h2">
-              Routing Preview
-            </Typography>
-            <Typography id="routes-preview-description" sx={{ mt: 1 }}>
-              Tablas de enrutamiento construidas por VPC (intra = local, inter = vía router conectado).
-            </Typography>
-
-            <Box sx={{
-              maxHeight: '75%',
-              overflowY: 'auto',
-              mt: 2,
-              border: '1px solid #ccc',
-              padding: 2,
-              height: '100%'
-            }}>
-              <pre>{JSON.stringify(routesPreviewData, null, 2)}</pre>
-            </Box>
-
-            <Stack mt={3} direction="row" spacing={2} flexWrap="wrap">
-              <Button variant="contained" onClick={closeRoutesPreview}>
-                Cerrar
-              </Button>
-            </Stack>
-          </Box>
-        </Modal>
 
 
 
