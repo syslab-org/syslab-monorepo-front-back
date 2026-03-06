@@ -4,7 +4,7 @@ import { useCanvasRuntimeController } from "@/features/networkCanvas/core/useCan
 import { useRoutingPreview } from "@/features/networkCanvas/core/useRoutingPreview";
 import PacketToolbar from "@/features/networkCanvas/panels/PacketToolbar";
 import { useReactFlow } from "@xyflow/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { initialNodes } from '../utils/initials-elements';
 // mui
@@ -158,8 +158,9 @@ function MainFlow() {
     [isValidConnection, nodes]
   );
 
+  const memoNodeTypes = useMemo(() => nodeTypes, []);
 
-  const reactFlow = useReactFlow();
+
 
   const amiList = useAmiList();
 
@@ -503,7 +504,7 @@ function MainFlow() {
                 <ReactFlowCanvas
                   nodes={nodes}
                   edges={edges}
-                  nodeTypes={nodeTypes}
+                  nodeTypes={memoNodeTypes}
                   onNodesChange={onNodesChange}
                   onEdgesChange={onEdgesChange}
                   onNodeClick={onNodeClick}
