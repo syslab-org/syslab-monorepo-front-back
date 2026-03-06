@@ -1,4 +1,5 @@
 import { ReactFlow, Background, Controls } from "@xyflow/react";
+import { useMemo } from "react";
 
 function ReactFlowCanvas({
     nodes,
@@ -22,11 +23,18 @@ function ReactFlowCanvas({
     reactFlowInstance,
     theme
 }) {
+    const memoNodeTypes = useMemo(() => nodeTypes, [nodeTypes]);
+
+    const memoEdges = useMemo(
+        () => edges.map(e => ({ ...e, style: connectionLineStyle, animated: false })),
+        [edges, connectionLineStyle]
+    );
 
     return (
         <ReactFlow
             nodes={nodes}
-            edges={edges.map(e => ({ ...e, style: connectionLineStyle, animated: false }))}
+            edges={memoEdges}
+            onlyRenderVisibleElements
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onNodeClick={onNodeClick}
@@ -45,7 +53,7 @@ function ReactFlowCanvas({
             onConnectEnd={onConnectEnd}
             fitViewOptions={{ padding: 0.2 }}
             isValidConnection={isValidConnection}
-            nodeTypes={nodeTypes}
+            nodeTypes={memoNodeTypes}
             nodeOrigin={[0, 0]}
             style={{
                 background: theme.palette.mode === "light"
