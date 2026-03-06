@@ -49,6 +49,7 @@ import SidebarFlow from '@/features/networkCanvas/panels/SidebarFlow';
 import useCidrBlockVPCStore from '@/features/networkCanvas/store/cidrBlocksIp';
 import useClickedNodeIdStore from '@/features/networkCanvas/store/clickedNodeIdStore';
 import { computeInfraHash } from "@/features/networkCanvas/utils/infraHash";
+import { useCanvasDirtyState } from "@/features/networkCanvas/core/useCanvasDirtyState";
 import { useLocation, useNavigate } from 'react-router-dom';
 // Importar constantes
 import {
@@ -154,12 +155,6 @@ function MainFlow() {
   const [canvasUiError, setCanvasUiError] = useState(null);
   const [validatedPlanHash, setValidatedPlanHash] = useState(null);
   const [hasValidatedInSession, setHasValidatedInSession] = useState(false);
-  const [isCanvasDirty, setIsCanvasDirty] = useState(false);
-
-  const dirtyInitializedRef = useRef(false);
-  const [editGuardOpen, setEditGuardOpen] = useState(false);
-  const editGuardRef = useRef({ fn: null, args: null });
-  const [ignoreDirtyGuard, setIgnoreDirtyGuard] = useState(false);
 
   const { loadingFlow } = useContext(LoadingFlowContext);
   useRestrictSubnetsInsideVPC()
@@ -173,6 +168,26 @@ function MainFlow() {
   // eslint-disable-next-line no-unused-vars
   const [target, setTarget] = useState(null);
   const amiList = useAmiList();
+
+  const {
+    isCanvasDirty,
+    setIsCanvasDirty,
+    editGuardOpen,
+    setEditGuardOpen,
+    guardBeforeEdit,
+    ignoreDirtyGuard,
+    setIgnoreDirtyGuard,
+    editGuardRef
+  } = useCanvasDirtyState({
+    nodes,
+    edges,
+    canvasPlanId,
+    validatedPlanHash,
+    restorationDone,
+    hasValidatedInSession,
+    isCanvasLocked,
+    setCanvasUiError
+  });
 
   // eslint-disable-next-line no-unused-vars
   const [clickedNodeId, setClickedNodeId] = useClickedNodeIdStore(state => [state.clickedNodeId, state.setClickedNodeId])
@@ -224,70 +239,6 @@ function MainFlow() {
     setValidatedPlanHash
   });
 
-  useEffect(() => {
-    setIgnoreDirtyGuard(false);
-    dirtyInitializedRef.current = false;
-  }, [canvasPlanId, validatedPlanHash]);
-
-
-  useEffect(() => {
-    if (!restorationDone) return;
-
-    // Si no hay plan asociado, no existe concepto de "dirty"
-    if (!canvasPlanId || !validatedPlanHash) {
-      setIsCanvasDirty(false);
-      return;
-    }
-
-    // Evita falsos positivos justo después de restaurar/hidratar ReactFlow.
-    // La primera evaluación solo "calienta" el hash actual.
-    if (!dirtyInitializedRef.current) {
-      dirtyInitializedRef.current = true;
-      setIsCanvasDirty(false);
-      return;
-    }
-
-    const current = computeInfraHash(nodes, edges);
-
-    // Si no existe hash validado persistido (caso extremo),
-    // no podemos comparar todavía.
-    if (!validatedPlanHash) {
-      setIsCanvasDirty(false);
-      return;
-    }
-
-    const dirty = current !== validatedPlanHash;
-    setIsCanvasDirty(dirty);
-
-    // Si vuelve a coincidir, levantamos el ignore
-    if (!dirty) {
-      setIgnoreDirtyGuard(false);
-    }
-
-  }, [nodes, edges, validatedPlanHash, canvasPlanId, restorationDone, hasValidatedInSession]);
-
-
-  const guardBeforeEdit = (
-    fn,
-    msgLocked = 'Hay un plan ejecutándose. Revisa el plan antes de editar el canvas.'
-  ) => {
-    return (...args) => {
-      // 1) Lock fuerte si hay ejecución
-      if (isCanvasLocked) {
-        setCanvasUiError(msgLocked);
-        return;
-      }
-
-      // 2) Warning: canvas cambió desde la última validación y ya existe un plan
-      if (canvasPlanId && validatedPlanHash && isCanvasDirty && !ignoreDirtyGuard) {
-        editGuardRef.current = { fn, args };
-        setEditGuardOpen(true);
-        return;
-      }
-
-      return fn?.(...args);
-    };
-  };
 
   const onNodeClickBase = useNodeClick(setSelectedNode, setModalIsOpen);
   const onNodeClick = onNodeClickBase;
