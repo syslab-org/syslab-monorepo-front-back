@@ -43,8 +43,7 @@ export function useVpcRouterSync({ nodes, edges, setNodes }) {
       vpcToRouters.get(vpcId).add(routerId);
     });
 
-    // 3) Detect real changes
-    const updates = [];
+    const updatesMap = new Map();
 
     for (const n of nodes) {
       if (n.type !== TYPE_VPC_NODE) continue;
@@ -55,20 +54,23 @@ export function useVpcRouterSync({ nodes, edges, setNodes }) {
         : [];
 
       if (!shallowArrEq(newList, prevList)) {
-        updates.push({ id: n.id, newList });
+        updatesMap.set(n.id, newList);
       }
     }
 
-    // 4) No updates → avoid unnecessary render
-    if (updates.length === 0) return;
+    if (updatesMap.size === 0) return;
 
     setNodes((curr) =>
       curr.map((n) => {
-        const u = updates.find((x) => x.id === n.id);
+        if (!updatesMap.has(n.id)) return n;
 
-        return u
-          ? { ...n, data: { ...n.data, connectedRouters: u.newList } }
-          : n;
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            connectedRouters: updatesMap.get(n.id),
+          },
+        };
       }),
     );
   }, [nodes, edges, setNodes]);
