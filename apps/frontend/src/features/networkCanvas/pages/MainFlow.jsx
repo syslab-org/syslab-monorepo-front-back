@@ -49,6 +49,8 @@ import useCidrBlockVPCStore from '@/features/networkCanvas/store/cidrBlocksIp';
 import useClickedNodeIdStore from '@/features/networkCanvas/store/clickedNodeIdStore';
 import { computeInfraHash } from "@/features/networkCanvas/utils/infraHash";
 import { useCanvasDirtyState } from "@/features/networkCanvas/core/useCanvasDirtyState";
+import CanvasFeedbackLayer from "@/features/networkCanvas/ui/CanvasFeedbackLayer";
+
 import { useLocation, useNavigate } from 'react-router-dom';
 // Importar constantes
 import {
@@ -126,6 +128,7 @@ const useBodyClass = (className, enabled = true) => {
     return () => document.body.classList.remove(className);
   }, [className, enabled]);
 };
+
 
 // eslint-disable-next-line react-refresh/only-export-components
 function MainFlow() {
@@ -554,81 +557,30 @@ function MainFlow() {
                   theme={theme}
                 />
               </Box>
-              <Snackbar
-                open={!!canvasUiError}
-                autoHideDuration={6000}
-                onClose={(_e, reason) => {
-                  if (reason === 'clickaway') return;
-                  setCanvasUiError(null);
-                }}
-                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-              >
-                <Alert severity="warning" variant="filled" sx={{ width: '100%' }}>
-                  {canvasUiError}
-                </Alert>
-              </Snackbar>
-
-              <Dialog
-                open={editGuardOpen}
-                onClose={() => setEditGuardOpen(false)}
-                maxWidth="sm"
-                fullWidth
-              >
-                <DialogTitle>Canvas desactualizado vs Plan</DialogTitle>
-                <DialogContent>
-                  <Typography variant="body2" color="text.secondary">
-                    Este canvas cambió desde la última validación asociada al plan.
-                    Si sigues editando, el plan ya no representa exactamente lo que estás viendo.
-                  </Typography>
-                </DialogContent>
-                <DialogActions>
-                  <Button
-                    onClick={() => {
-                      setEditGuardOpen(false);
-                      if (canvasPlanId) navigate(`/admin/plans/${canvasPlanId}`);
-                    }}
-                  >
-                    Ver plan
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    onClick={() => {
-                      setEditGuardOpen(false);
-                      setIgnoreDirtyGuard(false);
-                      processJsonToCloud();
-                    }}
-                  >
-                    Re-validar
-                  </Button>
-                  <Button
-                    variant="contained"
-                    onClick={() => {
-                      setEditGuardOpen(false);
-                      // El usuario acepta el riesgo: no interrumpir más con el modal
-                      // mientras el canvas siga “desactualizado”.
-                      setIgnoreDirtyGuard(true);
-                      editGuardRef.current = { fn: null, args: null };
-                    }}
-                  >
-                    Seguir editando
-                  </Button>
-                </DialogActions>
-              </Dialog>
-
-
-              <ConfirmDeployDialog
-                open={showConfirmation && restorationDone}
-                onClose={handleCancelDeploy}
+              <CanvasFeedbackLayer
+                canvasUiError={canvasUiError}
+                setCanvasUiError={setCanvasUiError}
+                editGuardOpen={editGuardOpen}
+                setEditGuardOpen={setEditGuardOpen}
+                canvasPlanId={canvasPlanId}
+                navigate={navigate}
+                processJsonToCloud={processJsonToCloud}
+                setIgnoreDirtyGuard={setIgnoreDirtyGuard}
+                editGuardRef={editGuardRef}
+                showConfirmation={showConfirmation}
+                restorationDone={restorationDone}
+                handleCancelDeploy={handleCancelDeploy}
                 validationState={validationState}
                 canvasState={canvasState}
                 validationResult={validationResult}
                 transformedData={transformedData}
-                onValidate={handleValidatePlan}
-                onDeploy={handleApplyReal}
-                onViewPlan={() =>
-                  handleOpenPlanDetails(validationResult?.plan_id)
-                }
+                handleValidatePlan={handleValidatePlan}
+                handleApplyReal={handleApplyReal}
+                handleOpenPlanDetails={handleOpenPlanDetails}
                 loadingFlow={loadingFlow}
+                successMessage={successMessage}
+                errorMessage={errorMessage}
+                handleCloseSnackbar={handleCloseSnackbar}
               />
 
             </Box>
@@ -702,32 +654,6 @@ function MainFlow() {
 
 
 
-        <Snackbar
-          open={!!successMessage}
-          autoHideDuration={6000}
-          onClose={handleCloseSnackbar}
-          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-        >
-          <Alert
-            severity="success"
-            variant="filled"
-            sx={{ width: '100%' }}
-          >
-            {successMessage}
-          </Alert>
-        </Snackbar>
-        <Snackbar
-          open={!!errorMessage}
-          autoHideDuration={6000}
-          onClose={handleCloseSnackbar}
-          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-        >
-          <Alert
-            severity="error"
-          >
-            {errorMessage}
-          </Alert>
-        </Snackbar>
 
       </Grid>
     </NetworkProvider>
