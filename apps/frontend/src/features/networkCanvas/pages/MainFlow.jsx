@@ -4,7 +4,7 @@ import { useCanvasRuntimeController } from "@/features/networkCanvas/core/useCan
 import { useRoutingPreview } from "@/features/networkCanvas/core/useRoutingPreview";
 import PacketToolbar from "@/features/networkCanvas/panels/PacketToolbar";
 import { useReactFlow } from "@xyflow/react";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { initialNodes } from '../utils/initials-elements';
 // mui
@@ -24,6 +24,7 @@ import '@xyflow/react/dist/style.css';
 import '../../../App.css';
 import '../styles/packet-tracer.css';
 //Custom compoonents and hooks
+import { connectionLineStyle, nodeTypes } from "@/features/networkCanvas/canvas/canvasConfig";
 import { useWizard } from "@/features/networkCanvas/context/WizardContext";
 import { useCanvasDirtyState } from "@/features/networkCanvas/core/useCanvasDirtyState";
 import { useCanvasInteractionController } from "@/features/networkCanvas/core/useCanvasInteractionController";
@@ -31,10 +32,6 @@ import { useCanvasPlanState } from "@/features/networkCanvas/core/useCanvasPlanS
 import useRestoreFlow from '@/features/networkCanvas/core/useRestoreFlow';
 import useSaveFlow from '@/features/networkCanvas/core/useSaveFlow';
 import useNodeClick from '@/features/networkCanvas/hooks/useNodeClick';
-import InstanceNode from "@/features/networkCanvas/nodes/InstanceNode";
-import RouterNodeInstance from "@/features/networkCanvas/nodes/RouterNodeInstance";
-import SubNetworkNodeInstance from '@/features/networkCanvas/nodes/SubNetworkNodeInstance';
-import VPCNodeInstance from "@/features/networkCanvas/nodes/VPCNodeInstance";
 import SidebarFlow from '@/features/networkCanvas/panels/SidebarFlow';
 import useCidrBlockVPCStore from '@/features/networkCanvas/store/cidrBlocksIp';
 import useClickedNodeIdStore from '@/features/networkCanvas/store/clickedNodeIdStore';
@@ -61,14 +58,6 @@ import { useTheme } from "@mui/material/styles";
 import { useAmiList } from "@/features/networkCanvas/core/useAmiList";
 import { useContext } from "react";
 
-const nodeTypes = {
-  vpc: VPCNodeInstance,
-  subnetwork: SubNetworkNodeInstance,
-  router: RouterNodeInstance,
-  computer: InstanceNode,
-  printer: InstanceNode,
-  server: InstanceNode
-}
 
 
 
@@ -98,11 +87,6 @@ const getId = {
 
 
 
-const connectionLineStyle = {
-  strokeWidth: 2.5,
-  stroke: "#2c3e50",
-  strokeDasharray: "6 4",
-};
 
 const useBodyClass = (className, enabled = true) => {
   useEffect(() => {
