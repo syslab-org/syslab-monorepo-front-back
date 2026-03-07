@@ -100,6 +100,7 @@ class SubnetSerializer(serializers.Serializer):
 
 
 class RouteSerializer(serializers.Serializer):
+    name = serializers.CharField(required=False, allow_blank=True, default="")
     dest_cidr = serializers.CharField()
     target = serializers.CharField()  # "local" | "router-<id>" (para peering)
     via_router_id = serializers.CharField(required=False, allow_null=True)
@@ -172,6 +173,12 @@ class LinkSerializer(serializers.Serializer):
         return data
 
 
+class RouterSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    name = serializers.CharField(required=False, allow_blank=True, default="")
+    type = serializers.ChoiceField(choices=["tgw"])
+
+
 class VlanSerializer(serializers.Serializer):
     name = serializers.CharField(required=False, allow_blank=True, default="")
     region = serializers.CharField(required=False, allow_blank=True, default="")
@@ -184,3 +191,4 @@ class MultiPlanSerializer(serializers.Serializer):
     vlan = VlanSerializer(required=False)
     vpcs = VpcSerializer(many=True)
     links = LinkSerializer(many=True, required=False)
+    routers = RouterSerializer(many=True, required=False)

@@ -55,6 +55,11 @@ const ConfirmDeployDialog = ({
     validationState === "PLANNING";
 
   const vpcs = transformedData?.vpcs || [];
+  const links = transformedData?.links || [];
+  const routers = transformedData?.routers || [];
+  const peeringLinks = links.filter((link) => String(link?.type || "").toLowerCase() === "peering").length;
+  const tgwAttachments = links.filter((link) => String(link?.type || "").toLowerCase() === "tgw-attach").length;
+  const tgwRouters = routers.filter((router) => String(router?.type || "").toLowerCase() === "tgw").length;
 
   const renderBanner = () => {
     if (isSyncing) {
@@ -120,8 +125,27 @@ const ConfirmDeployDialog = ({
               <Chip label={`VPCs: ${vpcs.length}`} />
               <Chip label={`Subnets: ${totalSubnets}`} />
               <Chip label={`Instancias: ${totalInstances}`} />
+              <Chip
+                label={`Peering links: ${peeringLinks}`}
+                color={peeringLinks > 0 ? "secondary" : "default"}
+                variant={peeringLinks > 0 ? "filled" : "outlined"}
+              />
+              <Chip
+                label={`TGW routers: ${tgwRouters}`}
+                color={tgwRouters > 0 ? "primary" : "default"}
+                variant={tgwRouters > 0 ? "filled" : "outlined"}
+              />
+              <Chip
+                label={`TGW attachments: ${tgwAttachments}`}
+                color={tgwAttachments > 0 ? "primary" : "default"}
+                variant={tgwAttachments > 0 ? "filled" : "outlined"}
+              />
             </Stack>
           </Box>
+
+          <Alert severity="info" sx={{ mt: 2 }}>
+            Después del deploy, valida conectividad en <b>Plan Detail → Pruebas</b> con comandos de ping guiados entre VPCs.
+          </Alert>
 
           <Box mt={4}>
             {vpcs.map((vpc) => (

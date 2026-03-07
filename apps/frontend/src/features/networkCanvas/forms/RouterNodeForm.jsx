@@ -19,6 +19,20 @@ import { Netmask } from "netmask";
 /* ========================= Helpers ========================= */
 
 const normalizeCidr = (val) => (val || "").trim();
+const normalizeMode = (value) => {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (
+    raw === "tgw" ||
+    raw === "transit" ||
+    raw === "transit_gateway" ||
+    raw === "transit-gateway"
+  ) {
+    return "tgw";
+  }
+  return "peering";
+};
 
 // cidrA está contenido en cidrB
 const cidrWithin = (cidrA, cidrB) => {
@@ -53,6 +67,7 @@ const sameRoute = (a, b) =>
 const isDuplicate = (routes, idx) =>
   routes.some((r, i) => i !== idx && sameRoute(r, routes[idx]));
 
+const pairKey = (a, b) => (a < b ? `${a}::${b}` : `${b}::${a}`);
 
 const isUnidirectional = (route, routes, connectedVpcs) => {
   if (!route.sourceVpcId || !route.destVpcId) return false;
@@ -117,11 +132,11 @@ export default function RouterNodeForm({
   );
 
   const [identifier, setIdentifier] = useState(nodeData.identifier || "");
-  const [mode, setMode] = useState(nodeData.mode || "peering");
+  const [mode, setMode] = useState(normalizeMode(nodeData.mode || "peering"));
 
   useEffect(() => {
     setIdentifier(nodeData.identifier || "");
-    setMode(nodeData.mode || "peering");
+    setMode(normalizeMode(nodeData.mode || "peering"));
   }, [nodeData.identifier, nodeData.mode]);
 
   // Si desconectas/renombras VPCs, limpiamos rutas que ya no aplican
@@ -216,10 +231,96 @@ export default function RouterNodeForm({
     [routes, connectedVpcs]
   );
 
+  const routePairStats = useMemo(() => {
+    const connectedIds = new Set(connectedVpcs.map((vpc) => vpc.id));
+    const pairs = new Map();
+
+    routes.forEach((route) => {
+      if (!route?.sourceVpcId || !route?.destVpcId) return;
+      if (route.sourceVpcId === route.destVpcId) return;
+      if (!connectedIds.has(route.sourceVpcId) || !connectedIds.has(route.destVpcId)) {
+        return;
+      }
+
+      const key = pairKey(route.sourceVpcId, route.destVpcId);
+      if (!pairs.has(key)) {
+        pairs.set(key, {
+          a: route.sourceVpcId < route.destVpcId ? route.sourceVpcId : route.destVpcId,
+          b: route.sourceVpcId < route.destVpcId ? route.destVpcId : route.sourceVpcId,
+          aToB: false,
+          bToA: false,
+        });
+      }
+
+      const pair = pairs.get(key);
+      if (route.sourceVpcId === pair.a && route.destVpcId === pair.b) pair.aToB = true;
+      if (route.sourceVpcId === pair.b && route.destVpcId === pair.a) pair.bToA = true;
+    });
+
+    let bidirectional = 0;
+    let oneWay = 0;
+    pairs.forEach((pair) => {
+      if (pair.aToB && pair.bToA) bidirectional += 1;
+      else oneWay += 1;
+    });
+
+    return {
+      totalPairsWithRoutes: pairs.size,
+      bidirectional,
+      oneWay,
+    };
+  }, [routes, connectedVpcs]);
+
+  const normalizedMode = normalizeMode(mode);
+  const connectedVpcCount = connectedVpcs.length;
+  const potentialPairs =
+    connectedVpcCount >= 2
+      ? (connectedVpcCount * (connectedVpcCount - 1)) / 2
+      : 0;
+  const hasPendingReverseForPeering =
+    normalizedMode === "peering" && routePairStats.oneWay > 0;
+
+  const modeSummary = useMemo(() => {
+    if (normalizedMode === "tgw") {
+      return {
+        severity: connectedVpcCount >= 3 ? "success" : "warning",
+        title: "Transit Gateway (hub-and-spoke)",
+        detail:
+          connectedVpcCount >= 3
+            ? `Se creará 1 TGW con ${connectedVpcCount} attachment(s). Escala mejor cuando hay varias VPC.`
+            : "Con pocas VPC, TGW puede ser más complejo y costoso que peering.",
+        bullets: [
+          "Implementación AWS: 1 Transit Gateway + 1 attachment por VPC conectada.",
+          "El tráfico pasa por el hub central; no hay malla de peerings entre pares.",
+          "Para ping bidireccional, define rutas de ida y vuelta en la tabla del router.",
+        ],
+      };
+    }
+
+    return {
+      severity: hasPendingReverseForPeering ? "warning" : "info",
+      title: "VPC Peering (enlace por pares)",
+      detail: `Con tu topología actual, el máximo son ${potentialPairs} peering(s).`,
+      bullets: [
+        "Implementación AWS: 1 conexión peering por par con rutas declaradas en ambos sentidos.",
+        "No es transitivo: A↔B y B↔C no habilita A↔C automáticamente.",
+        connectedVpcCount > 2
+          ? "Con varias VPC aumenta el número de pares y el mantenimiento de rutas."
+          : "Es ideal para laboratorios pequeños y directos.",
+      ],
+    };
+  }, [
+    normalizedMode,
+    connectedVpcCount,
+    potentialPairs,
+    hasPendingReverseForPeering,
+  ]);
+
   const hasErrors = rowErrors.some(Boolean);
+  const disableSave = hasErrors || hasPendingReverseForPeering;
 
   const handleSave = () => {
-    if (hasErrors) return;
+    if (disableSave) return;
     onSave({
       ...nodeData,
       identifier:
@@ -297,12 +398,52 @@ export default function RouterNodeForm({
         </Select>
 
         <Typography variant="caption" color="text.secondary">
-          Este selector define cómo se implementará la conectividad en AWS:
-          • Peering → conexiones directas entre pares de VPCs.
-          • Transit Gateway → un router administrado por AWS que interconecta múltiples VPCs.
-          La conectividad real dependerá de las rutas que configures abajo.
+          Este selector define cómo AWS implementa el enrutamiento: Peering por pares o Transit Gateway central.
+          La conectividad final depende de las rutas que declares.
         </Typography>
       </Box>
+
+      <Alert severity={modeSummary.severity} variant="outlined" sx={{ mb: 2 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+          {modeSummary.title}
+        </Typography>
+        <Typography variant="body2" sx={{ mt: 0.5 }}>
+          {modeSummary.detail}
+        </Typography>
+        <Box sx={{ mt: 0.8 }}>
+          {modeSummary.bullets.map((line) => (
+            <Typography key={line} variant="caption" display="block">
+              • {line}
+            </Typography>
+          ))}
+        </Box>
+      </Alert>
+
+      <Stack direction="row" gap={1} flexWrap="wrap" sx={{ mb: 2 }}>
+        <Chip
+          size="small"
+          label={`Pares con rutas: ${routePairStats.totalPairsWithRoutes}`}
+          variant="outlined"
+        />
+        <Chip
+          size="small"
+          color="success"
+          label={`Bidireccionales: ${routePairStats.bidirectional}`}
+          variant={routePairStats.bidirectional > 0 ? "filled" : "outlined"}
+        />
+        <Chip
+          size="small"
+          color={routePairStats.oneWay > 0 ? "warning" : "default"}
+          label={`Solo ida: ${routePairStats.oneWay}`}
+          variant={routePairStats.oneWay > 0 ? "filled" : "outlined"}
+        />
+      </Stack>
+
+      {hasPendingReverseForPeering && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          En modo <b>Peering</b> necesitas rutas de ida y vuelta por cada par de VPC para que ese enlace se despliegue.
+        </Alert>
+      )}
 
       <Divider sx={{ my: 2 }} />
 
@@ -311,9 +452,9 @@ export default function RouterNodeForm({
       </Typography>
 
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Las rutas definen el alcance de la comunicación.
-        Conectar una VPC al router no implica acceso automático a otras VPCs:
-        debes declarar explícitamente cada CIDR permitido.
+        Las rutas definen quién se comunica con quién.
+        En peering, cada par debe quedar declarado en ambos sentidos.
+        En TGW, también necesitas rutas de retorno para ping bidireccional.
       </Typography>
 
       {routes.map((r, idx) => {
@@ -405,7 +546,7 @@ export default function RouterNodeForm({
           + Ruta
         </Button>
         <Box sx={{ flex: 1 }} />
-        <Button variant="contained" onClick={handleSave} disabled={hasErrors}>
+        <Button variant="contained" onClick={handleSave} disabled={disableSave}>
           Guardar
         </Button>
         <Button color="error" onClick={deleteNode}>

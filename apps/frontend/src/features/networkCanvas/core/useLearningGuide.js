@@ -26,6 +26,23 @@ const isApplySuccess = (plan) =>
       String(plan.status || "").toUpperCase() === "SUCCESS",
   );
 
+const normalizeMode = (value) => {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (
+    raw === "tgw" ||
+    raw === "transit" ||
+    raw === "transit_gateway" ||
+    raw === "transit-gateway"
+  ) {
+    return "tgw";
+  }
+  return "peering";
+};
+
+const pairKey = (a, b) => (a < b ? `${a}::${b}` : `${b}::${a}`);
+
 export function useLearningGuide({
   nodes,
   edges,
@@ -58,6 +75,40 @@ export function useLearningGuide({
     const routersWithRoutes = routers.filter(
       (r) => Array.isArray(r.data?.routeTable) && r.data.routeTable.some((rt) => rt?.destCidr),
     ).length;
+    const peeringRouters = routers.filter(
+      (router) => normalizeMode(router.data?.mode) === "peering",
+    ).length;
+    const tgwRouters = routers.filter(
+      (router) => normalizeMode(router.data?.mode) === "tgw",
+    ).length;
+    const oneWayPairs = routers.reduce((acc, router) => {
+      const routeTable = Array.isArray(router.data?.routeTable)
+        ? router.data.routeTable
+        : [];
+      const pairs = new Map();
+      routeTable.forEach((route) => {
+        if (!route.sourceVpcId || !route.destVpcId || route.sourceVpcId === route.destVpcId) {
+          return;
+        }
+        const key = pairKey(route.sourceVpcId, route.destVpcId);
+        if (!pairs.has(key)) {
+          pairs.set(key, {
+            a: route.sourceVpcId < route.destVpcId ? route.sourceVpcId : route.destVpcId,
+            b: route.sourceVpcId < route.destVpcId ? route.destVpcId : route.sourceVpcId,
+            aToB: false,
+            bToA: false,
+          });
+        }
+        const pair = pairs.get(key);
+        if (route.sourceVpcId === pair.a && route.destVpcId === pair.b) pair.aToB = true;
+        if (route.sourceVpcId === pair.b && route.destVpcId === pair.a) pair.bToA = true;
+      });
+      let partial = 0;
+      pairs.forEach((pair) => {
+        if (!(pair.aToB && pair.bToA)) partial += 1;
+      });
+      return acc + partial;
+    }, 0);
 
     const needsRouter = vpcs.length > 1;
     const topology = validateTopology(nodes, edges);
@@ -148,9 +199,13 @@ export function useLearningGuide({
     const awsLines = [
       `Esto se traduce a ${vpcs.length} VPC(s) y ${subnets.length} subnet(s) en AWS.`,
       `Conectividad de salida: IGW ${igwCount} / NAT ${natCount}.`,
+      `Routers en modo AWS: Peering ${peeringRouters} / TGW ${tgwRouters}.`,
       routersWithRoutes > 0
         ? "Las rutas definidas se transforman en route tables y enlaces entre VPCs."
         : "Sin rutas explicitas, AWS solo aplicara conectividad local por VPC.",
+      oneWayPairs > 0
+        ? `Detectamos ${oneWayPairs} par(es) con ruta de solo ida; revisa retorno para pruebas bidireccionales.`
+        : "No se detectan pares con rutas solo de ida.",
     ];
 
     const conceptMap = [
@@ -182,6 +237,8 @@ export function useLearningGuide({
         subnets: subnets.length,
         routers: routers.length,
         instances: instances.length,
+        peeringRouters,
+        tgwRouters,
       },
       validation: {
         isValidated,
