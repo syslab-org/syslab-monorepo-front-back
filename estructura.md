@@ -3,41 +3,25 @@
 ├── README.md
 ├── apps
 │   ├── backend
-│   │   ├── Dockerfile
-│   │   ├── Screenshot 2025-08-30 at 12.32.47 am.png
 │   │   ├── api
 │   │   │   ├── **init**.py
 │   │   │   ├── admin.py
 │   │   │   ├── apps.py
-│   │   │   ├── data
 │   │   │   ├── migrations
 │   │   │   ├── models.py
 │   │   │   ├── serializers.py
 │   │   │   ├── tasks.py
 │   │   │   ├── tests.py
 │   │   │   ├── urls.py
-│   │   │   ├── users
 │   │   │   ├── validators.py
 │   │   │   ├── views.py
 │   │   │   └── views_plans.py
-│   │   ├── create_superuser.py
-│   │   ├── docker-compose.yml
-│   │   ├── dump.rdb
-│   │   ├── entrypoint.sh
-│   │   ├── generated
-│   │   │   ├── instance.tf
-│   │   │   ├── key.tf
-│   │   │   ├── mykey
-│   │   │   ├── mykey.pub
-│   │   │   ├── nacl.tf
-│   │   │   ├── provider.tf
-│   │   │   ├── securitygroup.tf
-│   │   │   ├── subnet.tf
-│   │   │   ├── vars.tf
-│   │   │   └── vpc.tf
+│   │   ├── examples
+│   │   │   └── network_plan.simple.json
 │   │   ├── manage.py
 │   │   ├── provisioning
 │   │   │   ├── templates
+│   │   │   ├── __init__.py
 │   │   │   └── terraform_runner.py
 │   │   ├── requirements.txt
 │   │   ├── teg
@@ -47,16 +31,6 @@
 │   │   │   ├── settings.py
 │   │   │   ├── urls.py
 │   │   │   └── wsgi.py
-│   │   ├── terraform
-│   │   │   ├── cloud
-│   │   │   └── global
-│   │   ├── terraform_with_modules
-│   │   │   ├── cloud
-│   │   │   └── global
-│   │   ├── test_network.json
-│   │   ├── test_network_ready.json
-│   │   └── utils
-│   │   └── terraform_commands.py
 │   └── frontend
 │   ├── README.md
 │   ├── index.html
