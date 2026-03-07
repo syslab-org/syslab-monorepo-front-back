@@ -5,9 +5,26 @@ import { Handle, Position } from "@xyflow/react";
 import '../styles/packet-tracer.css';
 import RouterIcon from '@mui/icons-material/Router';
 
+const normalizeMode = (value) => {
+  const raw = String(value || '').trim().toLowerCase();
+  if (
+    raw === 'tgw' ||
+    raw === 'transit' ||
+    raw === 'transit_gateway' ||
+    raw === 'transit-gateway'
+  ) {
+    return 'tgw';
+  }
+  return 'peering';
+};
+
 const RouterNodeInstance = ({ data = {}, isConnectable, selected }) => {
   const name = data.identifier || 'Router';
-  // Router state based on routing configuration
+  const mode = normalizeMode(data.mode);
+  const modeLabel = mode === 'tgw' ? 'Transit Gateway' : 'Peering';
+  const modeShort = mode === 'tgw' ? 'TGW' : 'PEER';
+  const modeHint =
+    mode === 'tgw' ? 'Hub central en AWS' : 'Enlaces por pares';
   const hasRoutes =
     Array.isArray(data.routeTable) &&
     data.routeTable.some(r => r.destCidr);
@@ -38,6 +55,12 @@ const RouterNodeInstance = ({ data = {}, isConnectable, selected }) => {
             state === 'warn' ? 'pt-device__led--warn' : ''
             }`}
         />
+        <div
+          className={`pt-router-mode pt-router-mode--${mode}`}
+          title={`${modeLabel}: ${modeHint}`}
+        >
+          {modeShort}
+        </div>
 
         {/* Ícono centrado */}
         <div className="pt-device__icon" style={{ fontSize: 36, color: '#fff', lineHeight: 0 }}>
@@ -53,6 +76,9 @@ const RouterNodeInstance = ({ data = {}, isConnectable, selected }) => {
 
       {/* Etiquetas */}
       <div className="pt-device__label" style={{ marginTop: 8 }}>{name}</div>
+      <div className={`pt-device__modehint pt-device__modehint--${mode}`}>
+        {modeHint}
+      </div>
       {data.region ? (
         <div className="pt-device__sublabel" style={{ marginTop: 2 }}>{data.region}</div>
       ) : null}
