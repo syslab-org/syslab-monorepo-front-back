@@ -1,18 +1,31 @@
 import { useContext } from 'react'
 import { LoadingFlowContext } from '@/app/providers/LoadingFlowContext'
-import { Backdrop, CircularProgress } from '@mui/material';
+import { Box, CircularProgress, Stack, Typography } from '@mui/material';
 
 const LoadingFlow = () => {
 
-    const { loadingFlow } = useContext(LoadingFlowContext)
+    const { loadingFlow, loadingMessage } = useContext(LoadingFlowContext)
 
     if (!loadingFlow) return null
 
     return (
-
-        <Backdrop open={loadingFlow} sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
-            <CircularProgress color="inherit" />
-        </Backdrop>
+        <Box
+            sx={{
+                position: "absolute",
+                inset: 0,
+                zIndex: (theme) => theme.zIndex.appBar - 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "rgba(15, 23, 42, 0.22)",
+                backdropFilter: "blur(2px)",
+            }}
+        >
+            <Stack spacing={1.2} alignItems="center" sx={{ color: "common.white" }}>
+                <CircularProgress color="inherit" />
+                <Typography variant="body2">{loadingMessage || "Procesando..."}</Typography>
+            </Stack>
+        </Box>
     )
 }
 

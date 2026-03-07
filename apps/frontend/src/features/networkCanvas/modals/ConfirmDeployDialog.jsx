@@ -10,7 +10,6 @@ import {
   DialogTitle,
   Stack,
   Typography,
-  CircularProgress,
 } from "@mui/material";
 
 /**
@@ -109,23 +108,7 @@ const ConfirmDeployDialog = ({
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>Confirmar infraestructura</DialogTitle>
       <DialogContent dividers>
-        <Box position="relative">
-          {loadingFlow && (
-            <Box
-              sx={{
-                position: "absolute",
-                inset: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "rgba(255,255,255,0.6)",
-                zIndex: 10,
-              }}
-            >
-              <CircularProgress size={40} />
-            </Box>
-          )}
-
+        <Box>
           {renderBanner()}
 
           <Box mt={3}>

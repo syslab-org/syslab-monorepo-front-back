@@ -6,6 +6,8 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import RestoreIcon from '@mui/icons-material/Restore';
 import SaveIcon from '@mui/icons-material/Save';
+import SchoolIcon from '@mui/icons-material/School';
+import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import { Alert, Box, Button, Chip, IconButton, Tooltip } from '@mui/material';
@@ -25,8 +27,14 @@ export default function PacketToolbar({
   planStatus = null, // { status, last_action, simulate_only, updated_at }
   canvasState = "NO_PLAN",
   validationState = "IDLE",
+  paletteOpen = true,
+  guideOpen = false,
+  onTogglePalette,
+  onToggleGuide,
 }) {
   const { mode, toggle } = useThemeMode();
+  const canTogglePalette = typeof onTogglePalette === "function";
+  const canToggleGuide = typeof onToggleGuide === "function";
 
   const PLAN_STATES = {
     IDLE: "IDLE",
@@ -112,6 +120,26 @@ export default function PacketToolbar({
 
         {/* Controles de vista */}
         <div className="pt-toolbar__group">
+          {canTogglePalette && (
+            <Tooltip title={paletteOpen ? "Ocultar Tool Palette" : "Mostrar Tool Palette"}>
+              <IconButton size="small" className="pt-ibtn" onClick={onTogglePalette}>
+                <ViewSidebarIcon
+                  fontSize="small"
+                  sx={{ transform: paletteOpen ? "scaleX(1)" : "scaleX(-1)" }}
+                />
+              </IconButton>
+            </Tooltip>
+          )}
+          {canToggleGuide && (
+            <Tooltip title={guideOpen ? "Ocultar guía de aprendizaje" : "Mostrar guía de aprendizaje"}>
+              <IconButton size="small" className="pt-ibtn" onClick={onToggleGuide}>
+                <SchoolIcon
+                  fontSize="small"
+                  sx={{ opacity: guideOpen ? 1 : 0.7 }}
+                />
+              </IconButton>
+            </Tooltip>
+          )}
           <Tooltip title="Acercar"><IconButton size="small" className="pt-ibtn" onClick={onZoomIn}><ZoomInIcon fontSize="small" /></IconButton></Tooltip>
           <Tooltip title="Alejar"><IconButton size="small" className="pt-ibtn" onClick={onZoomOut}><ZoomOutIcon fontSize="small" /></IconButton></Tooltip>
           <Tooltip title="Ajustar vista"><IconButton size="small" className="pt-ibtn" onClick={onFitView}><CenterFocusStrongIcon fontSize="small" /></IconButton></Tooltip>

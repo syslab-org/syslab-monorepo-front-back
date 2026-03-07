@@ -7,9 +7,6 @@ apps/frontend/src
 │   │   └── LoadingFlowContext.jsx
 │   └── routes
 │       └── DashboardRoutes.jsx
-├── assets
-│   ├── background.cbcde707.jpg
-│   └── react.svg
 ├── features
 │   ├── admin
 │   │   └── pages
@@ -18,9 +15,7 @@ apps/frontend/src
 │   │       └── ProfilePage.jsx
 │   ├── auth
 │   │   ├── components
-│   │   │   ├── InviteUserForm.jsx
-│   │   │   └── RegistrationForm.jsx
-│   │   ├── forms
+│   │   │   └── InviteUserForm.jsx
 │   │   ├── hooks
 │   │   │   ├── useInviteUserFormValidation.jsx
 │   │   │   └── useRegistrationUserFormValidation.jsx
@@ -68,8 +63,6 @@ apps/frontend/src
 │   │   ├── forms
 │   │   │   ├── InstanceNodeForm.jsx
 │   │   │   ├── NewVLANForm.jsx
-│   │   │   ├── RouteTableForm.jsx
-│   │   │   ├── RouteTableFormFullScreen.jsx
 │   │   │   ├── RouterNodeForm.jsx
 │   │   │   ├── SubNetworkNodeForm.jsx
 │   │   │   ├── VPCNodeForm.jsx
@@ -83,8 +76,6 @@ apps/frontend/src
 │   │   │   ├── useHandleDrop.js
 │   │   │   ├── useNodeClick.js
 │   │   │   ├── useNodeDrag.js
-│   │   │   ├── useNodeDragStart.js
-│   │   │   ├── useNodeDragStop.js
 │   │   │   ├── useRestrictMovement.js
 │   │   │   └── useRestrictSubnetsInsideVPC.js
 │   │   ├── index.js
@@ -94,47 +85,33 @@ apps/frontend/src
 │   │   │   ├── ConfirmDeployDialog.jsx
 │   │   │   └── NodeConfigModal.jsx
 │   │   ├── nodes
-│   │   │   ├── CustomResizerNode.jsx
 │   │   │   ├── InstanceNode.jsx
 │   │   │   ├── NodeChrome.jsx
 │   │   │   ├── RouterNodeInstance.jsx
 │   │   │   ├── SubNetworkNodeInstance.jsx
-│   │   │   ├── VPCNodeInstance.jsx
-│   │   │   ├── edges
-│   │   │   │   └── ConnectionLine.jsx
-│   │   │   └── styles
-│   │   │       ├── InstanceNode.css
-│   │   │       ├── RouterNode.css
-│   │   │       ├── SubNetworkNode.css
-│   │   │       └── VPCNode.css
+│   │   │   └── VPCNodeInstance.jsx
 │   │   ├── pages
 │   │   │   ├── CreateVPCModal.jsx
 │   │   │   ├── MainFlow.jsx
 │   │   │   └── VPCList.jsx
 │   │   ├── panels
-│   │   │   ├── DeployConfirmationRoutes.jsx
 │   │   │   ├── PacketToolbar.jsx
 │   │   │   ├── RoutePreviewPanel.jsx
 │   │   │   └── SidebarFlow.jsx
-│   │   ├── services
-│   │   │   └── deployNetworkToCloud.jsx
 │   │   ├── store
 │   │   │   ├── cidrBlocksIp.js
 │   │   │   └── clickedNodeIdStore.js
 │   │   ├── styles
-│   │   │   ├── device-icons.css
 │   │   │   └── packet-tracer.css
 │   │   ├── ui
 │   │   │   └── CanvasFeedbackLayer.jsx
 │   │   └── utils
 │   │       ├── buildRoutingPreview.js
-│   │       ├── cidr.js
 │   │       ├── constants.js
 │   │       ├── getNodeTitle.js
 │   │       ├── iconHelper.js
 │   │       ├── infraHash.js
 │   │       ├── initials-elements.js
-│   │       ├── networkUtils.js
 │   │       ├── networking.js
 │   │       └── topologyValidation.js
 │   ├── plans
@@ -142,7 +119,6 @@ apps/frontend/src
 │   │       ├── PlanDetailPage.jsx
 │   │       └── PlanListPage.jsx
 │   └── settings
-│       ├── components
 │       ├── hooks
 │       │   ├── useFormValidationsSettings.jsx
 │       │   └── useUsersFetch.jsx
@@ -153,22 +129,15 @@ apps/frontend/src
 │           ├── GeneralSettings.jsx
 │           ├── SettingsPage.jsx
 │           └── UsersManagement.jsx
-├── index.css
 ├── infrastructure
 │   ├── firebase
 │   │   └── firebaseConfig.js
 │   └── http
 │       └── api.js
 ├── main.jsx
-├── mocks
-│   ├── Untitled-2024-03-23-1000.excalidraw
-│   ├── Untitled-2024-03-23-1000.png
-│   └── schema.text
 └── shared
     ├── constants
     │   └── index.js
-    ├── hooks
-    │   └── useTaskPoller.js
     └── ui
         ├── layouts
         │   ├── MainLayout.jsx
@@ -179,14 +148,10 @@ apps/frontend/src
         └── theme
             ├── AppThemeProvider.jsx
             ├── createPacketTheme.js
-            ├── dashboard
-            │   ├── elements
-            │   │   ├── AppBarStyle.jsx
-            │   │   └── DrawerStyle.jsx
-            │   └── listItems.jsx
-            ├── packetTracerTheme.js
-            ├── palettle.js
-            ├── theme.js
-            └── typografy.js
+            └── dashboard
+                ├── elements
+                │   ├── AppBarStyle.jsx
+                │   └── DrawerStyle.jsx
+                └── listItems.jsx
 
-58 directories, 132 files
+50 directories, 105 files
