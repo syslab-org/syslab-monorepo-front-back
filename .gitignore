@@ -34,3 +34,14 @@ infra/terraform/*.tfvars
 # VSCode / Devcontainer
 .vscode/
 .devcontainer/data
+
+# macOS
+.DS_Store
+
+# Redis dumps
+*.rdb
+
+# Backend generated/legacy artifacts
+apps/backend/generated/
+apps/backend/terraform/
+apps/backend/terraform_with_modules/
