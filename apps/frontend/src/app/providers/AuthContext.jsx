@@ -15,7 +15,6 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
-            setLoading(true);
             if (authUser) {
                 try {
                     const usersCollectionRef = collection(db, DB_FIRESTORE_USERS);
@@ -43,6 +42,7 @@ export const AuthProvider = ({ children }) => {
 
                 } catch (error) {
                     console.error('Error al obtener los datos del usuario de Firestore:', error);
+                    setUser(null);
                 } finally {
                     setLoading(false);
                 }
@@ -61,12 +61,8 @@ export const AuthProvider = ({ children }) => {
         navigate("/login"); // Redirige a login después de cerrar sesión
     };
 
-    if (loading) {
-        return <div>Loading...</div>;
-    }
-
     return (
-        <AuthContext.Provider value={{ user, logout }}>
+        <AuthContext.Provider value={{ user, logout, loading }}>
             {children}
         </AuthContext.Provider>
     );

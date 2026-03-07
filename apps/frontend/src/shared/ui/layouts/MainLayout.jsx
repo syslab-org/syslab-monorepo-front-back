@@ -1,6 +1,6 @@
 // apps/frontend/src/shared/ui/layouts/MainLayout.jsx
-import { useState } from "react";
-import { Link, Outlet } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import {
   Avatar,
   Badge,
@@ -30,6 +30,7 @@ import {
   SecondaryListItems,
 } from "@/shared/ui/theme/dashboard/listItems.jsx";
 import { useAuth } from '@/app/providers/AuthContext';
+import LoadingFlow from "@/shared/ui/organisms/LoadingFlow";
 
 export const PageHeader = ({ title, subtitle, actions }) => {
   return (
@@ -93,10 +94,24 @@ const settings = [
 function MainLayout() {
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [anchorElUser, setAnchorElUser] = useState(null);
+  const location = useLocation();
 
   const auth = useAuth();
   const user = auth?.user;
   const logout = auth?.logout || (() => { });
+
+  const isMainFlowRoute = useMemo(
+    () => /^\/admin\/vpcs\/[^/]+\/mainflow$/.test(location.pathname),
+    [location.pathname],
+  );
+
+  useEffect(() => {
+    if (isMainFlowRoute) {
+      setDrawerOpen(false);
+      return;
+    }
+    setDrawerOpen(true);
+  }, [isMainFlowRoute]);
 
   const toggleDrawer = () => {
     setDrawerOpen((prev) => !prev);
@@ -270,6 +285,7 @@ function MainLayout() {
         }}
       >
         <Toolbar />
+        <LoadingFlow />
 
         <Box
           sx={{
@@ -280,6 +296,7 @@ function MainLayout() {
             margin: "var(--Content-margin)",
             padding: "var(--Content-padding)",
             width: "var(--Content-width)",
+            position: "relative",
           }}
         >
           <Outlet />

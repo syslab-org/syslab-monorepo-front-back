@@ -82,12 +82,12 @@ const CreateVPCModal = ({ open, onClose, wizardMode = false }) => {
   const isWizardActive = wizardMode && active;
 
   let title = "Crear nueva VPC";
-  let subtitle = "Define el nombre del laboratorio, la región y el rango de direcciones. Luego podrás agregar VPCs, subredes e instancias.";
+  let subtitle = "Crea un laboratorio para simular topologías VLAN o para preparar una orquestación real en AWS. Define nombre, región y CIDR maestro.";
   let stepLabel = "";
 
   if (wizardMode) {
     title = "Crear laboratorio";
-    subtitle = "Define el nombre del laboratorio, la región y el rango de direcciones. Después te guiaremos por subredes, instancias y pruebas.";
+    subtitle = "Crea un laboratorio educativo guiado: modela topologías VLAN paso a paso y déjalo listo para una ejecución real en AWS.";
     if (isWizardActive && Array.isArray(steps) && steps.length > 0) {
       const idx = steps.indexOf(currentStep);
       const stepNumber = idx >= 0 ? idx + 1 : 1;

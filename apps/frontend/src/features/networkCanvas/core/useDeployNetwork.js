@@ -566,6 +566,21 @@ const useDeployNetwork = ({
   };
 
   const handleApplyReal = async () => {
+    if (validationState !== PLAN_STATES.SUCCESS) {
+      setErrorMessage(
+        "Primero valida la topologia en modo simulacion antes de desplegar en AWS.",
+      );
+      return;
+    }
+
+    const recheck = validateTopology(nodes, edges);
+    if (recheck.errors.length > 0) {
+      setErrorMessage(
+        "El canvas tiene errores de topologia. Corrigelos y vuelve a validar antes del deploy real.",
+      );
+      return;
+    }
+
     const planId = validationResult?.plan_id;
     if (!planId) {
       setErrorMessage("Primero valida el plan.");

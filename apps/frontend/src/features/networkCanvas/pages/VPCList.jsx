@@ -336,7 +336,7 @@ const VPCList = () => {
         {/* Header (match PlanListPage) */}
         <PageHeader
           title="Laboratorios"
-          subtitle="Aquí puedes gestionar tus laboratorios de redes. Crea un entorno guiado para demostraciones y prácticas, o una VPC avanzada si ya dominas la configuración."
+          subtitle="Gestiona laboratorios para aprendizaje y orquestación: simula topologías VLAN en modo guiado o construye configuraciones avanzadas listas para AWS."
           actions={
             <>
               <Tooltip

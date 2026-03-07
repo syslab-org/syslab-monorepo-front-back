@@ -33,6 +33,9 @@
 │   │   │   └── wsgi.py
 │   └── frontend
 │   ├── README.md
+│   ├── examples
+│   │   ├── mocks
+│   │   └── requestuseregister.rest
 │   ├── index.html
 │   ├── package-lock.json
 │   ├── package.json
@@ -40,26 +43,14 @@
 │   ├── public
 │   │   ├── \_redirects
 │   │   └── vite.svg
-│   ├── requestuseregister.rest
 │   ├── src
 │   │   ├── App.css
 │   │   ├── App.jsx
-│   │   ├── assets
-│   │   ├── components
-│   │   ├── config
-│   │   ├── constants.js
-│   │   ├── contexts
+│   │   ├── app
 │   │   ├── features
-│   │   ├── firebase
-│   │   ├── index.css
-│   │   ├── lib
+│   │   ├── infrastructure
 │   │   ├── main.jsx
-│   │   ├── mocks
-│   │   ├── pages
-│   │   ├── services
-│   │   ├── styles
-│   │   ├── theme
-│   │   └── utils
+│   │   └── shared
 │   └── vite.config.js
 ├── case-01-single-vpc.json
 ├── cleanup_vpcs_extras.sh
