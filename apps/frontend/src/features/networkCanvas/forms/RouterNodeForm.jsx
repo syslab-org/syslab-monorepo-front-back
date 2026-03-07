@@ -316,6 +316,34 @@ export default function RouterNodeForm({
     hasPendingReverseForPeering,
   ]);
 
+  const routingCopy = useMemo(() => {
+    if (normalizedMode === "tgw") {
+      return {
+        sectionTitle: "Rutas hacia el hub",
+        intro:
+          "Cada fila indica qué tráfico sale desde una VPC y se envía al Transit Gateway para alcanzar otra red conectada al hub.",
+        explainer:
+          "Aquí no defines un enlace directo entre pares. Defines qué destinos deben enviarse al hub central.",
+        sourceLabel: "VPC que envía al hub",
+        destVpcLabel: "VPC alcanzada vía hub",
+        destCidrLabel: "CIDR enviado al hub",
+        oneWayLabel: "Falta retorno",
+      };
+    }
+
+    return {
+      sectionTitle: "Rutas entre pares",
+      intro:
+        "Cada fila representa un destino directo entre VPCs. En peering, el par solo queda operativo cuando declaras ida y vuelta.",
+      explainer:
+        "Aquí sí estás modelando conectividad directa entre dos VPC específicas.",
+      sourceLabel: "VPC de origen",
+      destVpcLabel: "VPC destino directa",
+      destCidrLabel: "CIDR destino",
+      oneWayLabel: "Solo ida",
+    };
+  }, [normalizedMode]);
+
   const hasErrors = rowErrors.some(Boolean);
   const disableSave = hasErrors || hasPendingReverseForPeering;
 
@@ -448,14 +476,16 @@ export default function RouterNodeForm({
       <Divider sx={{ my: 2 }} />
 
       <Typography variant="subtitle1" sx={{ mb: 1 }}>
-        Rutas del router
+        {routingCopy.sectionTitle}
       </Typography>
 
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Las rutas definen quién se comunica con quién.
-        En peering, cada par debe quedar declarado en ambos sentidos.
-        En TGW, también necesitas rutas de retorno para ping bidireccional.
+        {routingCopy.intro}
       </Typography>
+
+      <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
+        {routingCopy.explainer}
+      </Alert>
 
       {routes.map((r, idx) => {
         const err = rowErrors[idx];
@@ -473,7 +503,7 @@ export default function RouterNodeForm({
           >
             {/* Source VPC */}
             <Box sx={{ minWidth: 200 }}>
-              <Typography variant="caption">VPC de origen</Typography>
+              <Typography variant="caption">{routingCopy.sourceLabel}</Typography>
               <Select
                 size="small"
                 value={r.sourceVpcId || ""}
@@ -490,7 +520,7 @@ export default function RouterNodeForm({
 
             {/* Dest VPC (opcional) */}
             <Box sx={{ minWidth: 220 }}>
-              <Typography variant="caption">VPC destino (opcional)</Typography>
+              <Typography variant="caption">{routingCopy.destVpcLabel}</Typography>
               <Select
                 size="small"
                 value={r.destVpcId || ""}
@@ -513,7 +543,7 @@ export default function RouterNodeForm({
 
             {/* Dest CIDR */}
             <Box sx={{ flex: 1, minWidth: 220 }}>
-              <Typography variant="caption">CIDR destino</Typography>
+              <Typography variant="caption">{routingCopy.destCidrLabel}</Typography>
               <TextField
                 size="small"
                 fullWidth
@@ -528,7 +558,7 @@ export default function RouterNodeForm({
                 size="small"
                 color="warning"
                 variant="outlined"
-                label="Unidirectional"
+                label={routingCopy.oneWayLabel}
                 sx={{ mt: "26px" }}
               />
             )}
