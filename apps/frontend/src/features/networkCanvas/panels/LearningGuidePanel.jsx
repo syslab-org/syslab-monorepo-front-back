@@ -66,6 +66,8 @@ export default function LearningGuidePanel({
         <Chip size="small" label={`VPCs: ${stats.vpcs}`} />
         <Chip size="small" label={`Subredes: ${stats.subnets}`} />
         <Chip size="small" label={`Routers: ${stats.routers}`} />
+        <Chip size="small" label={`Peering: ${stats.peeringRouters || 0}`} variant="outlined" />
+        <Chip size="small" label={`TGW: ${stats.tgwRouters || 0}`} variant="outlined" />
         <Chip size="small" label={`Instancias: ${stats.instances}`} />
       </Stack>
 

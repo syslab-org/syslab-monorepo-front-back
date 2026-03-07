@@ -111,6 +111,169 @@ function statusChipProps(status) {
   }
 }
 
+const safeObject = (value) =>
+  value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+
+const splitInstanceKey = (key) => {
+  const raw = String(key || '');
+  const idx = raw.indexOf(':');
+  if (idx === -1) return { vpcId: raw, instanceName: raw };
+  return {
+    vpcId: raw.slice(0, idx),
+    instanceName: raw.slice(idx + 1),
+  };
+};
+
+function buildInstanceCatalog(outputs) {
+  const instanceIds = safeObject(outputs?.instance_ids);
+  const privateIps = safeObject(outputs?.instance_private_ips);
+  const publicIps = safeObject(outputs?.instance_public_ips);
+
+  const keys = Array.from(
+    new Set([
+      ...Object.keys(instanceIds),
+      ...Object.keys(privateIps),
+      ...Object.keys(publicIps),
+    ]),
+  );
+
+  const byVpc = new Map();
+  keys.forEach((key) => {
+    const { vpcId, instanceName } = splitInstanceKey(key);
+    if (!vpcId) return;
+
+    if (!byVpc.has(vpcId)) byVpc.set(vpcId, []);
+    byVpc.get(vpcId).push({
+      key,
+      instanceName,
+      instanceId: instanceIds[key] || null,
+      privateIp: privateIps[key] || null,
+      publicIp: publicIps[key] || null,
+    });
+  });
+
+  byVpc.forEach((list) => {
+    list.sort((a, b) => a.instanceName.localeCompare(b.instanceName));
+  });
+
+  return byVpc;
+}
+
+const pairKey = (a, b) => (a < b ? `${a}::${b}` : `${b}::${a}`);
+
+function buildConnectivityScenarios(plan, outputsResponse) {
+  const payload = safeObject(plan?.payload);
+  const vpcs = Array.isArray(payload?.vpcs) ? payload.vpcs : [];
+  const links = Array.isArray(payload?.links) ? payload.links : [];
+  const outputs = safeObject(outputsResponse?.outputs);
+
+  const vpcById = new Map(
+    vpcs.map((vpc) => [
+      vpc.id,
+      {
+        id: vpc.id,
+        name: vpc.name || vpc.id,
+        cidr: vpc.cidr_block || 'CIDR n/a',
+      },
+    ]),
+  );
+
+  const pairMap = new Map();
+  const upsertPair = (aId, bId, mode, routerId) => {
+    if (!aId || !bId || aId === bId) return;
+    const key = pairKey(aId, bId);
+    if (!pairMap.has(key)) {
+      pairMap.set(key, {
+        aId: aId < bId ? aId : bId,
+        bId: aId < bId ? bId : aId,
+        modes: new Set(),
+        routers: new Set(),
+      });
+    }
+    const item = pairMap.get(key);
+    if (mode) item.modes.add(mode);
+    if (routerId) item.routers.add(routerId);
+  };
+
+  links
+    .filter((link) => String(link?.type || '').toLowerCase() === 'peering')
+    .forEach((link) => {
+      upsertPair(link.vpc_a_id, link.vpc_b_id, 'peering', link.via_router_id);
+    });
+
+  const tgwByRouter = new Map();
+  links
+    .filter((link) => String(link?.type || '').toLowerCase() === 'tgw-attach')
+    .forEach((link) => {
+      if (!link?.router_id || !link?.vpc_id) return;
+      if (!tgwByRouter.has(link.router_id)) tgwByRouter.set(link.router_id, []);
+      tgwByRouter.get(link.router_id).push(link.vpc_id);
+    });
+
+  tgwByRouter.forEach((routerVpcIds, routerId) => {
+    const uniqueVpcIds = Array.from(new Set(routerVpcIds));
+    for (let i = 0; i < uniqueVpcIds.length; i += 1) {
+      for (let j = i + 1; j < uniqueVpcIds.length; j += 1) {
+        upsertPair(uniqueVpcIds[i], uniqueVpcIds[j], 'tgw', routerId);
+      }
+    }
+  });
+
+  const instanceCatalog = buildInstanceCatalog(outputs);
+  return Array.from(pairMap.values()).map((pair) => {
+    const aVpc = vpcById.get(pair.aId) || { id: pair.aId, name: pair.aId, cidr: 'CIDR n/a' };
+    const bVpc = vpcById.get(pair.bId) || { id: pair.bId, name: pair.bId, cidr: 'CIDR n/a' };
+    const aInstances = instanceCatalog.get(pair.aId) || [];
+    const bInstances = instanceCatalog.get(pair.bId) || [];
+    const src = aInstances[0] || null;
+    const dst = bInstances[0] || null;
+    const reverseSrc = bInstances[0] || null;
+    const reverseDst = aInstances[0] || null;
+
+    const modeNames = Array.from(pair.modes);
+    const modeLabel =
+      modeNames.length === 0
+        ? 'Sin modo'
+        : modeNames.length > 1
+          ? 'Mixto'
+          : modeNames[0] === 'tgw'
+            ? 'Transit Gateway'
+            : 'Peering';
+
+    const checks = [];
+    if (src?.privateIp && dst?.privateIp) {
+      checks.push({
+        title: `Prueba ida (${aVpc.name} -> ${bVpc.name})`,
+        command: `ping -c 4 ${dst.privateIp}`,
+        context: src.publicIp
+          ? `Ejecutar dentro de ${src.instanceName} (${src.publicIp})`
+          : `Ejecutar dentro de ${src.instanceName} (${src.instanceId || 'sin instance_id'})`,
+      });
+    }
+    if (reverseSrc?.privateIp && reverseDst?.privateIp) {
+      checks.push({
+        title: `Prueba retorno (${bVpc.name} -> ${aVpc.name})`,
+        command: `ping -c 4 ${reverseDst.privateIp}`,
+        context: reverseSrc.publicIp
+          ? `Ejecutar dentro de ${reverseSrc.instanceName} (${reverseSrc.publicIp})`
+          : `Ejecutar dentro de ${reverseSrc.instanceName} (${reverseSrc.instanceId || 'sin instance_id'})`,
+      });
+    }
+
+    return {
+      ...pair,
+      aVpc,
+      bVpc,
+      modeLabel,
+      routers: Array.from(pair.routers),
+      src,
+      dst,
+      checks,
+      readyForRun: checks.length >= 2,
+    };
+  });
+}
+
 export default function PlanDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -142,6 +305,15 @@ export default function PlanDetailPage() {
   const isRunning = plan?.status === TASK_STATE_RUNNING || plan?.status === TASK_STATE_PENDING;
 
   const lifecycle = useMemo(() => computeLifecycle(plan), [plan]);
+  const connectivityScenarios = useMemo(
+    () => buildConnectivityScenarios(plan, outputsResponse),
+    [plan, outputsResponse],
+  );
+  const hasOutputsData = Boolean(
+    outputsResponse?.outputs &&
+      typeof outputsResponse.outputs === 'object' &&
+      Object.keys(outputsResponse.outputs).length > 0,
+  );
 
   const busy = deploying || destroying;
 
@@ -620,6 +792,7 @@ export default function PlanDetailPage() {
           >
             <Tab value="summary" label="Resumen" />
             <Tab value="outputs" label="Outputs" />
+            <Tab value="tests" label="Pruebas" />
             <Tab value="logs" label="Logs" />
             <Tab value="payload" label="Payload" />
           </Tabs>
@@ -740,6 +913,97 @@ export default function PlanDetailPage() {
                     </Paper>
                   </>
                 )}
+              </Box>
+            </Box>
+          )}
+
+          {tab === 'tests' && (
+            <Box sx={{ p: 3 }}>
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="h6">Guía de pruebas post-deploy</Typography>
+                  <Typography component="div" variant="body2" color="text.secondary">
+                    Define pruebas de conectividad entre VPCs según el modo de enrutamiento desplegado.
+                  </Typography>
+                </Box>
+                <Button
+                  variant="outlined"
+                  onClick={fetchOutputs}
+                  disabled={outputsLoading}
+                >
+                  {outputsLoading ? 'Cargando…' : 'Cargar outputs para pruebas'}
+                </Button>
+              </Stack>
+
+              <Box sx={{ mt: 2 }}>
+                {!hasOutputsData && (
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    Carga outputs para identificar instancias/IPs reales y ejecutar pruebas guiadas.
+                  </Alert>
+                )}
+
+                {connectivityScenarios.length === 0 && (
+                  <Alert severity="warning">
+                    Este plan no expone pares de VPC conectados por peering o TGW para pruebas cruzadas.
+                  </Alert>
+                )}
+
+                {connectivityScenarios.map((scenario) => (
+                  <Paper key={`${scenario.aId}:${scenario.bId}`} variant="outlined" sx={{ p: 2, mb: 2 }}>
+                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'center' }}>
+                      <Typography variant="subtitle2" sx={{ flex: 1 }}>
+                        {scenario.aVpc.name} ↔ {scenario.bVpc.name}
+                      </Typography>
+                      <Chip size="small" label={scenario.modeLabel} color="primary" variant="outlined" />
+                      <Chip size="small" label={`${scenario.aVpc.cidr} / ${scenario.bVpc.cidr}`} variant="outlined" />
+                    </Stack>
+
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                      Routers implicados: {scenario.routers.length > 0 ? scenario.routers.join(', ') : 'n/a'}
+                    </Typography>
+
+                    {!scenario.readyForRun && (
+                      <Alert severity="warning" sx={{ mt: 1.5 }}>
+                        No hay suficientes outputs de instancias para generar prueba ida/vuelta en este par.
+                      </Alert>
+                    )}
+
+                    {scenario.checks.length > 0 && (
+                      <Stack spacing={1.2} sx={{ mt: 1.5 }}>
+                        {scenario.checks.map((check) => (
+                          <Box key={`${scenario.aId}:${scenario.bId}:${check.title}`}>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {check.title}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                              {check.context}
+                            </Typography>
+                            <Paper
+                              variant="outlined"
+                              sx={{ p: 1, bgcolor: 'background.default', overflow: 'auto' }}
+                            >
+                              <Box
+                                component="pre"
+                                sx={{
+                                  m: 0,
+                                  whiteSpace: 'pre-wrap',
+                                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                  fontSize: 12,
+                                }}
+                              >
+                                {check.command}
+                              </Box>
+                            </Paper>
+                          </Box>
+                        ))}
+                      </Stack>
+                    )}
+                  </Paper>
+                ))}
+
+                <Alert severity="info" variant="outlined">
+                  Resultado esperado: si la topología está correcta, cada par conectado debe responder ping en ida y retorno.
+                </Alert>
               </Box>
             </Box>
           )}
