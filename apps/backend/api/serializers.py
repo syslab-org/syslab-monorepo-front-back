@@ -22,23 +22,12 @@ class PlanListSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_simulate_only(self, obj):
-        payload = getattr(obj, "payload", None) or {}
-        if isinstance(payload, dict):
-            return bool(payload.get("simulate_only", True))
-        return True
+        if bool(getattr(obj, "applied", False)):
+            return False
+        return bool(getattr(obj, "payload_simulate_only", True))
 
     def get_can_destroy(self, obj):
-        # Regla única: solo se puede destruir si el plan terminó OK, fue aplicado real,
-        # y NO está en modo simulación.
-        if getattr(obj, "status", None) != Plan.Status.SUCCESS:
-            return False
-        if not bool(getattr(obj, "applied", False)):
-            return False
-        if self.get_simulate_only(obj):
-            return False
-        if getattr(obj, "last_action", "") == "destroy":
-            return False
-        return True
+        return bool(getattr(obj, "can_destroy_now", False))
 
 
 class PlanDetailSerializer(serializers.ModelSerializer):
@@ -70,23 +59,12 @@ class PlanDetailSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_simulate_only(self, obj):
-        payload = getattr(obj, "payload", None) or {}
-        if isinstance(payload, dict):
-            return bool(payload.get("simulate_only", True))
-        return True
+        if bool(getattr(obj, "applied", False)):
+            return False
+        return bool(getattr(obj, "payload_simulate_only", True))
 
     def get_can_destroy(self, obj):
-        # Regla única: solo se puede destruir si el plan terminó OK, fue aplicado real,
-        # y NO está en modo simulación.
-        if getattr(obj, "status", None) != Plan.Status.SUCCESS:
-            return False
-        if not bool(getattr(obj, "applied", False)):
-            return False
-        if self.get_simulate_only(obj):
-            return False
-        if getattr(obj, "last_action", "") == "destroy":
-            return False
-        return True
+        return bool(getattr(obj, "can_destroy_now", False))
 
 
 class SubnetSerializer(serializers.Serializer):
@@ -133,6 +111,10 @@ class LinkRoutesDirSerializer(serializers.Serializer):
     b_to_a = RouteSerializer(many=True, required=False)
 
 
+class LinkTgwRoutesSerializer(serializers.Serializer):
+    to_router = RouteSerializer(many=True, required=False)
+
+
 class LinkSerializer(serializers.Serializer):
     # Ahora aceptamos peering y tgw-attach
     type = serializers.ChoiceField(choices=["peering", "tgw-attach"])
@@ -148,6 +130,7 @@ class LinkSerializer(serializers.Serializer):
     router_id = serializers.CharField(required=False)
     vpc_id = serializers.CharField(required=False)
     subnet_names = serializers.ListField(child=serializers.CharField(), required=False)
+    routes = LinkTgwRoutesSerializer(required=False)
 
     def validate(self, data):
         t = data.get("type")

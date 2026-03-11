@@ -189,10 +189,10 @@ function MainFlow() {
   const dragRef = useRef(null);
   //const connectionCreated = useRef(true)
 
-  const isPlanRunning = (st) => {
+  const isPlanRunning = useCallback((st) => {
     const s = String(st || '').toUpperCase();
     return s === 'RUNNING' || s === 'PENDING' || s === 'STARTED';
-  };
+  }, []);
 
   // Load plan metadata (planId + planCanvasHash) from Firestore and keep it actualizado en 
   // el estado del canvas. Esto es clave para la lógica de "dirty" y validación.

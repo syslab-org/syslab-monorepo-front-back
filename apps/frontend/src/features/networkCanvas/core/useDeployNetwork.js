@@ -1,6 +1,6 @@
 // apps/frontend/src/components/flow/flow-hooks/useDeployNetwork.js
-import { useContext, useEffect, useRef, useState } from "react";
-import { doc, setDoc } from "firebase/firestore";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "../../../infrastructure/firebase/firebaseConfig";
 import { DB_FIRESTORE_VPCS } from "@/shared/constants";
 import { useNavigate } from "react-router-dom";
@@ -52,6 +52,32 @@ function normalizeAz(region, az) {
 }
 
 const resolveSubnetName = (sn) => sn?.data?.subnetName || `subnet-${sn.id}`;
+
+function pickTgwAttachmentSubnetNames(subnets, region) {
+  const byAz = new Map();
+
+  subnets.forEach((sn) => {
+    const name = resolveSubnetName(sn);
+    const az = normalizeAz(region, sn?.data?.availabilityZone);
+    const subnetType = String(sn?.data?.subnetType || "").toLowerCase();
+    const typePriority =
+      subnetType === "public" ? 0 : subnetType === "private" ? 1 : 2;
+
+    const current = byAz.get(az);
+    if (
+      !current ||
+      typePriority < current.typePriority ||
+      (typePriority === current.typePriority &&
+        name.localeCompare(current.name) < 0)
+    ) {
+      byAz.set(az, { name, az, typePriority });
+    }
+  });
+
+  return Array.from(byAz.values())
+    .sort((a, b) => a.az.localeCompare(b.az) || a.name.localeCompare(b.name))
+    .map((entry) => entry.name);
+}
 
 function buildLinksFromEdges(nodes, edges) {
   const idToType = new Map(nodes.map((n) => [n.id, n.type]));
@@ -117,7 +143,11 @@ function buildLinksFromEdges(nodes, edges) {
       // - tgw-attach
       vpcs.forEach((vpcId) => {
         const subnetsForVpc = groupSubnetsByVpc(nodes, vpcId);
-        const subnetNames = subnetsForVpc.map(resolveSubnetName);
+        const vpcRegion = idToNode.get(vpcId)?.data?.region || "us-east-1";
+        const subnetNames = pickTgwAttachmentSubnetNames(
+          subnetsForVpc,
+          vpcRegion,
+        );
 
         const linkPayload = {
           type: "tgw-attach",
@@ -201,6 +231,7 @@ const useDeployNetwork = ({
   const [planName, setPlanName] = useState("");
   const [successMessage, setSuccessMessage] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [canvasLabName, setCanvasLabName] = useState("");
   const { setLoadingFlow } = useContext(LoadingFlowContext);
   const [simulateOnly, setSimulateOnly] = useState(true);
   // Máquina de estados explícita del plan
@@ -230,10 +261,39 @@ const useDeployNetwork = ({
     }
   }, [planName]);
 
+  const loadCanvasLabName = useCallback(async () => {
+    if (!firestoreVpcId) return "";
+    try {
+      const snap = await getDoc(doc(db, DB_FIRESTORE_VPCS, firestoreVpcId));
+      if (!snap.exists()) return "";
+      const name = String(snap.data()?.name || "").trim();
+      if (name) setCanvasLabName(name);
+      return name;
+    } catch (e) {
+      console.warn("No se pudo cargar nombre del canvas:", e);
+      return "";
+    }
+  }, [firestoreVpcId]);
+
+  // Hidrata nombre del plan desde el nombre real del laboratorio en Firestore.
+  useEffect(() => {
+    let cancelled = false;
+    const loadCanvasName = async () => {
+      const canvasName = await loadCanvasLabName();
+      if (cancelled || !canvasName) return;
+      planNameRef.current = canvasName;
+      if (planName !== canvasName) setPlanName(canvasName);
+    };
+    loadCanvasName();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadCanvasLabName, planName]);
+
   const ensurePlanName = () => {
     if (!planNameRef.current) {
       const fallback = transformedData?.name || `plan-${Date.now()}`;
-      planNameRef.current = planName || fallback;
+      planNameRef.current = canvasLabName || planName || fallback;
       // Si aún no hay planName visible en UI, lo seteamos una sola vez.
       if (!planName) setPlanName(planNameRef.current);
     }
@@ -420,17 +480,21 @@ const useDeployNetwork = ({
         ? `${cidrBlockVPC}/${prefixLength}`
         : firstVpcCidr;
 
+    const latestCanvasName = await loadCanvasLabName();
+    const canvasNameForPlan = latestCanvasName || canvasLabName;
+
     const vlanNameFinal =
-      vlanName || vpcsPayload[0]?.name || `VLAN-${Date.now()}`;
+      canvasNameForPlan || vlanName || vpcsPayload[0]?.name || `VLAN-${Date.now()}`;
     const vlanRegionFinal = vlanRegion || vpcsPayload[0]?.region || "us-east-1";
 
     // Use existing planName (laboratory name) if present.
     // Do NOT derive from first VPC anymore.
-    const planDefaultName = planName || vlanNameFinal || `plan-${Date.now()}`;
+    const planDefaultName =
+      canvasNameForPlan || planName || vlanNameFinal || `plan-${Date.now()}`;
 
-    // Solo sugerimos nombre si aún no hay uno definido.
-    // No volvemos a sincronizarlo con la VPC.
-    if (!planName) {
+    planNameRef.current = planDefaultName;
+
+    if (planName !== planDefaultName) {
       setPlanName(planDefaultName);
     }
 
@@ -495,28 +559,20 @@ const useDeployNetwork = ({
       }
 
       setValidationState(PLAN_STATES.SYNCING);
-      const stableName = ensurePlanName();
+      const latestCanvasName = await loadCanvasLabName();
+      if (latestCanvasName) {
+        planNameRef.current = latestCanvasName;
+        if (planName !== latestCanvasName) setPlanName(latestCanvasName);
+      }
+      const stableName = latestCanvasName || ensurePlanName();
 
       // sync_from_canvas SOLO crea/actualiza el Plan (no ejecuta Terraform)
       const syncRes = await api.syncPlanFromCanvas({
-        name: stableName,
         ...transformedData,
+        name: stableName,
       });
 
       const planId = syncRes?.plan_id;
-      const existingPlan = await api.getPlan(planId);
-
-      if (existingPlan?.applied && !existingPlan?.simulate_only) {
-        setValidationState(PLAN_STATES.ERROR);
-        setValidationError(
-          "Este plan ya fue aplicado en AWS. Debes destruirlo antes de volver a validar.",
-        );
-        setErrorMessage(
-          "Plan ya aplicado. Ve a Plan Detail y ejecuta Destroy primero.",
-        );
-        setLoadingFlow(false);
-        return;
-      }
 
       if (!planId) throw new Error("sync-from-canvas no devolvió plan_id");
       await persistPlanIdToCanvas({
@@ -561,7 +617,11 @@ const useDeployNetwork = ({
 
       setLoadingFlow(false);
     } catch (error) {
-      const msg = error?.message || "Error desconocido";
+      const code = error?.data?.code;
+      const msg =
+        code === "PLAN_ALREADY_APPLIED"
+          ? "El plan ya está aplicado. Puedes validar en preview, pero no aplicar de nuevo sin Destroy."
+          : error?.message || "Error desconocido";
       setLoadingFlow(false);
       setValidationState(PLAN_STATES.ERROR);
       setValidationError(msg);
@@ -612,12 +672,17 @@ const useDeployNetwork = ({
     setErrorMessage(null);
 
     try {
-      const stableName = ensurePlanName();
+      const latestCanvasName = await loadCanvasLabName();
+      if (latestCanvasName) {
+        planNameRef.current = latestCanvasName;
+        if (planName !== latestCanvasName) setPlanName(latestCanvasName);
+      }
+      const stableName = latestCanvasName || ensurePlanName();
 
       // 1) Re-sync antes de aplicar para garantizar que el backend tiene el payload más reciente.
       await api.syncPlanFromCanvas({
-        name: stableName,
         ...transformedData,
+        name: stableName,
       });
 
       // 2) Apply real (Terraform apply)
@@ -627,6 +692,13 @@ const useDeployNetwork = ({
       navigate(`/admin/plans/${planId}`);
     } catch (error) {
       setLoadingFlow(false);
+      const code = error?.data?.code;
+      if (code === "PLAN_ALREADY_APPLIED") {
+        setErrorMessage(
+          "Este plan ya está aplicado en AWS. Si necesitas cambios, primero ejecuta Destroy.",
+        );
+        return;
+      }
       setErrorMessage(error?.message || "Error desconocido");
     }
   };
