@@ -1,5 +1,6 @@
 from celery import shared_task
 import os, tempfile, subprocess, json, pathlib
+import re
 
 import boto3
 from botocore.exceptions import (
@@ -138,6 +139,100 @@ def can_call_aws_sts() -> tuple[bool, str]:
         return False, f"unknown_error: {e}"
 
 
+def payload_uses_tgw(payload: dict) -> bool:
+    routers = payload.get("routers") if isinstance(payload, dict) else []
+    links = payload.get("links") if isinstance(payload, dict) else []
+
+    has_tgw_router = any(
+        str((r or {}).get("type", "")).strip().lower() == "tgw" for r in (routers or [])
+    )
+    has_tgw_links = any(
+        str((l or {}).get("type", "")).strip().lower() == "tgw-attach"
+        for l in (links or [])
+    )
+    return bool(has_tgw_router or has_tgw_links)
+
+
+def resolve_payload_region(payload: dict) -> str:
+    raw = ""
+    if isinstance(payload, dict):
+        vlan = payload.get("vlan") or {}
+        if isinstance(vlan, dict):
+            raw = str(vlan.get("region") or "").strip()
+
+        if not raw:
+            vpcs = payload.get("vpcs") or []
+            if isinstance(vpcs, list) and vpcs:
+                raw = str((vpcs[0] or {}).get("region") or "").strip()
+
+    raw = (raw or os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "us-east-1").strip().lower()
+
+    # Si llega AZ (ej: us-east-1a), la convertimos a región (us-east-1)
+    if re.match(r"^[a-z]{2}(-[a-z0-9-]+)+-\d+[a-z]$", raw):
+        return raw[:-1]
+    return raw
+
+
+def check_tgw_quota_preflight(payload: dict) -> tuple[bool, str, dict]:
+    if not payload_uses_tgw(payload):
+        return True, "tgw_not_used", {"used": False}
+
+    region = resolve_payload_region(payload)
+    profile = os.getenv("AWS_PROFILE")
+    session = boto3.Session(profile_name=profile) if profile else boto3.Session()
+    ec2 = session.client("ec2", region_name=region)
+
+    tgws_resp = ec2.describe_transit_gateways()
+    tgws = tgws_resp.get("TransitGateways", []) or []
+    active = [
+        t for t in tgws if str(t.get("State", "")).lower() not in {"deleted", "deleting"}
+    ]
+
+    quota_value = 5.0
+    quota_source = "default"
+    quota_error = ""
+    try:
+        sq = session.client("service-quotas", region_name=region)
+        q = sq.get_service_quota(service_code="ec2", quota_code="L-A2478D36")
+        quota_value = float((q.get("Quota") or {}).get("Value") or quota_value)
+        quota_source = "service-quotas"
+    except Exception as e:
+        quota_error = str(e)
+
+    limit = int(quota_value)
+    current = len(active)
+    summary = [
+        {
+            "id": t.get("TransitGatewayId"),
+            "state": t.get("State"),
+            "name": next(
+                (tag.get("Value") for tag in (t.get("Tags") or []) if tag.get("Key") == "Name"),
+                "",
+            ),
+        }
+        for t in active
+    ]
+
+    info = {
+        "used": True,
+        "region": region,
+        "current_tgws": current,
+        "limit_tgws": limit,
+        "quota_source": quota_source,
+        "quota_error": quota_error,
+        "transit_gateways": summary,
+    }
+
+    if current >= limit:
+        msg = (
+            f"TGW preflight failed en {region}: límite alcanzado ({current}/{limit}). "
+            f"Libera TGWs existentes o solicita aumento de cuota (EC2 quota L-A2478D36)."
+        )
+        return False, msg, info
+
+    return True, "ok", info
+
+
 # === TAREAS CELERY ===
 @shared_task(name="api.tasks.prueba_larga")
 def prueba_larga(n: int = 3):
@@ -157,6 +252,7 @@ def process_network_plan(self, plan_id: str, payload: dict):
     workdir = None
     full_log = ""
     plan_obj = None
+    previous_applied = False
 
     # --- Normaliza payload ---
     if isinstance(payload, str):
@@ -182,6 +278,7 @@ def process_network_plan(self, plan_id: str, payload: dict):
         with transaction.atomic():
             try:
                 plan_obj = Plan.objects.select_for_update().get(id=plan_id)
+                previous_applied = bool(plan_obj.applied)
                 if payload and not plan_obj.payload:
                     plan_obj.payload = payload
             except Plan.DoesNotExist:
@@ -190,6 +287,7 @@ def process_network_plan(self, plan_id: str, payload: dict):
                     payload=payload,
                     status=Plan.Status.PENDING,
                 )
+                previous_applied = False
 
             plan_obj.status = Plan.Status.RUNNING
             plan_obj.task_id = self.request.id
@@ -276,6 +374,50 @@ def process_network_plan(self, plan_id: str, payload: dict):
         full_log += f"simulate_only={simulate_only}\n"
         full_log += f"aws_diag={diag} sts_ok={sts_ok} sts_reason={sts_reason} ALLOW_LOCAL_APPLY={ALLOW_LOCAL}\n\n"
 
+        # === 5.1) Preflight TGW quota (solo apply real con TGW) ===
+        if not simulate_only:
+            try:
+                tgw_ok, tgw_reason, tgw_info = check_tgw_quota_preflight(payload)
+            except Exception as e:
+                tgw_ok, tgw_reason, tgw_info = (
+                    False,
+                    f"TGW preflight error: {e}",
+                    {"used": payload_uses_tgw(payload), "preflight_error": str(e)},
+                )
+
+            full_log += f"[preflight][tgw] reason={tgw_reason} info={tgw_info}\n\n"
+
+            if not tgw_ok:
+                msg = (
+                    f"Terraform apply BLOQUEADO: {tgw_reason} "
+                    "Puedes destruir TGWs viejos o cambiar el router a modo peering."
+                )
+                plan_obj.last_log = full_log
+                plan_obj.last_log_updated_at = timezone.now()
+                plan_obj.status = Plan.Status.FAILURE
+                plan_obj.error = msg
+                plan_obj.applied = False
+                plan_obj.last_action = "apply"
+                plan_obj.updated_at = timezone.now()
+                plan_obj.save(
+                    update_fields=[
+                        "status",
+                        "error",
+                        "applied",
+                        "last_action",
+                        "last_log",
+                        "last_log_updated_at",
+                        "updated_at",
+                    ]
+                )
+
+                return {
+                    "ok": False,
+                    "error": msg,
+                    "plan_id": str(plan_obj.id),
+                    "log": full_log,
+                }
+
         # === 6) Terraform init ===
         proc = run(["terraform", "init", "-input=false", "-no-color"], cwd=workdir)
         full_log += f"$ terraform init\n{proc.stdout}\n{proc.stderr}\n"
@@ -283,19 +425,19 @@ def process_network_plan(self, plan_id: str, payload: dict):
             raise RuntimeError("terraform init failed")
 
         # === 7) Terraform plan ===
-        proc = run(
-            [
-                "terraform",
-                "plan",
-                "-input=false",
-                "-refresh=false",
-                "-no-color",
-                "-out",
-                "plan.out",
-            ],
-            cwd=workdir,
-        )
-        full_log += f"\n$ terraform plan\n{proc.stdout}\n{proc.stderr}\n"
+        # En preview mantenemos refresh=false para no depender de llamadas AWS.
+        # En apply real usamos refresh=true para reconciliar drift manual en AWS.
+        plan_cmd = [
+            "terraform",
+            "plan",
+            "-input=false",
+            "-refresh=false" if simulate_only else "-refresh=true",
+            "-no-color",
+            "-out",
+            "plan.out",
+        ]
+        proc = run(plan_cmd, cwd=workdir)
+        full_log += f"\n$ {' '.join(plan_cmd)}\n{proc.stdout}\n{proc.stderr}\n"
         if proc.returncode != 0:
             raise RuntimeError("terraform plan failed")
 
@@ -344,6 +486,18 @@ def process_network_plan(self, plan_id: str, payload: dict):
             )
             full_log += f"\n$ terraform apply\n{proc.stdout}\n{proc.stderr}\n"
             if proc.returncode != 0:
+                err_text = f"{proc.stdout}\n{proc.stderr}".lower()
+                if "transitgatewaylimitexceeded" in err_text:
+                    raise RuntimeError(
+                        "terraform apply failed: TransitGatewayLimitExceeded. "
+                        "La cuenta alcanzó el límite de Transit Gateways en esta región."
+                    )
+                if "invalidsubnetid.notfound" in err_text:
+                    raise RuntimeError(
+                        "terraform apply failed: InvalidSubnetID.NotFound. "
+                        "Se detectó drift: AWS ya no tiene una subnet referenciada en el state. "
+                        "Ejecuta Destroy del plan para limpiar estado y vuelve a aplicar."
+                    )
                 raise RuntimeError("terraform apply failed")
             applied = True
 
@@ -362,7 +516,7 @@ def process_network_plan(self, plan_id: str, payload: dict):
         plan_obj.status = Plan.Status.SUCCESS
         plan_obj.s3_key = ""
         plan_obj.error = ""
-        plan_obj.applied = applied
+        plan_obj.applied = previous_applied if simulate_only else applied
         plan_obj.last_action = "apply" if applied else "plan"
         plan_obj.updated_at = timezone.now()
 
@@ -439,23 +593,8 @@ def destroy_last_deploy(self, plan_id: str):
     plan = Plan.objects.get(id=plan_id)
     payload = plan.payload or {}
 
-    # 🔒 Regla de dominio: solo destruir si fue aplicado realmente
-    if not plan.applied:
-        msg = "Destroy bloqueado: el plan nunca fue aplicado (applied=false)."
-        plan.error = msg
-        plan.last_log = full_log + msg
-        plan.last_log_updated_at = timezone.now()
-        plan.updated_at = timezone.now()
-        plan.save(
-            update_fields=["error", "last_log", "last_log_updated_at", "updated_at"]
-        )
-        return {
-            "ok": False,
-            "error": msg,
-            "log": "",
-            "state_path": None,
-            "plan_id": str(plan.id),
-        }
+    # La validación de "si se puede destruir" se hace en la vista antes de encolar.
+    # Aquí evitamos revalidar con `can_destroy_now` porque el plan ya viene en RUNNING.
 
     # --- Detecta entorno/credenciales (soporta AWS_PROFILE + ~/.aws montado) ---
     diag = aws_creds_diagnostics()
@@ -464,21 +603,31 @@ def destroy_last_deploy(self, plan_id: str):
     sts_ok, sts_reason = can_call_aws_sts()
     creds_ok_for_apply = bool(diag["running_in_ecs"] or (ALLOW_LOCAL and sts_ok))
 
-    if payload.get("simulate_only", True):
-        # No es un fallo del sistema: es un NO-OP (no hay nada que destruir).
-        msg = "Plan en modo simulación: no hay infraestructura que destruir."
-        plan.error = msg
+    if payload.get("simulate_only", True) and not plan.applied:
+        # No-op idempotente: no hay recursos reales que destruir.
+        msg = "Plan en modo simulación: no hay infraestructura real que destruir."
+        plan.status = Plan.Status.SUCCESS
+        plan.error = ""
+        plan.applied = False
+        plan.last_action = "destroy"
         plan.last_log = full_log + msg
         plan.last_log_updated_at = timezone.now()
         plan.updated_at = timezone.now()
-        # OJO: NO cambiamos status a FAILURE
         plan.save(
-            update_fields=["error", "last_log", "last_log_updated_at", "updated_at"]
+            update_fields=[
+                "status",
+                "error",
+                "applied",
+                "last_action",
+                "last_log",
+                "last_log_updated_at",
+                "updated_at",
+            ]
         )
         return {
-            "ok": False,
-            "error": msg,
-            "log": "",
+            "ok": True,
+            "message": msg,
+            "log": msg,
             "state_path": None,
             "plan_id": str(plan.id),
         }

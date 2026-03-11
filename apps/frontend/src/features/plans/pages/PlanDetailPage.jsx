@@ -49,6 +49,32 @@ function computeLifecycle(plan) {
 
   const isDestroyed = lastAction === 'destroy';
   const hasRealInfra = applied && !isDestroyed;
+  const failedRealApply =
+    status === 'FAILURE' &&
+    lastAction === 'apply' &&
+    !simulateOnly &&
+    !applied;
+  const isRunning = status === TASK_STATE_RUNNING || status === TASK_STATE_PENDING;
+
+  if (isRunning && lastAction === 'destroy') {
+    return {
+      key: 'DESTROYING',
+      label: 'DESTROYING',
+      helper: 'Destroy en ejecución: eliminando infraestructura en AWS.',
+      chip: { variant: 'filled', color: 'warning' },
+      allowDestroy: false,
+    };
+  }
+
+  if (isRunning && lastAction === 'apply') {
+    return {
+      key: 'DEPLOYING',
+      label: 'DEPLOYING',
+      helper: 'Deploy en ejecución: aplicando cambios en AWS.',
+      chip: { variant: 'filled', color: 'info' },
+      allowDestroy: false,
+    };
+  }
 
   // 1️⃣ ACTIVE (infra real viva)
   if (hasRealInfra) {
@@ -83,7 +109,18 @@ function computeLifecycle(plan) {
     };
   }
 
-  // 4️⃣ NOT APPLIED
+  // 4️⃣ FAILED REAL APPLY (puede haber recursos parciales)
+  if (failedRealApply) {
+    return {
+      key: 'FAILED_REAL_APPLY',
+      label: 'RECOVERY',
+      helper: 'El apply real falló. Puede haber recursos parciales en AWS: ejecuta Destroy antes de reintentar.',
+      chip: { variant: 'outlined', color: 'error' },
+      allowDestroy: true,
+    };
+  }
+
+  // 5️⃣ NOT APPLIED
   return {
     key: 'NOT_APPLIED',
     label: 'NOT APPLIED',
@@ -337,11 +374,14 @@ export default function PlanDetailPage() {
   // Deploy permitido cuando el plan NO está corriendo
   const canDeploy = !isRunning;
 
-  // Destroy permitido cuando está ACTIVE + SUCCESS (regla backend), y no está corriendo
+  // Destroy permitido según regla backend (incluye apply real fallido), y no está corriendo
   const canDestroy =
     !isRunning &&
-    plan?.applied === true &&
-    String(plan?.last_action || '').toLowerCase() !== 'destroy';
+    Boolean(
+      plan?.can_destroy ??
+      (plan?.applied === true &&
+        String(plan?.last_action || '').toLowerCase() !== 'destroy')
+    );
 
   const fetchPlan = useCallback(
     async ({ resetLoading = false } = {}) => {
@@ -758,8 +798,8 @@ export default function PlanDetailPage() {
                   </Button>
                 )}
 
-                {/* Solo mostrar Destroy si lifecycle.key === 'ACTIVE' */}
-                {lifecycle.key === 'ACTIVE' && (
+                {/* Mostrar Destroy siempre que backend lo permita */}
+                {canDestroy && (
                   <Button
                     variant="outlined"
                     color="error"

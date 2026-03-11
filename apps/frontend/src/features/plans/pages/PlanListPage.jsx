@@ -112,7 +112,8 @@ export default function PlanListPage() {
         if (!q) return true;
         const name = (p.name || '').toLowerCase();
         const id = (p.id || '').toLowerCase();
-        return name.includes(q) || id.includes(q);
+        const canvasId = (p.firestore_vpc_id || '').toLowerCase();
+        return name.includes(q) || id.includes(q) || canvasId.includes(q);
       });
   }, [items, query, statusFilter]);
 
@@ -327,6 +328,15 @@ export default function PlanListPage() {
                       <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
                         {p.id}
                       </Typography>
+                      {p.firestore_vpc_id && (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: 'block', fontFamily: 'monospace' }}
+                        >
+                          canvas: {p.firestore_vpc_id}
+                        </Typography>
+                      )}
                     </TableCell>
 
                     <TableCell>
@@ -398,7 +408,7 @@ export default function PlanListPage() {
                           title={
                             p.can_destroy
                               ? 'Destruir infraestructura de este plan'
-                              : 'Solo se puede destruir si status=SUCCESS, applied=true, simulate_only=false y last_action!=destroy'
+                              : 'Destroy solo se habilita cuando el backend detecta infraestructura real o apply real fallido para limpiar.'
                           }
                         >
                           <span>

@@ -1,8 +1,12 @@
 import os
+from datetime import timedelta
 
 from django.db import IntegrityError, transaction
 from django.db.utils import ProgrammingError
+from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+
+from celery.result import AsyncResult
 
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -10,6 +14,73 @@ from rest_framework.response import Response
 
 from .models import Plan
 from .serializers import PlanListSerializer, PlanDetailSerializer
+from .validators import validate_network_plan
+
+
+TERMINAL_TASK_STATES = {"SUCCESS", "FAILURE", "REVOKED"}
+
+
+def _reconcile_running_plan(plan: Plan) -> bool:
+    if plan.status != Plan.Status.RUNNING or not plan.task_id:
+        return False
+
+    task_state = AsyncResult(plan.task_id).state
+    now = timezone.now()
+
+    if task_state == "PENDING":
+        stale_minutes = int(os.getenv("PLAN_RUNNING_STALE_MINUTES", "20"))
+        if plan.updated_at and now - plan.updated_at > timedelta(minutes=stale_minutes):
+            plan.status = Plan.Status.FAILURE
+            plan.error = (
+                f"La tarea {plan.task_id} quedó en estado PENDING por más de "
+                f"{stale_minutes} minutos. Marca reconciliada como fallo."
+            )
+            plan.updated_at = now
+            plan.save(update_fields=["status", "error", "updated_at"])
+            return True
+        return False
+
+    if task_state not in TERMINAL_TASK_STATES:
+        return False
+
+    result = AsyncResult(plan.task_id).result
+
+    if task_state in {"FAILURE", "REVOKED"}:
+        plan.status = Plan.Status.FAILURE
+        plan.error = str(result or f"Tarea {task_state.lower()}.")
+        plan.updated_at = now
+        plan.save(update_fields=["status", "error", "updated_at"])
+        return True
+
+    task_ok = not (isinstance(result, dict) and result.get("ok") is False)
+    if task_ok:
+        plan.status = Plan.Status.SUCCESS
+        if plan.last_action == "destroy":
+            plan.applied = False
+            plan.payload = {**(plan.payload or {}), "simulate_only": True}
+            plan.error = ""
+            plan.updated_at = now
+            plan.save(
+                update_fields=["status", "applied", "payload", "error", "updated_at"]
+            )
+            return True
+
+        if isinstance(result, dict) and "applied" in result:
+            plan.applied = bool(result.get("applied"))
+        plan.error = ""
+        plan.updated_at = now
+        plan.save(update_fields=["status", "applied", "error", "updated_at"])
+        return True
+
+    plan.status = Plan.Status.FAILURE
+    plan.error = (
+        (result or {}).get("error")
+        if isinstance(result, dict)
+        else str(result or "La tarea finalizó con error.")
+    )
+    plan.updated_at = now
+    plan.save(update_fields=["status", "error", "updated_at"])
+    return True
 
 
 def _read_s3_text(bucket: str, key: str) -> str:
@@ -17,6 +88,29 @@ def _read_s3_text(bucket: str, key: str) -> str:
 
     obj = boto3.client("s3").get_object(Bucket=bucket, Key=key)
     return obj["Body"].read().decode("utf-8", errors="replace")
+
+
+def _sanitize_payload_for_storage(payload: dict, fallback_firestore_vpc_id=None) -> dict:
+    sanitized = validate_network_plan(payload)
+    raw = payload if isinstance(payload, dict) else {}
+    out = dict(sanitized)
+
+    for key in ("firestore_vpc_id", "vpcId", "canvas_id"):
+        value = raw.get(key)
+        if value:
+            out[key] = value
+
+    vlan_raw = raw.get("vlan") if isinstance(raw.get("vlan"), dict) else {}
+    resolved_firestore_vpc_id = (
+        fallback_firestore_vpc_id
+        or out.get("firestore_vpc_id")
+        or out.get("vpcId")
+        or vlan_raw.get("id")
+    )
+    if resolved_firestore_vpc_id:
+        out["firestore_vpc_id"] = resolved_firestore_vpc_id
+
+    return out
 
 
 class PlanViewSet(viewsets.ReadOnlyModelViewSet):
@@ -33,6 +127,19 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
         if self.action in ("retrieve", "payload"):
             return PlanDetailSerializer
         return PlanListSerializer
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        for plan in queryset:
+            _reconcile_running_plan(plan)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        _reconcile_running_plan(instance)
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
     @action(
         detail=False,
@@ -60,7 +167,14 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
                 payload = dict(data)
                 payload.pop("payload", None)
 
-            name = data.get("name", "")
+            try:
+                payload = _sanitize_payload_for_storage(
+                    payload, fallback_firestore_vpc_id=firestore_vpc_id
+                )
+            except Exception as e:
+                return Response({"ok": False, "error": str(e)}, status=400)
+
+            name = data.get("name") or payload.get("name", "")
             canvas_hash = data.get("canvas_hash")
             canvas_updated_at = data.get("canvas_updated_at")
 
