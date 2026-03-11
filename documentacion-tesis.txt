@@ -1,0 +1,306 @@
+DOCUMENTACIÓN TESIS
+Architectta / Cloud Orchestrator
+
+Fecha de actualización: 11/03/2026
+
+====================================================================
+1. INTRODUCCIÓN
+====================================================================
+
+Architectta / Cloud Orchestrator es una plataforma visual para el diseño,
+validación, despliegue y prueba de topologías de red en la nube, con foco
+inicial en Amazon Web Services (AWS).
+
+El sistema busca resolver una brecha común en contextos educativos y
+experimentales: la distancia entre comprender una topología de red y ser capaz
+de implementarla correctamente en un proveedor cloud real.
+
+La propuesta combina tres dimensiones:
+
+- una dimensión teórica, donde se explican conceptos como VPC, subnet, route
+  table, Security Group, Internet Gateway, NAT Gateway, VPC Peering y Transit
+  Gateway;
+- una dimensión práctica, donde el usuario construye laboratorios y valida
+  conectividad;
+- una dimensión técnica, donde el canvas se traduce a Terraform y se ejecuta
+  sobre AWS.
+
+
+====================================================================
+2. PROBLEMA QUE ABORDA
+====================================================================
+
+El aprendizaje de redes en la nube suele presentar al menos cuatro problemas:
+
+1. Los conceptos se enseñan de forma fragmentada.
+2. La consola cloud distribuye la configuración en muchas pantallas y niveles.
+3. El estudiante puede terminar replicando pasos sin comprender relaciones
+   entre routing, seguridad y conectividad.
+4. El despliegue manual reduce la repetibilidad y aumenta la probabilidad de
+   error.
+
+En ese contexto, el proyecto propone una herramienta que permita:
+
+- modelar la intención de infraestructura desde un canvas,
+- traducir esa intención a una definición formal,
+- desplegar la topología como infraestructura real,
+- y verificar si el comportamiento obtenido coincide con el esperado.
+
+
+====================================================================
+3. OBJETIVO GENERAL
+====================================================================
+
+Desarrollar una plataforma educativa y operativa que permita representar
+topologías de red en un canvas visual, validarlas desde una perspectiva
+pedagógica y traducirlas a infraestructura real en AWS mediante Terraform.
+
+
+====================================================================
+4. OBJETIVOS ESPECÍFICOS
+====================================================================
+
+- Permitir la creación visual de VPCs, subnets, instancias y routers.
+- Modelar escenarios con Internet Gateway, NAT Gateway, peering y TGW.
+- Traducir el canvas a un payload estructurado de infraestructura.
+- Generar archivos Terraform desde ese payload.
+- Ejecutar `plan`, `apply` y `destroy` de forma controlada.
+- Persistir estado, outputs, logs y metadatos del plan.
+- Facilitar pruebas post-deploy para validar conectividad real.
+- Mantener un enfoque didáctico que conecte topología, teoría y despliegue.
+
+
+====================================================================
+5. MARCO CONCEPTUAL
+====================================================================
+
+5.1 VPC
+
+Una VPC es una red virtual aislada dentro de AWS. En el sistema, representa la
+unidad principal del laboratorio y contiene subnets, route tables, instancias
+y mecanismos de conectividad.
+
+5.2 CIDR
+
+El CIDR define el rango IP de una red. Su función es estructurar el espacio de
+direcciones y servir como base para el routing entre VPCs y subnets.
+
+5.3 Subnet pública y privada
+
+La distinción entre subnet pública y privada depende del enrutamiento. Una
+subnet pública tiene salida por defecto hacia un Internet Gateway. Una subnet
+privada puede salir a Internet mediante NAT, pero no recibir tráfico entrante
+directo desde Internet.
+
+5.4 Route table
+
+La route table define el siguiente salto según el destino. Conceptualmente es
+el mecanismo que convierte una topología declarada en una conectividad
+operativa.
+
+5.5 Security Group
+
+El Security Group es un firewall virtual stateful. Dentro del proyecto, su
+relevancia es doble:
+
+- controlar exposición administrativa, por ejemplo SSH;
+- y permitir o restringir pruebas de conectividad entre redes.
+
+5.6 Allowed SSH CIDR
+
+Este parámetro define qué IP o red externa puede iniciar SSH hacia las
+instancias del laboratorio. Su traducción técnica es una regla de entrada
+TCP/22 en el Security Group.
+
+5.7 Internet Gateway
+
+El Internet Gateway habilita conectividad entre una VPC e Internet. Su
+presencia es necesaria para que una subnet pública realmente tenga salida y
+posible acceso externo.
+
+5.8 NAT Gateway
+
+El NAT Gateway permite salida a Internet desde redes privadas sin convertirlas
+en destinos expuestos. Su valor pedagógico está en separar acceso saliente de
+acceso entrante.
+
+5.9 VPC Peering
+
+El peering conecta dos VPCs directamente. Es un modelo punto a punto y
+requiere rutas explícitas en ambos lados.
+
+5.10 Transit Gateway
+
+El TGW implementa un modelo hub-and-spoke. Las VPCs se adjuntan al hub mediante
+attachments y envían al hub el tráfico destinado a otras redes. Esto lo vuelve
+más escalable que una malla de peerings cuando aumenta el número de VPCs.
+
+
+====================================================================
+6. DESCRIPCIÓN DE LA SOLUCIÓN
+====================================================================
+
+La solución funciona como una cadena de traducción:
+
+Canvas visual
+-> modelo de topología
+-> payload estructurado
+-> plantilla Terraform
+-> recursos reales en AWS
+-> outputs, logs y pruebas
+
+Cada etapa tiene una responsabilidad diferente:
+
+- el canvas expresa intención;
+- el payload formaliza esa intención;
+- Terraform declara la infraestructura;
+- AWS la ejecuta;
+- el módulo de pruebas comprueba si la conectividad real coincide con la
+  esperada.
+
+
+====================================================================
+7. ARQUITECTURA DEL SISTEMA
+====================================================================
+
+7.1 Frontend
+
+El frontend está implementado en React. La pantalla principal del laboratorio
+está en:
+
+`apps/frontend/src/features/networkCanvas/pages/MainFlow.jsx`
+
+Responsabilidades principales:
+
+- mostrar el canvas,
+- capturar configuración de nodos y enlaces,
+- transformar la topología en payload,
+- presentar validaciones, resumen y pruebas,
+- consultar el estado del plan.
+
+La transformación del canvas a payload se concentra en:
+
+`apps/frontend/src/features/networkCanvas/core/useDeployNetwork.js`
+
+El polling del estado del plan se concentra en:
+
+`apps/frontend/src/features/networkCanvas/core/usePlanPolling.js`
+
+7.2 Backend
+
+El backend está implementado con Django y expone endpoints para:
+
+- crear o actualizar planes,
+- iniciar preview o apply,
+- destruir infraestructura,
+- consultar detalle, outputs y estado de ejecución.
+
+Archivos principales:
+
+- `apps/backend/api/views.py`
+- `apps/backend/api/views_plans.py`
+- `apps/backend/api/tasks.py`
+
+7.3 Ejecución asíncrona
+
+Los procesos Terraform se ejecutan vía Celery, porque apply y destroy pueden
+demorar varios minutos. Esto permite persistir logs, estado y resultados sin
+bloquear el request HTTP.
+
+7.4 Terraform
+
+La infraestructura se genera desde:
+
+`apps/backend/provisioning/templates/main.tf.j2`
+
+La plantilla soporta:
+
+- VPCs,
+- subnets,
+- instancias EC2,
+- Internet Gateway,
+- NAT Gateway,
+- route tables y rutas,
+- VPC Peering,
+- Transit Gateway,
+- TGW attachments,
+- Security Groups,
+- outputs para depuración.
+
+
+====================================================================
+8. MODELO OPERACIONAL
+====================================================================
+
+El sistema opera con una convención clara:
+
+1 plan = 1 stack Terraform
+
+Esto implica que cada plan representa una infraestructura concreta y reutiliza
+su propio state para futuras operaciones de apply o destroy.
+
+Ventajas:
+
+- consistencia,
+- trazabilidad,
+- control sobre lifecycle,
+- relación clara entre plan lógico y stack real.
+
+
+====================================================================
+9. FLUJO END-TO-END
+====================================================================
+
+1. El usuario crea o abre un laboratorio.
+2. Diseña la topología en el canvas.
+3. El frontend traduce nodes/edges a un payload.
+4. El backend sincroniza o crea el plan.
+5. Celery renderiza `main.tf` desde `main.tf.j2`.
+6. Terraform ejecuta `init`, `plan` y eventualmente `apply`.
+7. AWS crea recursos reales.
+8. El backend persiste outputs, logs, estado y errores.
+9. El frontend actualiza la UI y muestra resultado.
+10. El usuario ejecuta pruebas post-deploy.
+11. El usuario destruye la infraestructura cuando termina.
+
+
+====================================================================
+10. APORTE PEDAGÓGICO
+====================================================================
+
+El valor pedagógico del proyecto consiste en explicitar relaciones que en AWS
+normalmente se presentan de forma dispersa.
+
+La plataforma permite conectar en un mismo flujo:
+
+- representación topológica,
+- decisión de enrutamiento,
+- reglas de seguridad,
+- traducción a recursos cloud,
+- y validación experimental de la conectividad.
+
+Esto convierte al sistema en algo más que un orquestador. También lo convierte
+en una herramienta de aprendizaje estructurado.
+
+
+====================================================================
+11. LIMITACIONES Y CONSIDERACIONES TÉCNICAS
+====================================================================
+
+- AWS impone cuotas por región y cuenta.
+- El drift ocurre si se modifican recursos manualmente desde la consola.
+- Cambiar `key_name` en una instancia suele exigir recrearla.
+- El TGW requiere rutas correctas; dibujarlo no garantiza conectividad.
+- NAT Gateway tiene costo y debe justificarse pedagógica u operacionalmente.
+- SSH depende de la key correcta, del SG y del CIDR autorizado.
+
+
+====================================================================
+12. CONCLUSIÓN
+====================================================================
+
+Architectta / Cloud Orchestrator integra comprensión conceptual, modelado
+visual, automatización con infraestructura como código y validación real en
+AWS. Su principal contribución es ofrecer un flujo continuo donde el usuario no
+solo diseña una red, sino que puede entenderla, desplegarla, inspeccionarla y
+comprobar si funciona de acuerdo con su intención original.
