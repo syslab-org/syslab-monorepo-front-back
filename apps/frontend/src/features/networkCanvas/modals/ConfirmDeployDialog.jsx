@@ -199,7 +199,19 @@ const ConfirmDeployDialog = ({
                   {vpc.nat_gateway?.enabled && (
                     <Chip label="NAT" size="small" color="secondary" />
                   )}
+                  {vpc.nat_gateway?.enabled && vpc.nat_gateway?.elastic_ip && (
+                    <Chip
+                      label={`NAT EIP: ${vpc.nat_gateway.elastic_ip}`}
+                      size="small"
+                      color="warning"
+                    />
+                  )}
                 </Stack>
+                {vpc.nat_gateway?.enabled && (
+                  <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+                    Si defines una EIP para el NAT, debe ser un Allocation ID real de AWS (`eipalloc-...`), no una IP pública.
+                  </Typography>
+                )}
               </Box>
             ))}
           </Box>

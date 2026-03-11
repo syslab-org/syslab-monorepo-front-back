@@ -18,6 +18,14 @@ Esta plataforma te permite:
 No es solo un editor de diagramas. Las decisiones que tomas en el canvas
 pueden crear recursos reales en AWS.
 
+Importante:
+
+- si ejecutas un APPLY real, el laboratorio puede generar costo monetario;
+- el costo depende de los recursos desplegados y del tiempo que permanezcan
+  activos;
+- destroy elimina el stack principal, pero ciertos recursos externos o
+  preexistentes que tú aportaste pueden quedar fuera de su alcance.
+
 
 ====================================================================
 2. QUÉ PUEDES CONSTRUIR
@@ -115,7 +123,7 @@ En el formulario de VPC puedes definir:
 - Internet Gateway,
 - NAT Gateway,
 - subnet pública para NAT,
-- Elastic IP opcional,
+- Elastic IP opcional (Allocation ID),
 - Allowed SSH CIDR.
 
 Qué significa cada uno:
@@ -127,6 +135,13 @@ Internet Gateway
 Enable NAT Gateway
 - da salida a Internet a redes privadas;
 - no permite entrar desde tu laptop.
+
+Elastic IP (opcional)
+- si la dejas vacía, AWS asigna una EIP nueva al NAT;
+- si escribes un valor, debe ser un Allocation ID existente, por ejemplo
+  `eipalloc-0123456789abcdef0`.
+- no debes escribir la IP pública visible de la EIP, porque Terraform necesita
+  el `Allocation ID`.
 
 Allowed SSH CIDR
 - define desde qué IP o red podrás conectarte por SSH;
@@ -316,6 +331,16 @@ Revisa:
 
 Eso es incorrecto.
 NAT sirve para salida desde redes privadas, no para acceso entrante.
+
+13.5 Hice destroy y aún veo recursos en la consola
+
+Revisa estas posibilidades:
+
+- una Elastic IP aportada manualmente al NAT no se libera automáticamente;
+- AWS mantiene un `DHCP option set` por defecto por región, y no implica que
+  el stack haya quedado vivo;
+- los outputs que ves en la plataforma son históricos y no generan costo por sí
+  mismos.
 
 
 ====================================================================

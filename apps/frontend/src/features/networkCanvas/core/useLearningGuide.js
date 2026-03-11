@@ -98,6 +98,9 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges }) => {
         hasNat
           ? "Se creará 1 NAT Gateway: tus redes privadas podrán salir a Internet, pero no recibir tráfico entrante."
           : "Sin NAT Gateway, las subnets privadas tampoco tendrán salida pública a menos que exista otro camino.",
+        hasNat
+          ? "Si asignas una Elastic IP al NAT, debe ser un Allocation ID existente de AWS (por ejemplo `eipalloc-...`), no la IP pública visible."
+          : "Si luego habilitas NAT y quieres fijar su EIP, usa un Allocation ID real de AWS.",
         sshCidr
           ? `El Security Group abrirá TCP/22 desde ${sshCidr}.`
           : "No se abrirá SSH administrativo desde Internet salvo que lo habilites explícitamente.",

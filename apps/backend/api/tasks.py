@@ -1,6 +1,7 @@
 from celery import shared_task
 import os, tempfile, subprocess, json, pathlib
 import re
+import time
 
 import boto3
 from botocore.exceptions import (
@@ -78,6 +79,114 @@ def read_terraform_outputs_json(cwd: str) -> dict:
         else:
             simplified[k] = v
     return simplified
+
+
+def build_nat_cleanup_targets(payload: dict, outputs: dict) -> dict[str, dict]:
+    """Relaciona VPC real -> metadata de cleanup NAT a partir de payload y outputs."""
+    payload = payload if isinstance(payload, dict) else {}
+    outputs = outputs if isinstance(outputs, dict) else {}
+
+    logical_to_actual = outputs.get("vpc_ids") if isinstance(outputs.get("vpc_ids"), dict) else {}
+    vpcs = payload.get("vpcs") if isinstance(payload.get("vpcs"), list) else []
+
+    targets = {}
+    for vpc in vpcs:
+        if not isinstance(vpc, dict):
+            continue
+        logical_id = str(vpc.get("id") or "").strip()
+        actual_vpc_id = str(logical_to_actual.get(logical_id) or "").strip()
+        nat_cfg = vpc.get("nat_gateway") if isinstance(vpc.get("nat_gateway"), dict) else {}
+        nat_enabled = bool(nat_cfg.get("enabled"))
+        if not logical_id or not actual_vpc_id or not nat_enabled:
+            continue
+        provided_eip = str(nat_cfg.get("elastic_ip") or "").strip()
+        targets[actual_vpc_id] = {
+            "logical_vpc_id": logical_id,
+            "release_generated_eip": provided_eip == "",
+            "provided_eip": provided_eip,
+        }
+
+    return targets
+
+
+def cleanup_residual_nat_gateways(payload: dict, outputs: dict) -> dict:
+    """Borra NAT Gateways residuales por VPC real y libera EIPs autogeneradas."""
+    targets = build_nat_cleanup_targets(payload, outputs)
+    region = resolve_payload_region(payload if isinstance(payload, dict) else {})
+
+    summary = {
+        "region": region,
+        "checked_vpc_ids": sorted(targets.keys()),
+        "deleted_nat_ids": [],
+        "released_eip_ids": [],
+        "remaining_nat_ids": [],
+        "skipped": not bool(targets),
+    }
+    if not targets:
+        return summary
+
+    profile = os.getenv("AWS_PROFILE")
+    session = boto3.Session(profile_name=profile) if profile else boto3.Session()
+    ec2 = session.client("ec2", region_name=region)
+
+    nat_ids = []
+    generated_eip_ids = set()
+
+    for actual_vpc_id, meta in targets.items():
+        resp = ec2.describe_nat_gateways(
+            Filter=[
+                {"Name": "vpc-id", "Values": [actual_vpc_id]},
+                {"Name": "state", "Values": ["pending", "available", "failed", "deleting"]},
+            ]
+        )
+        for nat in resp.get("NatGateways", []) or []:
+            nat_id = str(nat.get("NatGatewayId") or "").strip()
+            state = str(nat.get("State") or "").strip().lower()
+            if not nat_id or state == "deleted":
+                continue
+            if nat_id not in nat_ids and state != "deleting":
+                ec2.delete_nat_gateway(NatGatewayId=nat_id)
+                summary["deleted_nat_ids"].append(nat_id)
+            nat_ids.append(nat_id)
+
+            if meta["release_generated_eip"]:
+                for addr in nat.get("NatGatewayAddresses", []) or []:
+                    allocation_id = str(addr.get("AllocationId") or "").strip()
+                    if allocation_id:
+                        generated_eip_ids.add(allocation_id)
+
+    if nat_ids:
+        pending = set(nat_ids)
+        for _ in range(30):
+            still_pending = set()
+            for nat_id in pending:
+                resp = ec2.describe_nat_gateways(
+                    Filter=[{"Name": "nat-gateway-id", "Values": [nat_id]}]
+                )
+                states = {
+                    str(nat.get("State") or "").strip().lower()
+                    for nat in (resp.get("NatGateways", []) or [])
+                }
+                if not states or states <= {"deleted"}:
+                    continue
+                still_pending.add(nat_id)
+            if not still_pending:
+                pending = set()
+                break
+            pending = still_pending
+            time.sleep(10)
+        summary["remaining_nat_ids"] = sorted(pending)
+
+    if not summary["remaining_nat_ids"]:
+        for allocation_id in sorted(generated_eip_ids):
+            try:
+                ec2.release_address(AllocationId=allocation_id)
+                summary["released_eip_ids"].append(allocation_id)
+            except ClientError:
+                # Si la EIP sigue asociada o ya fue liberada por Terraform, no rompemos destroy.
+                continue
+
+    return summary
 
 
 def aws_creds_diagnostics() -> dict:
@@ -741,8 +850,29 @@ def destroy_last_deploy(self, plan_id: str):
         # 5) destroy
         p = run(["terraform", "destroy", "-auto-approve", "-no-color"], cwd=workdir)
         full_log += f"$ terraform destroy\n{p.stdout}\n{p.stderr}\n"
+        nat_cleanup_error = ""
+        nat_cleanup_summary = {}
+        try:
+            nat_cleanup_summary = cleanup_residual_nat_gateways(
+                payload, plan.outputs or {}
+            )
+            full_log += (
+                f"[cleanup][nat] {json.dumps(nat_cleanup_summary, indent=2, sort_keys=True)}\n"
+            )
+        except Exception as cleanup_exc:
+            nat_cleanup_error = str(cleanup_exc)
+            full_log += f"[cleanup][nat][error] {cleanup_exc}\n"
         if p.returncode != 0:
             raise RuntimeError("terraform destroy failed")
+        if nat_cleanup_error:
+            raise RuntimeError(
+                f"destroy completed but NAT residual cleanup failed: {nat_cleanup_error}"
+            )
+        if nat_cleanup_summary.get("remaining_nat_ids"):
+            remaining = ", ".join(nat_cleanup_summary["remaining_nat_ids"])
+            raise RuntimeError(
+                f"destroy completed but residual NAT Gateways remain: {remaining}"
+            )
 
         plan.last_log = full_log
         plan.last_log_updated_at = timezone.now()

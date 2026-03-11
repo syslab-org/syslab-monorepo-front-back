@@ -286,6 +286,9 @@ const VPCNodeForm = ({
           - NAT da salida a subnets privadas, pero no acceso entrante desde Internet.
         </Typography>
         <Typography variant="caption" display="block">
+          - Si defines una Elastic IP para NAT, debe ser un Allocation ID real de AWS (`eipalloc-...`), no una IP pública.
+        </Typography>
+        <Typography variant="caption" display="block">
           - Allowed SSH CIDR abre TCP/22 solo desde la IP o red que indiques.
         </Typography>
       </Alert>
@@ -409,12 +412,12 @@ const VPCNodeForm = ({
 
       {/* EIP opcional */}
       <TextField
-        label="Elastic IP (opcional)"
+        label="Elastic IP Allocation ID (opcional)"
         {...register("natGatewayElasticIp")}
-        placeholder="(auto)"
+        placeholder="eipalloc-0123456789abcdef0"
         helperText={
           enableNat
-            ? "Si la dejas vacía, AWS asignará una Elastic IP para la salida del NAT."
+            ? "Si la dejas vacía, AWS asignará una Elastic IP nueva. Si ya tienes una reservada, ingresa su Allocation ID real (`eipalloc-...`), no la IP pública."
             : "Solo aplica si habilitas NAT Gateway."
         }
         fullWidth
