@@ -108,6 +108,26 @@ const ConfirmDeployDialog = ({
       ),
     0
   );
+  const vpcsWithIgw = vpcs.filter((vpc) => Boolean(vpc.internet_gateway)).length;
+  const vpcsWithNat = vpcs.filter((vpc) => Boolean(vpc.nat_gateway?.enabled)).length;
+  const vpcsWithSsh = vpcs.filter((vpc) => Boolean(vpc.allowed_ssh_cidr)).length;
+  const publicSubnets = vpcs.reduce(
+    (acc, vpc) =>
+      acc +
+      (vpc.subnets || []).filter(
+        (subnet) => String(subnet.subnet_type || "").toLowerCase() === "public",
+      ).length,
+    0,
+  );
+  const privateSubnets = Math.max(totalSubnets - publicSubnets, 0);
+  const awsInterpretation = [
+    `Se crearán ${vpcs.length} VPC(s), ${totalSubnets} subnet(s) y ${totalInstances} instancia(s) EC2.`,
+    `Exposición pública: IGW en ${vpcsWithIgw} VPC(s), ${publicSubnets} subnet(s) pública(s) y SSH externo definido en ${vpcsWithSsh} VPC(s).`,
+    `Salida privada: NAT Gateway en ${vpcsWithNat} VPC(s) para ${privateSubnets} subnet(s) potencialmente privadas.`,
+    tgwRouters > 0
+      ? `Enrutamiento central: ${tgwRouters} TGW router(s) y ${tgwAttachments} attachment(s).`
+      : `Enrutamiento por pares: ${peeringLinks} enlace(s) peering declarados.`,
+  ];
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -146,6 +166,19 @@ const ConfirmDeployDialog = ({
           <Alert severity="info" sx={{ mt: 2 }}>
             Después del deploy, valida conectividad en <b>Plan Detail → Pruebas</b> con comandos de ping guiados entre VPCs.
           </Alert>
+
+          <Box mt={3}>
+            <Typography variant="subtitle1" gutterBottom>
+              Cómo AWS leerá este canvas
+            </Typography>
+            <Stack spacing={1}>
+              {awsInterpretation.map((line) => (
+                <Alert key={line} severity="info" variant="outlined">
+                  {line}
+                </Alert>
+              ))}
+            </Stack>
+          </Box>
 
           <Box mt={4}>
             {vpcs.map((vpc) => (

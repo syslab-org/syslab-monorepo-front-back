@@ -43,12 +43,193 @@ const normalizeMode = (value) => {
 
 const pairKey = (a, b) => (a < b ? `${a}::${b}` : `${b}::${a}`);
 
+const makeBadge = (label, tone = "default") => ({ label, tone });
+
+const resolveNodeLabel = (node) =>
+  node?.data?.vpcName ||
+  node?.data?.subnetName ||
+  node?.data?.name ||
+  node?.data?.identifier ||
+  node?.data?.label ||
+  node?.label ||
+  node?.id ||
+  "Elemento";
+
+const buildFocusedGuide = ({ selectedNode, nodes, edges }) => {
+  if (!selectedNode) return null;
+
+  const label = resolveNodeLabel(selectedNode);
+
+  if (selectedNode.type === TYPE_VPC_NODE) {
+    const subnets = nodes.filter((node) => node.parentId === selectedNode.id);
+    const publicSubnets = subnets.filter(
+      (node) => String(node.data?.subnetType || "").toLowerCase() === "public",
+    ).length;
+    const privateSubnets = subnets.filter(
+      (node) => String(node.data?.subnetType || "").toLowerCase() === "private",
+    ).length;
+    const hasIgw = Boolean(selectedNode.data?.internetGateway);
+    const hasNat = Boolean(selectedNode.data?.enableNatGateway);
+    const sshCidr = String(selectedNode.data?.allowedSshCidr || "").trim();
+
+    return {
+      title: `VPC: ${label}`,
+      subtitle: "Qué significa en el laboratorio y cómo se traduce en AWS.",
+      badges: [
+        makeBadge(`CIDR ${selectedNode.data?.cidrBlock || "n/a"}/${selectedNode.data?.prefixLength || "?"}`),
+        makeBadge(hasIgw ? "IGW habilitado" : "Sin IGW", hasIgw ? "success" : "default"),
+        makeBadge(hasNat ? "NAT habilitado" : "Sin NAT", hasNat ? "warning" : "default"),
+        makeBadge(sshCidr ? "SSH desde IP definida" : "SSH no expuesto", sshCidr ? "info" : "default"),
+      ],
+      labLines: [
+        `Esta VPC representa un dominio principal de red dentro del laboratorio.`,
+        publicSubnets > 0
+          ? `Tienes ${publicSubnets} subnet(s) pública(s): sirven para bastions o servicios con salida directa.`
+          : "No hay subnets públicas; este dominio no está pensado para exposición directa.",
+        privateSubnets > 0
+          ? `Tienes ${privateSubnets} subnet(s) privada(s): sirven para workloads internos.`
+          : "No hay subnets privadas; toda la práctica está concentrada en segmentos públicos o no definidos.",
+      ],
+      awsLines: [
+        `AWS creará 1 VPC real en ${selectedNode.data?.region || "us-east-1"} con el CIDR indicado.`,
+        hasIgw
+          ? "Se creará y adjuntará un Internet Gateway para permitir salida/entrada pública donde existan rutas y SGs."
+          : "Sin Internet Gateway, la VPC no tendrá salida pública directa.",
+        hasNat
+          ? "Se creará 1 NAT Gateway: tus redes privadas podrán salir a Internet, pero no recibir tráfico entrante."
+          : "Sin NAT Gateway, las subnets privadas tampoco tendrán salida pública a menos que exista otro camino.",
+        sshCidr
+          ? `El Security Group abrirá TCP/22 desde ${sshCidr}.`
+          : "No se abrirá SSH administrativo desde Internet salvo que lo habilites explícitamente.",
+      ],
+      whyItMatters:
+        "La VPC define el límite principal del laboratorio. A partir de aquí se decide segmentación, exposición y conectividad hacia otras redes.",
+    };
+  }
+
+  if (selectedNode.type === TYPE_ROUTER_NODE) {
+    const connectedVpcs = new Set();
+    edges.forEach((edge) => {
+      if (edge.source === selectedNode.id) connectedVpcs.add(edge.target);
+      if (edge.target === selectedNode.id) connectedVpcs.add(edge.source);
+    });
+    const mode = normalizeMode(selectedNode.data?.mode);
+    const routeTable = Array.isArray(selectedNode.data?.routeTable)
+      ? selectedNode.data.routeTable
+      : [];
+    const oneWayRoutes = routeTable.filter(
+      (route) =>
+        route?.sourceVpcId &&
+        route?.destVpcId &&
+        route.sourceVpcId !== route.destVpcId &&
+        !routeTable.some(
+          (candidate) =>
+            candidate?.sourceVpcId === route.destVpcId &&
+            candidate?.destVpcId === route.sourceVpcId,
+        ),
+    ).length;
+
+    return {
+      title: `Router: ${label}`,
+      subtitle: mode === "tgw" ? "Hub central de enrutamiento" : "Conectividad directa entre pares",
+      badges: [
+        makeBadge(mode === "tgw" ? "Modo TGW" : "Modo Peering", mode === "tgw" ? "primary" : "secondary"),
+        makeBadge(`${connectedVpcs.size} VPC(s) conectadas`),
+        makeBadge(`${routeTable.length} ruta(s) declaradas`),
+        makeBadge(oneWayRoutes > 0 ? `${oneWayRoutes} posible(s) retorno(s) faltante(s)` : "Rutas ida/vuelta coherentes", oneWayRoutes > 0 ? "warning" : "success"),
+      ],
+      labLines: [
+        mode === "tgw"
+          ? "En el laboratorio este nodo actúa como un hub: las VPCs envían tráfico al router para alcanzar otras redes."
+          : "En el laboratorio este nodo representa enlaces directos por pares: cada VPC necesita rutas explícitas hacia la otra.",
+        "Las filas de rutas no son decorativas: determinan quién puede hablar con quién.",
+      ],
+      awsLines: [
+        mode === "tgw"
+          ? `AWS implementará 1 Transit Gateway y ${connectedVpcs.size} attachment(s) para las VPCs conectadas.`
+          : "AWS implementará conexiones VPC Peering entre los pares que realmente queden declarados por rutas.",
+        mode === "tgw"
+          ? "Cada ruta hacia TGW enviará tráfico al hub central; luego el hub lo reencamina hacia la VPC destino."
+          : "En peering no existe tránsito implícito: A↔B y B↔C no conectan automáticamente A↔C.",
+      ],
+      whyItMatters:
+        "Aquí se define la diferencia entre una topología punto a punto y una topología centralizada. Ese cambio altera tanto la escalabilidad como la forma de razonar el tráfico.",
+    };
+  }
+
+  if (selectedNode.type === TYPE_SUBNETWORK_NODE) {
+    const subnetType = String(selectedNode.data?.subnetType || "").toLowerCase();
+    const routeTable = selectedNode.data?.routeTable || "main";
+    return {
+      title: `Subnet: ${label}`,
+      subtitle: "Segmento interno dentro de una VPC.",
+      badges: [
+        makeBadge(subnetType === "public" ? "Pública" : "Privada", subnetType === "public" ? "success" : "default"),
+        makeBadge(`CIDR ${selectedNode.data?.cidrBlock || "n/a"}`),
+        makeBadge(`Tabla ${routeTable}`),
+      ],
+      labLines: [
+        subnetType === "public"
+          ? "En el laboratorio esta subnet está pensada para bastions o workloads con salida directa."
+          : "En el laboratorio esta subnet está pensada para workloads internos o menos expuestos.",
+      ],
+      awsLines: [
+        "AWS creará 1 aws_subnet con el CIDR indicado y la asociará a una route table.",
+        subnetType === "public"
+          ? "Será pública solo si su route table apunta a un Internet Gateway."
+          : "Será privada mientras no tenga ruta pública directa.",
+      ],
+      whyItMatters:
+        "La subnet no define conectividad por sí sola; la combinación de route table y Security Group determina su comportamiento real.",
+    };
+  }
+
+  if (
+    selectedNode.type === TYPE_COMPUTER_NODE ||
+    selectedNode.type === TYPE_SERVER_NODE ||
+    selectedNode.type === TYPE_PRINTER_NODE
+  ) {
+    const hasPublicIp = Boolean(selectedNode.data?.associatePublicIp);
+    const keyPair = selectedNode.data?.ssh_access || selectedNode.data?.sshAccess || "n/a";
+    return {
+      title: `Instancia: ${label}`,
+      subtitle: "Host desde donde se materializa la práctica.",
+      badges: [
+        makeBadge(selectedNode.data?.instance_type || "tipo n/a"),
+        makeBadge(hasPublicIp ? "Con IP pública" : "Solo IP privada", hasPublicIp ? "info" : "default"),
+        makeBadge(`Key ${keyPair}`),
+      ],
+      labLines: [
+        "En el laboratorio este nodo representa el equipo final sobre el que harás pruebas o desplegarás servicios.",
+      ],
+      awsLines: [
+        "AWS creará 1 instancia EC2 con la AMI, tipo y key pair definidos.",
+        hasPublicIp
+          ? "Podrás administrarla desde fuera si la ruta pública y el SG lo permiten."
+          : "Solo será alcanzable desde dentro de la red o mediante saltos intermedios.",
+      ],
+      whyItMatters:
+        "Las pruebas de ping y acceso SSH terminan ocurriendo aquí. Si la instancia está mal ubicada o mal protegida, el laboratorio no será verificable.",
+    };
+  }
+
+  return {
+    title: label,
+    subtitle: "Explicación contextual del elemento seleccionado.",
+    badges: [],
+    labLines: ["Selecciona un elemento principal del canvas para ver una lectura pedagógica más precisa."],
+    awsLines: [],
+    whyItMatters: "",
+  };
+};
+
 export function useLearningGuide({
   nodes,
   edges,
   validationState,
   canvasState,
   canvasPlanInfo,
+  selectedNode,
 }) {
   return useMemo(() => {
     const vpcs = nodes.filter((n) => n.type === TYPE_VPC_NODE);
@@ -264,8 +445,9 @@ export function useLearningGuide({
         awsLines,
         conceptMap,
       },
+      focused: buildFocusedGuide({ selectedNode, nodes, edges }),
     };
-  }, [nodes, edges, validationState, canvasState, canvasPlanInfo]);
+  }, [nodes, edges, validationState, canvasState, canvasPlanInfo, selectedNode]);
 }
 
 export default useLearningGuide;

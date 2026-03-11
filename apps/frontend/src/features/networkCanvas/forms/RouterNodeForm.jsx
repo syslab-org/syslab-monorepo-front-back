@@ -450,6 +450,34 @@ export default function RouterNodeForm({
       <Stack direction="row" gap={1} flexWrap="wrap" sx={{ mb: 2 }}>
         <Chip
           size="small"
+          label={normalizedMode === "tgw" ? "AWS: 1 hub central" : "AWS: enlaces por pares"}
+          color={normalizedMode === "tgw" ? "primary" : "secondary"}
+          variant="filled"
+        />
+        <Chip
+          size="small"
+          label={
+            normalizedMode === "tgw"
+              ? "Lectura: el tráfico pasa por el hub"
+              : "Lectura: el tráfico va directo entre VPCs"
+          }
+          variant="outlined"
+        />
+        <Chip
+          size="small"
+          label={
+            normalizedMode === "tgw"
+              ? "Escala mejor con varias VPCs"
+              : "Más simple con pocas VPCs"
+          }
+          color={normalizedMode === "tgw" ? "success" : "default"}
+          variant={normalizedMode === "tgw" ? "filled" : "outlined"}
+        />
+      </Stack>
+
+      <Stack direction="row" gap={1} flexWrap="wrap" sx={{ mb: 2 }}>
+        <Chip
+          size="small"
           label={`Pares con rutas: ${routePairStats.totalPairsWithRoutes}`}
           variant="outlined"
         />
@@ -485,6 +513,24 @@ export default function RouterNodeForm({
 
       <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
         {routingCopy.explainer}
+      </Alert>
+
+      <Alert severity="info" sx={{ mb: 2 }}>
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+          Cómo leer esta tabla
+        </Typography>
+        <Typography variant="caption" display="block" sx={{ mt: 0.4 }}>
+          - Origen: VPC desde la que sale el tráfico.
+        </Typography>
+        <Typography variant="caption" display="block">
+          - Destino: red que quieres alcanzar.
+        </Typography>
+        <Typography variant="caption" display="block">
+          - En peering modelas conectividad directa entre pares.
+        </Typography>
+        <Typography variant="caption" display="block">
+          - En TGW modelas qué destinos deben enviarse al hub central.
+        </Typography>
       </Alert>
 
       {routes.map((r, idx) => {

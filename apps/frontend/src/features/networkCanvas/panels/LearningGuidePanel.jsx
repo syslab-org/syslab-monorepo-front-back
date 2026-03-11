@@ -24,7 +24,7 @@ export default function LearningGuidePanel({
 }) {
   if (!guide) return null;
 
-  const { stats, progress, steps, nextStep, nextAction, issues } = guide;
+  const { stats, progress, steps, nextStep, nextAction, issues, focused } = guide;
   const canOpenValidation = nextStep?.id === "validate";
   const canOpenDeploy = nextStep?.id === "deploy";
 
@@ -70,6 +70,83 @@ export default function LearningGuidePanel({
         <Chip size="small" label={`TGW: ${stats.tgwRouters || 0}`} variant="outlined" />
         <Chip size="small" label={`Instancias: ${stats.instances}`} />
       </Stack>
+
+      {focused && (
+        <>
+          <Divider />
+
+          <Stack spacing={1}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+              Elemento seleccionado
+            </Typography>
+
+            <Box
+              sx={{
+                p: 1.2,
+                borderRadius: 1.5,
+                border: "1px solid",
+                borderColor: "divider",
+                backgroundColor: "background.default",
+              }}
+            >
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                {focused.title}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.25 }}>
+                {focused.subtitle}
+              </Typography>
+
+              {focused.badges?.length > 0 && (
+                <Stack direction="row" spacing={0.8} flexWrap="wrap" sx={{ mt: 1 }}>
+                  {focused.badges.map((badge) => (
+                    <Chip
+                      key={badge.label}
+                      size="small"
+                      label={badge.label}
+                      color={
+                        ["default", "primary", "secondary", "success", "info", "warning", "error"].includes(badge.tone)
+                          ? badge.tone
+                          : "default"
+                      }
+                      variant={badge.tone === "default" ? "outlined" : "filled"}
+                    />
+                  ))}
+                </Stack>
+              )}
+
+              <Stack spacing={1} sx={{ mt: 1.2 }}>
+                <Box>
+                  <Typography variant="caption" sx={{ fontWeight: 700 }} display="block">
+                    Lectura laboratorio
+                  </Typography>
+                  {focused.labLines.map((line) => (
+                    <Typography key={line} variant="caption" display="block" color="text.secondary">
+                      - {line}
+                    </Typography>
+                  ))}
+                </Box>
+
+                <Box>
+                  <Typography variant="caption" sx={{ fontWeight: 700 }} display="block">
+                    Lectura AWS
+                  </Typography>
+                  {focused.awsLines.map((line) => (
+                    <Typography key={line} variant="caption" display="block" color="text.secondary">
+                      - {line}
+                    </Typography>
+                  ))}
+                </Box>
+
+                {focused.whyItMatters && (
+                  <Alert severity="info" variant="outlined" sx={{ py: 0 }}>
+                    <Typography variant="caption">{focused.whyItMatters}</Typography>
+                  </Alert>
+                )}
+              </Stack>
+            </Box>
+          </Stack>
+        </>
+      )}
 
       <Divider />
 

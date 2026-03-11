@@ -7,7 +7,11 @@ from celery.result import AsyncResult
 import boto3
 from botocore.exceptions import ClientError
 from .validators import validate_network_plan
-from .tasks import prueba_larga, process_network_plan, destroy_last_deploy
+from .tasks import (
+    prueba_larga,
+    process_network_plan,
+    destroy_last_deploy,
+)
 from .models import Plan
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
