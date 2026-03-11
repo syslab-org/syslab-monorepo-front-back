@@ -286,6 +286,7 @@ function MainFlow() {
     validationState,
     canvasState,
     canvasPlanInfo,
+    selectedNode,
   });
 
   const location = useLocation();

@@ -9,6 +9,10 @@ import {
   CircularProgress,
   Container,
   Divider,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControlLabel,
   Paper,
   Stack,
@@ -311,6 +315,40 @@ function buildConnectivityScenarios(plan, outputsResponse) {
   });
 }
 
+function buildConsoleTestGuide(plan, outputsResponse, connectivityScenarios) {
+  const payload = safeObject(plan?.payload);
+  const outputs = safeObject(outputsResponse?.outputs);
+  const instanceCatalog = buildInstanceCatalog(outputs);
+  const vpcs = Array.isArray(payload?.vpcs) ? payload.vpcs : [];
+
+  const bastions = vpcs
+    .map((vpc) => {
+      const instances = instanceCatalog.get(vpc.id) || [];
+      const primary = instances[0] || null;
+      const subnet = Array.isArray(vpc.subnets) ? vpc.subnets[0] : null;
+      const declaredInstance = subnet?.instances?.[0] || null;
+      return {
+        vpcId: vpc.id,
+        vpcName: vpc.name || vpc.id,
+        cidr: vpc.cidr_block || 'n/a',
+        region: vpc.region || payload?.vlan?.region || 'us-east-1',
+        availabilityZone: subnet?.availability_zone || 'n/a',
+        instanceName: primary?.instanceName || declaredInstance?.name || 'instancia',
+        instanceId: primary?.instanceId || null,
+        publicIp: primary?.publicIp || null,
+        privateIp: primary?.privateIp || declaredInstance?.ip_address || null,
+        keyPair: declaredInstance?.ssh_access || 'tu-keypair',
+      };
+    })
+    .filter((item) => item.instanceId || item.publicIp);
+
+  return {
+    region: payload?.vlan?.region || bastions[0]?.region || 'us-east-1',
+    bastions,
+    scenarios: connectivityScenarios,
+  };
+}
+
 export default function PlanDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -330,6 +368,7 @@ export default function PlanDetailPage() {
 
   const [logText, setLogText] = useState(null);
   const [lastDestroyTaskId, setLastDestroyTaskId] = useState(null);
+  const [consoleGuideOpen, setConsoleGuideOpen] = useState(false);
 
   const [msg, setMsg] = useState(null); // { text: string, severity: 'success'|'info'|'warning'|'error' }
   const [err, setErr] = useState(null);
@@ -345,6 +384,10 @@ export default function PlanDetailPage() {
   const connectivityScenarios = useMemo(
     () => buildConnectivityScenarios(plan, outputsResponse),
     [plan, outputsResponse],
+  );
+  const consoleGuide = useMemo(
+    () => buildConsoleTestGuide(plan, outputsResponse, connectivityScenarios),
+    [plan, outputsResponse, connectivityScenarios],
   );
   const hasOutputsData = Boolean(
     outputsResponse?.outputs &&
@@ -646,6 +689,11 @@ export default function PlanDetailPage() {
       setDestroying(false);
     }
   };
+
+  const canOpenConsoleGuide =
+    Boolean(plan?.applied) &&
+    connectivityScenarios.length > 0 &&
+    hasOutputsData;
 
   const header = (
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
@@ -973,9 +1021,21 @@ export default function PlanDetailPage() {
                 >
                   {outputsLoading ? 'Cargando…' : 'Cargar outputs para pruebas'}
                 </Button>
+                <Button
+                  variant="contained"
+                  onClick={() => setConsoleGuideOpen(true)}
+                  disabled={!canOpenConsoleGuide}
+                >
+                  Cómo probar en consola
+                </Button>
               </Stack>
 
               <Box sx={{ mt: 2 }}>
+                <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
+                  Abre el modal de instrucciones para ver el paso a paso por consola: cómo entrar por SSH a una bastion
+                  y luego cómo ejecutar los pings entre VPCs.
+                </Alert>
+
                 {!hasOutputsData && (
                   <Alert severity="info" sx={{ mb: 2 }}>
                     Carga outputs para identificar instancias/IPs reales y ejecutar pruebas guiadas.
@@ -1123,6 +1183,148 @@ export default function PlanDetailPage() {
           )}
         </Paper>
       </Stack>
+      <Dialog
+        open={consoleGuideOpen}
+        onClose={() => setConsoleGuideOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Cómo probar conectividad desde consola</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Alert severity="info" variant="outlined">
+              Primero entra por SSH a una bastion pública. Después, desde esa instancia, ejecuta ping a las IPs
+              privadas sugeridas en esta misma pestaña.
+            </Alert>
+
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                1. Requisitos previos
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Necesitas `aws` CLI, acceso a la key pair con la que desplegaste la instancia y que tu IP pública esté
+                permitida en `Allowed SSH CIDR`.
+              </Typography>
+            </Box>
+
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                2. Bastions detectadas en este laboratorio
+              </Typography>
+              <Stack spacing={1}>
+                {consoleGuide.bastions.map((item) => (
+                  <Paper key={`${item.vpcId}:${item.instanceId || item.instanceName}`} variant="outlined" sx={{ p: 1.5 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {item.vpcName}
+                    </Typography>
+                    <Typography variant="caption" display="block" color="text.secondary">
+                      Instancia: {item.instanceName} · instance_id: {item.instanceId || 'n/a'}
+                    </Typography>
+                    <Typography variant="caption" display="block" color="text.secondary">
+                      IP pública: {item.publicIp || 'n/a'} · IP privada: {item.privateIp || 'n/a'}
+                    </Typography>
+                    <Typography variant="caption" display="block" color="text.secondary">
+                      Región/AZ: {item.region} / {item.availabilityZone} · Key pair: {item.keyPair}
+                    </Typography>
+                  </Paper>
+                ))}
+              </Stack>
+            </Box>
+
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                3. Si ya tienes el archivo `.pem`, conéctate por SSH
+              </Typography>
+              <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'background.default' }}>
+                <Box
+                  component="pre"
+                  sx={{
+                    m: 0,
+                    whiteSpace: 'pre-wrap',
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                    fontSize: 12,
+                  }}
+                >
+{`chmod 400 ~/.ssh/tesis-key-new.pem
+ssh -i ~/.ssh/tesis-key-new.pem ec2-user@${consoleGuide.bastions[0]?.publicIp || 'IP_PUBLICA_BASTION'}`}
+                </Box>
+              </Paper>
+            </Box>
+
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                4. Si no tienes la llave privada, usa EC2 Instance Connect
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                AWS no permite descargar la private key de una key pair existente. En ese caso, puedes inyectar una
+                clave pública temporal y entrar con una llave efímera.
+              </Typography>
+              <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'background.default' }}>
+                <Box
+                  component="pre"
+                  sx={{
+                    m: 0,
+                    whiteSpace: 'pre-wrap',
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                    fontSize: 12,
+                  }}
+                >
+{`TMPK=/tmp/eic_lab
+ssh-keygen -t ed25519 -N '' -f "$TMPK"
+
+aws ec2-instance-connect send-ssh-public-key \\
+  --region ${consoleGuide.region} \\
+  --instance-id ${consoleGuide.bastions[0]?.instanceId || 'i-xxxxxxxx'} \\
+  --availability-zone ${consoleGuide.bastions[0]?.availabilityZone || 'us-east-1a'} \\
+  --instance-os-user ec2-user \\
+  --ssh-public-key file://"$TMPK.pub"
+
+ssh -i "$TMPK" ec2-user@${consoleGuide.bastions[0]?.publicIp || 'IP_PUBLICA_BASTION'}`}
+                </Box>
+              </Paper>
+            </Box>
+
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                5. Ejecuta los pings desde la bastion
+              </Typography>
+              <Stack spacing={1}>
+                {consoleGuide.scenarios.flatMap((scenario) =>
+                  scenario.checks.map((check) => (
+                    <Paper key={`${scenario.aId}:${scenario.bId}:${check.title}`} variant="outlined" sx={{ p: 1.5 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {check.title}
+                      </Typography>
+                      <Typography variant="caption" display="block" color="text.secondary" sx={{ mb: 0.75 }}>
+                        {check.context}
+                      </Typography>
+                      <Box
+                        component="pre"
+                        sx={{
+                          m: 0,
+                          whiteSpace: 'pre-wrap',
+                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                          fontSize: 12,
+                        }}
+                      >
+                        {check.command}
+                      </Box>
+                    </Paper>
+                  )),
+                )}
+              </Stack>
+            </Box>
+
+            <Alert severity="success" variant="outlined">
+              Resultado esperado: cada par conectado debería responder ping en ida y retorno. Si falla, revisa route
+              tables, Security Groups, key pair y `Allowed SSH CIDR`.
+            </Alert>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConsoleGuideOpen(false)}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }
