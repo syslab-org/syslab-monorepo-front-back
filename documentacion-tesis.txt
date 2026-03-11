@@ -112,6 +112,9 @@ Este parámetro define qué IP o red externa puede iniciar SSH hacia las
 instancias del laboratorio. Su traducción técnica es una regla de entrada
 TCP/22 en el Security Group.
 
+Si el usuario lo define en el formulario, el valor se conserva en el payload y
+termina materializándose como una regla de ingreso para SSH.
+
 5.7 Internet Gateway
 
 El Internet Gateway habilita conectividad entre una VPC e Internet. Su
@@ -123,6 +126,13 @@ posible acceso externo.
 El NAT Gateway permite salida a Internet desde redes privadas sin convertirlas
 en destinos expuestos. Su valor pedagógico está en separar acceso saliente de
 acceso entrante.
+
+Cuando el formulario permite especificar una Elastic IP, el valor útil no es la
+IP pública en sí, sino el Allocation ID de una EIP ya reservada. Si el campo se
+deja vacío, AWS asigna una EIP nueva al crear el NAT.
+Por lo tanto, durante la creación del canvas debe explicitarse que un valor
+como `54.x.x.x` es incorrecto en ese campo, mientras que `eipalloc-...` sí es
+la referencia válida.
 
 5.9 VPC Peering
 
@@ -293,6 +303,12 @@ en una herramienta de aprendizaje estructurado.
 - El TGW requiere rutas correctas; dibujarlo no garantiza conectividad.
 - NAT Gateway tiene costo y debe justificarse pedagógica u operacionalmente.
 - SSH depende de la key correcta, del SG y del CIDR autorizado.
+- Un APPLY real puede generar costo monetario mientras existan recursos como
+  EC2, NAT Gateway, TGW o direcciones IPv4 públicas.
+- Destroy no debe liberar automáticamente recursos externos aportados por el
+  usuario, como una Elastic IP preexistente usada por un NAT.
+- El `DHCP option set` por defecto de AWS puede seguir visible en consola y no
+  implica necesariamente que el stack del laboratorio siga desplegado.
 
 
 ====================================================================

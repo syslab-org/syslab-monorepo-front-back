@@ -200,6 +200,191 @@ function buildInstanceCatalog(outputs) {
   return byVpc;
 }
 
+function buildVpcInfraCatalog(plan, outputsResponse) {
+  const payload = safeObject(plan?.payload);
+  const outputs = safeObject(outputsResponse?.outputs);
+  const vpcs = Array.isArray(payload?.vpcs) ? payload.vpcs : [];
+
+  const natGatewayIds = safeObject(outputs?.nat_gateway_ids);
+  const natEipAllocationIds = safeObject(outputs?.nat_eip_allocation_ids);
+  const igwIds = safeObject(outputs?.igw_ids);
+  const vpcIds = safeObject(outputs?.vpc_ids);
+
+  return vpcs.map((vpc) => ({
+    logicalVpcId: vpc.id,
+    name: vpc.name || vpc.id,
+    actualVpcId: vpcIds[vpc.id] || null,
+    igwId: igwIds[vpc.id] || null,
+    natGatewayId: natGatewayIds[vpc.id] || null,
+    natEipAllocationId: natEipAllocationIds[vpc.id] || null,
+  }));
+}
+
+function buildPlanAdvisories(plan, outputsResponse, lifecycle) {
+  const payload = safeObject(plan?.payload);
+  const outputs = safeObject(outputsResponse?.outputs);
+  const vpcs = Array.isArray(payload?.vpcs) ? payload.vpcs : [];
+  const links = Array.isArray(payload?.links) ? payload.links : [];
+  const routers = Array.isArray(payload?.routers) ? payload.routers : [];
+
+  const publicIps = safeObject(outputs?.instance_public_ips);
+  const publicIpv4InUse = Object.values(publicIps).filter((value) => Boolean(String(value || '').trim())).length;
+
+  const instanceCount = vpcs.reduce(
+    (acc, vpc) =>
+      acc +
+      (Array.isArray(vpc?.subnets) ? vpc.subnets : []).reduce(
+        (subAcc, subnet) => subAcc + ((Array.isArray(subnet?.instances) ? subnet.instances.length : 0)),
+        0,
+      ),
+    0,
+  );
+  const natVpcs = vpcs.filter((vpc) => Boolean(vpc?.nat_gateway?.enabled));
+  const natCount = natVpcs.length;
+  const providedNatEips = natVpcs
+    .map((vpc) => String(vpc?.nat_gateway?.elastic_ip || '').trim())
+    .filter(Boolean);
+  const tgwCount = routers.filter((router) => String(router?.type || '').toLowerCase() === 'tgw').length;
+  const tgwAttachmentCount = links.filter((link) => String(link?.type || '').toLowerCase() === 'tgw-attach').length;
+  const peeringCount = links.filter((link) => String(link?.type || '').toLowerCase() === 'peering').length;
+  const publicSubnetCount = vpcs.reduce(
+    (acc, vpc) =>
+      acc +
+      (Array.isArray(vpc?.subnets) ? vpc.subnets : []).filter(
+        (subnet) => String(subnet?.subnet_type || '').toLowerCase() === 'public',
+      ).length,
+    0,
+  );
+  const privateSubnetCount = vpcs.reduce(
+    (acc, vpc) =>
+      acc +
+      (Array.isArray(vpc?.subnets) ? vpc.subnets : []).filter(
+        (subnet) => String(subnet?.subnet_type || '').toLowerCase() === 'private',
+      ).length,
+    0,
+  );
+
+  const costs = [];
+  if (lifecycle.key === 'ACTIVE' || lifecycle.key === 'DEPLOYING' || lifecycle.key === 'FAILED_REAL_APPLY') {
+    costs.push({
+      severity: 'warning',
+      text: 'Este plan usa APPLY real o quedó parcialmente aplicado: puede generar costo monetario en AWS mientras existan recursos activos.',
+    });
+  } else if (lifecycle.key === 'PREVIEW' || lifecycle.key === 'NOT_APPLIED') {
+    costs.push({
+      severity: 'info',
+      text: 'En modo PLAN/preview no se crean recursos reales, por lo que este plan no debería generar costo directo en AWS.',
+    });
+  } else if (lifecycle.key === 'DESTROYED') {
+    costs.push({
+      severity: 'success',
+      text: 'El stack principal figura destruido. Si no dejaste recursos externos o residuales, este plan ya no debería seguir generando costo principal.',
+    });
+  }
+
+  if (instanceCount > 0) {
+    costs.push({
+      severity: lifecycle.key === 'ACTIVE' ? 'warning' : 'info',
+      text: `${instanceCount} instancia(s) EC2 declarada(s): generan costo de compute y, normalmente, de almacenamiento mientras existan.`,
+    });
+  }
+  if (natCount > 0) {
+    costs.push({
+      severity: lifecycle.key === 'ACTIVE' ? 'warning' : 'info',
+      text: `${natCount} NAT Gateway(s): AWS cobra por hora aprovisionada y por tráfico procesado mientras estén activos.`,
+    });
+  }
+  if (publicIpv4InUse > 0) {
+    costs.push({
+      severity: lifecycle.key === 'ACTIVE' ? 'warning' : 'info',
+      text: `${publicIpv4InUse} IPv4 pública(s) en uso según outputs: AWS cobra las IPv4 públicas en uso.`,
+    });
+  }
+  if (tgwCount > 0 || tgwAttachmentCount > 0) {
+    costs.push({
+      severity: lifecycle.key === 'ACTIVE' ? 'warning' : 'info',
+      text: `${tgwCount} TGW router(s) y ${tgwAttachmentCount} attachment(s): Transit Gateway agrega cobro por attachment/hora y por tráfico procesado.`,
+    });
+  }
+  if (peeringCount > 0) {
+    costs.push({
+      severity: 'info',
+      text: `${peeringCount} peering link(s): crear el peering no agrega cargo fijo, pero el tráfico por peering puede generar cobros según el patrón de transferencia.`,
+    });
+  }
+  costs.push({
+    severity: 'info',
+    text: 'La VPC en sí no tiene cargo adicional por existir, pero algunos componentes asociados sí lo tienen.',
+  });
+
+  const residuals = [];
+  if (providedNatEips.length > 0) {
+    residuals.push({
+      severity: 'warning',
+      text: `${providedNatEips.length} EIP(s) fue/fueron aportada(s) manualmente al NAT. Destroy no las libera por seguridad; pueden seguir generando cobro por IPv4 pública mientras permanezcan reservadas en tu cuenta.`,
+    });
+  } else if (natCount > 0) {
+    residuals.push({
+      severity: 'info',
+      text: 'Si el NAT usó una EIP autogenerada por el stack, Destroy intenta eliminar tanto el NAT como esa EIP. Si aún ves una Elastic IP, revisa si pertenece a otro recurso o a un deploy previo.',
+    });
+  }
+  residuals.push({
+    severity: 'info',
+    text: 'Los outputs guardados en esta página son históricos para auditoría/debug. No son recursos vivos en AWS y no generan costo por sí mismos.',
+  });
+  residuals.push({
+    severity: 'info',
+    text: 'AWS mantiene un DHCP option set por defecto por región. Este proyecto no crea uno dedicado, así que verlo en consola no implica que el destroy haya dejado un residuo de este stack.',
+  });
+  if (lifecycle.key === 'FAILED_REAL_APPLY') {
+    residuals.push({
+      severity: 'warning',
+      text: 'Si un APPLY real falla, puede quedar infraestructura parcial. En ese estado debes ejecutar Destroy y revisar logs antes de volver a aplicar.',
+    });
+  }
+
+  const pedagogy = [];
+  if (natCount > 0 && privateSubnetCount > 0) {
+    pedagogy.push({
+      severity: 'info',
+      text: 'Pedagógicamente, este laboratorio separa salida y exposición: NAT permite salida desde subnets privadas, pero no acceso entrante desde Internet.',
+    });
+  }
+  if (publicSubnetCount > 0 && privateSubnetCount > 0) {
+    pedagogy.push({
+      severity: 'info',
+      text: `Tienes ${publicSubnetCount} subnet(s) pública(s) y ${privateSubnetCount} privada(s): es un buen caso para observar bastion pública + workload privada.`,
+    });
+  }
+  if (providedNatEips.length > 0) {
+    pedagogy.push({
+      severity: 'info',
+      text: 'Usar una EIP propia fija la identidad de salida del NAT, pero también deja su ciclo de vida bajo responsabilidad del operador.',
+    });
+  }
+  if (peeringCount > 0) {
+    pedagogy.push({
+      severity: 'info',
+      text: 'El peering enseña conectividad punto a punto: necesitas rutas explícitas de ida y vuelta para obtener comunicación completa.',
+    });
+  }
+  if (tgwCount > 0) {
+    pedagogy.push({
+      severity: 'info',
+      text: 'Transit Gateway enseña un modelo hub-and-spoke: simplifica topologías multipunto, pero añade costo y una capa adicional de routing.',
+    });
+  }
+  if (instanceCount === 0) {
+    pedagogy.push({
+      severity: 'info',
+      text: 'Sin instancias, este plan sirve para estudiar topología y rutas, pero no para validar conectividad extremo a extremo dentro del laboratorio.',
+    });
+  }
+
+  return { costs, residuals, pedagogy };
+}
+
 const pairKey = (a, b) => (a < b ? `${a}::${b}` : `${b}::${a}`);
 
 function buildConnectivityScenarios(plan, outputsResponse) {
@@ -385,9 +570,17 @@ export default function PlanDetailPage() {
     () => buildConnectivityScenarios(plan, outputsResponse),
     [plan, outputsResponse],
   );
+  const vpcInfraCatalog = useMemo(
+    () => buildVpcInfraCatalog(plan, outputsResponse),
+    [plan, outputsResponse],
+  );
   const consoleGuide = useMemo(
     () => buildConsoleTestGuide(plan, outputsResponse, connectivityScenarios),
     [plan, outputsResponse, connectivityScenarios],
+  );
+  const planAdvisories = useMemo(
+    () => buildPlanAdvisories(plan, outputsResponse, lifecycle),
+    [plan, outputsResponse, lifecycle],
   );
   const hasOutputsData = Boolean(
     outputsResponse?.outputs &&
@@ -936,6 +1129,56 @@ export default function PlanDetailPage() {
                   </Stack>
                 </Stack>
               </Paper>
+
+              <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Costo, residuos y lectura técnica
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                  Este bloque se calcula desde el payload, los outputs cargados y el estado actual del plan.
+                </Typography>
+
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                      1. Costo potencial
+                    </Typography>
+                    <Stack spacing={1}>
+                      {planAdvisories.costs.map((item, idx) => (
+                        <Alert key={`cost-${idx}`} severity={item.severity} variant="outlined">
+                          {item.text}
+                        </Alert>
+                      ))}
+                    </Stack>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                      2. Qué puede quedar tras Destroy
+                    </Typography>
+                    <Stack spacing={1}>
+                      {planAdvisories.residuals.map((item, idx) => (
+                        <Alert key={`residual-${idx}`} severity={item.severity} variant="outlined">
+                          {item.text}
+                        </Alert>
+                      ))}
+                    </Stack>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                      3. Lectura pedagógica y técnica
+                    </Typography>
+                    <Stack spacing={1}>
+                      {planAdvisories.pedagogy.map((item, idx) => (
+                        <Alert key={`pedagogy-${idx}`} severity={item.severity} variant="outlined">
+                          {item.text}
+                        </Alert>
+                      ))}
+                    </Stack>
+                  </Box>
+                </Stack>
+              </Paper>
             </Box>
           )}
 
@@ -982,6 +1225,48 @@ export default function PlanDetailPage() {
                         El backend respondió correctamente, pero no hay outputs guardados para este plan.
                       </Alert>
                     ) : null}
+
+                    {vpcInfraCatalog.length > 0 && (
+                      <Box sx={{ mt: 2 }}>
+                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                          Infraestructura destacada por VPC
+                        </Typography>
+                        <Stack spacing={1.5}>
+                          {vpcInfraCatalog.map((item) => (
+                            <Paper key={item.logicalVpcId} variant="outlined" sx={{ p: 2 }}>
+                              <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                                {item.name}
+                              </Typography>
+                              <Stack direction="row" spacing={1} flexWrap="wrap">
+                                <Chip size="small" label={`VPC: ${item.actualVpcId || '—'}`} variant="outlined" />
+                                <Chip
+                                  size="small"
+                                  label={item.igwId ? `IGW: ${item.igwId}` : 'IGW: —'}
+                                  color={item.igwId ? 'primary' : 'default'}
+                                  variant={item.igwId ? 'filled' : 'outlined'}
+                                />
+                                <Chip
+                                  size="small"
+                                  label={item.natGatewayId ? `NAT: ${item.natGatewayId}` : 'NAT: —'}
+                                  color={item.natGatewayId ? 'secondary' : 'default'}
+                                  variant={item.natGatewayId ? 'filled' : 'outlined'}
+                                />
+                                <Chip
+                                  size="small"
+                                  label={
+                                    item.natEipAllocationId
+                                      ? `NAT EIP: ${item.natEipAllocationId}`
+                                      : 'NAT EIP: —'
+                                  }
+                                  color={item.natEipAllocationId ? 'warning' : 'default'}
+                                  variant={item.natEipAllocationId ? 'filled' : 'outlined'}
+                                />
+                              </Stack>
+                            </Paper>
+                          ))}
+                        </Stack>
+                      </Box>
+                    )}
 
                     <Paper
                       variant="outlined"

@@ -72,6 +72,7 @@ class SubnetSerializer(serializers.Serializer):
     cidr_block = serializers.CharField()
     availability_zone = serializers.CharField()
     subnet_type = serializers.CharField()  # "public" | "private"
+    map_public_ip_on_launch = serializers.BooleanField(required=False, default=False)
     public_ip = serializers.BooleanField(required=False, default=False)
     route_table = serializers.CharField(required=False, default="main")
     instances = serializers.ListField(required=False)
@@ -94,6 +95,16 @@ class NatGwSerializer(serializers.Serializer):
     public_subnet = serializers.CharField(required=False, allow_blank=True, default="")
     elastic_ip = serializers.CharField(required=False, allow_blank=True, default="")
 
+    def validate_elastic_ip(self, value):
+        value = (value or "").strip()
+        if not value:
+            return ""
+        if not value.startswith("eipalloc-"):
+            raise serializers.ValidationError(
+                "Elastic IP must be an allocation ID (e.g. eipalloc-0123456789abcdef0)."
+            )
+        return value
+
 
 class VpcSerializer(serializers.Serializer):
     id = serializers.CharField()
@@ -101,6 +112,7 @@ class VpcSerializer(serializers.Serializer):
     region = serializers.CharField()
     cidr_block = serializers.CharField()
     internet_gateway = serializers.BooleanField(required=False, default=False)
+    allowed_ssh_cidr = serializers.CharField(required=False, allow_blank=True, default="")
     nat_gateway = NatGwSerializer(required=False)
     subnets = SubnetSerializer(many=True)
     route_tables = RouteTableSerializer(many=True, required=False)
