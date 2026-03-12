@@ -64,7 +64,7 @@ const DashboardRoutes = () => {
             path="/plans"
             element={
               <ProtectedRoute
-                allowedRoles={[USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER]}>
+                allowedRoles={[USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER, USER_ROL_STUDENT]}>
                 <PlanListPage />
               </ProtectedRoute>
             }
