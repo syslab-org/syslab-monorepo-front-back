@@ -362,10 +362,14 @@ export default function RouterNodeForm({
   };
 
   return (
-    <Box sx={{ minWidth: 560 }}>
-      <Typography variant="h6" gutterBottom>
-        Router
-      </Typography>
+    <Box sx={{ minWidth: 560 }} className="pt-node-form">
+      <Box className="pt-node-form__header">
+        <Typography className="pt-node-form__eyebrow">routing node</Typography>
+        <Typography className="pt-node-form__title">Router</Typography>
+        <Typography className="pt-node-form__subtitle">
+          Define routing mode and traffic policies between connected VPCs.
+        </Typography>
+      </Box>
 
       <TextField
         fullWidth
@@ -617,7 +621,7 @@ export default function RouterNodeForm({
         );
       })}
 
-      <Stack direction="row" gap={1} sx={{ mt: 1 }}>
+      <Stack direction="row" gap={1} sx={{ mt: 1 }} className="pt-node-form__actions">
         <Button variant="outlined" onClick={addRoute} disabled={!canAdd}>
           + Ruta
         </Button>

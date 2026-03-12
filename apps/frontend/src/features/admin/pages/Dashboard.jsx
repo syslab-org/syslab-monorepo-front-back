@@ -230,7 +230,6 @@ function Dashboard() {
                 display: "block",
                 color: "inherit",
                 textDecoration: "none",
-                textDecoration: "none",
                 transition: "all .2s ease",
                 borderLeft: (theme) => `4px solid ${theme.palette.primary.main}`,
                 "&:hover": {
@@ -276,7 +275,6 @@ function Dashboard() {
                 cursor: "pointer",
                 display: "block",
                 color: "inherit",
-                textDecoration: "none",
                 textDecoration: "none",
                 transition: "all .2s ease",
                 borderLeft: (theme) => `4px solid ${theme.palette.secondary.main}`,

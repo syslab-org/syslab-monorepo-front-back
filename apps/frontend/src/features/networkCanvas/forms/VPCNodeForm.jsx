@@ -180,7 +180,14 @@ const VPCNodeForm = ({
     enableNat && (!hasPublicSubnets || !natSubnet || natSubnet === "");
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <form onSubmit={handleSubmit(onSubmit)} className="pt-node-form">
+      <Box className="pt-node-form__header">
+        <Typography className="pt-node-form__eyebrow">vpc node</Typography>
+        <Typography className="pt-node-form__title">Virtual Private Cloud</Typography>
+        <Typography className="pt-node-form__subtitle">
+          Define network range, internet access and egress behavior for this VPC.
+        </Typography>
+      </Box>
       {/* Snackbar vistoso */}
       <Snackbar
         open={snackOpen}
@@ -210,7 +217,7 @@ const VPCNodeForm = ({
           <MenuItem value={CLOUD_AWS_VALUE}>{CLOUD_AWS_LABEL}</MenuItem>
         </Select>
         {errors.cloudProvider && (
-          <p style={{ color: "red" }}>{errors.cloudProvider.message}</p>
+          <FormHelperText error>{errors.cloudProvider.message}</FormHelperText>
         )}
       </FormControl>
 
@@ -249,7 +256,7 @@ const VPCNodeForm = ({
           <MenuItem value="eu-west-1">EU (Ireland)</MenuItem>
         </Select>
         {errors.region && (
-          <p style={{ color: "red" }}>{errors.region.message}</p>
+          <FormHelperText error>{errors.region.message}</FormHelperText>
         )}
       </FormControl>
 
@@ -266,9 +273,9 @@ const VPCNodeForm = ({
           <MenuItem value={false}>Disabled</MenuItem>
         </Select>
         {errors.internetGateway && (
-          <p style={{ color: "red", marginTop: 4 }}>
+          <FormHelperText error>
             {errors.internetGateway.message}
-          </p>
+          </FormHelperText>
         )}
       </FormControl>
 
@@ -440,7 +447,7 @@ const VPCNodeForm = ({
       />
 
       {/* Botones */}
-      <Box sx={{ mt: 1.5 }}>
+      <Box className="pt-node-form__actions">
         <Tooltip
           arrow
           disableHoverListener={!disableSubmitForNat}
@@ -462,7 +469,7 @@ const VPCNodeForm = ({
           </span>
         </Tooltip>
 
-        <Button onClick={deleteNode} sx={{ ml: 1 }}>
+        <Button onClick={deleteNode} color="error">
           Delete Node
         </Button>
 

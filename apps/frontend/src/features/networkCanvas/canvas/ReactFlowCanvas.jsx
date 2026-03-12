@@ -1,4 +1,4 @@
-import { ReactFlow, Background, Controls } from "@xyflow/react";
+import { ReactFlow, Background, Controls, ConnectionMode } from "@xyflow/react";
 import { useMemo } from "react";
 
 function ReactFlowCanvas({
@@ -54,6 +54,8 @@ function ReactFlowCanvas({
             onConnectEnd={onConnectEnd}
             fitViewOptions={{ padding: 0.2 }}
             isValidConnection={isValidConnection}
+            connectionMode={ConnectionMode.Loose}
+            connectionRadius={22}
             nodeTypes={memoNodeTypes}
             nodeOrigin={[0, 0]}
             style={{
