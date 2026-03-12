@@ -22,23 +22,12 @@ class PlanListSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_simulate_only(self, obj):
-        payload = getattr(obj, "payload", None) or {}
-        if isinstance(payload, dict):
-            return bool(payload.get("simulate_only", True))
-        return True
+        if bool(getattr(obj, "applied", False)):
+            return False
+        return bool(getattr(obj, "payload_simulate_only", True))
 
     def get_can_destroy(self, obj):
-        # Regla única: solo se puede destruir si el plan terminó OK, fue aplicado real,
-        # y NO está en modo simulación.
-        if getattr(obj, "status", None) != Plan.Status.SUCCESS:
-            return False
-        if not bool(getattr(obj, "applied", False)):
-            return False
-        if self.get_simulate_only(obj):
-            return False
-        if getattr(obj, "last_action", "") == "destroy":
-            return False
-        return True
+        return bool(getattr(obj, "can_destroy_now", False))
 
 
 class PlanDetailSerializer(serializers.ModelSerializer):
@@ -70,23 +59,12 @@ class PlanDetailSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_simulate_only(self, obj):
-        payload = getattr(obj, "payload", None) or {}
-        if isinstance(payload, dict):
-            return bool(payload.get("simulate_only", True))
-        return True
+        if bool(getattr(obj, "applied", False)):
+            return False
+        return bool(getattr(obj, "payload_simulate_only", True))
 
     def get_can_destroy(self, obj):
-        # Regla única: solo se puede destruir si el plan terminó OK, fue aplicado real,
-        # y NO está en modo simulación.
-        if getattr(obj, "status", None) != Plan.Status.SUCCESS:
-            return False
-        if not bool(getattr(obj, "applied", False)):
-            return False
-        if self.get_simulate_only(obj):
-            return False
-        if getattr(obj, "last_action", "") == "destroy":
-            return False
-        return True
+        return bool(getattr(obj, "can_destroy_now", False))
 
 
 class SubnetSerializer(serializers.Serializer):
@@ -94,12 +72,14 @@ class SubnetSerializer(serializers.Serializer):
     cidr_block = serializers.CharField()
     availability_zone = serializers.CharField()
     subnet_type = serializers.CharField()  # "public" | "private"
+    map_public_ip_on_launch = serializers.BooleanField(required=False, default=False)
     public_ip = serializers.BooleanField(required=False, default=False)
     route_table = serializers.CharField(required=False, default="main")
     instances = serializers.ListField(required=False)
 
 
 class RouteSerializer(serializers.Serializer):
+    name = serializers.CharField(required=False, allow_blank=True, default="")
     dest_cidr = serializers.CharField()
     target = serializers.CharField()  # "local" | "router-<id>" (para peering)
     via_router_id = serializers.CharField(required=False, allow_null=True)
@@ -115,6 +95,16 @@ class NatGwSerializer(serializers.Serializer):
     public_subnet = serializers.CharField(required=False, allow_blank=True, default="")
     elastic_ip = serializers.CharField(required=False, allow_blank=True, default="")
 
+    def validate_elastic_ip(self, value):
+        value = (value or "").strip()
+        if not value:
+            return ""
+        if not value.startswith("eipalloc-"):
+            raise serializers.ValidationError(
+                "Elastic IP must be an allocation ID (e.g. eipalloc-0123456789abcdef0)."
+            )
+        return value
+
 
 class VpcSerializer(serializers.Serializer):
     id = serializers.CharField()
@@ -122,6 +112,7 @@ class VpcSerializer(serializers.Serializer):
     region = serializers.CharField()
     cidr_block = serializers.CharField()
     internet_gateway = serializers.BooleanField(required=False, default=False)
+    allowed_ssh_cidr = serializers.CharField(required=False, allow_blank=True, default="")
     nat_gateway = NatGwSerializer(required=False)
     subnets = SubnetSerializer(many=True)
     route_tables = RouteTableSerializer(many=True, required=False)
@@ -130,6 +121,10 @@ class VpcSerializer(serializers.Serializer):
 class LinkRoutesDirSerializer(serializers.Serializer):
     a_to_b = RouteSerializer(many=True, required=False)
     b_to_a = RouteSerializer(many=True, required=False)
+
+
+class LinkTgwRoutesSerializer(serializers.Serializer):
+    to_router = RouteSerializer(many=True, required=False)
 
 
 class LinkSerializer(serializers.Serializer):
@@ -147,6 +142,7 @@ class LinkSerializer(serializers.Serializer):
     router_id = serializers.CharField(required=False)
     vpc_id = serializers.CharField(required=False)
     subnet_names = serializers.ListField(child=serializers.CharField(), required=False)
+    routes = LinkTgwRoutesSerializer(required=False)
 
     def validate(self, data):
         t = data.get("type")
@@ -172,6 +168,12 @@ class LinkSerializer(serializers.Serializer):
         return data
 
 
+class RouterSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    name = serializers.CharField(required=False, allow_blank=True, default="")
+    type = serializers.ChoiceField(choices=["tgw"])
+
+
 class VlanSerializer(serializers.Serializer):
     name = serializers.CharField(required=False, allow_blank=True, default="")
     region = serializers.CharField(required=False, allow_blank=True, default="")
@@ -184,3 +186,4 @@ class MultiPlanSerializer(serializers.Serializer):
     vlan = VlanSerializer(required=False)
     vpcs = VpcSerializer(many=True)
     links = LinkSerializer(many=True, required=False)
+    routers = RouterSerializer(many=True, required=False)

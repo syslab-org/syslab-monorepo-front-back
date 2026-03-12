@@ -1,0 +1,59 @@
+{
+  "name": "scenario-07-overlapping-subnets-invalid",
+  "cloud": "aws",
+  "simulate_only": true,
+  "vlan": {
+    "name": "lab-overlap-invalid",
+    "region": "us-east-1",
+    "master_cidr": "10.80.0.0/16"
+  },
+  "vpcs": [
+    {
+      "id": "vpc-a-07",
+      "name": "VPC-A",
+      "region": "us-east-1",
+      "cidr_block": "10.80.0.0/16",
+      "allowed_ssh_cidr": "190.20.221.154/32",
+      "internet_gateway": true,
+      "nat_gateway": {
+        "enabled": false,
+        "public_subnet": "",
+        "elastic_ip": ""
+      },
+      "route_tables": [
+        {
+          "name": "public",
+          "routes": [
+            {
+              "name": "igw-default",
+              "target": "igw",
+              "dest_cidr": "0.0.0.0/0"
+            }
+          ]
+        }
+      ],
+      "subnets": [
+        {
+          "name": "public-a1",
+          "cidr_block": "10.80.1.0/24",
+          "subnet_type": "public",
+          "availability_zone": "us-east-1a",
+          "map_public_ip_on_launch": true,
+          "route_table": "public",
+          "instances": []
+        },
+        {
+          "name": "public-a2-overlap",
+          "cidr_block": "10.80.1.128/25",
+          "subnet_type": "public",
+          "availability_zone": "us-east-1b",
+          "map_public_ip_on_launch": true,
+          "route_table": "public",
+          "instances": []
+        }
+      ]
+    }
+  ],
+  "links": [],
+  "routers": []
+}

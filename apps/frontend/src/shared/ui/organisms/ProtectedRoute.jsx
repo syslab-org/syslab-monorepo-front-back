@@ -5,9 +5,10 @@ import { useAuth } from "@/app/providers/AuthContext";
 
 // eslint-disable-next-line react/prop-types
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  const { user, roleUser } = useAuth();
+  const { user, roleUser, loading } = useAuth();
   const location = useLocation();
 
+  if (loading) return null;
 
 
   // Verificar si el usuario no está autenticado

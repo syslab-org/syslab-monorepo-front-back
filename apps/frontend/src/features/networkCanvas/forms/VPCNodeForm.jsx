@@ -4,12 +4,14 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   FormControl,
   FormControlLabel,
   FormHelperText,
   InputLabel,
   MenuItem,
   Select,
+  Stack,
   Snackbar,
   Switch,
   TextField,
@@ -84,6 +86,8 @@ const VPCNodeForm = ({
 
   const enableNat = watch("enableNatGateway");
   const natSubnet = watch("natGatewayPublicSubnet");
+  const internetGatewayEnabled = watch("internetGateway");
+  const allowedSshCidr = watch("allowedSshCidr");
 
   // Cuando cambia el nodeData (o props clave), refresca el form SIN perder NAT fields
   useEffect(() => {
@@ -176,7 +180,14 @@ const VPCNodeForm = ({
     enableNat && (!hasPublicSubnets || !natSubnet || natSubnet === "");
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <form onSubmit={handleSubmit(onSubmit)} className="pt-node-form">
+      <Box className="pt-node-form__header">
+        <Typography className="pt-node-form__eyebrow">vpc node</Typography>
+        <Typography className="pt-node-form__title">Virtual Private Cloud</Typography>
+        <Typography className="pt-node-form__subtitle">
+          Define network range, internet access and egress behavior for this VPC.
+        </Typography>
+      </Box>
       {/* Snackbar vistoso */}
       <Snackbar
         open={snackOpen}
@@ -206,7 +217,7 @@ const VPCNodeForm = ({
           <MenuItem value={CLOUD_AWS_VALUE}>{CLOUD_AWS_LABEL}</MenuItem>
         </Select>
         {errors.cloudProvider && (
-          <p style={{ color: "red" }}>{errors.cloudProvider.message}</p>
+          <FormHelperText error>{errors.cloudProvider.message}</FormHelperText>
         )}
       </FormControl>
 
@@ -245,7 +256,7 @@ const VPCNodeForm = ({
           <MenuItem value="eu-west-1">EU (Ireland)</MenuItem>
         </Select>
         {errors.region && (
-          <p style={{ color: "red" }}>{errors.region.message}</p>
+          <FormHelperText error>{errors.region.message}</FormHelperText>
         )}
       </FormControl>
 
@@ -262,11 +273,53 @@ const VPCNodeForm = ({
           <MenuItem value={false}>Disabled</MenuItem>
         </Select>
         {errors.internetGateway && (
-          <p style={{ color: "red", marginTop: 4 }}>
+          <FormHelperText error>
             {errors.internetGateway.message}
-          </p>
+          </FormHelperText>
         )}
       </FormControl>
+
+      <Alert severity="info" variant="outlined" sx={{ mt: 1, mb: 1.5 }}>
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+          Qué significa esta VPC
+        </Typography>
+        <Typography variant="caption" display="block" sx={{ mt: 0.4 }}>
+          - El CIDR define el rango principal de la red.
+        </Typography>
+        <Typography variant="caption" display="block">
+          - IGW habilita salida pública directa donde existan rutas adecuadas.
+        </Typography>
+        <Typography variant="caption" display="block">
+          - NAT da salida a subnets privadas, pero no acceso entrante desde Internet.
+        </Typography>
+        <Typography variant="caption" display="block">
+          - Si defines una Elastic IP para NAT, debe ser un Allocation ID real de AWS (`eipalloc-...`), no una IP pública.
+        </Typography>
+        <Typography variant="caption" display="block">
+          - Allowed SSH CIDR abre TCP/22 solo desde la IP o red que indiques.
+        </Typography>
+      </Alert>
+
+      <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 1 }}>
+        <Chip
+          size="small"
+          label={internetGatewayEnabled ? "AWS: crea IGW" : "AWS: sin IGW"}
+          color={internetGatewayEnabled ? "primary" : "default"}
+          variant={internetGatewayEnabled ? "filled" : "outlined"}
+        />
+        <Chip
+          size="small"
+          label={enableNat ? "AWS: crea NAT" : "AWS: sin NAT"}
+          color={enableNat ? "warning" : "default"}
+          variant={enableNat ? "filled" : "outlined"}
+        />
+        <Chip
+          size="small"
+          label={allowedSshCidr ? "Seguridad: SSH expuesto a CIDR" : "Seguridad: sin SSH externo"}
+          color={allowedSshCidr ? "info" : "default"}
+          variant={allowedSshCidr ? "filled" : "outlined"}
+        />
+      </Stack>
 
       {/* ---- NAT Gateway ---- */}
       <Box sx={{ mt: 1.5, mb: 0.5 }}>
@@ -366,9 +419,14 @@ const VPCNodeForm = ({
 
       {/* EIP opcional */}
       <TextField
-        label="Elastic IP (opcional)"
+        label="Elastic IP Allocation ID (opcional)"
         {...register("natGatewayElasticIp")}
-        placeholder="(auto)"
+        placeholder="eipalloc-0123456789abcdef0"
+        helperText={
+          enableNat
+            ? "Si la dejas vacía, AWS asignará una Elastic IP nueva. Si ya tienes una reservada, ingresa su Allocation ID real (`eipalloc-...`), no la IP pública."
+            : "Solo aplica si habilitas NAT Gateway."
+        }
         fullWidth
         margin="normal"
         disabled={!enableNat}
@@ -380,7 +438,8 @@ const VPCNodeForm = ({
         {...register("allowedSshCidr")}
         error={!!errors.allowedSshCidr}
         helperText={
-          errors.allowedSshCidr?.message || "Ej: 203.0.113.5/32 (tu IP pública)"
+          errors.allowedSshCidr?.message ||
+          "Ej: 203.0.113.5/32. Esto crea una regla del Security Group para permitir SSH desde tu IP pública."
         }
         placeholder="203.0.113.5/32"
         fullWidth
@@ -388,7 +447,7 @@ const VPCNodeForm = ({
       />
 
       {/* Botones */}
-      <Box sx={{ mt: 1.5 }}>
+      <Box className="pt-node-form__actions">
         <Tooltip
           arrow
           disableHoverListener={!disableSubmitForNat}
@@ -410,7 +469,7 @@ const VPCNodeForm = ({
           </span>
         </Tooltip>
 
-        <Button onClick={deleteNode} sx={{ ml: 1 }}>
+        <Button onClick={deleteNode} color="error">
           Delete Node
         </Button>
 

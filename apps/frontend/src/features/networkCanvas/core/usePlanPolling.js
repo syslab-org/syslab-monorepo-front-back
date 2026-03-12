@@ -21,6 +21,11 @@ export const usePlanPolling = ({
         return;
       }
 
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+
       try {
         const plan = await api.getPlan(canvasPlanId);
         if (!alive) return;

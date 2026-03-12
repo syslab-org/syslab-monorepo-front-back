@@ -44,6 +44,7 @@ export function useCanvasRuntimeController({
   const movement = useRestrictMovement(
     reactFlowInstance || reactFlow,
     setNodes,
+    nodes,
   );
 
   const drop = useHandleDrop(reactFlowInstance, setNodes, setCanvasUiError);

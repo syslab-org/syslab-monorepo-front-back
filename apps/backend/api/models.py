@@ -101,6 +101,27 @@ class Plan(models.Model):
     def __str__(self) -> str:
         return f"{self.id} [{self.status}] {self.name}"
 
+    @property
+    def payload_simulate_only(self) -> bool:
+        payload = self.payload or {}
+        if isinstance(payload, dict):
+            return bool(payload.get("simulate_only", True))
+        return True
+
+    @property
+    def can_destroy_now(self) -> bool:
+        if self.status == self.Status.RUNNING:
+            return False
+
+        if bool(self.applied):
+            return True
+
+        return (
+            self.last_action == self.LastAction.APPLY
+            and self.status == self.Status.FAILURE
+            and not self.payload_simulate_only
+        )
+
     class Meta:
         ordering = ["-updated_at"]
         constraints = [

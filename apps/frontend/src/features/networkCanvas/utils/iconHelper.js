@@ -9,7 +9,7 @@ import StorageIcon from "@mui/icons-material/Storage";
 import React from "react";
 
 export const getIconByInstanceType = (type) => {
-  const baseProps = { style: { fontSize: 50, color: "#3f51b5" } };
+  const baseProps = { style: { fontSize: 28, color: "currentColor" } };
 
   switch (type) {
     case TYPE_COMPUTER_NODE:
@@ -20,7 +20,7 @@ export const getIconByInstanceType = (type) => {
       return React.createElement(StorageIcon, baseProps);
     default:
       return React.createElement(ComputerIcon, {
-        style: { fontSize: 100, color: "#3f51b5" },
+        style: { fontSize: 32, color: "currentColor" },
       });
   }
 };

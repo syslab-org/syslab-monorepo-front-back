@@ -290,6 +290,12 @@ resource "aws_instance" "vm" {
   tags = {
     Name = each.value.name
   }
+
+  # En cuentas/labs con alta latencia de provisión EC2, 10m puede ser insuficiente
+  # y generar falsos FAIL aunque la instancia termine arrancando después.
+  timeouts {
+    create = "20m"
+  }
 }
 {% endif %}
 
@@ -317,12 +323,16 @@ resource "aws_internet_gateway" "igw" {
 
 # --- NAT Gateway (1 por VPC habilitada) ---
 locals {
-  vpc_nat_enabled    = { for v in local.vpcs : v.id => try(v.nat_gateway.enabled, false) }
-  vpc_nat_pub_subnet = { for v in local.vpcs : v.id => try(v.nat_gateway.public_subnet, "") }
+  vpc_nat_enabled       = { for v in local.vpcs : v.id => try(v.nat_gateway.enabled, false) }
+  vpc_nat_pub_subnet    = { for v in local.vpcs : v.id => try(v.nat_gateway.public_subnet, "") }
+  vpc_nat_eip_alloc_id  = { for v in local.vpcs : v.id => trimspace(try(v.nat_gateway.elastic_ip, "")) }
 }
 
 resource "aws_eip" "nat_eip" {
-  for_each = { for v in local.vpcs : v.id => v if local.vpc_nat_enabled[v.id] }
+  for_each = {
+    for v in local.vpcs : v.id => v
+    if local.vpc_nat_enabled[v.id] && local.vpc_nat_eip_alloc_id[v.id] == ""
+  }
   domain   = "vpc"
   tags     = { Name = "${each.value.name}-nat-eip" }
 }
@@ -330,7 +340,11 @@ resource "aws_eip" "nat_eip" {
 resource "aws_nat_gateway" "nat" {
   for_each      = { for v in local.vpcs : v.id => v if local.vpc_nat_enabled[v.id] }
   subnet_id     = aws_subnet.this["${each.key}:${local.vpc_nat_pub_subnet[each.key]}"].id
-  allocation_id = aws_eip.nat_eip[each.key].id
+  allocation_id = (
+    local.vpc_nat_eip_alloc_id[each.key] != ""
+    ? local.vpc_nat_eip_alloc_id[each.key]
+    : aws_eip.nat_eip[each.key].id
+  )
   tags          = { Name = "${each.value.name}-nat" }
   depends_on    = [aws_internet_gateway.igw]
 }
@@ -456,6 +470,20 @@ locals {
   }
 }
 
+locals {
+  explicit_route_destinations_by_rt = {
+    for rt in local.route_tables_flat :
+    rt.key => toset([
+      for r in coalesce(rt.routes, []) :
+      trimspace(try(r.dest_cidr, ""))
+      if (
+        !contains(["", "local"], lower(try(r.target, ""))) &&
+        try(length(trimspace(r.dest_cidr)) > 0, false)
+      )
+    ])
+  }
+}
+
 # Candidatos por cada subnet (sin usar attributes de recursos)
 locals {
   nat_default_candidates = flatten([
@@ -506,14 +534,45 @@ resource "aws_ec2_transit_gateway" "tgw" {
   }
 }
 
+locals {
+  tgw_attachment_subnets_by_link = {
+    for l in local.tgw_links : "${l.router_id}:${l.vpc_id}" => (
+      length([
+        for sn_name in distinct(coalesce(l.subnet_names, [])) : sn_name
+        if contains([for sn in coalesce(local.vpc_by_id[l.vpc_id].subnets, []) : sn.name], sn_name)
+      ]) > 0
+      ? [
+          for sn_name in distinct(coalesce(l.subnet_names, [])) : sn_name
+          if contains([for sn in coalesce(local.vpc_by_id[l.vpc_id].subnets, []) : sn.name], sn_name)
+        ]
+      : [for sn in coalesce(local.vpc_by_id[l.vpc_id].subnets, []) : sn.name]
+    )
+  }
+
+  tgw_attachment_subnet_name_by_az = {
+    for l in local.tgw_links : "${l.router_id}:${l.vpc_id}" => {
+      for sn_name in local.tgw_attachment_subnets_by_link["${l.router_id}:${l.vpc_id}"] :
+      coalesce(
+        try(
+          [for sn in coalesce(local.vpc_by_id[l.vpc_id].subnets, []) : lower(sn.availability_zone) if sn.name == sn_name][0],
+          null
+        ),
+        "unknown:${sn_name}"
+      ) => sn_name
+    }
+  }
+}
+
 resource "aws_ec2_transit_gateway_vpc_attachment" "tgw_attach" {
   for_each = { for l in local.tgw_links : "${l.router_id}:${l.vpc_id}" => l }
 
   transit_gateway_id = aws_ec2_transit_gateway.tgw[0].id
   vpc_id             = aws_vpc.vpc[each.value.vpc_id].id
   subnet_ids         = [
-    for sn in coalesce(each.value.subnet_names, []) :
-    aws_subnet.this["${each.value.vpc_id}:${sn}"].id
+    for az in sort(keys(local.tgw_attachment_subnet_name_by_az[each.key])) :
+    aws_subnet.this[
+      "${each.value.vpc_id}:${local.tgw_attachment_subnet_name_by_az[each.key][az]}"
+    ].id
   ]
 
   tags = { Name = "tgw-attach-${each.value.vpc_id}" }
@@ -582,20 +641,33 @@ resource "aws_ec2_transit_gateway_route" "tgw_to_vpcs" {
 # =========================
 
 locals {
-  # Para cada link TGW y cada ruta "to_router", generamos una entrada SOLO
-  # si la route table existe realmente en la VPC.
+  # Para cada link TGW, propagamos los destinos declarados por el router a TODAS
+  # las route tables de la VPC (excepto si ya existe una ruta explícita para ese destino).
   tgw_vpc_routes = flatten([
     for l in local.tgw_links : [
-      for r in coalesce(try(l.routes.to_router, []), []) : {
-        key       = "${l.vpc_id}:${r.dest_cidr}"
-        vpc_id    = l.vpc_id
-        dest_cidr = r.dest_cidr
-        rt_name   = "public"
-      }
-      if contains(
-        local.rt_names_by_vpc[l.vpc_id],
-        "public"
-      )
+      for dest_cidr in distinct([
+        for r in coalesce(try(l.routes.to_router, []), []) :
+        trimspace(try(r.dest_cidr, ""))
+        if try(length(trimspace(r.dest_cidr)) > 0, false)
+      ]) : [
+        for rt in coalesce(local.vpc_by_id[l.vpc_id].route_tables, []) : {
+          key       = "${l.vpc_id}:${rt.name}:${dest_cidr}"
+          vpc_id    = l.vpc_id
+          dest_cidr = dest_cidr
+          rt_name   = rt.name
+        }
+        if (
+          dest_cidr != try(local.vpc_by_id[l.vpc_id].cidr_block, "") &&
+          !contains(
+            lookup(
+              local.explicit_route_destinations_by_rt,
+              "${l.vpc_id}:${rt.name}",
+              toset([])
+            ),
+            dest_cidr
+          )
+        )
+      ]
     ]
   ])
 }
@@ -700,6 +772,28 @@ output "route_table_named_ids" {
 # Internet gateways por VPC id (solo donde aplica)
 output "igw_ids" {
   value = { for k, g in aws_internet_gateway.igw : k => g.id }
+}
+
+# NAT gateways por VPC id (solo donde aplica)
+output "nat_gateway_ids" {
+  value = { for k, nat in aws_nat_gateway.nat : k => nat.id }
+}
+
+# Allocation ID efectiva usada por el NAT.
+# Si la EIP fue provista, reflejamos ese allocation_id; si no, el que Terraform creó.
+output "nat_eip_allocation_ids" {
+  value = {
+    for v in local.vpcs : v.id => (
+      local.vpc_nat_enabled[v.id]
+      ? (
+          local.vpc_nat_eip_alloc_id[v.id] != ""
+          ? local.vpc_nat_eip_alloc_id[v.id]
+          : aws_eip.nat_eip[v.id].id
+        )
+      : null
+    )
+    if local.vpc_nat_enabled[v.id]
+  }
 }
 
 # Peering connections por key "<vpc_a_id>--<vpc_b_id>"

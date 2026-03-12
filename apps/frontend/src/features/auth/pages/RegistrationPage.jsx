@@ -5,7 +5,7 @@ import GoogleIcon from "@mui/icons-material/Google";
 import { Alert, Avatar, Box, Button, CssBaseline, Grid, Link, Paper, Snackbar, TextField, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import { useUserRegistration } from '@/features/auth/services/authService';
 import { useRegistrationUserFormValidation } from '@/features/auth/hooks/useRegistrationUserFormValidation';
 
@@ -117,9 +117,9 @@ const RegistrationPage = () => {
                             >
                                 Sign Up With Google
                             </Button>
-                            <Grid container>
-                                <Grid item>
-                                    <Link href="/login" variant="body2">
+                                <Grid container>
+                                    <Grid item>
+                                    <Link component={RouterLink} to="/login" variant="body2">
                                         {"Sign In"}
                                     </Link>
                                 </Grid>

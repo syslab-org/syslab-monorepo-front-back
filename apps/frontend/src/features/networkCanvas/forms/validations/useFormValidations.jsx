@@ -168,6 +168,11 @@ export const useFormValidationSchema = (
             s
               .nullable()
               .transform((v) => (v === '' ? null : v))
+              .test(
+                'nat-eip-allocation-id',
+                'Elastic IP inválida. Usa un Allocation ID, por ejemplo: eipalloc-0123456789abcdef0',
+                (value) => value == null || /^eipalloc-[a-z0-9]+$/.test(value)
+              )
               .notRequired(),
           otherwise: (s) => s.optional(),
         }),

@@ -1,17 +1,17 @@
 //Dimensions of The Instance Node
-export const widthDefaultInstanceNode = 150;
-export const heightDefaultInstanceNode = 100;
+export const widthDefaultInstanceNode = 212;
+export const heightDefaultInstanceNode = 168;
 
 //Dimensions of The InstanceRouter
-export const widthDefaultInstanceRouter = 150;
-export const heightDefaultInstanceRouter = 150;
+export const widthDefaultInstanceRouter = 188;
+export const heightDefaultInstanceRouter = 228;
 
 //Dimensions of the SubNetwork Node
-export const widthDefaultSubNetworkNode = 225;
-export const heightDefaultSubNetworkNode = 300;
+export const widthDefaultSubNetworkNode = 400;
+export const heightDefaultSubNetworkNode = 320;
 
-export const widthDefaultVPCNode = 500;
-export const heightDefaultVPCNode = 600;
+export const widthDefaultVPCNode = 640;
+export const heightDefaultVPCNode = 560;
 
 export const TYPE_DEFAULT_NODE = "default";
 export const TYPE_VPC_NODE = "vpc";

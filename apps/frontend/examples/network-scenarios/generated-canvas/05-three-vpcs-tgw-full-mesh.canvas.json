@@ -1,0 +1,363 @@
+{
+  "nodes": [
+    {
+      "id": "vpc-a-05",
+      "type": "vpc",
+      "position": {
+        "x": 80,
+        "y": 80
+      },
+      "width": 640,
+      "height": 560,
+      "data": {
+        "label": "vpc-vpc-a-05",
+        "title": "VPC",
+        "vpcName": "VPC-A",
+        "name": "VPC-A",
+        "region": "us-east-1",
+        "cidrBlock": "10.60.0.0",
+        "prefixLength": 16,
+        "cloudProvider": "AWS",
+        "internetGateway": true,
+        "enableNatGateway": false,
+        "natGatewayPublicSubnet": "",
+        "natGatewayElasticIp": "",
+        "nat_gateway": {
+          "enabled": false,
+          "public_subnet": "",
+          "elastic_ip": ""
+        },
+        "allowedSshCidr": "190.20.221.154/32"
+      }
+    },
+    {
+      "id": "vpc-a-05--subnet--public-a1",
+      "type": "subnetwork",
+      "parentId": "vpc-a-05",
+      "parentNode": "vpc-a-05",
+      "extent": "parent",
+      "position": {
+        "x": 24,
+        "y": 182
+      },
+      "width": 400,
+      "height": 320,
+      "data": {
+        "label": "subnet-public-a1",
+        "title": "SUBNETWORK",
+        "subnetName": "public-a1",
+        "name": "public-a1",
+        "cidrBlock": "10.60.1.0/24",
+        "availabilityZone": "us-east-1a",
+        "availability_zone": "us-east-1a",
+        "subnetType": "public",
+        "subnet_type": "public",
+        "map_public_ip_on_launch": true,
+        "route_table": "public"
+      }
+    },
+    {
+      "id": "vm-a1",
+      "type": "server",
+      "parentId": "vpc-a-05--subnet--public-a1",
+      "parentNode": "vpc-a-05--subnet--public-a1",
+      "extent": "parent",
+      "position": {
+        "x": 16,
+        "y": 126
+      },
+      "width": 212,
+      "height": 168,
+      "data": {
+        "label": "instance-bastion-a1",
+        "title": "SERVER",
+        "name": "bastion-a1",
+        "ipAddress": "10.60.1.10",
+        "ip_address": "10.60.1.10",
+        "ami": "ami-0ebfd941bbafe70c6",
+        "instanceType": "t2.micro",
+        "instance_type": "t2.micro",
+        "sshAccess": "tesis-key",
+        "ssh_access": "tesis-key",
+        "associate_public_ip": true
+      }
+    },
+    {
+      "id": "vpc-b-05",
+      "type": "vpc",
+      "position": {
+        "x": 1040,
+        "y": 80
+      },
+      "width": 640,
+      "height": 560,
+      "data": {
+        "label": "vpc-vpc-b-05",
+        "title": "VPC",
+        "vpcName": "VPC-B",
+        "name": "VPC-B",
+        "region": "us-east-1",
+        "cidrBlock": "10.61.0.0",
+        "prefixLength": 16,
+        "cloudProvider": "AWS",
+        "internetGateway": true,
+        "enableNatGateway": false,
+        "natGatewayPublicSubnet": "",
+        "natGatewayElasticIp": "",
+        "nat_gateway": {
+          "enabled": false,
+          "public_subnet": "",
+          "elastic_ip": ""
+        },
+        "allowedSshCidr": "190.20.221.154/32"
+      }
+    },
+    {
+      "id": "vpc-b-05--subnet--public-b1",
+      "type": "subnetwork",
+      "parentId": "vpc-b-05",
+      "parentNode": "vpc-b-05",
+      "extent": "parent",
+      "position": {
+        "x": 24,
+        "y": 182
+      },
+      "width": 400,
+      "height": 320,
+      "data": {
+        "label": "subnet-public-b1",
+        "title": "SUBNETWORK",
+        "subnetName": "public-b1",
+        "name": "public-b1",
+        "cidrBlock": "10.61.1.0/24",
+        "availabilityZone": "us-east-1a",
+        "availability_zone": "us-east-1a",
+        "subnetType": "public",
+        "subnet_type": "public",
+        "map_public_ip_on_launch": true,
+        "route_table": "public"
+      }
+    },
+    {
+      "id": "vm-b1",
+      "type": "server",
+      "parentId": "vpc-b-05--subnet--public-b1",
+      "parentNode": "vpc-b-05--subnet--public-b1",
+      "extent": "parent",
+      "position": {
+        "x": 16,
+        "y": 126
+      },
+      "width": 212,
+      "height": 168,
+      "data": {
+        "label": "instance-bastion-b1",
+        "title": "SERVER",
+        "name": "bastion-b1",
+        "ipAddress": "10.61.1.10",
+        "ip_address": "10.61.1.10",
+        "ami": "ami-0ebfd941bbafe70c6",
+        "instanceType": "t2.micro",
+        "instance_type": "t2.micro",
+        "sshAccess": "tesis-key",
+        "ssh_access": "tesis-key",
+        "associate_public_ip": true
+      }
+    },
+    {
+      "id": "vpc-c-05",
+      "type": "vpc",
+      "position": {
+        "x": 2000,
+        "y": 80
+      },
+      "width": 640,
+      "height": 560,
+      "data": {
+        "label": "vpc-vpc-c-05",
+        "title": "VPC",
+        "vpcName": "VPC-C",
+        "name": "VPC-C",
+        "region": "us-east-1",
+        "cidrBlock": "10.62.0.0",
+        "prefixLength": 16,
+        "cloudProvider": "AWS",
+        "internetGateway": true,
+        "enableNatGateway": false,
+        "natGatewayPublicSubnet": "",
+        "natGatewayElasticIp": "",
+        "nat_gateway": {
+          "enabled": false,
+          "public_subnet": "",
+          "elastic_ip": ""
+        },
+        "allowedSshCidr": "190.20.221.154/32"
+      }
+    },
+    {
+      "id": "vpc-c-05--subnet--public-c1",
+      "type": "subnetwork",
+      "parentId": "vpc-c-05",
+      "parentNode": "vpc-c-05",
+      "extent": "parent",
+      "position": {
+        "x": 24,
+        "y": 182
+      },
+      "width": 400,
+      "height": 320,
+      "data": {
+        "label": "subnet-public-c1",
+        "title": "SUBNETWORK",
+        "subnetName": "public-c1",
+        "name": "public-c1",
+        "cidrBlock": "10.62.1.0/24",
+        "availabilityZone": "us-east-1a",
+        "availability_zone": "us-east-1a",
+        "subnetType": "public",
+        "subnet_type": "public",
+        "map_public_ip_on_launch": true,
+        "route_table": "public"
+      }
+    },
+    {
+      "id": "vm-c1",
+      "type": "server",
+      "parentId": "vpc-c-05--subnet--public-c1",
+      "parentNode": "vpc-c-05--subnet--public-c1",
+      "extent": "parent",
+      "position": {
+        "x": 16,
+        "y": 126
+      },
+      "width": 212,
+      "height": 168,
+      "data": {
+        "label": "instance-bastion-c1",
+        "title": "SERVER",
+        "name": "bastion-c1",
+        "ipAddress": "10.62.1.10",
+        "ip_address": "10.62.1.10",
+        "ami": "ami-0ebfd941bbafe70c6",
+        "instanceType": "t2.micro",
+        "instance_type": "t2.micro",
+        "sshAccess": "tesis-key",
+        "ssh_access": "tesis-key",
+        "associate_public_ip": true
+      }
+    },
+    {
+      "id": "router-tgw-05",
+      "type": "router",
+      "position": {
+        "x": 1266,
+        "y": 720
+      },
+      "width": 188,
+      "height": 228,
+      "data": {
+        "label": "router-router-tgw-05",
+        "title": "ROUTER",
+        "identifier": "router-tgw-05",
+        "name": "router-tgw-05",
+        "mode": "tgw",
+        "region": "us-east-1",
+        "routeTable": [
+          {
+            "sourceVpcId": "vpc-a-05",
+            "destCidr": "10.61.0.0/16",
+            "destVpcId": "vpc-b-05"
+          },
+          {
+            "sourceVpcId": "vpc-a-05",
+            "destCidr": "10.62.0.0/16",
+            "destVpcId": "vpc-c-05"
+          },
+          {
+            "sourceVpcId": "vpc-b-05",
+            "destCidr": "10.60.0.0/16",
+            "destVpcId": "vpc-a-05"
+          },
+          {
+            "sourceVpcId": "vpc-b-05",
+            "destCidr": "10.62.0.0/16",
+            "destVpcId": "vpc-c-05"
+          },
+          {
+            "sourceVpcId": "vpc-c-05",
+            "destCidr": "10.60.0.0/16",
+            "destVpcId": "vpc-a-05"
+          },
+          {
+            "sourceVpcId": "vpc-c-05",
+            "destCidr": "10.61.0.0/16",
+            "destVpcId": "vpc-b-05"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-1-vpc-a-05-vpc-a-05--subnet--public-a1",
+      "source": "vpc-a-05",
+      "target": "vpc-a-05--subnet--public-a1"
+    },
+    {
+      "id": "e-2-vpc-a-05--subnet--public-a1-vm-a1",
+      "source": "vpc-a-05--subnet--public-a1",
+      "target": "vm-a1"
+    },
+    {
+      "id": "e-3-vpc-b-05-vpc-b-05--subnet--public-b1",
+      "source": "vpc-b-05",
+      "target": "vpc-b-05--subnet--public-b1"
+    },
+    {
+      "id": "e-4-vpc-b-05--subnet--public-b1-vm-b1",
+      "source": "vpc-b-05--subnet--public-b1",
+      "target": "vm-b1"
+    },
+    {
+      "id": "e-5-vpc-c-05-vpc-c-05--subnet--public-c1",
+      "source": "vpc-c-05",
+      "target": "vpc-c-05--subnet--public-c1"
+    },
+    {
+      "id": "e-6-vpc-c-05--subnet--public-c1-vm-c1",
+      "source": "vpc-c-05--subnet--public-c1",
+      "target": "vm-c1"
+    },
+    {
+      "id": "e-7-vpc-a-05-router-tgw-05",
+      "source": "vpc-a-05",
+      "target": "router-tgw-05"
+    },
+    {
+      "id": "e-8-vpc-b-05-router-tgw-05",
+      "source": "vpc-b-05",
+      "target": "router-tgw-05"
+    },
+    {
+      "id": "e-9-vpc-c-05-router-tgw-05",
+      "source": "vpc-c-05",
+      "target": "router-tgw-05"
+    }
+  ],
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 0.7
+  },
+  "meta": {
+    "generated_from": "05-three-vpcs-tgw-full-mesh.json",
+    "scenario_name": "scenario-05-three-vpcs-tgw-full-mesh",
+    "generated_at": "2026-03-12T11:20:13.784191+00:00",
+    "counts": {
+      "nodes": 10,
+      "edges": 9,
+      "vpcs": 3,
+      "routers": 1
+    }
+  }
+}

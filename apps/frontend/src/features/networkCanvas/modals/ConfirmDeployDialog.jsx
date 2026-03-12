@@ -10,7 +10,6 @@ import {
   DialogTitle,
   Stack,
   Typography,
-  CircularProgress,
 } from "@mui/material";
 
 /**
@@ -56,6 +55,11 @@ const ConfirmDeployDialog = ({
     validationState === "PLANNING";
 
   const vpcs = transformedData?.vpcs || [];
+  const links = transformedData?.links || [];
+  const routers = transformedData?.routers || [];
+  const peeringLinks = links.filter((link) => String(link?.type || "").toLowerCase() === "peering").length;
+  const tgwAttachments = links.filter((link) => String(link?.type || "").toLowerCase() === "tgw-attach").length;
+  const tgwRouters = routers.filter((router) => String(router?.type || "").toLowerCase() === "tgw").length;
 
   const renderBanner = () => {
     if (isSyncing) {
@@ -104,28 +108,32 @@ const ConfirmDeployDialog = ({
       ),
     0
   );
+  const vpcsWithIgw = vpcs.filter((vpc) => Boolean(vpc.internet_gateway)).length;
+  const vpcsWithNat = vpcs.filter((vpc) => Boolean(vpc.nat_gateway?.enabled)).length;
+  const vpcsWithSsh = vpcs.filter((vpc) => Boolean(vpc.allowed_ssh_cidr)).length;
+  const publicSubnets = vpcs.reduce(
+    (acc, vpc) =>
+      acc +
+      (vpc.subnets || []).filter(
+        (subnet) => String(subnet.subnet_type || "").toLowerCase() === "public",
+      ).length,
+    0,
+  );
+  const privateSubnets = Math.max(totalSubnets - publicSubnets, 0);
+  const awsInterpretation = [
+    `Se crearán ${vpcs.length} VPC(s), ${totalSubnets} subnet(s) y ${totalInstances} instancia(s) EC2.`,
+    `Exposición pública: IGW en ${vpcsWithIgw} VPC(s), ${publicSubnets} subnet(s) pública(s) y SSH externo definido en ${vpcsWithSsh} VPC(s).`,
+    `Salida privada: NAT Gateway en ${vpcsWithNat} VPC(s) para ${privateSubnets} subnet(s) potencialmente privadas.`,
+    tgwRouters > 0
+      ? `Enrutamiento central: ${tgwRouters} TGW router(s) y ${tgwAttachments} attachment(s).`
+      : `Enrutamiento por pares: ${peeringLinks} enlace(s) peering declarados.`,
+  ];
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>Confirmar infraestructura</DialogTitle>
       <DialogContent dividers>
-        <Box position="relative">
-          {loadingFlow && (
-            <Box
-              sx={{
-                position: "absolute",
-                inset: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "rgba(255,255,255,0.6)",
-                zIndex: 10,
-              }}
-            >
-              <CircularProgress size={40} />
-            </Box>
-          )}
-
+        <Box>
           {renderBanner()}
 
           <Box mt={3}>
@@ -137,6 +145,38 @@ const ConfirmDeployDialog = ({
               <Chip label={`VPCs: ${vpcs.length}`} />
               <Chip label={`Subnets: ${totalSubnets}`} />
               <Chip label={`Instancias: ${totalInstances}`} />
+              <Chip
+                label={`Peering links: ${peeringLinks}`}
+                color={peeringLinks > 0 ? "secondary" : "default"}
+                variant={peeringLinks > 0 ? "filled" : "outlined"}
+              />
+              <Chip
+                label={`TGW routers: ${tgwRouters}`}
+                color={tgwRouters > 0 ? "primary" : "default"}
+                variant={tgwRouters > 0 ? "filled" : "outlined"}
+              />
+              <Chip
+                label={`TGW attachments: ${tgwAttachments}`}
+                color={tgwAttachments > 0 ? "primary" : "default"}
+                variant={tgwAttachments > 0 ? "filled" : "outlined"}
+              />
+            </Stack>
+          </Box>
+
+          <Alert severity="info" sx={{ mt: 2 }}>
+            Después del deploy, valida conectividad en <b>Plan Detail → Pruebas</b> con comandos de ping guiados entre VPCs.
+          </Alert>
+
+          <Box mt={3}>
+            <Typography variant="subtitle1" gutterBottom>
+              Cómo AWS leerá este canvas
+            </Typography>
+            <Stack spacing={1}>
+              {awsInterpretation.map((line) => (
+                <Alert key={line} severity="info" variant="outlined">
+                  {line}
+                </Alert>
+              ))}
             </Stack>
           </Box>
 
@@ -159,7 +199,19 @@ const ConfirmDeployDialog = ({
                   {vpc.nat_gateway?.enabled && (
                     <Chip label="NAT" size="small" color="secondary" />
                   )}
+                  {vpc.nat_gateway?.enabled && vpc.nat_gateway?.elastic_ip && (
+                    <Chip
+                      label={`NAT EIP: ${vpc.nat_gateway.elastic_ip}`}
+                      size="small"
+                      color="warning"
+                    />
+                  )}
                 </Stack>
+                {vpc.nat_gateway?.enabled && (
+                  <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+                    Si defines una EIP para el NAT, debe ser un Allocation ID real de AWS (`eipalloc-...`), no una IP pública.
+                  </Typography>
+                )}
               </Box>
             ))}
           </Box>

@@ -1,6 +1,7 @@
 import CloseIcon from "@mui/icons-material/Close";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import HubIcon from "@mui/icons-material/Hub";
 import LanIcon from "@mui/icons-material/Lan";
 import PublicIcon from "@mui/icons-material/Public";
 import RouteIcon from "@mui/icons-material/Route";
@@ -87,6 +88,16 @@ const routeChip = (target) => {
           sx={{ fontWeight: 600 }}
         />
       );
+    case "tgw":
+      return (
+        <Chip
+          icon={<HubIcon />}
+          label="Transit Gateway"
+          color="primary"
+          size="small"
+          sx={{ fontWeight: 600 }}
+        />
+      );
     default:
       return (
         <Chip
@@ -105,6 +116,19 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
   const [validated, setValidated] = useState(false);
 
   const preview = useMemo(() => buildRoutingPreview(nodes, edges), [nodes, edges]);
+  const previewWarnings = useMemo(
+    () =>
+      (preview?.warnings || []).map(
+        (warning) =>
+          warning?.message ||
+          `Router ${warning?.router_id || "n/a"}: ${warning?.from_vpc || "?"} → ${warning?.to_vpc || "?"}`,
+      ),
+    [preview],
+  );
+  const allWarnings = useMemo(() => {
+    const merged = [...warnings, ...previewWarnings].filter(Boolean);
+    return Array.from(new Set(merged));
+  }, [warnings, previewWarnings]);
 
   useEffect(() => {
     if (!open) return;
@@ -121,8 +145,6 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
     setValidated(true);
   };
 
-  const ok = validated && errors.length === 0;
-
   return (
     <Modal open={open} onClose={onClose} aria-labelledby="routes-preview-title">
       <Box sx={style}>
@@ -134,14 +156,14 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
         </Stack>
 
         <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
-          Visualiza las tablas de rutas “main” generadas para cada VPC, incluyendo rutas locales, NAT, IGW y peering entre routers.
+          Visualiza cómo se traduce el enrutamiento del laboratorio a AWS (Peering o TGW), con implicancias por router y conectividad esperada.
         </Typography>
 
         <Stack direction="row" gap={1} sx={{ mb: 1 }}>
           <Button variant="contained" onClick={runValidation}>
             {validated ? "Revalidar rutas" : "Validar rutas"}
           </Button>
-          <Chip label={`warnings: ${warnings.length}`} color="warning" size="small" variant={warnings.length ? "filled" : "outlined"} />
+          <Chip label={`warnings: ${allWarnings.length}`} color="warning" size="small" variant={allWarnings.length ? "filled" : "outlined"} />
           <Chip label={`errores: ${errors.length}`} color="error" size="small" variant={errors.length ? "filled" : "outlined"} />
         </Stack>
 
@@ -149,7 +171,7 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
           {validated && errors.length === 0 && (
             <Alert severity="success" sx={{ mb: 1.5 }}>
               ✅ Todo en orden para el deploy. No se detectaron errores.
-              {warnings.length > 0 && " Hay advertencias no bloqueantes."}
+              {allWarnings.length > 0 && " Hay advertencias no bloqueantes."}
             </Alert>
           )}
 
@@ -166,16 +188,124 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
             </Box>
           )}
 
-          {warnings.length > 0 && (
+          {allWarnings.length > 0 && (
             <Box sx={{ mb: 1.5 }}>
               <Alert severity="warning" sx={{ mb: 1 }}>
                 Advertencias (no bloquean el deploy):
               </Alert>
               <Stack gap={0.5}>
-                {warnings.map((w, i) => (
+                {allWarnings.map((w, i) => (
                   <Typography key={i} variant="body2">• {w}</Typography>
                 ))}
               </Stack>
+            </Box>
+          )}
+
+          {(preview?.routers || []).length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                Cómo se implementará cada router en AWS
+              </Typography>
+              <Stack spacing={1}>
+                {preview.routers.map((router) => (
+                  <Box
+                    key={router.id}
+                    sx={{
+                      p: 1.2,
+                      border: "1px solid",
+                      borderColor: "divider",
+                      borderRadius: 1.5,
+                    }}
+                  >
+                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                      <Typography variant="body2" sx={{ fontWeight: 700, mr: "auto" }}>
+                        {router.name}
+                      </Typography>
+                      {routeChip(router.mode)}
+                      <Chip
+                        size="small"
+                        label={`VPCs conectadas: ${router.connectedCount}`}
+                        variant="outlined"
+                      />
+                      {router.mode === "peering" ? (
+                        <Chip
+                          size="small"
+                          label={`Peerings listos: ${router.awsResources?.peerings || 0}`}
+                          color="secondary"
+                          variant="outlined"
+                        />
+                      ) : (
+                        <Chip
+                          size="small"
+                          label={`Attachments TGW: ${router.awsResources?.attachments || 0}`}
+                          color="primary"
+                          variant="outlined"
+                        />
+                      )}
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.6 }}>
+                      Rutas explícitas: {router.explicitRoutes} • Bidireccionales: {router.bidirectionalPairs} • Solo ida: {router.oneWayPairs}
+                    </Typography>
+                  </Box>
+                ))}
+              </Stack>
+            </Box>
+          )}
+
+          {(preview?.connectivityPairs || []).length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                Matriz pedagógica de conectividad esperada
+              </Typography>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Par de VPCs</TableCell>
+                    <TableCell>Modo</TableCell>
+                    <TableCell>Estado</TableCell>
+                    <TableCell>Lectura</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {preview.connectivityPairs.map((pair) => (
+                    <TableRow key={`${pair.aId}:${pair.bId}`}>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {pair.aName} ↔ {pair.bName}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        {pair.mode ? routeChip(pair.mode) : <Chip size="small" label="Sin modo" variant="outlined" />}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={
+                            pair.status === "reachable"
+                              ? "Bidireccional"
+                              : pair.status === "partial"
+                                ? "Parcial"
+                                : "Sin ruta"
+                          }
+                          color={
+                            pair.status === "reachable"
+                              ? "success"
+                              : pair.status === "partial"
+                                ? "warning"
+                                : "default"
+                          }
+                          variant={pair.status === "isolated" ? "outlined" : "filled"}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="caption" color="text.secondary">
+                          {pair.reason}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </Box>
           )}
 
@@ -201,6 +331,7 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
                       <TableCell>Destino (CIDR)</TableCell>
                       <TableCell>Target</TableCell>
                       <TableCell>via_router_id</TableCell>
+                      <TableCell>Direccionalidad</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -213,11 +344,22 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
                             {r.via_router_id || "—"}
                           </Typography>
                         </TableCell>
+                        <TableCell>
+                          {r.directionality === "missing-return" ? (
+                            <Chip size="small" color="warning" label="Falta retorno" />
+                          ) : r.directionality === "bidirectional" ? (
+                            <Chip size="small" color="success" label="Ida y vuelta" />
+                          ) : r.directionality === "manual-cidr" ? (
+                            <Chip size="small" variant="outlined" label="CIDR manual" />
+                          ) : (
+                            <Chip size="small" variant="outlined" label="N/A" />
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                     {(!vpc.main_route_table || vpc.main_route_table.length === 0) && (
                       <TableRow>
-                        <TableCell colSpan={3}>
+                        <TableCell colSpan={4}>
                           <Typography variant="body2" color="text.secondary">Sin rutas calculadas para esta VPC.</Typography>
                         </TableCell>
                       </TableRow>
