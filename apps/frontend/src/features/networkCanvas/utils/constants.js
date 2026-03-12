@@ -3,8 +3,8 @@ export const widthDefaultInstanceNode = 212;
 export const heightDefaultInstanceNode = 168;
 
 //Dimensions of The InstanceRouter
-export const widthDefaultInstanceRouter = 150;
-export const heightDefaultInstanceRouter = 150;
+export const widthDefaultInstanceRouter = 188;
+export const heightDefaultInstanceRouter = 228;
 
 //Dimensions of the SubNetwork Node
 export const widthDefaultSubNetworkNode = 400;
