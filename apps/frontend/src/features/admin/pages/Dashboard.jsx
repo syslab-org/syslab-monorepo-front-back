@@ -3,13 +3,14 @@ import { Box, Button, Card, CardContent, Grid, Typography, Stack } from "@mui/ma
 import CloudQueueIcon from "@mui/icons-material/CloudQueue";
 import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
 import HistoryIcon from "@mui/icons-material/History";
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "@/infrastructure/http/api";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from '@/infrastructure/firebase/firebaseConfig';
 import { DB_FIRESTORE_VPCS, USER_ROL_STUDENT } from '@/shared/constants';
 import { useAuth } from '@/app/providers/AuthContext';
+import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
 import { PageHeader } from '@/shared/ui/layouts/MainLayout';
 
 function Dashboard() {
@@ -17,6 +18,7 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [totalLaboratorios, setTotalLaboratorios] = useState(0);
   const { user } = useAuth();
+  const { showLoading, hideLoading } = useContext(LoadingFlowContext);
 
 
   useEffect(() => {
@@ -24,6 +26,7 @@ function Dashboard() {
 
     async function loadData() {
       try {
+        showLoading("Cargando dashboard...");
         // =========================
         // 1️⃣ Cargar planes (backend)
         // =========================
@@ -62,6 +65,7 @@ function Dashboard() {
         console.error("Error loading dashboard data:", err);
       } finally {
         if (mounted) setLoading(false);
+        hideLoading();
       }
     }
 
@@ -69,8 +73,9 @@ function Dashboard() {
 
     return () => {
       mounted = false;
+      hideLoading();
     };
-  }, [user]);
+  }, [user, showLoading, hideLoading]);
 
   // Ordenar por fecha más reciente
   const sortedPlans = [...plans].sort((a, b) => {
@@ -225,7 +230,6 @@ function Dashboard() {
                 display: "block",
                 color: "inherit",
                 textDecoration: "none",
-                textDecoration: "none",
                 transition: "all .2s ease",
                 borderLeft: (theme) => `4px solid ${theme.palette.primary.main}`,
                 "&:hover": {
@@ -271,7 +275,6 @@ function Dashboard() {
                 cursor: "pointer",
                 display: "block",
                 color: "inherit",
-                textDecoration: "none",
                 textDecoration: "none",
                 transition: "all .2s ease",
                 borderLeft: (theme) => `4px solid ${theme.palette.secondary.main}`,

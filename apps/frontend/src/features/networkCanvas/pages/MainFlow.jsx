@@ -9,11 +9,7 @@ import { initialNodes } from '../utils/initials-elements';
 // mui
 import NodeConfigModal from "@/features/networkCanvas/modals/NodeConfigModal";
 import {
-  Backdrop,
-  CircularProgress,
   Grid,
-  Stack,
-  Typography
 } from "@mui/material";
 // import Modal from 'react-modal';
 import { useNodeActions } from "@/features/networkCanvas/domain/useNodeActions";
@@ -46,6 +42,7 @@ import { NetworkProvider } from "@/features/networkCanvas/context/NetworkNodesCo
 import { useNetworkPlanController } from "@/features/networkCanvas/core/useNetworkPlanController";
 import { usePlanMeta } from "@/features/networkCanvas/core/usePlanMeta";
 import { usePlanPolling } from "@/features/networkCanvas/core/usePlanPolling";
+import { useLearningGuide } from "@/features/networkCanvas/core/useLearningGuide";
 import RoutePreviewPanel from "@/features/networkCanvas/panels/RoutePreviewPanel";
 // import { buildRoutingPreview } from "@/features/networkCanvas/utils/buildRoutingPreview";
 // import { db } from "@/infrastructure/firebase/firebaseConfig";
@@ -192,10 +189,10 @@ function MainFlow() {
   const dragRef = useRef(null);
   //const connectionCreated = useRef(true)
 
-  const isPlanRunning = (st) => {
+  const isPlanRunning = useCallback((st) => {
     const s = String(st || '').toUpperCase();
     return s === 'RUNNING' || s === 'PENDING' || s === 'STARTED';
-  };
+  }, []);
 
   // Load plan metadata (planId + planCanvasHash) from Firestore and keep it actualizado en 
   // el estado del canvas. Esto es clave para la lógica de "dirty" y validación.
@@ -221,7 +218,6 @@ function MainFlow() {
 
   const closeModal = closeNodeModal;
 
-  //const onNodeDragStop = useNodeDragStop({ nodes, setNodes, reactFlow, TYPE_SUBNETWORK_NODE, TYPE_VPC_NODE });
   const onSaveFlow = useSaveFlow({ reactFlowInstance, flowKey, vpcid });
   const onRestoreFlow = useRestoreFlow({ setNodes, setEdges, setViewport, flowKey, getId, setCanvasPlanId });
   const { saveNodeData, deleteNodeInstance } = useNodeActions({
@@ -284,6 +280,15 @@ function MainFlow() {
     isCanvasLocked
   });
 
+  const learningGuide = useLearningGuide({
+    nodes,
+    edges,
+    validationState,
+    canvasState,
+    canvasPlanInfo,
+    selectedNode,
+  });
+
   const location = useLocation();
   const isWizardEntry = new URLSearchParams(location.search).get("wizard") === "1";
 
@@ -330,18 +335,6 @@ function MainFlow() {
   });
   return (
     <NetworkProvider>
-      <Backdrop
-        open={!!loadingFlow}
-        sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.modal + 1 }}
-      >
-        <Stack spacing={2} alignItems="center">
-          <CircularProgress />
-          <Typography variant="h6">🔄 Procesando…</Typography>
-          <Typography variant="body2" sx={{ opacity: 0.9 }}>
-            Validando/ejecutando plan o restaurando red. No cierres la pestaña.
-          </Typography>
-        </Stack>
-      </Backdrop>
       <Grid
         container
         sx={{
@@ -416,6 +409,11 @@ function MainFlow() {
               successMessage,
               errorMessage,
               handleCloseSnackbar
+            }}
+            learningGuideProps={{
+              guide: learningGuide,
+              onOpenValidation: guardBeforeEdit(processJsonToCloud),
+              onOpenDeploy: guardBeforeEdit(processJsonToCloud),
             }}
           />
 

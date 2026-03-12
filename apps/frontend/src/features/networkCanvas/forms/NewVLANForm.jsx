@@ -153,7 +153,7 @@ const NewVLANForm = ({ onSave, wizardMode = false }) => {
             <MenuItem value={CLOUD_AWS_VALUE}>{CLOUD_AWS_LABEL}</MenuItem>
           </Select>
           <FormHelperText>
-            Por ahora el MVP se ejecuta en AWS (más adelante puedes habilitar otros proveedores).
+            Inicialmente trabajamos con AWS, tanto para simulación educativa de topologías como para orquestación real.
           </FormHelperText>
         </FormControl>
 

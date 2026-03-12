@@ -1,6 +1,6 @@
 // apps/frontend/src/app/routes/DashboardRoutes.jsx
 import { ReactFlowProvider } from "@xyflow/react";
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { USER_ROL_STUDENT, USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER } from '@/shared/constants';
 import { LoadingFlowProvider } from '@/app/providers/LoadingFlowContext';
 import Dashboard from '@/features/admin/pages/Dashboard';
@@ -13,9 +13,13 @@ import ProfilePage from '@/features/admin/pages/ProfilePage';
 import { SettingsPage } from "@/features/settings";
 import GeneralSettings from '@/features/settings/pages/GeneralSettings';
 import { UsersManagement } from '@/features/settings/pages/UsersManagement';
-import LoadingFlow from '@/shared/ui/organisms/LoadingFlow';
 import ProtectedRoute from '@/shared/ui/organisms/ProtectedRoute'
-import { LoginPage, RegistrationPage } from "@/features/auth";
+
+const VpcsLayout = () => (
+  <WizardProvider>
+    <Outlet />
+  </WizardProvider>
+);
 
 
 const DashboardRoutes = () => {
@@ -28,63 +32,30 @@ const DashboardRoutes = () => {
 
           <Route path='paneladmin' element={<PanelAdmin />} />
 
-
-          <Route path='settings/amilist' element={
-
-            <>
-              <LoadingFlow />
-              <SettingsPage />
-            </>
-          }
-          />
+          <Route path='settings/amilist' element={<SettingsPage />} />
           <Route path='settings/usersmanagement' element={
             <ProtectedRoute allowedRoles={[USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER]}>
-              <>
-                <LoadingFlow />
-                <UsersManagement />
-              </>
+              <UsersManagement />
             </ProtectedRoute>
           } />
 
+          <Route path='settings/profile' element={<ProfilePage />} />
 
-
-          <Route path='settings/profile' element={
-
-            <>
-              <LoadingFlow />
-              <ProfilePage />
-            </>
-          }
-          />
-
-
-          {/* Encapsulating specific routes */}
-          <Route path='vpcs/*' element={
-            <WizardProvider>
-              <LoadingFlow />
-              <Routes>
-                <Route
-                  index
-                  element={<VPCList />}
-                />
-                <Route
-                  path=':vpcid/mainflow'
-                  element={
-                    <ReactFlowProvider>
-                      <MainFlow />
-                    </ReactFlowProvider>
-                  }
-                />
-              </Routes>
-            </WizardProvider>
-          } />
+          <Route path='vpcs' element={<VpcsLayout />}>
+            <Route index element={<VPCList />} />
+            <Route
+              path=':vpcid/mainflow'
+              element={
+                <ReactFlowProvider>
+                  <MainFlow />
+                </ReactFlowProvider>
+              }
+            />
+          </Route>
 
           <Route path='settings/general' element={
             <ProtectedRoute allowedRoles={[USER_ROL_STUDENT, USER_ROL_TEACHER]}>
-              <>
-                <LoadingFlow />
-                <GeneralSettings />
-              </>
+              <GeneralSettings />
             </ProtectedRoute>
           } />
 

@@ -1,0 +1,166 @@
+{
+  "name": "scenario-06-three-vpcs-peering-partial",
+  "cloud": "aws",
+  "simulate_only": true,
+  "vlan": {
+    "name": "lab-peering-partial",
+    "region": "us-east-1",
+    "master_cidr": "10.70.0.0/14"
+  },
+  "vpcs": [
+    {
+      "id": "vpc-a-06",
+      "name": "VPC-A",
+      "region": "us-east-1",
+      "cidr_block": "10.70.0.0/16",
+      "allowed_ssh_cidr": "190.20.221.154/32",
+      "internet_gateway": true,
+      "nat_gateway": {
+        "enabled": false,
+        "public_subnet": "",
+        "elastic_ip": ""
+      },
+      "route_tables": [
+        {
+          "name": "public",
+          "routes": [
+            {
+              "name": "igw-default",
+              "target": "igw",
+              "dest_cidr": "0.0.0.0/0"
+            }
+          ]
+        }
+      ],
+      "subnets": [
+        {
+          "name": "public-a1",
+          "cidr_block": "10.70.1.0/24",
+          "subnet_type": "public",
+          "availability_zone": "us-east-1a",
+          "map_public_ip_on_launch": true,
+          "route_table": "public",
+          "instances": [
+            {
+              "id": "vm-a1",
+              "name": "bastion-a1",
+              "ami": "ami-0ebfd941bbafe70c6",
+              "instance_type": "t2.micro",
+              "ip_address": "10.70.1.10",
+              "ssh_access": "tesis-key",
+              "associate_public_ip": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "vpc-b-06",
+      "name": "VPC-B",
+      "region": "us-east-1",
+      "cidr_block": "10.71.0.0/16",
+      "allowed_ssh_cidr": "190.20.221.154/32",
+      "internet_gateway": true,
+      "nat_gateway": {
+        "enabled": false,
+        "public_subnet": "",
+        "elastic_ip": ""
+      },
+      "route_tables": [
+        {
+          "name": "public",
+          "routes": [
+            {
+              "name": "igw-default",
+              "target": "igw",
+              "dest_cidr": "0.0.0.0/0"
+            }
+          ]
+        }
+      ],
+      "subnets": [
+        {
+          "name": "public-b1",
+          "cidr_block": "10.71.1.0/24",
+          "subnet_type": "public",
+          "availability_zone": "us-east-1a",
+          "map_public_ip_on_launch": true,
+          "route_table": "public",
+          "instances": [
+            {
+              "id": "vm-b1",
+              "name": "bastion-b1",
+              "ami": "ami-0ebfd941bbafe70c6",
+              "instance_type": "t2.micro",
+              "ip_address": "10.71.1.10",
+              "ssh_access": "tesis-key",
+              "associate_public_ip": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "vpc-c-06",
+      "name": "VPC-C",
+      "region": "us-east-1",
+      "cidr_block": "10.72.0.0/16",
+      "allowed_ssh_cidr": "190.20.221.154/32",
+      "internet_gateway": true,
+      "nat_gateway": {
+        "enabled": false,
+        "public_subnet": "",
+        "elastic_ip": ""
+      },
+      "route_tables": [
+        {
+          "name": "public",
+          "routes": [
+            {
+              "name": "igw-default",
+              "target": "igw",
+              "dest_cidr": "0.0.0.0/0"
+            }
+          ]
+        }
+      ],
+      "subnets": [
+        {
+          "name": "public-c1",
+          "cidr_block": "10.72.1.0/24",
+          "subnet_type": "public",
+          "availability_zone": "us-east-1a",
+          "map_public_ip_on_launch": true,
+          "route_table": "public",
+          "instances": [
+            {
+              "id": "vm-c1",
+              "name": "bastion-c1",
+              "ami": "ami-0ebfd941bbafe70c6",
+              "instance_type": "t2.micro",
+              "ip_address": "10.72.1.10",
+              "ssh_access": "tesis-key",
+              "associate_public_ip": true
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "type": "peering",
+      "via_router_id": "router-p-06",
+      "vpc_a_id": "vpc-a-06",
+      "vpc_b_id": "vpc-b-06"
+    },
+    {
+      "type": "peering",
+      "via_router_id": "router-p-06",
+      "vpc_a_id": "vpc-b-06",
+      "vpc_b_id": "vpc-c-06"
+    }
+  ],
+  "routers": [],
+  "allow_cross_vpc_ping": true
+}

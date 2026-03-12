@@ -1,8 +1,10 @@
 import { Box, Typography } from "@mui/material";
+import { useState } from "react";
 import SidebarFlow from "@/features/networkCanvas/panels/SidebarFlow";
 import ReactFlowCanvas from "@/features/networkCanvas/canvas/ReactFlowCanvas";
 import PacketToolbar from "@/features/networkCanvas/panels/PacketToolbar";
 import CanvasFeedbackLayer from "@/features/networkCanvas/ui/CanvasFeedbackLayer";
+import LearningGuidePanel from "@/features/networkCanvas/panels/LearningGuidePanel";
 
 export default function FlowWorkspace({
     reactFlowWrapper,
@@ -27,8 +29,11 @@ export default function FlowWorkspace({
     reactFlowInstance,
     theme,
     toolbarProps,
-    feedbackProps
+    feedbackProps,
+    learningGuideProps
 }) {
+    const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+    const [isGuideOpen, setIsGuideOpen] = useState(false);
 
     return (
         <Box
@@ -36,22 +41,30 @@ export default function FlowWorkspace({
             sx={{
                 height: "100%",
                 display: "flex",
-                borderRadius: 1,
+                borderRadius: 2,
                 overflow: "hidden",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+                border: "1px solid",
+                borderColor: "divider",
+                boxShadow: (theme) =>
+                    theme.palette.mode === "light"
+                        ? "0 16px 40px rgba(15,23,42,0.08)"
+                        : "0 18px 44px rgba(0,0,0,0.32)",
                 backgroundColor: "background.paper",
             }}
         >
             <Box
                 sx={{
-                    width: { xs: 220, md: 260 },
-                    borderRight: "1px solid",
+                    width: isPaletteOpen ? { xs: 220, md: 260 } : 0,
+                    minWidth: isPaletteOpen ? { xs: 220, md: 260 } : 0,
+                    borderRight: isPaletteOpen ? "1px solid" : "none",
                     borderColor: "divider",
                     display: "flex",
                     flexDirection: "column",
+                    overflow: "hidden",
+                    transition: "width .22s ease, min-width .22s ease",
                 }}
             >
-                <SidebarFlow />
+                {isPaletteOpen && <SidebarFlow />}
             </Box>
 
             <Box
@@ -63,7 +76,13 @@ export default function FlowWorkspace({
                 }}
             >
 
-                <PacketToolbar {...toolbarProps} />
+                <PacketToolbar
+                    {...toolbarProps}
+                    paletteOpen={isPaletteOpen}
+                    guideOpen={isGuideOpen}
+                    onTogglePalette={() => setIsPaletteOpen((prev) => !prev)}
+                    onToggleGuide={() => setIsGuideOpen((prev) => !prev)}
+                />
 
                 <Box
                     sx={{
@@ -85,11 +104,23 @@ export default function FlowWorkspace({
                                 justifyContent: "center",
                                 pointerEvents: "none",
                                 zIndex: 10,
+                                textAlign: "center",
+                                px: 2,
                             }}
                         >
-                            <Typography variant="h6">
-                                Comienza creando tu red
-                            </Typography>
+                            <Box>
+                                <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                                    Diseña tu laboratorio de topologías
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                    Simula una VLAN para aprendizaje o prepara una orquestación real en AWS.
+                                </Typography>
+                                {!isPaletteOpen && (
+                                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.8, display: "block" }}>
+                                        Tip: abre Tool Palette desde la barra superior para comenzar a arrastrar componentes.
+                                    </Typography>
+                                )}
+                            </Box>
                         </Box>
                     )}
 
@@ -120,6 +151,21 @@ export default function FlowWorkspace({
 
                 <CanvasFeedbackLayer {...feedbackProps} />
 
+            </Box>
+
+            <Box
+                sx={{
+                    width: isGuideOpen ? { xs: 0, lg: 320 } : 0,
+                    minWidth: isGuideOpen ? { xs: 0, lg: 320 } : 0,
+                    display: { xs: "none", lg: "block" },
+                    borderLeft: isGuideOpen ? "1px solid" : "none",
+                    borderColor: "divider",
+                    backgroundColor: "background.paper",
+                    overflow: "hidden",
+                    transition: "width .22s ease, min-width .22s ease",
+                }}
+            >
+                {isGuideOpen && <LearningGuidePanel {...learningGuideProps} />}
             </Box>
         </Box>
     );

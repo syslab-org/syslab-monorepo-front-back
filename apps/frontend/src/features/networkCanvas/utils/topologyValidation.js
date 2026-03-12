@@ -51,6 +51,21 @@ const indexById = (arr) => {
   arr.forEach((x) => m.set(x.id, x));
   return m;
 };
+const normalizeMode = (value) => {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (
+    raw === "tgw" ||
+    raw === "transit" ||
+    raw === "transit_gateway" ||
+    raw === "transit-gateway"
+  ) {
+    return "tgw";
+  }
+  return "peering";
+};
+const pairKey = (a, b) => (a < b ? `${a}::${b}` : `${b}::${a}`);
 const INSTANCE_TYPES = new Set([
   TYPE_COMPUTER_NODE,
   TYPE_PRINTER_NODE,
@@ -166,6 +181,8 @@ export function validateTopology(nodes, edges) {
     const rName = r.data?.identifier || r.id;
     const routes = Array.isArray(r.data?.routeTable) ? r.data.routeTable : [];
     const vpcsOnThisRouter = routerToVpcs.get(r.id) || new Set();
+    const routerMode = normalizeMode(r.data?.mode);
+    const pairDirections = new Map();
 
     routes.forEach((rt, idx) => {
       const row = `Router "${rName}" ruta #${idx + 1}`;
@@ -228,7 +245,58 @@ export function validateTopology(nodes, edges) {
           );
         }
       }
+
+      if (
+        srcVpc &&
+        dstVpc &&
+        srcVpc.id !== dstVpc.id &&
+        vpcsOnThisRouter.has(srcVpc.id) &&
+        vpcsOnThisRouter.has(dstVpc.id)
+      ) {
+        const key = pairKey(srcVpc.id, dstVpc.id);
+        if (!pairDirections.has(key)) {
+          pairDirections.set(key, {
+            a: srcVpc.id < dstVpc.id ? srcVpc.id : dstVpc.id,
+            b: srcVpc.id < dstVpc.id ? dstVpc.id : srcVpc.id,
+            aToB: false,
+            bToA: false,
+          });
+        }
+        const pair = pairDirections.get(key);
+        if (srcVpc.id === pair.a && dstVpc.id === pair.b) pair.aToB = true;
+        if (srcVpc.id === pair.b && dstVpc.id === pair.a) pair.bToA = true;
+      }
     });
+
+    pairDirections.forEach((pair) => {
+      const aName = idToNode.get(pair.a)?.data?.vpcName || pair.a;
+      const bName = idToNode.get(pair.b)?.data?.vpcName || pair.b;
+      const hasBothDirections = pair.aToB && pair.bToA;
+
+      if (routerMode === "peering" && !hasBothDirections) {
+        errors.push(
+          `Router "${rName}": en modo peering, ${aName} ↔ ${bName} requiere rutas en ambos sentidos.`,
+        );
+      }
+
+      if (routerMode === "tgw" && !hasBothDirections) {
+        warnings.push(
+          `Router "${rName}": ${aName} ↔ ${bName} tiene ruta solo de ida en TGW; el ping de retorno fallará.`,
+        );
+      }
+    });
+
+    if (routerMode === "peering" && vpcsOnThisRouter.size > 2) {
+      warnings.push(
+        `Router "${rName}": peering con ${vpcsOnThisRouter.size} VPC puede ser difícil de mantener por cantidad de pares.`,
+      );
+    }
+
+    if (routerMode === "tgw" && vpcsOnThisRouter.size > 0 && vpcsOnThisRouter.size < 3) {
+      warnings.push(
+        `Router "${rName}": TGW con ${vpcsOnThisRouter.size} VPC puede ser sobredimensionado para este laboratorio.`,
+      );
+    }
   });
 
   /* --- Instancias: IP ∈ subnet (opcional) --- */

@@ -4,17 +4,17 @@ import {
   TYPE_VPC_NODE,
   TYPE_SUBNETWORK_NODE,
   restrictedNodes,
-  widthDefaultVPCNode,
-  heightDefaultVPCNode,
-  widthDefaultSubNetworkNode,
-  heightDefaultSubNetworkNode,
-  widthDefaultInstanceNode,
-  heightDefaultInstanceNode,
   colorBgInstanceNode,
   colorsBgSubnetworksNodes,
   TYPE_ROUTER_NODE,
 } from "@/features/networkCanvas/utils/constants";
 import getNodeTitle from "@/features/networkCanvas/utils/getNodeTitle";
+import {
+  clampToParentContent,
+  findFreePositionInParent,
+  getNodeDefaultSize,
+  toNumber,
+} from "@/features/networkCanvas/utils/nodeGeometry";
 
 const getRandomColor = () =>
   colorsBgSubnetworksNodes[
@@ -22,14 +22,6 @@ const getRandomColor = () =>
   ];
 
 const makeId = () => Math.random().toString(36).substring(2, 10);
-
-// Convierte posibles tamaños en number (pueden venir como string en style)
-const toNumber = (v, fallback) => {
-  if (v == null) return fallback;
-  if (typeof v === "number") return v;
-  const n = Number(String(v).replace("px", ""));
-  return Number.isFinite(n) ? n : fallback;
-};
 
 export default function useHandleDrop(
   reactFlowInstance,
@@ -55,16 +47,7 @@ export default function useHandleDrop(
           y: event.clientY,
         });
 
-        // tamaño por defecto según tipo
-        let width = widthDefaultInstanceNode;
-        let height = heightDefaultInstanceNode;
-        if (type === TYPE_VPC_NODE) {
-          width = widthDefaultVPCNode;
-          height = heightDefaultVPCNode;
-        } else if (type === TYPE_SUBNETWORK_NODE) {
-          width = widthDefaultSubNetworkNode;
-          height = heightDefaultSubNetworkNode;
-        }
+        const { width, height } = getNodeDefaultSize(type);
 
         const bg = restrictedNodes.includes(type)
           ? colorBgInstanceNode
@@ -113,13 +96,14 @@ export default function useHandleDrop(
           if (type === TYPE_SUBNETWORK_NODE) {
             const parent = all.find((n) => {
               if (n.type !== TYPE_VPC_NODE) return false;
+              const parentDefault = getNodeDefaultSize(n.type);
               const pw = toNumber(
                 n.width ?? n.style?.width,
-                widthDefaultVPCNode,
+                parentDefault.width,
               );
               const ph = toNumber(
                 n.height ?? n.style?.height,
-                heightDefaultVPCNode,
+                parentDefault.height,
               );
               const { x: px, y: py } = n.position;
               return (
@@ -135,11 +119,34 @@ export default function useHandleDrop(
             }
 
             const { x: px, y: py } = parent.position;
+            const parentDefault = getNodeDefaultSize(parent.type);
+            const parentSize = {
+              width: toNumber(
+                parent.width ?? parent.style?.width,
+                parentDefault.width,
+              ),
+              height: toNumber(
+                parent.height ?? parent.style?.height,
+                parentDefault.height,
+              ),
+            };
+            const siblingSubnets = all.filter(
+              (node) =>
+                node.type === TYPE_SUBNETWORK_NODE &&
+                (node.parentNode || node.parentId) === parent.id,
+            );
+            const relativePosition = findFreePositionInParent({
+              preferredPosition: { x: pos.x - px, y: pos.y - py },
+              childSize: { width, height },
+              parentSize,
+              parentType: parent.type,
+              siblings: siblingSubnets,
+            });
             newNode = {
               ...newNode,
               parentId: parent.id,
               parentNode: parent.id,
-              position: { x: pos.x - px, y: pos.y - py },
+              position: relativePosition,
               extent: "parent",
             };
             return [...nds, newNode];
@@ -177,22 +184,14 @@ export default function useHandleDrop(
               );
               if (!parent) return false;
 
-              const pw = toNumber(
-                parent.width ?? parent.style?.width,
-                widthDefaultVPCNode,
-              );
-              const ph = toNumber(
-                parent.height ?? parent.style?.height,
-                heightDefaultVPCNode,
-              );
-
+              const subnetDefault = getNodeDefaultSize(n.type);
               const sw = toNumber(
                 n.width ?? n.style?.width,
-                widthDefaultSubNetworkNode,
+                subnetDefault.width,
               );
               const sh = toNumber(
                 n.height ?? n.style?.height,
-                heightDefaultSubNetworkNode,
+                subnetDefault.height,
               );
 
               // posición absoluta de la subnet (parent + offset)
@@ -220,12 +219,35 @@ export default function useHandleDrop(
 
             const absX = parent.position.x + (subnet.position?.x ?? 0);
             const absY = parent.position.y + (subnet.position?.y ?? 0);
+            const subnetDefault = getNodeDefaultSize(subnet.type);
+            const parentSize = {
+              width: toNumber(
+                subnet.width ?? subnet.style?.width,
+                subnetDefault.width,
+              ),
+              height: toNumber(
+                subnet.height ?? subnet.style?.height,
+                subnetDefault.height,
+              ),
+            };
+            const siblingInstances = all.filter(
+              (node) =>
+                restrictedNodes.includes(node.type) &&
+                (node.parentNode || node.parentId) === subnet.id,
+            );
+            const relativePosition = findFreePositionInParent({
+              preferredPosition: { x: pos.x - absX, y: pos.y - absY },
+              childSize: { width, height },
+              parentSize,
+              parentType: subnet.type,
+              siblings: siblingInstances,
+            });
 
             newNode = {
               ...newNode,
               parentId: subnet.id,
               parentNode: subnet.id,
-              position: { x: pos.x - absX, y: pos.y - absY },
+              position: relativePosition,
               extent: "parent",
             };
             return [...nds, newNode];

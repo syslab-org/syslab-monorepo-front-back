@@ -1,4 +1,4 @@
-import { ReactFlow, Background, Controls } from "@xyflow/react";
+import { ReactFlow, Background, Controls, ConnectionMode } from "@xyflow/react";
 import { useMemo } from "react";
 
 function ReactFlowCanvas({
@@ -32,6 +32,7 @@ function ReactFlowCanvas({
 
     return (
         <ReactFlow
+            className="pt-canvas"
             nodes={nodes}
             edges={memoEdges}
             onlyRenderVisibleElements
@@ -53,6 +54,8 @@ function ReactFlowCanvas({
             onConnectEnd={onConnectEnd}
             fitViewOptions={{ padding: 0.2 }}
             isValidConnection={isValidConnection}
+            connectionMode={ConnectionMode.Loose}
+            connectionRadius={22}
             nodeTypes={memoNodeTypes}
             nodeOrigin={[0, 0]}
             style={{
@@ -66,6 +69,14 @@ function ReactFlowCanvas({
             onPaneClick={() => setNodes(nds => nds.map(n => ({ ...n, selected: false })))}
         >
             <Controls />
+            <Background
+                variant="lines"
+                gap={96}
+                size={1}
+                color={theme.palette.mode === "light"
+                    ? "rgba(148,163,184,0.08)"
+                    : "rgba(148,163,184,0.10)"}
+            />
             <Background
                 variant="dots"
                 gap={32}

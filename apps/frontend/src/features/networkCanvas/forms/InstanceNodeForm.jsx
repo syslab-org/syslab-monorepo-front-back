@@ -1,13 +1,16 @@
 // apps/frontend/src/components/flow/forms/InstanceNodeForm.jsx
 import { yupResolver } from '@hookform/resolvers/yup';
 import {
+  Alert,
+  Box,
   Button,
   FormControl,
   FormHelperText,
   InputLabel,
   MenuItem,
   Select,
-  TextField
+  TextField,
+  Typography,
 } from "@mui/material";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
@@ -113,7 +116,15 @@ const InstanceNodeForm = ({
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <form onSubmit={handleSubmit(onSubmit)} className="pt-node-form">
+      <Box className="pt-node-form__header">
+        <Typography className="pt-node-form__eyebrow">compute node</Typography>
+        <Typography className="pt-node-form__title">Instance</Typography>
+        <Typography className="pt-node-form__subtitle">
+          Configure naming, addressing and runtime profile for this VM.
+        </Typography>
+      </Box>
+
       <TextField
         label="Name of Instance"
         {...register("name")}
@@ -173,9 +184,9 @@ const InstanceNodeForm = ({
 
       {/* Mensaje didáctico si se elige t4g.* */}
       {watch("instanceType")?.startsWith("t4g") && (
-        <p style={{ fontSize: 13, marginTop: 6, color: '#666' }}>
-          💡 Los tipos <b>t4g.*</b> usan ARM (Graviton). Asegúrate de elegir una AMI <b>ARM64</b>.
-        </p>
+        <Alert severity="info" variant="outlined" sx={{ mt: 0.4 }}>
+          Los tipos t4g.* usan ARM (Graviton). Selecciona una AMI ARM64.
+        </Alert>
       )}
 
       <TextField
@@ -189,14 +200,14 @@ const InstanceNodeForm = ({
       />
 
 
-      <div style={{ marginTop: 12 }}>
+      <Box className="pt-node-form__actions">
         <Button type="submit" variant="contained" color="primary">
           Registrar Configuración
         </Button>
-        <Button onClick={deleteNode} sx={{ ml: 1 }}>
+        <Button onClick={deleteNode} color="error">
           Delete Node
         </Button>
-      </div>
+      </Box>
     </form>
   );
 };

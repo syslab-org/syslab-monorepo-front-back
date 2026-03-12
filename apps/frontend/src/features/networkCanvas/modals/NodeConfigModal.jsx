@@ -1,4 +1,4 @@
-import { Modal, Box } from "@mui/material";
+import { Modal, Box, Typography } from "@mui/material";
 
 import InstanceNodeForm from "@/features/networkCanvas/forms/InstanceNodeForm";
 import RouterNodeForm from "@/features/networkCanvas/forms/RouterNodeForm";
@@ -22,7 +22,7 @@ const restrictedNodes = [
     TYPE_SERVER_NODE
 ];
 
-const styleModal = {
+const styleModal = (theme) => ({
     position: "absolute",
     top: "50%",
     left: "50%",
@@ -32,10 +32,85 @@ const styleModal = {
     maxHeight: "85vh",
     overflowY: "auto",
     bgcolor: "background.paper",
-    border: "2px solid #000",
-    borderRadius: 2,
-    boxShadow: 24,
-    p: 4
+    border: "1px solid",
+    borderColor: "divider",
+    borderRadius: 3,
+    boxShadow:
+        theme.palette.mode === "light"
+            ? "0 26px 56px rgba(15,23,42,0.18)"
+            : "0 30px 60px rgba(0,0,0,0.45)",
+    p: { xs: 2, md: 2.5 },
+    background:
+        theme.palette.mode === "light"
+            ? "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,251,255,0.98) 100%)"
+            : "linear-gradient(180deg, rgba(17,24,39,0.98) 0%, rgba(15,23,42,0.98) 100%)",
+    "& .pt-node-form": {
+        display: "flex",
+        flexDirection: "column",
+        gap: 1.4,
+    },
+    "& .pt-node-form__header": {
+        mb: 0.5,
+        pb: 1.2,
+        borderBottom: "1px solid",
+        borderColor: "divider",
+    },
+    "& .pt-node-form__eyebrow": {
+        display: "block",
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: 1,
+        textTransform: "uppercase",
+        opacity: 0.7,
+    },
+    "& .pt-node-form__title": {
+        fontSize: 19,
+        fontWeight: 700,
+        lineHeight: 1.15,
+    },
+    "& .pt-node-form__subtitle": {
+        fontSize: 12,
+        color: "text.secondary",
+        mt: 0.25,
+    },
+    "& .pt-node-form .MuiFormControl-root, & .pt-node-form .MuiTextField-root": {
+        mb: 0.35,
+    },
+    "& .pt-node-form .MuiInputBase-root": {
+        borderRadius: 2,
+        background:
+            theme.palette.mode === "light"
+                ? "rgba(255,255,255,0.84)"
+                : "rgba(15,23,42,0.45)",
+    },
+    "& .pt-node-form .MuiAlert-root": {
+        borderRadius: 2,
+    },
+    "& .pt-node-form__actions": {
+        display: "flex",
+        alignItems: "center",
+        gap: 1,
+        pt: 0.8,
+        mt: 0.4,
+        borderTop: "1px solid",
+        borderColor: "divider",
+        flexWrap: "wrap",
+    },
+    "& .pt-node-form .MuiButton-root": {
+        borderRadius: 2,
+        fontWeight: 700,
+        px: 1.8,
+    },
+});
+
+const NODE_FORM_META = {
+    [TYPE_VPC_NODE]: { label: "Network Node", title: "VPC Configuration" },
+    [TYPE_SUBNETWORK_NODE]: { label: "Network Node", title: "Subnet Configuration" },
+    [TYPE_ROUTER_NODE]: { label: "Routing Node", title: "Router Configuration" },
+    [TYPE_DEFAULT_NODE]: { label: "Compute Node", title: "Instance Configuration" },
+    [TYPE_COMPUTER_NODE]: { label: "Compute Node", title: "Instance Configuration" },
+    [TYPE_PRINTER_NODE]: { label: "Compute Node", title: "Instance Configuration" },
+    [TYPE_SERVER_NODE]: { label: "Compute Node", title: "Instance Configuration" },
 };
 
 function getInstanceNodeProps(selectedNode, nodes, restrictedNodes) {
@@ -166,6 +241,17 @@ function NodeConfigModal({
 }) {
 
     if (!selectedNode) return null;
+    const formMeta = NODE_FORM_META[selectedNode.type] || {
+        label: "Node",
+        title: "Node Configuration",
+    };
+    const nodeName =
+        selectedNode.data?.vpcName ||
+        selectedNode.data?.subnetName ||
+        selectedNode.data?.name ||
+        selectedNode.data?.identifier ||
+        selectedNode.data?.title ||
+        selectedNode.id;
 
     return (
         <Modal
@@ -174,7 +260,23 @@ function NodeConfigModal({
             aria-labelledby="parent-modal-title"
             aria-describedby="parent-modal-description"
         >
-            <Box sx={{ ...styleModal, width: selectedNode && selectedNode.type === TYPE_ROUTER_NODE ? 800 : 400 }}>
+            <Box
+                sx={(theme) => ({
+                    ...styleModal(theme),
+                    width: selectedNode && selectedNode.type === TYPE_ROUTER_NODE ? 840 : 460
+                })}
+            >
+                <Box sx={{ mb: 1.2, pb: 1.2, borderBottom: "1px solid", borderColor: "divider" }}>
+                    <Typography variant="overline" sx={{ fontWeight: 700, letterSpacing: 1.1, opacity: 0.7 }}>
+                        {formMeta.label}
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                        {formMeta.title}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        Editing: {nodeName}
+                    </Typography>
+                </Box>
 
                 {/* If selected node is restricted, show warning */}
                 {selectedNode && restrictedNodes.includes(selectedNode.type) && (() => {

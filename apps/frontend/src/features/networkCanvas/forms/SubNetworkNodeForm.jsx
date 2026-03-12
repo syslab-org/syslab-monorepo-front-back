@@ -1,6 +1,8 @@
 // apps/frontend/src/components/flow/forms/SubNetworkNodeForm.jsx
 import { yupResolver } from '@hookform/resolvers/yup';
 import {
+  Alert,
+  Box,
   Button,
   Checkbox,
   FormControl,
@@ -10,6 +12,7 @@ import {
   MenuItem,
   Select,
   TextField,
+  Typography,
 } from "@mui/material";
 import { useEffect, useMemo } from 'react';
 import { Controller, useForm } from "react-hook-form";
@@ -127,7 +130,19 @@ const SubNetworkNodeForm = ({
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <form onSubmit={handleSubmit(onSubmit)} className="pt-node-form">
+      <Box className="pt-node-form__header">
+        <Typography className="pt-node-form__eyebrow">subnet node</Typography>
+        <Typography className="pt-node-form__title">Subnet Segment</Typography>
+        <Typography className="pt-node-form__subtitle">
+          Segment traffic behavior and addressing inside the parent VPC.
+        </Typography>
+      </Box>
+
+      <Alert severity="info" variant="outlined" sx={{ mb: 0.5 }}>
+        Public subnet allows ingress/egress by route policy. Private subnet keeps traffic internal.
+      </Alert>
+
       <TextField
         label="Subnet Name"
         {...register("subnetName")}
@@ -214,17 +229,17 @@ const SubNetworkNodeForm = ({
         label="Auto-assign public IPv4 (recomendado en subnets públicas)"
       />
       {errors.map_public_ip_on_launch && (
-        <p style={{ color: 'red', marginTop: 4 }}>{errors.map_public_ip_on_launch.message}</p>
+        <FormHelperText error>{errors.map_public_ip_on_launch.message}</FormHelperText>
       )}
 
-      <div style={{ marginTop: 12 }}>
+      <Box className="pt-node-form__actions">
         <Button type="submit" variant="contained" color="primary">
           Registrar Configuración
         </Button>
-        <Button onClick={deleteNode} sx={{ ml: 1 }}>
+        <Button onClick={deleteNode} color="error">
           Delete Node
         </Button>
-      </div>
+      </Box>
     </form>
   );
 };

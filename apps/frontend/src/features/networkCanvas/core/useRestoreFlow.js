@@ -111,7 +111,10 @@ const normalizeFetchedDoc = (docData) => {
   const planId =
     docData.planId ?? data.planId ?? docData.plan_id ?? data.plan_id ?? null;
 
-  return { flow, cidrBlock, prefixLength, planId };
+  const labName = docData.name ?? data.name ?? null;
+  const labRegion = docData.region ?? data.region ?? null;
+
+  return { flow, cidrBlock, prefixLength, planId, labName, labRegion };
 };
 
 const useRestoreFlow = ({
@@ -123,7 +126,8 @@ const useRestoreFlow = ({
   setCanvasPlanId,
 }) => {
   const { vpcid } = useParams();
-  const { setCidrBlockVPC, setPrefixLength } = useCidrBlockVPCStore();
+  const { setCidrBlockVPC, setPrefixLength, setVlanName, setVlanRegion } =
+    useCidrBlockVPCStore();
   const { setLoadingFlow } = useContext(LoadingFlowContext);
 
   const restoreFlow = useCallback(async () => {
@@ -142,13 +146,22 @@ const useRestoreFlow = ({
         return;
       }
 
-      const { flow: fetchedFlow, cidrBlock, prefixLength, planId } = normalized;
+      const {
+        flow: fetchedFlow,
+        cidrBlock,
+        prefixLength,
+        planId,
+        labName,
+        labRegion,
+      } = normalized;
 
       // Actualiza CIDR / prefix / planId desde Firestore
       if (cidrBlock) setCidrBlockVPC(cidrBlock);
       if (prefixLength !== undefined && prefixLength !== null) {
         setPrefixLength(prefixLength || "");
       }
+      if (labName) setVlanName(labName);
+      if (labRegion) setVlanRegion(labRegion);
       if (typeof setCanvasPlanId === "function") {
         setCanvasPlanId(planId || null);
       }
@@ -221,6 +234,8 @@ const useRestoreFlow = ({
     getId,
     setCidrBlockVPC,
     setPrefixLength,
+    setVlanName,
+    setVlanRegion,
   ]);
 
   return restoreFlow;

@@ -15,6 +15,7 @@ SVC_PG        = postgres
 TF            = AWS_PROFILE=$(AWS_PROFILE) AWS_REGION=$(AWS_REGION) terraform -chdir=infra/terraform
 SMOKE_TIMEOUT ?= 60
 PLAN_FILE     ?= plan.json
+PLAN_API      ?= http://localhost:8000
 
 # -------- AWS/ECR (overrideables) --------
 AWS_REGION    ?= us-east-1
@@ -63,7 +64,8 @@ SLEEP             ?= 5
   aws-ecs-status aws-wait-ecs aws-wait-alb aws-migrate \
   smoke smoke-local smoke-quick test-network-plan \
   get-td-backend get-td-celery set-td-backend set-td-celery \
-  aws-db-bootstrap aws-db-up aws-db-down secret-db
+  aws-db-bootstrap aws-db-up aws-db-down secret-db \
+  tf-destroy tf-destroy-last tf-destroy-plan
 
 ## Runbook A: Local
 ## Runbook B: ECR
@@ -589,10 +591,21 @@ tf-destroy:
 
 # make tf-destroy-last
 tf-destroy-last:
-	$(DC) exec celery bash -lc '\
-	set -e; DIR=$$(ls -1td /tmp/tf-multi-* 2>/dev/null | head -1); \
-	test -n "$$DIR" && test -d "$$DIR" || { echo "No hay /tmp/tf-multi-*"; exit 1; } ; \
-	echo "[destroy] $$DIR"; cd "$$DIR"; \
-	export AWS_DEFAULT_REGION=$${AWS_DEFAULT_REGION:-us-east-1}; \
-	terraform init -input=false -no-color >/dev/null; \
-	terraform destroy -auto-approve -no-color'
+	@set -e; \
+	URL="$(PLAN_API)/api/network/plans/destroy-last/"; \
+	echo "POST $$URL"; \
+	HTTP=$$(curl -sS -o /tmp/tf_destroy_last_resp.json -w "%{http_code}" -X POST "$$URL"); \
+	cat /tmp/tf_destroy_last_resp.json | jq . 2>/dev/null || cat /tmp/tf_destroy_last_resp.json; \
+	echo "HTTP $$HTTP"; \
+	[ "$$HTTP" -lt 400 ] || exit 1
+
+# make tf-destroy-plan PLAN_ID=<uuid>
+tf-destroy-plan:
+	@[ -n "$(PLAN_ID)" ] || { echo "❌ PLAN_ID vacío. Ej: make tf-destroy-plan PLAN_ID=<uuid>"; exit 1; }
+	@set -e; \
+	URL="$(PLAN_API)/api/network/plans/$(PLAN_ID)/destroy/"; \
+	echo "POST $$URL"; \
+	HTTP=$$(curl -sS -o /tmp/tf_destroy_plan_resp.json -w "%{http_code}" -X POST "$$URL"); \
+	cat /tmp/tf_destroy_plan_resp.json | jq . 2>/dev/null || cat /tmp/tf_destroy_plan_resp.json; \
+	echo "HTTP $$HTTP"; \
+	[ "$$HTTP" -lt 400 ] || exit 1

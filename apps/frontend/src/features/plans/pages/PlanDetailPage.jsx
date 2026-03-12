@@ -9,6 +9,10 @@ import {
   CircularProgress,
   Container,
   Divider,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControlLabel,
   Paper,
   Stack,
@@ -49,6 +53,32 @@ function computeLifecycle(plan) {
 
   const isDestroyed = lastAction === 'destroy';
   const hasRealInfra = applied && !isDestroyed;
+  const failedRealApply =
+    status === 'FAILURE' &&
+    lastAction === 'apply' &&
+    !simulateOnly &&
+    !applied;
+  const isRunning = status === TASK_STATE_RUNNING || status === TASK_STATE_PENDING;
+
+  if (isRunning && lastAction === 'destroy') {
+    return {
+      key: 'DESTROYING',
+      label: 'DESTROYING',
+      helper: 'Destroy en ejecución: eliminando infraestructura en AWS.',
+      chip: { variant: 'filled', color: 'warning' },
+      allowDestroy: false,
+    };
+  }
+
+  if (isRunning && lastAction === 'apply') {
+    return {
+      key: 'DEPLOYING',
+      label: 'DEPLOYING',
+      helper: 'Deploy en ejecución: aplicando cambios en AWS.',
+      chip: { variant: 'filled', color: 'info' },
+      allowDestroy: false,
+    };
+  }
 
   // 1️⃣ ACTIVE (infra real viva)
   if (hasRealInfra) {
@@ -83,7 +113,18 @@ function computeLifecycle(plan) {
     };
   }
 
-  // 4️⃣ NOT APPLIED
+  // 4️⃣ FAILED REAL APPLY (puede haber recursos parciales)
+  if (failedRealApply) {
+    return {
+      key: 'FAILED_REAL_APPLY',
+      label: 'RECOVERY',
+      helper: 'El apply real falló. Puede haber recursos parciales en AWS: ejecuta Destroy antes de reintentar.',
+      chip: { variant: 'outlined', color: 'error' },
+      allowDestroy: true,
+    };
+  }
+
+  // 5️⃣ NOT APPLIED
   return {
     key: 'NOT_APPLIED',
     label: 'NOT APPLIED',
@@ -111,6 +152,388 @@ function statusChipProps(status) {
   }
 }
 
+const safeObject = (value) =>
+  value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+
+const splitInstanceKey = (key) => {
+  const raw = String(key || '');
+  const idx = raw.indexOf(':');
+  if (idx === -1) return { vpcId: raw, instanceName: raw };
+  return {
+    vpcId: raw.slice(0, idx),
+    instanceName: raw.slice(idx + 1),
+  };
+};
+
+function buildInstanceCatalog(outputs) {
+  const instanceIds = safeObject(outputs?.instance_ids);
+  const privateIps = safeObject(outputs?.instance_private_ips);
+  const publicIps = safeObject(outputs?.instance_public_ips);
+
+  const keys = Array.from(
+    new Set([
+      ...Object.keys(instanceIds),
+      ...Object.keys(privateIps),
+      ...Object.keys(publicIps),
+    ]),
+  );
+
+  const byVpc = new Map();
+  keys.forEach((key) => {
+    const { vpcId, instanceName } = splitInstanceKey(key);
+    if (!vpcId) return;
+
+    if (!byVpc.has(vpcId)) byVpc.set(vpcId, []);
+    byVpc.get(vpcId).push({
+      key,
+      instanceName,
+      instanceId: instanceIds[key] || null,
+      privateIp: privateIps[key] || null,
+      publicIp: publicIps[key] || null,
+    });
+  });
+
+  byVpc.forEach((list) => {
+    list.sort((a, b) => a.instanceName.localeCompare(b.instanceName));
+  });
+
+  return byVpc;
+}
+
+function buildVpcInfraCatalog(plan, outputsResponse) {
+  const payload = safeObject(plan?.payload);
+  const outputs = safeObject(outputsResponse?.outputs);
+  const vpcs = Array.isArray(payload?.vpcs) ? payload.vpcs : [];
+
+  const natGatewayIds = safeObject(outputs?.nat_gateway_ids);
+  const natEipAllocationIds = safeObject(outputs?.nat_eip_allocation_ids);
+  const igwIds = safeObject(outputs?.igw_ids);
+  const vpcIds = safeObject(outputs?.vpc_ids);
+
+  return vpcs.map((vpc) => ({
+    logicalVpcId: vpc.id,
+    name: vpc.name || vpc.id,
+    actualVpcId: vpcIds[vpc.id] || null,
+    igwId: igwIds[vpc.id] || null,
+    natGatewayId: natGatewayIds[vpc.id] || null,
+    natEipAllocationId: natEipAllocationIds[vpc.id] || null,
+  }));
+}
+
+function buildPlanAdvisories(plan, outputsResponse, lifecycle) {
+  const payload = safeObject(plan?.payload);
+  const outputs = safeObject(outputsResponse?.outputs);
+  const vpcs = Array.isArray(payload?.vpcs) ? payload.vpcs : [];
+  const links = Array.isArray(payload?.links) ? payload.links : [];
+  const routers = Array.isArray(payload?.routers) ? payload.routers : [];
+
+  const publicIps = safeObject(outputs?.instance_public_ips);
+  const publicIpv4InUse = Object.values(publicIps).filter((value) => Boolean(String(value || '').trim())).length;
+
+  const instanceCount = vpcs.reduce(
+    (acc, vpc) =>
+      acc +
+      (Array.isArray(vpc?.subnets) ? vpc.subnets : []).reduce(
+        (subAcc, subnet) => subAcc + ((Array.isArray(subnet?.instances) ? subnet.instances.length : 0)),
+        0,
+      ),
+    0,
+  );
+  const natVpcs = vpcs.filter((vpc) => Boolean(vpc?.nat_gateway?.enabled));
+  const natCount = natVpcs.length;
+  const providedNatEips = natVpcs
+    .map((vpc) => String(vpc?.nat_gateway?.elastic_ip || '').trim())
+    .filter(Boolean);
+  const tgwCount = routers.filter((router) => String(router?.type || '').toLowerCase() === 'tgw').length;
+  const tgwAttachmentCount = links.filter((link) => String(link?.type || '').toLowerCase() === 'tgw-attach').length;
+  const peeringCount = links.filter((link) => String(link?.type || '').toLowerCase() === 'peering').length;
+  const publicSubnetCount = vpcs.reduce(
+    (acc, vpc) =>
+      acc +
+      (Array.isArray(vpc?.subnets) ? vpc.subnets : []).filter(
+        (subnet) => String(subnet?.subnet_type || '').toLowerCase() === 'public',
+      ).length,
+    0,
+  );
+  const privateSubnetCount = vpcs.reduce(
+    (acc, vpc) =>
+      acc +
+      (Array.isArray(vpc?.subnets) ? vpc.subnets : []).filter(
+        (subnet) => String(subnet?.subnet_type || '').toLowerCase() === 'private',
+      ).length,
+    0,
+  );
+
+  const costs = [];
+  if (lifecycle.key === 'ACTIVE' || lifecycle.key === 'DEPLOYING' || lifecycle.key === 'FAILED_REAL_APPLY') {
+    costs.push({
+      severity: 'warning',
+      text: 'Este plan usa APPLY real o quedó parcialmente aplicado: puede generar costo monetario en AWS mientras existan recursos activos.',
+    });
+  } else if (lifecycle.key === 'PREVIEW' || lifecycle.key === 'NOT_APPLIED') {
+    costs.push({
+      severity: 'info',
+      text: 'En modo PLAN/preview no se crean recursos reales, por lo que este plan no debería generar costo directo en AWS.',
+    });
+  } else if (lifecycle.key === 'DESTROYED') {
+    costs.push({
+      severity: 'success',
+      text: 'El stack principal figura destruido. Si no dejaste recursos externos o residuales, este plan ya no debería seguir generando costo principal.',
+    });
+  }
+
+  if (instanceCount > 0) {
+    costs.push({
+      severity: lifecycle.key === 'ACTIVE' ? 'warning' : 'info',
+      text: `${instanceCount} instancia(s) EC2 declarada(s): generan costo de compute y, normalmente, de almacenamiento mientras existan.`,
+    });
+  }
+  if (natCount > 0) {
+    costs.push({
+      severity: lifecycle.key === 'ACTIVE' ? 'warning' : 'info',
+      text: `${natCount} NAT Gateway(s): AWS cobra por hora aprovisionada y por tráfico procesado mientras estén activos.`,
+    });
+  }
+  if (publicIpv4InUse > 0) {
+    costs.push({
+      severity: lifecycle.key === 'ACTIVE' ? 'warning' : 'info',
+      text: `${publicIpv4InUse} IPv4 pública(s) en uso según outputs: AWS cobra las IPv4 públicas en uso.`,
+    });
+  }
+  if (tgwCount > 0 || tgwAttachmentCount > 0) {
+    costs.push({
+      severity: lifecycle.key === 'ACTIVE' ? 'warning' : 'info',
+      text: `${tgwCount} TGW router(s) y ${tgwAttachmentCount} attachment(s): Transit Gateway agrega cobro por attachment/hora y por tráfico procesado.`,
+    });
+  }
+  if (peeringCount > 0) {
+    costs.push({
+      severity: 'info',
+      text: `${peeringCount} peering link(s): crear el peering no agrega cargo fijo, pero el tráfico por peering puede generar cobros según el patrón de transferencia.`,
+    });
+  }
+  costs.push({
+    severity: 'info',
+    text: 'La VPC en sí no tiene cargo adicional por existir, pero algunos componentes asociados sí lo tienen.',
+  });
+
+  const residuals = [];
+  if (providedNatEips.length > 0) {
+    residuals.push({
+      severity: 'warning',
+      text: `${providedNatEips.length} EIP(s) fue/fueron aportada(s) manualmente al NAT. Destroy no las libera por seguridad; pueden seguir generando cobro por IPv4 pública mientras permanezcan reservadas en tu cuenta.`,
+    });
+  } else if (natCount > 0) {
+    residuals.push({
+      severity: 'info',
+      text: 'Si el NAT usó una EIP autogenerada por el stack, Destroy intenta eliminar tanto el NAT como esa EIP. Si aún ves una Elastic IP, revisa si pertenece a otro recurso o a un deploy previo.',
+    });
+  }
+  residuals.push({
+    severity: 'info',
+    text: 'Los outputs guardados en esta página son históricos para auditoría/debug. No son recursos vivos en AWS y no generan costo por sí mismos.',
+  });
+  residuals.push({
+    severity: 'info',
+    text: 'AWS mantiene un DHCP option set por defecto por región. Este proyecto no crea uno dedicado, así que verlo en consola no implica que el destroy haya dejado un residuo de este stack.',
+  });
+  if (lifecycle.key === 'FAILED_REAL_APPLY') {
+    residuals.push({
+      severity: 'warning',
+      text: 'Si un APPLY real falla, puede quedar infraestructura parcial. En ese estado debes ejecutar Destroy y revisar logs antes de volver a aplicar.',
+    });
+  }
+
+  const pedagogy = [];
+  if (natCount > 0 && privateSubnetCount > 0) {
+    pedagogy.push({
+      severity: 'info',
+      text: 'Pedagógicamente, este laboratorio separa salida y exposición: NAT permite salida desde subnets privadas, pero no acceso entrante desde Internet.',
+    });
+  }
+  if (publicSubnetCount > 0 && privateSubnetCount > 0) {
+    pedagogy.push({
+      severity: 'info',
+      text: `Tienes ${publicSubnetCount} subnet(s) pública(s) y ${privateSubnetCount} privada(s): es un buen caso para observar bastion pública + workload privada.`,
+    });
+  }
+  if (providedNatEips.length > 0) {
+    pedagogy.push({
+      severity: 'info',
+      text: 'Usar una EIP propia fija la identidad de salida del NAT, pero también deja su ciclo de vida bajo responsabilidad del operador.',
+    });
+  }
+  if (peeringCount > 0) {
+    pedagogy.push({
+      severity: 'info',
+      text: 'El peering enseña conectividad punto a punto: necesitas rutas explícitas de ida y vuelta para obtener comunicación completa.',
+    });
+  }
+  if (tgwCount > 0) {
+    pedagogy.push({
+      severity: 'info',
+      text: 'Transit Gateway enseña un modelo hub-and-spoke: simplifica topologías multipunto, pero añade costo y una capa adicional de routing.',
+    });
+  }
+  if (instanceCount === 0) {
+    pedagogy.push({
+      severity: 'info',
+      text: 'Sin instancias, este plan sirve para estudiar topología y rutas, pero no para validar conectividad extremo a extremo dentro del laboratorio.',
+    });
+  }
+
+  return { costs, residuals, pedagogy };
+}
+
+const pairKey = (a, b) => (a < b ? `${a}::${b}` : `${b}::${a}`);
+
+function buildConnectivityScenarios(plan, outputsResponse) {
+  const payload = safeObject(plan?.payload);
+  const vpcs = Array.isArray(payload?.vpcs) ? payload.vpcs : [];
+  const links = Array.isArray(payload?.links) ? payload.links : [];
+  const outputs = safeObject(outputsResponse?.outputs);
+
+  const vpcById = new Map(
+    vpcs.map((vpc) => [
+      vpc.id,
+      {
+        id: vpc.id,
+        name: vpc.name || vpc.id,
+        cidr: vpc.cidr_block || 'CIDR n/a',
+      },
+    ]),
+  );
+
+  const pairMap = new Map();
+  const upsertPair = (aId, bId, mode, routerId) => {
+    if (!aId || !bId || aId === bId) return;
+    const key = pairKey(aId, bId);
+    if (!pairMap.has(key)) {
+      pairMap.set(key, {
+        aId: aId < bId ? aId : bId,
+        bId: aId < bId ? bId : aId,
+        modes: new Set(),
+        routers: new Set(),
+      });
+    }
+    const item = pairMap.get(key);
+    if (mode) item.modes.add(mode);
+    if (routerId) item.routers.add(routerId);
+  };
+
+  links
+    .filter((link) => String(link?.type || '').toLowerCase() === 'peering')
+    .forEach((link) => {
+      upsertPair(link.vpc_a_id, link.vpc_b_id, 'peering', link.via_router_id);
+    });
+
+  const tgwByRouter = new Map();
+  links
+    .filter((link) => String(link?.type || '').toLowerCase() === 'tgw-attach')
+    .forEach((link) => {
+      if (!link?.router_id || !link?.vpc_id) return;
+      if (!tgwByRouter.has(link.router_id)) tgwByRouter.set(link.router_id, []);
+      tgwByRouter.get(link.router_id).push(link.vpc_id);
+    });
+
+  tgwByRouter.forEach((routerVpcIds, routerId) => {
+    const uniqueVpcIds = Array.from(new Set(routerVpcIds));
+    for (let i = 0; i < uniqueVpcIds.length; i += 1) {
+      for (let j = i + 1; j < uniqueVpcIds.length; j += 1) {
+        upsertPair(uniqueVpcIds[i], uniqueVpcIds[j], 'tgw', routerId);
+      }
+    }
+  });
+
+  const instanceCatalog = buildInstanceCatalog(outputs);
+  return Array.from(pairMap.values()).map((pair) => {
+    const aVpc = vpcById.get(pair.aId) || { id: pair.aId, name: pair.aId, cidr: 'CIDR n/a' };
+    const bVpc = vpcById.get(pair.bId) || { id: pair.bId, name: pair.bId, cidr: 'CIDR n/a' };
+    const aInstances = instanceCatalog.get(pair.aId) || [];
+    const bInstances = instanceCatalog.get(pair.bId) || [];
+    const src = aInstances[0] || null;
+    const dst = bInstances[0] || null;
+    const reverseSrc = bInstances[0] || null;
+    const reverseDst = aInstances[0] || null;
+
+    const modeNames = Array.from(pair.modes);
+    const modeLabel =
+      modeNames.length === 0
+        ? 'Sin modo'
+        : modeNames.length > 1
+          ? 'Mixto'
+          : modeNames[0] === 'tgw'
+            ? 'Transit Gateway'
+            : 'Peering';
+
+    const checks = [];
+    if (src?.privateIp && dst?.privateIp) {
+      checks.push({
+        title: `Prueba ida (${aVpc.name} -> ${bVpc.name})`,
+        command: `ping -c 4 ${dst.privateIp}`,
+        context: src.publicIp
+          ? `Ejecutar dentro de ${src.instanceName} (${src.publicIp})`
+          : `Ejecutar dentro de ${src.instanceName} (${src.instanceId || 'sin instance_id'})`,
+      });
+    }
+    if (reverseSrc?.privateIp && reverseDst?.privateIp) {
+      checks.push({
+        title: `Prueba retorno (${bVpc.name} -> ${aVpc.name})`,
+        command: `ping -c 4 ${reverseDst.privateIp}`,
+        context: reverseSrc.publicIp
+          ? `Ejecutar dentro de ${reverseSrc.instanceName} (${reverseSrc.publicIp})`
+          : `Ejecutar dentro de ${reverseSrc.instanceName} (${reverseSrc.instanceId || 'sin instance_id'})`,
+      });
+    }
+
+    return {
+      ...pair,
+      aVpc,
+      bVpc,
+      modeLabel,
+      routers: Array.from(pair.routers),
+      src,
+      dst,
+      checks,
+      readyForRun: checks.length >= 2,
+    };
+  });
+}
+
+function buildConsoleTestGuide(plan, outputsResponse, connectivityScenarios) {
+  const payload = safeObject(plan?.payload);
+  const outputs = safeObject(outputsResponse?.outputs);
+  const instanceCatalog = buildInstanceCatalog(outputs);
+  const vpcs = Array.isArray(payload?.vpcs) ? payload.vpcs : [];
+
+  const bastions = vpcs
+    .map((vpc) => {
+      const instances = instanceCatalog.get(vpc.id) || [];
+      const primary = instances[0] || null;
+      const subnet = Array.isArray(vpc.subnets) ? vpc.subnets[0] : null;
+      const declaredInstance = subnet?.instances?.[0] || null;
+      return {
+        vpcId: vpc.id,
+        vpcName: vpc.name || vpc.id,
+        cidr: vpc.cidr_block || 'n/a',
+        region: vpc.region || payload?.vlan?.region || 'us-east-1',
+        availabilityZone: subnet?.availability_zone || 'n/a',
+        instanceName: primary?.instanceName || declaredInstance?.name || 'instancia',
+        instanceId: primary?.instanceId || null,
+        publicIp: primary?.publicIp || null,
+        privateIp: primary?.privateIp || declaredInstance?.ip_address || null,
+        keyPair: declaredInstance?.ssh_access || 'tu-keypair',
+      };
+    })
+    .filter((item) => item.instanceId || item.publicIp);
+
+  return {
+    region: payload?.vlan?.region || bastions[0]?.region || 'us-east-1',
+    bastions,
+    scenarios: connectivityScenarios,
+  };
+}
+
 export default function PlanDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -130,6 +553,7 @@ export default function PlanDetailPage() {
 
   const [logText, setLogText] = useState(null);
   const [lastDestroyTaskId, setLastDestroyTaskId] = useState(null);
+  const [consoleGuideOpen, setConsoleGuideOpen] = useState(false);
 
   const [msg, setMsg] = useState(null); // { text: string, severity: 'success'|'info'|'warning'|'error' }
   const [err, setErr] = useState(null);
@@ -142,6 +566,27 @@ export default function PlanDetailPage() {
   const isRunning = plan?.status === TASK_STATE_RUNNING || plan?.status === TASK_STATE_PENDING;
 
   const lifecycle = useMemo(() => computeLifecycle(plan), [plan]);
+  const connectivityScenarios = useMemo(
+    () => buildConnectivityScenarios(plan, outputsResponse),
+    [plan, outputsResponse],
+  );
+  const vpcInfraCatalog = useMemo(
+    () => buildVpcInfraCatalog(plan, outputsResponse),
+    [plan, outputsResponse],
+  );
+  const consoleGuide = useMemo(
+    () => buildConsoleTestGuide(plan, outputsResponse, connectivityScenarios),
+    [plan, outputsResponse, connectivityScenarios],
+  );
+  const planAdvisories = useMemo(
+    () => buildPlanAdvisories(plan, outputsResponse, lifecycle),
+    [plan, outputsResponse, lifecycle],
+  );
+  const hasOutputsData = Boolean(
+    outputsResponse?.outputs &&
+      typeof outputsResponse.outputs === 'object' &&
+      Object.keys(outputsResponse.outputs).length > 0,
+  );
 
   const busy = deploying || destroying;
 
@@ -165,11 +610,14 @@ export default function PlanDetailPage() {
   // Deploy permitido cuando el plan NO está corriendo
   const canDeploy = !isRunning;
 
-  // Destroy permitido cuando está ACTIVE + SUCCESS (regla backend), y no está corriendo
+  // Destroy permitido según regla backend (incluye apply real fallido), y no está corriendo
   const canDestroy =
     !isRunning &&
-    plan?.applied === true &&
-    String(plan?.last_action || '').toLowerCase() !== 'destroy';
+    Boolean(
+      plan?.can_destroy ??
+      (plan?.applied === true &&
+        String(plan?.last_action || '').toLowerCase() !== 'destroy')
+    );
 
   const fetchPlan = useCallback(
     async ({ resetLoading = false } = {}) => {
@@ -435,6 +883,11 @@ export default function PlanDetailPage() {
     }
   };
 
+  const canOpenConsoleGuide =
+    Boolean(plan?.applied) &&
+    connectivityScenarios.length > 0 &&
+    hasOutputsData;
+
   const header = (
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
       <Box sx={{ flex: 1 }}>
@@ -586,8 +1039,8 @@ export default function PlanDetailPage() {
                   </Button>
                 )}
 
-                {/* Solo mostrar Destroy si lifecycle.key === 'ACTIVE' */}
-                {lifecycle.key === 'ACTIVE' && (
+                {/* Mostrar Destroy siempre que backend lo permita */}
+                {canDestroy && (
                   <Button
                     variant="outlined"
                     color="error"
@@ -620,6 +1073,7 @@ export default function PlanDetailPage() {
           >
             <Tab value="summary" label="Resumen" />
             <Tab value="outputs" label="Outputs" />
+            <Tab value="tests" label="Pruebas" />
             <Tab value="logs" label="Logs" />
             <Tab value="payload" label="Payload" />
           </Tabs>
@@ -675,6 +1129,56 @@ export default function PlanDetailPage() {
                   </Stack>
                 </Stack>
               </Paper>
+
+              <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Costo, residuos y lectura técnica
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                  Este bloque se calcula desde el payload, los outputs cargados y el estado actual del plan.
+                </Typography>
+
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                      1. Costo potencial
+                    </Typography>
+                    <Stack spacing={1}>
+                      {planAdvisories.costs.map((item, idx) => (
+                        <Alert key={`cost-${idx}`} severity={item.severity} variant="outlined">
+                          {item.text}
+                        </Alert>
+                      ))}
+                    </Stack>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                      2. Qué puede quedar tras Destroy
+                    </Typography>
+                    <Stack spacing={1}>
+                      {planAdvisories.residuals.map((item, idx) => (
+                        <Alert key={`residual-${idx}`} severity={item.severity} variant="outlined">
+                          {item.text}
+                        </Alert>
+                      ))}
+                    </Stack>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                      3. Lectura pedagógica y técnica
+                    </Typography>
+                    <Stack spacing={1}>
+                      {planAdvisories.pedagogy.map((item, idx) => (
+                        <Alert key={`pedagogy-${idx}`} severity={item.severity} variant="outlined">
+                          {item.text}
+                        </Alert>
+                      ))}
+                    </Stack>
+                  </Box>
+                </Stack>
+              </Paper>
             </Box>
           )}
 
@@ -722,6 +1226,48 @@ export default function PlanDetailPage() {
                       </Alert>
                     ) : null}
 
+                    {vpcInfraCatalog.length > 0 && (
+                      <Box sx={{ mt: 2 }}>
+                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                          Infraestructura destacada por VPC
+                        </Typography>
+                        <Stack spacing={1.5}>
+                          {vpcInfraCatalog.map((item) => (
+                            <Paper key={item.logicalVpcId} variant="outlined" sx={{ p: 2 }}>
+                              <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                                {item.name}
+                              </Typography>
+                              <Stack direction="row" spacing={1} flexWrap="wrap">
+                                <Chip size="small" label={`VPC: ${item.actualVpcId || '—'}`} variant="outlined" />
+                                <Chip
+                                  size="small"
+                                  label={item.igwId ? `IGW: ${item.igwId}` : 'IGW: —'}
+                                  color={item.igwId ? 'primary' : 'default'}
+                                  variant={item.igwId ? 'filled' : 'outlined'}
+                                />
+                                <Chip
+                                  size="small"
+                                  label={item.natGatewayId ? `NAT: ${item.natGatewayId}` : 'NAT: —'}
+                                  color={item.natGatewayId ? 'secondary' : 'default'}
+                                  variant={item.natGatewayId ? 'filled' : 'outlined'}
+                                />
+                                <Chip
+                                  size="small"
+                                  label={
+                                    item.natEipAllocationId
+                                      ? `NAT EIP: ${item.natEipAllocationId}`
+                                      : 'NAT EIP: —'
+                                  }
+                                  color={item.natEipAllocationId ? 'warning' : 'default'}
+                                  variant={item.natEipAllocationId ? 'filled' : 'outlined'}
+                                />
+                              </Stack>
+                            </Paper>
+                          ))}
+                        </Stack>
+                      </Box>
+                    )}
+
                     <Paper
                       variant="outlined"
                       sx={{ mt: 2, p: 2, bgcolor: 'background.default', overflow: 'auto' }}
@@ -740,6 +1286,109 @@ export default function PlanDetailPage() {
                     </Paper>
                   </>
                 )}
+              </Box>
+            </Box>
+          )}
+
+          {tab === 'tests' && (
+            <Box sx={{ p: 3 }}>
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="h6">Guía de pruebas post-deploy</Typography>
+                  <Typography component="div" variant="body2" color="text.secondary">
+                    Define pruebas de conectividad entre VPCs según el modo de enrutamiento desplegado.
+                  </Typography>
+                </Box>
+                <Button
+                  variant="outlined"
+                  onClick={fetchOutputs}
+                  disabled={outputsLoading}
+                >
+                  {outputsLoading ? 'Cargando…' : 'Cargar outputs para pruebas'}
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={() => setConsoleGuideOpen(true)}
+                  disabled={!canOpenConsoleGuide}
+                >
+                  Cómo probar en consola
+                </Button>
+              </Stack>
+
+              <Box sx={{ mt: 2 }}>
+                <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
+                  Abre el modal de instrucciones para ver el paso a paso por consola: cómo entrar por SSH a una bastion
+                  y luego cómo ejecutar los pings entre VPCs.
+                </Alert>
+
+                {!hasOutputsData && (
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    Carga outputs para identificar instancias/IPs reales y ejecutar pruebas guiadas.
+                  </Alert>
+                )}
+
+                {connectivityScenarios.length === 0 && (
+                  <Alert severity="warning">
+                    Este plan no expone pares de VPC conectados por peering o TGW para pruebas cruzadas.
+                  </Alert>
+                )}
+
+                {connectivityScenarios.map((scenario) => (
+                  <Paper key={`${scenario.aId}:${scenario.bId}`} variant="outlined" sx={{ p: 2, mb: 2 }}>
+                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'center' }}>
+                      <Typography variant="subtitle2" sx={{ flex: 1 }}>
+                        {scenario.aVpc.name} ↔ {scenario.bVpc.name}
+                      </Typography>
+                      <Chip size="small" label={scenario.modeLabel} color="primary" variant="outlined" />
+                      <Chip size="small" label={`${scenario.aVpc.cidr} / ${scenario.bVpc.cidr}`} variant="outlined" />
+                    </Stack>
+
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                      Routers implicados: {scenario.routers.length > 0 ? scenario.routers.join(', ') : 'n/a'}
+                    </Typography>
+
+                    {!scenario.readyForRun && (
+                      <Alert severity="warning" sx={{ mt: 1.5 }}>
+                        No hay suficientes outputs de instancias para generar prueba ida/vuelta en este par.
+                      </Alert>
+                    )}
+
+                    {scenario.checks.length > 0 && (
+                      <Stack spacing={1.2} sx={{ mt: 1.5 }}>
+                        {scenario.checks.map((check) => (
+                          <Box key={`${scenario.aId}:${scenario.bId}:${check.title}`}>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {check.title}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                              {check.context}
+                            </Typography>
+                            <Paper
+                              variant="outlined"
+                              sx={{ p: 1, bgcolor: 'background.default', overflow: 'auto' }}
+                            >
+                              <Box
+                                component="pre"
+                                sx={{
+                                  m: 0,
+                                  whiteSpace: 'pre-wrap',
+                                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                  fontSize: 12,
+                                }}
+                              >
+                                {check.command}
+                              </Box>
+                            </Paper>
+                          </Box>
+                        ))}
+                      </Stack>
+                    )}
+                  </Paper>
+                ))}
+
+                <Alert severity="info" variant="outlined">
+                  Resultado esperado: si la topología está correcta, cada par conectado debe responder ping en ida y retorno.
+                </Alert>
               </Box>
             </Box>
           )}
@@ -819,6 +1468,148 @@ export default function PlanDetailPage() {
           )}
         </Paper>
       </Stack>
+      <Dialog
+        open={consoleGuideOpen}
+        onClose={() => setConsoleGuideOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Cómo probar conectividad desde consola</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Alert severity="info" variant="outlined">
+              Primero entra por SSH a una bastion pública. Después, desde esa instancia, ejecuta ping a las IPs
+              privadas sugeridas en esta misma pestaña.
+            </Alert>
+
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                1. Requisitos previos
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Necesitas `aws` CLI, acceso a la key pair con la que desplegaste la instancia y que tu IP pública esté
+                permitida en `Allowed SSH CIDR`.
+              </Typography>
+            </Box>
+
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                2. Bastions detectadas en este laboratorio
+              </Typography>
+              <Stack spacing={1}>
+                {consoleGuide.bastions.map((item) => (
+                  <Paper key={`${item.vpcId}:${item.instanceId || item.instanceName}`} variant="outlined" sx={{ p: 1.5 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {item.vpcName}
+                    </Typography>
+                    <Typography variant="caption" display="block" color="text.secondary">
+                      Instancia: {item.instanceName} · instance_id: {item.instanceId || 'n/a'}
+                    </Typography>
+                    <Typography variant="caption" display="block" color="text.secondary">
+                      IP pública: {item.publicIp || 'n/a'} · IP privada: {item.privateIp || 'n/a'}
+                    </Typography>
+                    <Typography variant="caption" display="block" color="text.secondary">
+                      Región/AZ: {item.region} / {item.availabilityZone} · Key pair: {item.keyPair}
+                    </Typography>
+                  </Paper>
+                ))}
+              </Stack>
+            </Box>
+
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                3. Si ya tienes el archivo `.pem`, conéctate por SSH
+              </Typography>
+              <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'background.default' }}>
+                <Box
+                  component="pre"
+                  sx={{
+                    m: 0,
+                    whiteSpace: 'pre-wrap',
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                    fontSize: 12,
+                  }}
+                >
+{`chmod 400 ~/.ssh/tesis-key-new.pem
+ssh -i ~/.ssh/tesis-key-new.pem ec2-user@${consoleGuide.bastions[0]?.publicIp || 'IP_PUBLICA_BASTION'}`}
+                </Box>
+              </Paper>
+            </Box>
+
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                4. Si no tienes la llave privada, usa EC2 Instance Connect
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                AWS no permite descargar la private key de una key pair existente. En ese caso, puedes inyectar una
+                clave pública temporal y entrar con una llave efímera.
+              </Typography>
+              <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'background.default' }}>
+                <Box
+                  component="pre"
+                  sx={{
+                    m: 0,
+                    whiteSpace: 'pre-wrap',
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                    fontSize: 12,
+                  }}
+                >
+{`TMPK=/tmp/eic_lab
+ssh-keygen -t ed25519 -N '' -f "$TMPK"
+
+aws ec2-instance-connect send-ssh-public-key \\
+  --region ${consoleGuide.region} \\
+  --instance-id ${consoleGuide.bastions[0]?.instanceId || 'i-xxxxxxxx'} \\
+  --availability-zone ${consoleGuide.bastions[0]?.availabilityZone || 'us-east-1a'} \\
+  --instance-os-user ec2-user \\
+  --ssh-public-key file://"$TMPK.pub"
+
+ssh -i "$TMPK" ec2-user@${consoleGuide.bastions[0]?.publicIp || 'IP_PUBLICA_BASTION'}`}
+                </Box>
+              </Paper>
+            </Box>
+
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                5. Ejecuta los pings desde la bastion
+              </Typography>
+              <Stack spacing={1}>
+                {consoleGuide.scenarios.flatMap((scenario) =>
+                  scenario.checks.map((check) => (
+                    <Paper key={`${scenario.aId}:${scenario.bId}:${check.title}`} variant="outlined" sx={{ p: 1.5 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {check.title}
+                      </Typography>
+                      <Typography variant="caption" display="block" color="text.secondary" sx={{ mb: 0.75 }}>
+                        {check.context}
+                      </Typography>
+                      <Box
+                        component="pre"
+                        sx={{
+                          m: 0,
+                          whiteSpace: 'pre-wrap',
+                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                          fontSize: 12,
+                        }}
+                      >
+                        {check.command}
+                      </Box>
+                    </Paper>
+                  )),
+                )}
+              </Stack>
+            </Box>
+
+            <Alert severity="success" variant="outlined">
+              Resultado esperado: cada par conectado debería responder ping en ida y retorno. Si falla, revisa route
+              tables, Security Groups, key pair y `Allowed SSH CIDR`.
+            </Alert>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConsoleGuideOpen(false)}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }
