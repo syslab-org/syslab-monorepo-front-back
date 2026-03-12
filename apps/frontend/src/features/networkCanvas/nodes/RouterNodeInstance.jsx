@@ -31,23 +31,9 @@ const RouterNodeInstance = ({ data = {}, isConnectable, selected }) => {
   const state = hasRoutes ? "up" : "warn";
 
   return (
-    <div style={{ width: 120, height: 130, display: 'grid', placeItems: 'center' }}>
+    <div className="pt-router">
       <div
-        className="pt-device"
-        // Centramos icono y dejamos espacio para LED/handles
-        style={{
-          borderRadius: 56,
-          width: 96,
-          height: 96,
-          background: '#1a365d',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          position: 'relative',
-          boxShadow: selected
-            ? '0 0 0 3px rgba(59,130,246,0.45), 0 10px 18px rgba(0,0,0,0.28)'
-            : '0 6px 16px rgba(0,0,0,0.22)'
-        }}
+        className={`pt-device pt-device--${mode} ${selected ? 'pt-device--selected' : ''}`}
       >
         {/* LED de estado (clases existentes controlan color) */}
         <div
@@ -63,7 +49,7 @@ const RouterNodeInstance = ({ data = {}, isConnectable, selected }) => {
         </div>
 
         {/* Ícono centrado */}
-        <div className="pt-device__icon" style={{ fontSize: 36, color: '#fff', lineHeight: 0 }}>
+        <div className="pt-device__icon">
           <RouterIcon fontSize="inherit" />
         </div>
 
@@ -75,12 +61,12 @@ const RouterNodeInstance = ({ data = {}, isConnectable, selected }) => {
       </div>
 
       {/* Etiquetas */}
-      <div className="pt-device__label" style={{ marginTop: 8 }}>{name}</div>
+      <div className="pt-device__label">{name}</div>
       <div className={`pt-device__modehint pt-device__modehint--${mode}`}>
         {modeHint}
       </div>
       {data.region ? (
-        <div className="pt-device__sublabel" style={{ marginTop: 2 }}>{data.region}</div>
+        <div className="pt-device__sublabel">{data.region}</div>
       ) : null}
     </div>
   );
