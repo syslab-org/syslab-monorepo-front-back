@@ -67,16 +67,6 @@ def _plan_running_conflict(plan: Plan) -> Response:
 
 
 def _plan_state_conflict(plan: Plan, action: str) -> Optional[Response]:
-    if action == "apply" and plan.applied:
-        return Response(
-            {
-                "ok": False,
-                "error": "El plan ya fue aplicado. Debe destruirse antes de volver a aplicar.",
-                "code": "PLAN_ALREADY_APPLIED",
-                "plan_id": str(plan.id),
-            },
-            status=status.HTTP_409_CONFLICT,
-        )
     if action == "destroy" and not plan.can_destroy_now:
         return Response(
             {

@@ -620,7 +620,7 @@ const useDeployNetwork = ({
       const code = error?.data?.code;
       const msg =
         code === "PLAN_ALREADY_APPLIED"
-          ? "El plan ya está aplicado. Puedes validar en preview, pero no aplicar de nuevo sin Destroy."
+          ? "El plan ya está aplicado y no aceptó redeploy. Revisa el estado del plan."
           : error?.message || "Error desconocido";
       setLoadingFlow(false);
       setValidationState(PLAN_STATES.ERROR);
@@ -695,7 +695,7 @@ const useDeployNetwork = ({
       const code = error?.data?.code;
       if (code === "PLAN_ALREADY_APPLIED") {
         setErrorMessage(
-          "Este plan ya está aplicado en AWS. Si necesitas cambios, primero ejecuta Destroy.",
+          "El backend rechazó el redeploy de este plan. Revisa el estado y vuelve a intentar.",
         );
         return;
       }

@@ -160,12 +160,17 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
             with transaction.atomic():
                 plan = self.get_queryset().filter(firestore_vpc_id=lab.canvas_id).first()
                 if plan:
+                    payload_changed = plan.payload != payload
+                    hash_changed = plan.canvas_hash != canvas_hash
                     plan.lab = lab
                     plan.name = name or plan.name or ""
                     plan.payload = payload
                     plan.canvas_hash = canvas_hash
                     plan.canvas_updated_at = dt_canvas_updated_at
                     plan.error = ""
+                    if payload_changed or hash_changed:
+                        plan.last_action = Plan.LastAction.CANVAS_UPDATE
+                        plan.status = Plan.Status.PENDING
                     plan.save()
                     msg = "Plan actualizado desde canvas"
                 else:
