@@ -34,6 +34,26 @@ const LAB_TEMPLATES = [
   },
 ];
 
+const normalizeProviderValue = (raw) => {
+  if (Array.isArray(raw)) {
+    return normalizeProviderValue(raw[0]);
+  }
+
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('[')) {
+      try {
+        return normalizeProviderValue(JSON.parse(trimmed));
+      } catch {
+        return trimmed.replace(/[[\]"]/g, '').trim().toLowerCase();
+      }
+    }
+    return trimmed.replace(/^"+|"+$/g, '').toLowerCase();
+  }
+
+  return String(raw || '').trim().toLowerCase();
+};
+
 const parseAndValidateCidr = (raw) => {
   const value = String(raw || '').trim();
   if (!value.includes('/')) {
@@ -50,7 +70,7 @@ const parseAndValidateCidr = (raw) => {
 };
 
 // eslint-disable-next-line react/prop-types
-const NewVLANForm = ({ onSave, wizardMode = false }) => {
+const NewVLANForm = ({ onSave, wizardMode = false, availableCourses = [], requireCourseSelection = false }) => {
   const validationSchema = useFormValidationSchema(VLAN_FORM, null, null, {}, true);
 
   const defaultCidr = useMemo(() => {
@@ -73,6 +93,7 @@ const NewVLANForm = ({ onSave, wizardMode = false }) => {
       cidrBlock: defaultCidr,
       region: 'us-east-1',
       labTemplate: 'mvp1-single-vpc-bastion-private', // solo se usa si wizardMode=true
+      courseId: '',
     },
   });
 
@@ -81,6 +102,10 @@ const NewVLANForm = ({ onSave, wizardMode = false }) => {
   const selectedTemplate = LAB_TEMPLATES.find(t => t.value === labTemplate);
 
   const onSubmit = (data) => {
+    if (requireCourseSelection && !data.courseId) {
+      setError('courseId', { type: 'manual', message: 'Debes seleccionar un curso.' });
+      return;
+    }
     const cidrCheck = parseAndValidateCidr(data.cidrBlock);
     if (!cidrCheck.ok) {
       setError('cidrBlock', { type: 'manual', message: cidrCheck.message });
@@ -88,12 +113,13 @@ const NewVLANForm = ({ onSave, wizardMode = false }) => {
     }
 
     const { base, prefix } = cidrCheck;
+    const provider = normalizeProviderValue(data.cloudProvider) || CLOUD_AWS_VALUE;
 
     onSave({
       type: 'vlan',
 
       // compat con lo que ya guarda el canvas
-      cloudProvider: data.cloudProvider,
+      cloudProvider: provider,
       vlanName: data.vlanName,
       cidrBlock: base,
       prefixLength: prefix,
@@ -111,6 +137,7 @@ const NewVLANForm = ({ onSave, wizardMode = false }) => {
           narrative: 'wizard',
         }
         : {}),
+      course_id: data.courseId || null,
     });
   };
 
@@ -203,6 +230,31 @@ const NewVLANForm = ({ onSave, wizardMode = false }) => {
           fullWidth
           autoComplete="off"
         />
+
+        {availableCourses.length > 0 && (
+          <FormControl fullWidth error={requireCourseSelection && !watch('courseId')}>
+            <InputLabel id="course-select-label">Curso</InputLabel>
+            <Select
+              labelId="course-select-label"
+              id="course-select"
+              {...register('courseId')}
+              label="Curso"
+              defaultValue=""
+            >
+              {!requireCourseSelection && <MenuItem value="">Sin curso</MenuItem>}
+              {availableCourses.map((course) => (
+                <MenuItem key={course.id} value={course.id}>
+                  {course.name}
+                </MenuItem>
+              ))}
+            </Select>
+            <FormHelperText>
+              {requireCourseSelection
+                ? 'Selecciona el curso al que se compartirá el laboratorio.'
+                : 'Opcional para administradores.'}
+            </FormHelperText>
+          </FormControl>
+        )}
 
         {/* CIDR */}
         <TextField

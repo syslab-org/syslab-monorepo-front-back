@@ -1,8 +1,6 @@
-// apps/frontend/src/features/networkCanvas/core/usePlanMeta.js
 import { useEffect } from "react";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/infrastructure/firebase/firebaseConfig";
-import { DB_FIRESTORE_VPCS } from "@/shared/constants";
+
+import { api } from "@/infrastructure/http/api";
 
 export const usePlanMeta = ({
   vpcid,
@@ -15,15 +13,10 @@ export const usePlanMeta = ({
     const loadPlanMeta = async () => {
       try {
         if (!vpcid) return;
-
-        const ref = doc(db, DB_FIRESTORE_VPCS, vpcid);
-        const snap = await getDoc(ref);
-
+        const lab = await api.getLab(vpcid);
         if (!alive) return;
-
-        const data = snap.exists() ? snap.data() : null;
-        setCanvasPlanId(data?.planId || null);
-        setValidatedPlanHash(data?.planCanvasHash || null);
+        setCanvasPlanId(lab?.metadata?.planId || null);
+        setValidatedPlanHash(lab?.plan_canvas_hash || "");
       } catch (error) {
         if (!alive) return;
         console.warn("Error loading plan meta:", error);

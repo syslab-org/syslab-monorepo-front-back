@@ -1,52 +1,45 @@
-# apps/backend/api/validators.py
-from .serializers import MultiPlanSerializer
+from rest_framework import serializers
 
-def _req(d, key, typ=None, where=""):
-    if key not in d:
-        raise ValueError(f"Falta clave requerida{f' en {where}' if where else ''}: {key}")
-    if typ and not isinstance(d[key], typ):
-        raise ValueError(f"Clave '{key}' debe ser de tipo {typ.__name__}")
-    return d[key]
+from .domain.network_intent import normalize_network_intent
+from .providers import get_provider_adapter
+
+
 
 def validate_network_plan(payload: dict) -> dict:
     """
-    Valida el payload multi-VPC del front con DRF serializers.
-    - Exige 'name' (para el Plan).
-    - Valida estructura (vlan/vpcs/links).
-    - Normaliza región de VPCs heredando de vlan.region si alguna viene vacía.
-    Devuelve el payload saneado (serializer.validated_data + name).
-    Lanza ValueError con mensaje claro si falla.
+    Valida el payload del front a traves del adapter del provider.
+    Devuelve el payload compilado para el runner actual de Terraform.
     """
     if not isinstance(payload, dict):
-        raise ValueError("Payload inválido: debe ser un objeto JSON.")
+        raise ValueError("Payload invalido: debe ser un objeto JSON.")
 
-    # 1) nombre del plan
     name = (payload.get("name") or "").strip()
     if not name:
         raise ValueError("Falta clave requerida: name")
 
-    # 2) validación estructural
-    ser = MultiPlanSerializer(data=payload)
-    if not ser.is_valid():
-        # construimos mensaje amigable
-        errs = []
-        for k, v in ser.errors.items():
-            errs.append(f"{k}: {v}")
-        msg = "; ".join(errs) or "Payload inválido"
-        raise ValueError(msg)
+    intent = normalize_network_intent(payload)
+    provider = intent["target_provider"]
 
-    data = ser.validated_data
+    try:
+        adapter = get_provider_adapter(provider)
+        bundle = adapter.compile(payload)
+    except serializers.ValidationError as exc:
+        detail = exc.detail if hasattr(exc, "detail") else exc
+        raise ValueError(str(detail)) from exc
+    except NotImplementedError as exc:
+        raise ValueError(str(exc)) from exc
+    except KeyError as exc:
+        raise ValueError(str(exc)) from exc
 
-    # 3) region por defecto: hereda de vlan.region si alguna vpc no trae
-    vlan_region = (data.get("vlan") or {}).get("region")
+    compiled = dict(bundle["payload"])
+    compiled["name"] = name
+    compiled["cloud"] = provider
+
+    # Heredamos region por defecto desde vlan.region si alguna VPC viene vacia.
+    vlan_region = ((compiled.get("vlan") or {}).get("region") or "").strip()
     if vlan_region:
-        for v in data.get("vpcs", []):
-            if not v.get("region"):
-                v["region"] = vlan_region
+        for vpc in compiled.get("vpcs", []):
+            if not vpc.get("region"):
+                vpc["region"] = vlan_region
 
-    # 4) master_cidr puede ser vacío (no lo apretamos aquí)
-
-    # 5) devolvemos saneado + name
-    data_out = dict(data)
-    data_out["name"] = name
-    return data_out
+    return compiled

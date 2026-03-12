@@ -185,8 +185,8 @@ function MainLayout() {
                 onClick={handleOpenUserMenu}
               >
                 <Avatar
-                  alt={user?.displayName || "User"}
-                  src={user?.photoURL || "https://i.pravatar.cc/100"}
+                  alt={user?.display_name || user?.email || "User"}
+                  src={user?.photo_url || "https://i.pravatar.cc/100"}
                 />
               </IconButton>
             </Tooltip>

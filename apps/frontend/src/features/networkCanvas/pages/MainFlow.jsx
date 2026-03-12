@@ -45,9 +45,7 @@ import { usePlanPolling } from "@/features/networkCanvas/core/usePlanPolling";
 import { useLearningGuide } from "@/features/networkCanvas/core/useLearningGuide";
 import RoutePreviewPanel from "@/features/networkCanvas/panels/RoutePreviewPanel";
 // import { buildRoutingPreview } from "@/features/networkCanvas/utils/buildRoutingPreview";
-// import { db } from "@/infrastructure/firebase/firebaseConfig";
 import { useTheme } from "@mui/material/styles";
-// import { collection, getDocs } from "firebase/firestore";
 import { useAmiList } from "@/features/networkCanvas/core/useAmiList";
 import { useContext } from "react";
 
@@ -194,7 +192,7 @@ function MainFlow() {
     return s === 'RUNNING' || s === 'PENDING' || s === 'STARTED';
   }, []);
 
-  // Load plan metadata (planId + planCanvasHash) from Firestore and keep it actualizado en 
+  // Load plan metadata (planId + planCanvasHash) from backend and keep it actualizado en
   // el estado del canvas. Esto es clave para la lógica de "dirty" y validación.
 
   usePlanMeta({

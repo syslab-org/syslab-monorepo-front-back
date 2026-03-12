@@ -1,8 +1,5 @@
 // apps/frontend/src/components/flow/flow-hooks/useDeployNetwork.js
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import { db } from "../../../infrastructure/firebase/firebaseConfig";
-import { DB_FIRESTORE_VPCS } from "@/shared/constants";
 import { useNavigate } from "react-router-dom";
 import { RouterPolicy } from "@/features/networkCanvas/utils/networking";
 import { useAuth } from "@/app/providers/AuthContext";
@@ -264,9 +261,8 @@ const useDeployNetwork = ({
   const loadCanvasLabName = useCallback(async () => {
     if (!firestoreVpcId) return "";
     try {
-      const snap = await getDoc(doc(db, DB_FIRESTORE_VPCS, firestoreVpcId));
-      if (!snap.exists()) return "";
-      const name = String(snap.data()?.name || "").trim();
+      const lab = await api.getLab(firestoreVpcId);
+      const name = String(lab?.name || "").trim();
       if (name) setCanvasLabName(name);
       return name;
     } catch (e) {
@@ -275,7 +271,7 @@ const useDeployNetwork = ({
     }
   }, [firestoreVpcId]);
 
-  // Hidrata nombre del plan desde el nombre real del laboratorio en Firestore.
+  // Hidrata nombre del plan desde el nombre real del laboratorio en backend.
   useEffect(() => {
     let cancelled = false;
     const loadCanvasName = async () => {
@@ -308,7 +304,7 @@ const useDeployNetwork = ({
       s.prefixLength,
     ]);
 
-  // persist planId in the canvas Firestore doc
+  // persist plan metadata in the lab record
   const persistPlanIdToCanvas = async ({
     canvasId,
     planId,
@@ -319,24 +315,28 @@ const useDeployNetwork = ({
   }) => {
     if (!canvasId || !planId) return;
     try {
-      const docRef = doc(db, DB_FIRESTORE_VPCS, canvasId);
-      const payload = {
+      const existing = await api.getLab(canvasId);
+      const metadata = {
+        ...(existing?.metadata || {}),
         planId,
         planName: name || "",
         planCreatedFromCanvas: !!created,
         planValidationOk:
           typeof validationOk === "boolean" ? validationOk : null,
-        planUpdatedAt: new Date(),
+        planUpdatedAt: new Date().toISOString(),
+      };
+      const payload = {
+        metadata,
       };
 
       // Solo persistimos hash cuando viene explícitamente definido
       if (typeof canvasHash === "string") {
-        payload.planCanvasHash = canvasHash;
+        payload.plan_canvas_hash = canvasHash;
       }
 
-      await setDoc(docRef, payload, { merge: true });
+      await api.updateLab(canvasId, payload);
     } catch (e) {
-      console.warn("No se pudo persistir planId en Firestore:", e);
+      console.warn("No se pudo persistir planId en backend:", e);
     }
   };
 

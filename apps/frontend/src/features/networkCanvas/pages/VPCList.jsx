@@ -1,4 +1,3 @@
-// apps/frontend/src/components/flow/pages/VPCList.jsx
 import { DeleteOutline, ModeEditOutlined, ContentCopy } from "@mui/icons-material";
 import AddIcon from '@mui/icons-material/Add';
 import {
@@ -9,7 +8,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
   FormControl,
   IconButton,
   InputLabel,
@@ -27,48 +25,30 @@ import {
   Typography,
   Tooltip,
 } from "@mui/material";
-import { collection, getDocs, query, where, deleteDoc, doc, setDoc } from 'firebase/firestore';
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { DB_FIRESTORE_VPCS, USER_ROL_STUDENT } from "@/shared/constants";
-import { useAuth } from "@/app/providers/AuthContext.jsx";
+
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext.jsx";
-import { useWizard } from "@/features/networkCanvas/context/WizardContext"
-import { db } from "@/infrastructure/firebase/firebaseConfig.js";
+import { useWizard } from "@/features/networkCanvas/context/WizardContext";
 import useCidrBlockVPCStore from '../store/cidrBlocksIp';
 import CreateVPCModal from "./CreateVPCModal";
 import { PageHeader } from '@/shared/ui/layouts/MainLayout';
+import { api } from "@/infrastructure/http/api";
 
-
-
-const useFetchVPCs = (setLoadingFlow) => {
+const useFetchLabs = (setLoadingFlow) => {
   const [vpcs, setVpcs] = useState([])
-  const { user } = useAuth()
-  const { role, userId } = user || {}
 
   const fetchVPCs = useCallback(async () => {
     setLoadingFlow(true)
-    // console.log("user:", user);
     try {
-      let vpcList = []
-      if (role === USER_ROL_STUDENT) {
-        vpcList = await fetchStudentVPCs(userId)
-      } else {
-        vpcList = await fetchAllVPCs()
-      }
-
-      setVpcs(vpcList)
-
-
-
-
+      const response = await api.listLabs()
+      setVpcs(Array.isArray(response) ? response : [])
     } catch (error) {
-      // console.log("Error fetching VPCs: ", error);
-
+      console.error('Error fetching labs: ', error)
     } finally {
       setLoadingFlow(false)
     }
-  }, [setLoadingFlow, userId, user, role])
+  }, [setLoadingFlow])
 
   useEffect(() => {
     fetchVPCs()
@@ -77,49 +57,14 @@ const useFetchVPCs = (setLoadingFlow) => {
   return { vpcs, fetchVPCs }
 }
 
-const fetchStudentVPCs = async (userId) => {
-
-  const vpcStudesCollectionRef = collection(db, DB_FIRESTORE_VPCS)
-  const q = query(vpcStudesCollectionRef, where('userId', '==', userId))
-  const querySnapshot = await getDocs(q)
-
-  if (querySnapshot.empty) {
-    console.warn('No se encontraron registros para el estudiante');
-    return []
-  }
-
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data()
-  }))
-
-}
-
-const fetchAllVPCs = async () => {
-  const vpcCollection = collection(db, DB_FIRESTORE_VPCS)
-  const vpcSnapshot = await getDocs(vpcCollection)
-  return vpcSnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data()
-  }))
-}
-
-
-
 const VPCList = () => {
-
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [vpcToDelete, setVpcToDelete] = useState(null);
-
-  // Rename dialog state
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [vpcToRename, setVpcToRename] = useState(null);
   const [newName, setNewName] = useState("");
-
-  // UI filters (match PlanListPage look & feel)
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
-
   const [isCreateVPCModalOpen, setIsCreateVPCModalOpen] = useState(false)
   const [wizardMode, setWizardMode] = useState(false)
 
@@ -127,35 +72,30 @@ const VPCList = () => {
   const { setLoadingFlow } = useContext(LoadingFlowContext)
   const { setCidrBlockVPC, setPrefixLength, setVlanName, setVlanRegion } = useCidrBlockVPCStore();
 
-  const { vpcs, fetchVPCs } = useFetchVPCs(setLoadingFlow)
+  const { vpcs, fetchVPCs } = useFetchLabs(setLoadingFlow)
   const { start, finish, setStep } = useWizard()
+
   const handleDuplicateVPC = async (vpc) => {
     if (!vpc?.id) return;
 
     try {
       setLoadingFlow(true);
-
-      const newId = crypto.randomUUID();
-
-      const duplicated = {
-        ...vpc,
+      await api.createLab({
         name: `${vpc.name || "Laboratorio"} (copia)`,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      delete duplicated.id;
-
-      // Reset deployment metadata so the copy starts clean
-      delete duplicated.planId;
-      delete duplicated.planValidationOk;
-      delete duplicated.planCreatedFromCanvas;
-      delete duplicated.planCanvasHash;
-      delete duplicated.planName;
-      delete duplicated.planUpdatedAt;
-
-      await setDoc(doc(db, DB_FIRESTORE_VPCS, newId), duplicated);
-
+        target_provider: vpc.target_provider || 'aws',
+        cidr_block: vpc.cidr_block || '',
+        prefix_length: vpc.prefix_length,
+        region: vpc.region || '',
+        narrative: vpc.narrative || 'advanced',
+        lab_template: vpc.lab_template || '',
+        flow: vpc.flow || {},
+        metadata: vpc.metadata || {},
+        intent: vpc.intent || {},
+        capabilities: vpc.capabilities || [],
+        provider_overrides: vpc.provider_overrides || {},
+        course_id: vpc.course?.id || null,
+        visibility_scope: vpc.visibility_scope || 'owner',
+      });
       await fetchVPCs();
     } catch (error) {
       console.error("Error duplicating VPC:", error);
@@ -164,26 +104,13 @@ const VPCList = () => {
       setLoadingFlow(false);
     }
   };
+
   const filteredVpcs = useMemo(() => {
     const q = query.trim().toLowerCase();
 
     return (vpcs || [])
-      .slice() // avoid mutating original array
-      .sort((a, b) => {
-        const getDate = (v) => {
-          if (!v?.createdAt) return 0;
-
-          // Firestore Timestamp support
-          if (typeof v.createdAt === "object" && v.createdAt.seconds) {
-            return v.createdAt.seconds * 1000;
-          }
-
-          // JS Date or ISO string
-          return new Date(v.createdAt).getTime() || 0;
-        };
-
-        return getDate(b) - getDate(a); // most recent first
-      })
+      .slice()
+      .sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime())
       .filter((v) => {
         if (typeFilter === "ALL") return true;
         const isWizard = v?.narrative === "wizard";
@@ -197,12 +124,11 @@ const VPCList = () => {
       });
   }, [vpcs, query, typeFilter]);
 
-
-  const deleteFirestoreOnly = async () => {
+  const deleteLabOnly = async () => {
     if (!vpcToDelete?.id) return;
     try {
       setLoadingFlow(true);
-      await deleteDoc(doc(db, DB_FIRESTORE_VPCS, vpcToDelete.id));
+      await api.deleteLab(vpcToDelete.id);
       await fetchVPCs();
       closeDeleteDialog();
     } catch (error) {
@@ -211,18 +137,13 @@ const VPCList = () => {
     } finally {
       setLoadingFlow(false);
     }
-
   }
 
   const handleCreateVPCModalClose = (newVPCId, cidrBlock, prefixLength, vlanName, vlanRegion) => {
-    // 1) guarda si era wizard ANTES de resetearlo
     const wasWizard = wizardMode;
-
-    // 2) ahora sí reseteas wizard UI
     finish();
     setWizardMode(false);
 
-    // 3) store
     if (cidrBlock) setCidrBlockVPC(cidrBlock);
     if (prefixLength) setPrefixLength(prefixLength);
     if (vlanName) setVlanName(vlanName);
@@ -231,7 +152,6 @@ const VPCList = () => {
     setIsCreateVPCModalOpen(false);
     setLoadingFlow(false);
 
-    // 4) navega con flag wizard
     if (newVPCId) {
       const qs = wasWizard ? "?wizard=1" : "";
       navigate(`/admin/vpcs/${newVPCId}/mainflow${qs}`);
@@ -240,9 +160,9 @@ const VPCList = () => {
 
   const handleLinkToFlow = (vpc) => {
     setLoadingFlow(true)
-    if (vpc?.cidrBlock) setCidrBlockVPC(vpc.cidrBlock)
-    if (vpc?.prefixLength !== undefined && vpc?.prefixLength !== null) {
-      setPrefixLength(vpc.prefixLength)
+    if (vpc?.cidr_block) setCidrBlockVPC(vpc.cidr_block)
+    if (vpc?.prefix_length !== undefined && vpc?.prefix_length !== null) {
+      setPrefixLength(vpc.prefix_length)
     }
     if (vpc?.name) setVlanName(vpc.name)
     if (vpc?.region) setVlanRegion(vpc.region)
@@ -251,48 +171,27 @@ const VPCList = () => {
     navigate(`/admin/vpcs/${vpc.id}/mainflow${qs}`);
   }
 
-  //Botón: laboratorio guiado
   const handleCreateGuideLab = () => {
     setWizardMode(true)
     start();
-    setStep("vpc-lab-type"); //primer paso lógico del wizard
+    setStep("vpc-lab-type");
     setIsCreateVPCModalOpen(true);
   }
 
-  //Botón: creación clásica/avanzada
-  const handleCreateAdvancedVPC = () => {
+  const handleCreateLab = () => {
     setWizardMode(false)
-    start(); // opcional, si quieres que igual muestre hints del wizard.
-    setStep("manual-vpc")
-    setIsCreateVPCModalOpen(true);
-  }
-
-  const handleDeleteVPC = async (vpc) => {
-    const name = vpc?.name || vpc?.id;
-
-    const confirmDelete = window.confirm(`¿Estás seguro de que deseas eliminar la VPC "${name}"? Esta acción no se puede deshacer.\n\nEsto borrará el registro en Firestore.\n(No destruye recursos en AWS si ya hiciste Deploy).`);
-    if (!confirmDelete) return;
-
-    try {
-      setLoadingFlow(true);
-      await deleteDoc(doc(db, DB_FIRESTORE_VPCS, vpc.id));
-      // refrescar lista
-      // Opción A: recargar (simple)
-      await fetchVPCs();
-      // Opción B (mejor): usar fetchVPCs desde el hook (te lo dejo en paso 2)
-    } catch (error) {
-      console.error("Error deleting VPC:", error);
-      alert("No se pudo eliminar. Revisa consola.");
-    } finally {
-      setLoadingFlow(false);
-    }
-
+    setIsCreateVPCModalOpen(true)
   }
 
   const openDeleteDialog = (vpc) => {
     setVpcToDelete(vpc);
     setDeleteDialogOpen(true);
-  }
+  };
+
+  const closeDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    setVpcToDelete(null);
+  };
 
   const openRenameDialog = (vpc) => {
     setVpcToRename(vpc);
@@ -301,341 +200,159 @@ const VPCList = () => {
   };
 
   const closeRenameDialog = () => {
+    setRenameDialogOpen(false);
     setVpcToRename(null);
     setNewName("");
-    setRenameDialogOpen(false);
   };
 
-  const handleRenameVPC = async () => {
+  const handleRename = async () => {
     if (!vpcToRename?.id || !newName.trim()) return;
-
     try {
       setLoadingFlow(true);
-
-      await setDoc(
-        doc(db, DB_FIRESTORE_VPCS, vpcToRename.id),
-        {
-          name: newName.trim(),
-          updatedAt: new Date(),
-        },
-        { merge: true }
-      );
-
+      await api.updateLab(vpcToRename.id, { name: newName.trim() });
       await fetchVPCs();
       closeRenameDialog();
     } catch (error) {
-      console.error("Error renaming VPC:", error);
-      alert("No se pudo renombrar el laboratorio.");
+      console.error('Error renaming lab:', error);
+      alert('No se pudo renombrar el laboratorio.');
     } finally {
       setLoadingFlow(false);
     }
   };
-  const closeDeleteDialog = () => {
-    setVpcToDelete(null);
-    setDeleteDialogOpen(false);
-  }
 
   return (
     <Box sx={{ p: 3 }}>
-      <Stack direction="column" spacing={3}>
-        {/* Header (match PlanListPage) */}
-        <PageHeader
-          title="Laboratorios"
-          subtitle="Gestiona laboratorios para aprendizaje y orquestación: simula topologías VLAN en modo guiado o construye configuraciones avanzadas listas para AWS."
-          actions={
-            <>
-              <Tooltip
-                title="Sigue un flujo paso a paso ideal para prácticas guiadas, clases y demostraciones académicas."
-                arrow
-              >
-                <Button
-                  variant="contained"
-                  color="primary"
-                  startIcon={<AddIcon />}
-                  onClick={handleCreateGuideLab}
-                  disableElevation
-                  sx={{ borderRadius: 999, fontWeight: 700 }}
-                >
-                  Crear laboratorio guiado
-                </Button>
-              </Tooltip>
-
-              <Tooltip
-                title="Configura manualmente todos los parámetros de red. Recomendado si ya dominas conceptos como CIDR, subredes, tablas de rutas y gateways."
-                arrow
-              >
-                <Button
-                  variant="outlined"
-                  color="primary"
-                  startIcon={<AddIcon />}
-                  onClick={handleCreateAdvancedVPC}
-                  sx={{ borderRadius: 999, fontWeight: 700 }}
-                >
-                  Crear laboratorio avanzado
-                </Button>
-              </Tooltip>
-            </>
-          }
-        />
-
-        {/* Filters / toolbar panel (match PlanListPage) */}
-        <Paper
-          elevation={0}
-          className="pt-panel"
-          sx={{
-            p: 2.5,
-            borderRadius: 2,
-          }}
-        >
-          <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ md: "center" }}>
-            <TextField
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              label="Buscar"
-              placeholder="Por nombre o VPC ID…"
-              size="small"
-              fullWidth
-            />
-
-            <FormControl size="small" sx={{ minWidth: 200 }}>
-              <InputLabel id="type-filter-label">Tipo</InputLabel>
-              <Select
-                labelId="type-filter-label"
-                value={typeFilter}
-                label="Tipo"
-                onChange={(e) => setTypeFilter(e.target.value)}
-              >
-                <MenuItem value="ALL">Todos</MenuItem>
-                <MenuItem value="GUIDED">Guiado</MenuItem>
-                <MenuItem value="ADVANCED">Avanzado</MenuItem>
-              </Select>
-            </FormControl>
-
-            <Box sx={{ minWidth: 120, display: "flex", justifyContent: { xs: "flex-start", md: "flex-end" } }}>
-              <Chip label={`${filteredVpcs.length} / ${(vpcs || []).length}`} variant="outlined" size="small" />
-            </Box>
+      <PageHeader
+        title="Laboratorios"
+        subtitle="Gestiona tus laboratorios y abre el canvas para editar topologías y preparar despliegues en AWS."
+        actions={
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+            <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreateGuideLab}>
+              Crear guiado
+            </Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateLab}>
+              Crear laboratorio
+            </Button>
           </Stack>
-        </Paper>
-
-        <VPCsTable
-          vpcs={filteredVpcs}
-          onEdit={handleLinkToFlow}
-          onDelete={openDeleteDialog}
-          onDuplicate={handleDuplicateVPC}
-          onRename={openRenameDialog}
-        />
-      </Stack>
-
-      <CreateVPCModal
-        open={isCreateVPCModalOpen}
-        onClose={handleCreateVPCModalClose}
-        wizardMode={wizardMode}
+        }
       />
-      <Dialog open={deleteDialogOpen} onClose={closeDeleteDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>Eliminar laboratorio/VPC</DialogTitle>
-        <Divider />
-        <DialogContent sx={{ pt: 2 }}>
-          <Typography variant="body1" sx={{ mb: 1 }}>
-            Vas a eliminar: <b>{vpcToDelete?.name || vpcToDelete?.id}</b>
-          </Typography>
 
-          <Typography variant="body2" color="text.secondary">
-            Esto borra el documento en Firestore. Si esta VPC ya fue desplegada en AWS,
-            los recursos podrían quedar vivos.
-          </Typography>
+      <Paper className="pt-panel" sx={{ p: 2.5, mb: 3, borderRadius: 2 }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
+          <TextField
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            label="Buscar"
+            placeholder="Por nombre o id…"
+            size="small"
+            fullWidth
+          />
+
+          <FormControl size="small" sx={{ minWidth: 180 }}>
+            <InputLabel id="type-filter-label">Modo</InputLabel>
+            <Select
+              labelId="type-filter-label"
+              value={typeFilter}
+              label="Modo"
+              onChange={(e) => setTypeFilter(e.target.value)}
+            >
+              <MenuItem value="ALL">Todos</MenuItem>
+              <MenuItem value="GUIDED">Guiados</MenuItem>
+              <MenuItem value="ADVANCED">Avanzados</MenuItem>
+            </Select>
+          </FormControl>
+
+          <Chip label={`${filteredVpcs.length} / ${vpcs.length}`} variant="outlined" size="small" />
+        </Stack>
+      </Paper>
+
+      <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2 }}>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Laboratorio</TableCell>
+              <TableCell>Provider</TableCell>
+              <TableCell>Curso</TableCell>
+              <TableCell>Visibilidad</TableCell>
+              <TableCell>Actualizado</TableCell>
+              <TableCell align="right">Acciones</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {filteredVpcs.map((vpc) => (
+              <TableRow key={vpc.id} hover>
+                <TableCell>
+                  <Stack spacing={0.5}>
+                    <Typography fontWeight={600}>{vpc.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">{vpc.id}</Typography>
+                  </Stack>
+                </TableCell>
+                <TableCell>{String(vpc.target_provider || 'aws').toUpperCase()}</TableCell>
+                <TableCell>{vpc.course?.name || '-'}</TableCell>
+                <TableCell>{vpc.visibility_scope || '-'}</TableCell>
+                <TableCell>{new Date(vpc.updated_at || vpc.created_at || Date.now()).toLocaleString()}</TableCell>
+                <TableCell align="right">
+                  <Stack direction="row" spacing={1} justifyContent="flex-end">
+                    <Tooltip title="Abrir laboratorio">
+                      <Button size="small" variant="outlined" onClick={() => handleLinkToFlow(vpc)}>
+                        Abrir
+                      </Button>
+                    </Tooltip>
+                    <Tooltip title="Renombrar">
+                      <IconButton onClick={() => openRenameDialog(vpc)} color="primary">
+                        <ModeEditOutlined />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Duplicar">
+                      <IconButton onClick={() => handleDuplicateVPC(vpc)} color="primary">
+                        <ContentCopy />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Eliminar">
+                      <IconButton onClick={() => openDeleteDialog(vpc)} color="error">
+                        <DeleteOutline />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      <Dialog open={deleteDialogOpen} onClose={closeDeleteDialog}>
+        <DialogTitle>Eliminar laboratorio</DialogTitle>
+        <DialogContent>
+          ¿Seguro que quieres eliminar <b>{vpcToDelete?.name}</b>?
         </DialogContent>
-
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={closeDeleteDialog} variant="outlined">
-            Cancelar
-          </Button>
-
-          <Button onClick={deleteFirestoreOnly} color="error" variant="contained">
-            Eliminar
-          </Button>
+        <DialogActions>
+          <Button onClick={closeDeleteDialog}>Cancelar</Button>
+          <Button color="error" onClick={deleteLabOnly}>Eliminar</Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={renameDialogOpen} onClose={closeRenameDialog} maxWidth="sm" fullWidth>
+      <Dialog open={renameDialogOpen} onClose={closeRenameDialog}>
         <DialogTitle>Renombrar laboratorio</DialogTitle>
-        <Divider />
-        <DialogContent sx={{ pt: 2 }}>
+        <DialogContent>
           <TextField
-            fullWidth
+            autoFocus
+            margin="dense"
             label="Nuevo nombre"
+            fullWidth
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            autoFocus
           />
         </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={closeRenameDialog} variant="outlined">
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleRenameVPC}
-            variant="contained"
-            disabled={!newName.trim()}
-          >
-            Guardar
-          </Button>
+        <DialogActions>
+          <Button onClick={closeRenameDialog}>Cancelar</Button>
+          <Button onClick={handleRename}>Guardar</Button>
         </DialogActions>
       </Dialog>
+
+      <CreateVPCModal open={isCreateVPCModalOpen} onClose={handleCreateVPCModalClose} wizardMode={wizardMode} />
     </Box>
   )
 }
-
-const VPCsTable = ({ vpcs, onEdit, onDelete, onDuplicate, onRename }) => (
-  <TableContainer
-    component={Paper}
-    elevation={0}
-    sx={{
-      borderRadius: 2,
-      border: (theme) => `1px solid ${theme.palette.divider}`,
-      backgroundColor: (theme) => theme.palette.background.paper,
-    }}
-  >
-    <Table size="small" aria-label="vpcs table">
-      <TableHead>
-        <TableRow
-          sx={{
-            backgroundColor: (theme) =>
-              theme.palette.mode === "light" ? theme.palette.grey[100] : theme.palette.background.paper,
-          }}
-        >
-          <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Laboratorio / VPC</TableCell>
-          <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Tipo</TableCell>
-          <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Estado</TableCell>
-          <TableCell align="right" sx={{ fontWeight: 700, color: "text.primary" }}>Acciones</TableCell>
-        </TableRow>
-      </TableHead>
-
-      <TableBody>
-        {(vpcs || []).map((vpc) => {
-          const isWizard = vpc?.narrative === "wizard";
-          const typeLabel = (isWizard ? "Guiado" : "Avanzado") + " • " + (vpc?.cloudProvider || "AWS");
-
-          return (
-            <TableRow
-              key={vpc.id}
-              hover
-              sx={{
-                transition: "background-color .15s ease",
-                "&:hover": {
-                  backgroundColor: (theme) =>
-                    theme.palette.mode === "light" ? theme.palette.grey[50] : "rgba(255,255,255,0.04)",
-                },
-              }}
-            >
-              <TableCell sx={{ maxWidth: 520 }}>
-                <Typography variant="body2" fontWeight={700} noWrap>
-                  {vpc?.name || "Sin nombre"}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ fontFamily: "monospace" }}>
-                  {vpc?.id}
-                </Typography>
-              </TableCell>
-
-              <TableCell>
-                <Typography variant="body2" color="text.secondary">
-                  {typeLabel}
-                </Typography>
-              </TableCell>
-
-              <TableCell>
-                {(() => {
-                  // Derivar estado real basado en metadata del plan persistida en Firestore
-                  let derivedStatus = "CREATED";
-
-                  if (vpc?.planValidationOk === false) {
-                    derivedStatus = "ERROR";
-                  } else if (vpc?.planValidationOk === true) {
-                    derivedStatus = "VALIDATED";
-                  } else if (vpc?.planId) {
-                    derivedStatus = "SYNCED";
-                  }
-
-                  let color = "default";
-                  if (derivedStatus === "VALIDATED") color = "success";
-                  else if (derivedStatus === "SYNCED") color = "info";
-                  else if (derivedStatus === "ERROR") color = "error";
-                  else if (derivedStatus === "CREATED") color = "default";
-
-                  const statusDescriptionMap = {
-                    CREATED:
-                      "El laboratorio fue creado en Firestore, pero aún no se ha validado ni sincronizado con un plan de infraestructura.",
-                    SYNCED:
-                      "El laboratorio fue sincronizado con un plan en el backend, pero aún no se ha ejecutado una validación (Terraform plan).",
-                    VALIDATED:
-                      "La validación (Terraform plan) se ejecutó correctamente y la infraestructura es consistente.",
-                    ERROR:
-                      "La validación del plan falló. Revisa los detalles del plan para corregir la configuración.",
-                  };
-
-                  const description =
-                    statusDescriptionMap[derivedStatus] ||
-                    "Estado desconocido del laboratorio.";
-
-                  return (
-                    <Tooltip title={description} arrow>
-                      <Chip
-                        size="small"
-                        label={derivedStatus}
-                        color={color}
-                        variant={
-                          derivedStatus === "CREATED"
-                            ? "outlined"
-                            : "filled"
-                        }
-                      />
-                    </Tooltip>
-                  );
-                })()}
-              </TableCell>
-
-              <TableCell align="right">
-                <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                  <IconButton onClick={() => onEdit(vpc)} aria-label="edit" color="primary" size="small">
-                    <ModeEditOutlined fontSize="small" />
-                  </IconButton>
-                  <IconButton onClick={() => onDelete(vpc)} aria-label="delete" color="error" size="small">
-                    <DeleteOutline fontSize="small" />
-                  </IconButton>
-                  <Tooltip title="Duplicar laboratorio" arrow>
-                    <IconButton
-                      size="small"
-                      onClick={() => onDuplicate(vpc)}
-                    >
-                      <ContentCopy fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Renombrar laboratorio" arrow>
-                    <IconButton
-                      size="small"
-                      onClick={() => onRename(vpc)}
-                    >
-                      <ModeEditOutlined fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </Stack>
-              </TableCell>
-            </TableRow>
-          );
-        })}
-
-        {(vpcs || []).length === 0 && (
-          <TableRow>
-            <TableCell colSpan={4}>
-              <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
-                No hay laboratorios para mostrar.
-              </Typography>
-            </TableCell>
-          </TableRow>
-        )}
-      </TableBody>
-    </Table>
-  </TableContainer>
-)
-
 
 export default VPCList

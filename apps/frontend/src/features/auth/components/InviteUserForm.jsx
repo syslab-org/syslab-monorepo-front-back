@@ -8,7 +8,7 @@ import { useEffect } from 'react';
 import { useAuth } from '@/app/providers/AuthContext'
 
 // eslint-disable-next-line react/prop-types
-const InviteUserForm = ({ closeModal, userData }) => {
+const InviteUserForm = ({ closeModal, userData, courses = [] }) => {
     const validationSchema = useInviteUserFormValidation();
     const { user } = useAuth()
     const rolesUser = user?.role === USER_ROL_SUPER_ADMIN
@@ -22,6 +22,7 @@ const InviteUserForm = ({ closeModal, userData }) => {
             email: '',
             role: '',
             status: STATUS_USER_PENDING,
+            course_id: '',
         },
     });
 
@@ -34,6 +35,7 @@ const InviteUserForm = ({ closeModal, userData }) => {
             setValue('email', userData.email || '');
             setValue('role', userData.role || '');
             setValue('status', userData.status || STATUS_USER_PENDING);
+            setValue('course_id', userData.course?.id || '');
         }
     }, [userData, setValue]);
 
@@ -86,6 +88,23 @@ const InviteUserForm = ({ closeModal, userData }) => {
                         ))}
                     </Select>
                     {errors.status && <p>{errors.status.message}</p>}
+                </FormControl>
+
+                <FormControl fullWidth>
+                    <InputLabel id="course-select-label">Course</InputLabel>
+                    <Select
+                        labelId="course-select-label"
+                        {...register('course_id')}
+                        label="Course"
+                        value={watch('course_id') || ''}
+                    >
+                        <MenuItem value="">Sin curso</MenuItem>
+                        {courses.map((course) => (
+                            <MenuItem key={course.id} value={course.id}>
+                                {course.name}
+                            </MenuItem>
+                        ))}
+                    </Select>
                 </FormControl>
 
                 <Button type="submit">

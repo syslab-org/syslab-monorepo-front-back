@@ -22,7 +22,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 
 import { VPC_CHILD_FORM, } from "@/features/networkCanvas/utils/constants";
-import { CLOUD_AWS_LABEL, CLOUD_AWS_VALUE } from '@/shared/constants';
 import { useFormValidationSchema } from "./validations/useFormValidations";
 
 const VPCNodeForm = ({
@@ -62,7 +61,6 @@ const VPCNodeForm = ({
   } = useForm({
     resolver: yupResolver(validationSchema),
     defaultValues: {
-      cloudProvider: nodeData?.cloudProvider || CLOUD_AWS_VALUE,
       vpcName: nodeData?.vpcName || "",
       region: nodeData?.region || defaultRegion, // ej: "us-east-1"
       cidrBlock:
@@ -92,7 +90,6 @@ const VPCNodeForm = ({
   // Cuando cambia el nodeData (o props clave), refresca el form SIN perder NAT fields
   useEffect(() => {
     reset({
-      cloudProvider: nodeData?.cloudProvider || CLOUD_AWS_VALUE,
       vpcName: nodeData?.vpcName || "",
       region: nodeData?.region || defaultRegion,
       cidrBlock:
@@ -204,22 +201,6 @@ const VPCNodeForm = ({
           {snackMsg}
         </Alert>
       </Snackbar>
-
-      {/* Cloud Provider */}
-      <FormControl fullWidth>
-        <InputLabel id="vpc-cloud-label">Cloud Provider</InputLabel>
-        <Select
-          labelId="vpc-cloud-label"
-          {...register("cloudProvider")}
-          label="Cloud Provider"
-          defaultValue={CLOUD_AWS_VALUE}
-        >
-          <MenuItem value={CLOUD_AWS_VALUE}>{CLOUD_AWS_LABEL}</MenuItem>
-        </Select>
-        {errors.cloudProvider && (
-          <FormHelperText error>{errors.cloudProvider.message}</FormHelperText>
-        )}
-      </FormControl>
 
       {/* VPC Name */}
       <TextField
