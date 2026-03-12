@@ -215,6 +215,74 @@ function buildLinksFromEdges(nodes, edges) {
   return { links, routers };
 }
 
+function buildNeutralConnectivity(links, routers) {
+  const hubs = (Array.isArray(routers) ? routers : [])
+    .filter((router) => String(router?.type || "").toLowerCase() === "tgw")
+    .map((router) => ({
+      id: router.id,
+      name: router.name || router.id,
+      kind: "routing_hub",
+      implementation: "tgw",
+    }));
+
+  const normalizedLinks = (Array.isArray(links) ? links : []).map((link) => {
+    const type = String(link?.type || "").toLowerCase();
+    if (type === "tgw-attach") {
+      return {
+        type: "hub_attachment",
+        implementation: "tgw",
+        hub_id: link.router_id || "",
+        segment_id: link.vpc_id || "",
+        attachment_zones: Array.isArray(link.subnet_names)
+          ? link.subnet_names
+          : [],
+        routes: Array.isArray(link?.routes?.to_router)
+          ? link.routes.to_router
+          : [],
+        provider_overrides: {
+          aws: { ...link },
+        },
+      };
+    }
+
+    return {
+      type: "direct_link",
+      implementation: "peering",
+      segment_a_id: link.vpc_a_id || "",
+      segment_b_id: link.vpc_b_id || "",
+      provider_overrides: {
+        aws: { ...link },
+      },
+    };
+  });
+
+  return {
+    mode: hubs.length > 0 ? "hub" : normalizedLinks.length > 0 ? "direct" : "isolated",
+    hubs,
+    links: normalizedLinks,
+  };
+}
+
+function buildNeutralTopology({
+  planName,
+  canvasId,
+  region,
+  masterCidr,
+  segments,
+  connectivity,
+}) {
+  return {
+    network: {
+      id: canvasId || "",
+      name: planName,
+      region,
+      cidr: masterCidr,
+    },
+    segments,
+    connectivity,
+  };
+}
+
 const useDeployNetwork = ({
   nodes,
   edges,
@@ -498,26 +566,99 @@ const useDeployNetwork = ({
       setPlanName(planDefaultName);
     }
 
-    // Construimos el payload final que el backend espera para crear el plan.
+    const segments = vpcsPayload.map((vpc) => {
+      const zones = (vpc.subnets || []).map((subnet) => {
+        const workloads = (subnet.instances || []).map((instance) => ({
+          id: instance.id,
+          name: instance.name,
+          kind: "workload",
+          image: instance.ami || "",
+          size: instance.instance_type || "t2.micro",
+          private_ip: instance.ip_address || "",
+          zone_id: subnet.name,
+          access: {
+            ssh_key: instance.ssh_access || "",
+            public_ip: !!instance.associate_public_ip,
+          },
+          provider_overrides: {
+            aws: { ...instance },
+          },
+        }));
+
+        return {
+          id: subnet.name,
+          name: subnet.name,
+          cidr: subnet.cidr_block,
+          kind: subnet.subnet_type || (subnet.map_public_ip_on_launch ? "public" : "private"),
+          availability_zone: subnet.availability_zone,
+          map_public_ip_on_launch: !!subnet.map_public_ip_on_launch,
+          route_table: subnet.route_table || "",
+          workloads,
+          provider_overrides: {
+            aws: {
+              subnet_type: subnet.subnet_type || "",
+              route_table: subnet.route_table || "",
+            },
+          },
+        };
+      });
+
+      const workloads = zones.flatMap((zone) => zone.workloads || []);
+      const hasPublic = zones.some((zone) => zone.kind === "public");
+      const hasPrivate = zones.some((zone) => zone.kind === "private");
+      const exposure = hasPublic && hasPrivate ? "mixed" : hasPublic ? "public" : hasPrivate ? "private" : "internal";
+      const internetAccess = vpc.internet_gateway ? "direct" : vpc.nat_gateway?.enabled ? "egress_only" : "isolated";
+
+      return {
+        id: vpc.id,
+        name: vpc.name,
+        region: vpc.region,
+        cidr: vpc.cidr_block,
+        exposure,
+        internet_access: internetAccess,
+        ingress: {
+          ssh_cidr: vpc.allowed_ssh_cidr || "",
+        },
+        zones,
+        workloads,
+        provider_overrides: {
+          aws: {
+            resource_kind: "vpc",
+            internet_gateway: !!vpc.internet_gateway,
+            nat_gateway: { ...(vpc.nat_gateway || { enabled: false, public_subnet: "", elastic_ip: "" }) },
+            route_tables: Array.isArray(vpc.route_tables) ? vpc.route_tables : [],
+          },
+        },
+      };
+    });
+
+    const connectivity = buildNeutralConnectivity(links, routers);
+
+    // Construimos el payload neutral que el backend traduce al provider.
     const built = {
       name: planDefaultName,
-      cloud: "aws",
-      firestore_vpc_id: firestoreVpcId || null, // ✅ top-level (el backend lo lee directo)
-      vpcId: firestoreVpcId || null, // ✅ alias opcional (por si algún lado lo usa)
-      vlan: {
-        id: firestoreVpcId || null, // ✅ para compatibilidad con payload antiguo
-        name: vlanNameFinal,
-        region: vlanRegionFinal,
-        master_cidr: masterCidr,
+      target_provider: "aws",
+      canvas_id: firestoreVpcId || null,
+      firestore_vpc_id: firestoreVpcId || null,
+      vpcId: firestoreVpcId || null,
+      metadata: {
+        name: planDefaultName,
+        canvas_id: firestoreVpcId || null,
+        source_format: "neutral_topology",
+        schema_version: "2026-03-neutral-v1",
       },
-      vpcs: vpcsPayload,
-      links,
-      routers,
+      topology: buildNeutralTopology({
+        planName: vlanNameFinal,
+        canvasId: firestoreVpcId || null,
+        region: vlanRegionFinal,
+        masterCidr,
+        segments,
+        connectivity,
+      }),
     };
 
     setTransformedData(built);
     console.log("processJsonToCloud - transformedData:", {
-      cloud: "aws",
       ...built,
     });
 

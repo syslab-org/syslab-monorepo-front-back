@@ -35,6 +35,21 @@ import CreateVPCModal from "./CreateVPCModal";
 import { PageHeader } from '@/shared/ui/layouts/MainLayout';
 import { api } from "@/infrastructure/http/api";
 
+const parseAndValidateCidr = (raw) => {
+  const value = String(raw || "").trim();
+  if (!value.includes("/")) {
+    return { ok: false, message: "Usa formato CIDR, ej: 10.0.0.0/16" };
+  }
+  const [base, prefixStr] = value.split("/");
+  const prefix = Number(prefixStr);
+
+  if (Number.isNaN(prefix) || prefix < 8 || prefix > 30) {
+    return { ok: false, message: "Prefijo invalido (esperado /8 a /30)" };
+  }
+
+  return { ok: true, base: base.trim(), prefix };
+};
+
 const useFetchLabs = (setLoadingFlow) => {
   const [vpcs, setVpcs] = useState([])
 
@@ -63,6 +78,8 @@ const VPCList = () => {
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [vpcToRename, setVpcToRename] = useState(null);
   const [newName, setNewName] = useState("");
+  const [editCidr, setEditCidr] = useState("");
+  const [editRegion, setEditRegion] = useState("us-east-1");
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [isCreateVPCModalOpen, setIsCreateVPCModalOpen] = useState(false)
@@ -196,6 +213,12 @@ const VPCList = () => {
   const openRenameDialog = (vpc) => {
     setVpcToRename(vpc);
     setNewName(vpc?.name || "");
+    setEditCidr(
+      vpc?.cidr_block && vpc?.prefix_length !== undefined && vpc?.prefix_length !== null
+        ? `${vpc.cidr_block}/${vpc.prefix_length}`
+        : ""
+    );
+    setEditRegion(vpc?.region || "us-east-1");
     setRenameDialogOpen(true);
   };
 
@@ -203,18 +226,30 @@ const VPCList = () => {
     setRenameDialogOpen(false);
     setVpcToRename(null);
     setNewName("");
+    setEditCidr("");
+    setEditRegion("us-east-1");
   };
 
   const handleRename = async () => {
     if (!vpcToRename?.id || !newName.trim()) return;
+    const cidrCheck = parseAndValidateCidr(editCidr);
+    if (!cidrCheck.ok) {
+      alert(cidrCheck.message);
+      return;
+    }
     try {
       setLoadingFlow(true);
-      await api.updateLab(vpcToRename.id, { name: newName.trim() });
+      await api.updateLab(vpcToRename.id, {
+        name: newName.trim(),
+        cidr_block: cidrCheck.base,
+        prefix_length: cidrCheck.prefix,
+        region: editRegion,
+      });
       await fetchVPCs();
       closeRenameDialog();
     } catch (error) {
-      console.error('Error renaming lab:', error);
-      alert('No se pudo renombrar el laboratorio.');
+      console.error('Error updating lab:', error);
+      alert('No se pudo actualizar el laboratorio.');
     } finally {
       setLoadingFlow(false);
     }
@@ -298,7 +333,7 @@ const VPCList = () => {
                         Abrir
                       </Button>
                     </Tooltip>
-                    <Tooltip title="Renombrar">
+                    <Tooltip title="Editar laboratorio">
                       <IconButton onClick={() => openRenameDialog(vpc)} color="primary">
                         <ModeEditOutlined />
                       </IconButton>
@@ -333,16 +368,38 @@ const VPCList = () => {
       </Dialog>
 
       <Dialog open={renameDialogOpen} onClose={closeRenameDialog}>
-        <DialogTitle>Renombrar laboratorio</DialogTitle>
+        <DialogTitle>Editar laboratorio</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
             margin="dense"
-            label="Nuevo nombre"
+            label="Nombre"
             fullWidth
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
           />
+          <TextField
+            margin="dense"
+            label="CIDR padre"
+            fullWidth
+            value={editCidr}
+            onChange={(e) => setEditCidr(e.target.value)}
+            placeholder="10.64.0.0/12"
+            helperText="Formato CIDR. Este es el rango padre del laboratorio."
+          />
+          <FormControl fullWidth margin="dense">
+            <InputLabel id="edit-region-label">Region</InputLabel>
+            <Select
+              labelId="edit-region-label"
+              value={editRegion}
+              label="Region"
+              onChange={(e) => setEditRegion(e.target.value)}
+            >
+              <MenuItem value="us-east-1">US East (N. Virginia)</MenuItem>
+              <MenuItem value="us-west-2">US West (Oregon)</MenuItem>
+              <MenuItem value="eu-west-1">EU (Ireland)</MenuItem>
+            </Select>
+          </FormControl>
         </DialogContent>
         <DialogActions>
           <Button onClick={closeRenameDialog}>Cancelar</Button>

@@ -5,7 +5,9 @@ from django.contrib.auth.models import User
 from django.test import SimpleTestCase
 from rest_framework.test import APITestCase
 
+from .domain.network_intent import normalize_network_intent
 from .models import Course, Lab, Plan, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, STATUS_ACTIVE, VISIBILITY_COURSE, VISIBILITY_OWNER
+from .providers import get_provider_adapter
 
 from .tasks import build_nat_cleanup_targets
 from .validators import validate_network_plan
@@ -151,6 +153,129 @@ class NatCleanupTargetTests(SimpleTestCase):
         self.assertFalse(targets["vpc-123"]["release_generated_eip"])
 
 
+class NetworkIntentTests(SimpleTestCase):
+    def test_normalize_network_intent_converts_legacy_payload_to_neutral_topology(self):
+        payload = {
+            "name": "Lab neutral",
+            "cloud": "aws",
+            "vlan": {
+                "id": "canvas-1",
+                "name": "Lab neutral",
+                "region": "us-east-1",
+                "master_cidr": "10.50.0.0/16",
+            },
+            "vpcs": [
+                {
+                    "id": "vpc-a",
+                    "name": "VPC-A",
+                    "region": "us-east-1",
+                    "cidr_block": "10.50.0.0/16",
+                    "internet_gateway": True,
+                    "allowed_ssh_cidr": "203.0.113.5/32",
+                    "nat_gateway": {"enabled": False, "public_subnet": "", "elastic_ip": ""},
+                    "route_tables": [{"name": "public", "routes": [{"dest_cidr": "0.0.0.0/0", "target": "igw"}]}],
+                    "subnets": [
+                        {
+                            "name": "public-a1",
+                            "cidr_block": "10.50.1.0/24",
+                            "availability_zone": "us-east-1a",
+                            "subnet_type": "public",
+                            "map_public_ip_on_launch": True,
+                            "route_table": "public",
+                            "instances": [
+                                {
+                                    "id": "vm-a1",
+                                    "name": "bastion-a1",
+                                    "ami": "ami-123",
+                                    "instance_type": "t2.micro",
+                                    "ip_address": "10.50.1.10",
+                                    "ssh_access": "tesis-key",
+                                    "associate_public_ip": True,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "links": [{"type": "peering", "vpc_a_id": "vpc-a", "vpc_b_id": "vpc-b", "via_router_id": "router-1"}],
+            "routers": [],
+        }
+
+        intent = normalize_network_intent(payload)
+
+        self.assertEqual(intent["metadata"]["source_format"], "legacy_aws_payload")
+        self.assertEqual(intent["topology"]["network"]["id"], "canvas-1")
+        self.assertEqual(intent["topology"]["segments"][0]["exposure"], "public")
+        self.assertEqual(intent["topology"]["segments"][0]["workloads"][0]["access"]["ssh_key"], "tesis-key")
+        self.assertEqual(intent["topology"]["connectivity"]["mode"], "direct")
+
+    def test_aws_adapter_compiles_neutral_topology(self):
+        adapter = get_provider_adapter("aws")
+        neutral_payload = {
+            "target_provider": "aws",
+            "metadata": {
+                "name": "Lab neutral compile",
+                "canvas_id": "canvas-neutral-1",
+            },
+            "topology": {
+                "network": {
+                    "id": "canvas-neutral-1",
+                    "name": "Lab neutral compile",
+                    "region": "us-east-1",
+                    "cidr": "10.70.0.0/16",
+                },
+                "segments": [
+                    {
+                        "id": "segment-a",
+                        "name": "Segment A",
+                        "region": "us-east-1",
+                        "cidr": "10.70.0.0/16",
+                        "ingress": {"ssh_cidr": "203.0.113.5/32"},
+                        "zones": [
+                            {
+                                "id": "zone-a1",
+                                "name": "public-a1",
+                                "cidr": "10.70.1.0/24",
+                                "kind": "public",
+                                "availability_zone": "us-east-1a",
+                                "map_public_ip_on_launch": True,
+                                "workloads": [
+                                    {
+                                        "id": "workload-a1",
+                                        "name": "bastion-a1",
+                                        "image": "ami-123",
+                                        "size": "t2.micro",
+                                        "private_ip": "10.70.1.10",
+                                        "access": {"ssh_key": "tesis-key", "public_ip": True},
+                                    }
+                                ],
+                            }
+                        ],
+                        "provider_overrides": {
+                            "aws": {
+                                "internet_gateway": True,
+                                "nat_gateway": {"enabled": False, "public_subnet": "", "elastic_ip": ""},
+                                "route_tables": [{"name": "public", "routes": [{"dest_cidr": "0.0.0.0/0", "target": "igw"}]}],
+                            }
+                        },
+                    }
+                ],
+                "connectivity": {
+                    "mode": "isolated",
+                    "hubs": [],
+                    "links": [],
+                },
+            },
+        }
+
+        compiled = adapter.compile(neutral_payload)["payload"]
+
+        self.assertEqual(compiled["cloud"], "aws")
+        self.assertEqual(compiled["vlan"]["id"], "canvas-neutral-1")
+        self.assertEqual(compiled["vpcs"][0]["name"], "Segment A")
+        self.assertEqual(compiled["vpcs"][0]["subnets"][0]["instances"][0]["ssh_access"], "tesis-key")
+
+
 class VisibilityApiTests(APITestCase):
     def setUp(self):
         self.admin = User.objects.create_user(
@@ -291,6 +416,89 @@ class VisibilityApiTests(APITestCase):
         )
         self.assertEqual(res.status_code, 201)
         self.assertEqual(res.json()["target_provider"], "aws")
+
+    def test_sync_from_canvas_accepts_legacy_string_canvas_id_with_neutral_payload(self):
+        self.client.force_authenticate(self.admin)
+        payload = {
+            "name": "Plan neutral legacy id",
+            "target_provider": "aws",
+            "canvas_id": "canvas-legacy-123",
+            "metadata": {
+                "name": "Plan neutral legacy id",
+                "canvas_id": "canvas-legacy-123",
+                "source_format": "neutral_topology",
+            },
+            "topology": {
+                "network": {
+                    "id": "canvas-legacy-123",
+                    "name": "Plan neutral legacy id",
+                    "region": "us-east-1",
+                    "cidr": "10.70.0.0/16",
+                },
+                "segments": [
+                    {
+                        "id": "segment-a",
+                        "name": "Segment A",
+                        "region": "us-east-1",
+                        "cidr": "10.70.0.0/16",
+                        "ingress": {"ssh_cidr": "203.0.113.5/32"},
+                        "zones": [
+                            {
+                                "id": "public-a",
+                                "name": "public-a",
+                                "cidr": "10.70.1.0/24",
+                                "kind": "public",
+                                "availability_zone": "us-east-1a",
+                                "map_public_ip_on_launch": True,
+                                "route_table": "public",
+                                "workloads": [],
+                                "provider_overrides": {
+                                    "aws": {
+                                        "subnet_type": "public",
+                                        "route_table": "public",
+                                    }
+                                },
+                            }
+                        ],
+                        "provider_overrides": {
+                            "aws": {
+                                "internet_gateway": True,
+                                "nat_gateway": {
+                                    "enabled": False,
+                                    "public_subnet": "",
+                                    "elastic_ip": "",
+                                },
+                                "route_tables": [
+                                    {
+                                        "name": "public",
+                                        "routes": [
+                                            {
+                                                "name": "igw-default",
+                                                "dest_cidr": "0.0.0.0/0",
+                                                "target": "igw",
+                                            }
+                                        ],
+                                    }
+                                ],
+                            }
+                        },
+                    }
+                ],
+                "connectivity": {"mode": "isolated", "hubs": [], "links": []},
+            },
+        }
+
+        res = self.client.post(
+            "/api/network/plans/sync-from-canvas/",
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 200)
+        plan = Plan.objects.get(id=res.json()["plan_id"])
+        self.assertEqual(plan.firestore_vpc_id, "canvas-legacy-123")
+        self.assertEqual(plan.payload["vpcs"][0]["name"], "Segment A")
+        self.assertEqual(plan.payload["cloud"], "aws")
 
     @patch("api.views.process_network_plan.delay")
     @patch("api.views._can_run_real_terraform", return_value=True)

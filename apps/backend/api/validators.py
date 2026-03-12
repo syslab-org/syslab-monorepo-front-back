@@ -13,11 +13,14 @@ def validate_network_plan(payload: dict) -> dict:
     if not isinstance(payload, dict):
         raise ValueError("Payload invalido: debe ser un objeto JSON.")
 
-    name = (payload.get("name") or "").strip()
+    intent = normalize_network_intent(payload)
+    name = (
+        (payload.get("name") or "").strip()
+        or str((intent.get("metadata") or {}).get("name") or "").strip()
+    )
     if not name:
         raise ValueError("Falta clave requerida: name")
 
-    intent = normalize_network_intent(payload)
     provider = intent["target_provider"]
 
     try:

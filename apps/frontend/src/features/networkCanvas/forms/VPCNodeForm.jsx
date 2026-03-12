@@ -179,10 +179,10 @@ const VPCNodeForm = ({
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="pt-node-form">
       <Box className="pt-node-form__header">
-        <Typography className="pt-node-form__eyebrow">vpc node</Typography>
-        <Typography className="pt-node-form__title">Virtual Private Cloud</Typography>
+        <Typography className="pt-node-form__eyebrow">network segment</Typography>
+        <Typography className="pt-node-form__title">Network Segment</Typography>
         <Typography className="pt-node-form__subtitle">
-          Define network range, internet access and egress behavior for this VPC.
+          Define address space, internet exposure and egress behavior for this segment. AWS translation: VPC.
         </Typography>
       </Box>
       {/* Snackbar vistoso */}
@@ -262,7 +262,7 @@ const VPCNodeForm = ({
 
       <Alert severity="info" variant="outlined" sx={{ mt: 1, mb: 1.5 }}>
         <Typography variant="body2" sx={{ fontWeight: 600 }}>
-          Qué significa esta VPC
+          Qué significa este segmento
         </Typography>
         <Typography variant="caption" display="block" sx={{ mt: 0.4 }}>
           - El CIDR define el rango principal de la red.

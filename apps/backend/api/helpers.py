@@ -1,4 +1,5 @@
 from typing import Optional
+from uuid import UUID
 
 from django.db.models import Q
 
@@ -25,7 +26,13 @@ def resolve_lab_by_canvas_id(user, canvas_id: str):
     if not canvas_id:
         return None
     qs = visible_labs_queryset(user, Lab.objects.select_related("course", "course__teacher", "owner_user", "owner_user__profile"))
-    return qs.filter(Q(id=canvas_id) | Q(legacy_canvas_id=canvas_id)).first()
+    filters = Q(legacy_canvas_id=canvas_id)
+    try:
+        UUID(str(canvas_id))
+        filters |= Q(id=canvas_id)
+    except (TypeError, ValueError, AttributeError):
+        pass
+    return qs.filter(filters).first()
 
 
 

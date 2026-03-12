@@ -132,10 +132,10 @@ const SubNetworkNodeForm = ({
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="pt-node-form">
       <Box className="pt-node-form__header">
-        <Typography className="pt-node-form__eyebrow">subnet node</Typography>
-        <Typography className="pt-node-form__title">Subnet Segment</Typography>
+        <Typography className="pt-node-form__eyebrow">network zone</Typography>
+        <Typography className="pt-node-form__title">Zone Segment</Typography>
         <Typography className="pt-node-form__subtitle">
-          Segment traffic behavior and addressing inside the parent VPC.
+          Define traffic behavior and addressing inside the parent network segment. AWS translation: subnet.
         </Typography>
       </Box>
 
