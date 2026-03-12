@@ -1,0 +1,246 @@
+{
+  "nodes": [
+    {
+      "id": "vpc-a-03",
+      "type": "vpc",
+      "position": {
+        "x": 80,
+        "y": 80
+      },
+      "width": 640,
+      "height": 560,
+      "data": {
+        "label": "vpc-vpc-a-03",
+        "title": "VPC",
+        "vpcName": "VPC-A",
+        "name": "VPC-A",
+        "region": "us-east-1",
+        "cidrBlock": "10.40.0.0",
+        "prefixLength": 16,
+        "cloudProvider": "AWS",
+        "internetGateway": true,
+        "enableNatGateway": false,
+        "natGatewayPublicSubnet": "",
+        "natGatewayElasticIp": "",
+        "nat_gateway": {
+          "enabled": false,
+          "public_subnet": "",
+          "elastic_ip": ""
+        },
+        "allowedSshCidr": "190.20.221.154/32"
+      }
+    },
+    {
+      "id": "vpc-a-03--subnet--public-a1",
+      "type": "subnetwork",
+      "parentId": "vpc-a-03",
+      "parentNode": "vpc-a-03",
+      "extent": "parent",
+      "position": {
+        "x": 24,
+        "y": 182
+      },
+      "width": 400,
+      "height": 320,
+      "data": {
+        "label": "subnet-public-a1",
+        "title": "SUBNETWORK",
+        "subnetName": "public-a1",
+        "name": "public-a1",
+        "cidrBlock": "10.40.1.0/24",
+        "availabilityZone": "us-east-1a",
+        "availability_zone": "us-east-1a",
+        "subnetType": "public",
+        "subnet_type": "public",
+        "map_public_ip_on_launch": true,
+        "route_table": "public"
+      }
+    },
+    {
+      "id": "vm-a1",
+      "type": "server",
+      "parentId": "vpc-a-03--subnet--public-a1",
+      "parentNode": "vpc-a-03--subnet--public-a1",
+      "extent": "parent",
+      "position": {
+        "x": 16,
+        "y": 126
+      },
+      "width": 212,
+      "height": 168,
+      "data": {
+        "label": "instance-bastion-a1",
+        "title": "SERVER",
+        "name": "bastion-a1",
+        "ipAddress": "10.40.1.10",
+        "ip_address": "10.40.1.10",
+        "ami": "ami-0ebfd941bbafe70c6",
+        "instanceType": "t2.micro",
+        "instance_type": "t2.micro",
+        "sshAccess": "tesis-key",
+        "ssh_access": "tesis-key",
+        "associate_public_ip": true
+      }
+    },
+    {
+      "id": "vpc-b-03",
+      "type": "vpc",
+      "position": {
+        "x": 1040,
+        "y": 80
+      },
+      "width": 640,
+      "height": 560,
+      "data": {
+        "label": "vpc-vpc-b-03",
+        "title": "VPC",
+        "vpcName": "VPC-B",
+        "name": "VPC-B",
+        "region": "us-east-1",
+        "cidrBlock": "10.41.0.0",
+        "prefixLength": 16,
+        "cloudProvider": "AWS",
+        "internetGateway": true,
+        "enableNatGateway": false,
+        "natGatewayPublicSubnet": "",
+        "natGatewayElasticIp": "",
+        "nat_gateway": {
+          "enabled": false,
+          "public_subnet": "",
+          "elastic_ip": ""
+        },
+        "allowedSshCidr": "190.20.221.154/32"
+      }
+    },
+    {
+      "id": "vpc-b-03--subnet--public-b1",
+      "type": "subnetwork",
+      "parentId": "vpc-b-03",
+      "parentNode": "vpc-b-03",
+      "extent": "parent",
+      "position": {
+        "x": 24,
+        "y": 182
+      },
+      "width": 400,
+      "height": 320,
+      "data": {
+        "label": "subnet-public-b1",
+        "title": "SUBNETWORK",
+        "subnetName": "public-b1",
+        "name": "public-b1",
+        "cidrBlock": "10.41.1.0/24",
+        "availabilityZone": "us-east-1a",
+        "availability_zone": "us-east-1a",
+        "subnetType": "public",
+        "subnet_type": "public",
+        "map_public_ip_on_launch": true,
+        "route_table": "public"
+      }
+    },
+    {
+      "id": "vm-b1",
+      "type": "server",
+      "parentId": "vpc-b-03--subnet--public-b1",
+      "parentNode": "vpc-b-03--subnet--public-b1",
+      "extent": "parent",
+      "position": {
+        "x": 16,
+        "y": 126
+      },
+      "width": 212,
+      "height": 168,
+      "data": {
+        "label": "instance-bastion-b1",
+        "title": "SERVER",
+        "name": "bastion-b1",
+        "ipAddress": "10.41.1.10",
+        "ip_address": "10.41.1.10",
+        "ami": "ami-0ebfd941bbafe70c6",
+        "instanceType": "t2.micro",
+        "instance_type": "t2.micro",
+        "sshAccess": "tesis-key",
+        "ssh_access": "tesis-key",
+        "associate_public_ip": true
+      }
+    },
+    {
+      "id": "router-p-03",
+      "type": "router",
+      "position": {
+        "x": 786,
+        "y": 720
+      },
+      "width": 188,
+      "height": 228,
+      "data": {
+        "label": "router-router-p-03",
+        "title": "ROUTER",
+        "identifier": "router-p-03",
+        "name": "router-p-03",
+        "mode": "peering",
+        "region": "us-east-1",
+        "routeTable": [
+          {
+            "sourceVpcId": "vpc-a-03",
+            "destVpcId": "vpc-b-03",
+            "destCidr": "10.41.0.0/16"
+          },
+          {
+            "sourceVpcId": "vpc-b-03",
+            "destVpcId": "vpc-a-03",
+            "destCidr": "10.40.0.0/16"
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-1-vpc-a-03-vpc-a-03--subnet--public-a1",
+      "source": "vpc-a-03",
+      "target": "vpc-a-03--subnet--public-a1"
+    },
+    {
+      "id": "e-2-vpc-a-03--subnet--public-a1-vm-a1",
+      "source": "vpc-a-03--subnet--public-a1",
+      "target": "vm-a1"
+    },
+    {
+      "id": "e-3-vpc-b-03-vpc-b-03--subnet--public-b1",
+      "source": "vpc-b-03",
+      "target": "vpc-b-03--subnet--public-b1"
+    },
+    {
+      "id": "e-4-vpc-b-03--subnet--public-b1-vm-b1",
+      "source": "vpc-b-03--subnet--public-b1",
+      "target": "vm-b1"
+    },
+    {
+      "id": "e-5-vpc-a-03-router-p-03",
+      "source": "vpc-a-03",
+      "target": "router-p-03"
+    },
+    {
+      "id": "e-6-vpc-b-03-router-p-03",
+      "source": "vpc-b-03",
+      "target": "router-p-03"
+    }
+  ],
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 0.7
+  },
+  "meta": {
+    "generated_from": "03-two-vpcs-peering-bidirectional.json",
+    "scenario_name": "scenario-03-two-vpcs-peering-bidirectional",
+    "generated_at": "2026-03-12T11:20:13.783282+00:00",
+    "counts": {
+      "nodes": 7,
+      "edges": 6,
+      "vpcs": 2,
+      "routers": 1
+    }
+  }
+}
