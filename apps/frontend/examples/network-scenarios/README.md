@@ -28,3 +28,58 @@ Uso recomendado:
 Nota:
 - Los casos de peering/TGW están pensados para comparar la infraestructura final.
 - El caso de error por ruta de una sola vía está documentado en `canvas-recipes.md`, porque ese comportamiento vive en el canvas/router y no en el payload final.
+
+## Generar flows de canvas automaticamente
+
+Se puede convertir cada escenario (`0*.json`) al formato de React Flow que usa el canvas
+(`nodes`, `edges`, `viewport`) con el script:
+
+```bash
+./scripts/generate_canvas_flows.py --overwrite
+```
+
+Salida por defecto:
+
+- `apps/frontend/examples/network-scenarios/generated-canvas/*.canvas.json`
+- `apps/frontend/examples/network-scenarios/generated-canvas/index.canvas.json`
+
+Opciones utiles:
+
+```bash
+# Cambiar carpeta de origen/salida
+./scripts/generate_canvas_flows.py \
+  --source-dir apps/frontend/examples/network-scenarios \
+  --output-dir apps/frontend/examples/network-scenarios/generated-canvas \
+  --overwrite
+```
+
+## Cargar canvas en Firestore (vpcs)
+
+Tambien puedes subir los flows generados directamente a Firestore para abrirlos
+desde la lista de laboratorios.
+
+Primero revisa en modo simulacion:
+
+```bash
+python3 scripts/upload_canvas_flows_firestore.py \
+  --dry-run \
+  --input-dir apps/frontend/examples/network-scenarios/generated-canvas \
+  --scenario-dir apps/frontend/examples/network-scenarios
+```
+
+Luego ejecuta la carga real:
+
+```bash
+FIREBASE_EMAIL="tu_email" FIREBASE_PASSWORD="tu_password" \
+python3 scripts/upload_canvas_flows_firestore.py \
+  --input-dir apps/frontend/examples/network-scenarios/generated-canvas \
+  --scenario-dir apps/frontend/examples/network-scenarios \
+  --id-prefix seed-canvas
+```
+
+Opciones recomendadas:
+
+- `--overwrite`: actualiza documentos existentes con el mismo `docId`.
+- `--user-id <users_doc_id>`: asigna propietario del laboratorio (clave para que
+  un estudiante vea sus labs en `VPCList`).
+- `--collection vpcs`: por defecto ya usa `vpcs`.
