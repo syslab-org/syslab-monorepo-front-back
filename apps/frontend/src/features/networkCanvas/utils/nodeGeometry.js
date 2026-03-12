@@ -87,3 +87,61 @@ export const clampToParentContent = ({
     y: Math.min(Math.max(childPosition.y, minY), maxY),
   };
 };
+
+const rectsOverlap = (a, b, gap = 12) =>
+  !(
+    a.x + a.width + gap <= b.x ||
+    b.x + b.width + gap <= a.x ||
+    a.y + a.height + gap <= b.y ||
+    b.y + b.height + gap <= a.y
+  );
+
+export const findFreePositionInParent = ({
+  preferredPosition,
+  childSize,
+  parentSize,
+  parentType,
+  siblings = [],
+  step = 24,
+  gap = 12,
+}) => {
+  const candidate = clampToParentContent({
+    childPosition: preferredPosition,
+    childSize,
+    parentSize,
+    parentType,
+  });
+
+  const normalizedSiblings = siblings.map((sibling) => {
+    const fallback = getNodeDefaultSize(sibling.type);
+    return {
+      x: sibling.position?.x ?? 0,
+      y: sibling.position?.y ?? 0,
+      width: toNumber(sibling.width ?? sibling.style?.width, fallback.width),
+      height: toNumber(sibling.height ?? sibling.style?.height, fallback.height),
+    };
+  });
+
+  const fits = (position) =>
+    normalizedSiblings.every((sibling) => !rectsOverlap({
+      x: position.x,
+      y: position.y,
+      width: childSize.width,
+      height: childSize.height,
+    }, sibling, gap));
+
+  if (fits(candidate)) return candidate;
+
+  const insets = getNodeContentInsets(parentType);
+  const maxX = Math.max(insets.left, parentSize.width - insets.right - childSize.width);
+  const maxY = Math.max(insets.top, parentSize.height - insets.bottom - childSize.height);
+
+  for (let y = insets.top; y <= maxY; y += step) {
+    for (let x = insets.left; x <= maxX; x += step) {
+      const position = { x, y };
+      if (fits(position)) return position;
+    }
+  }
+
+  return candidate;
+};

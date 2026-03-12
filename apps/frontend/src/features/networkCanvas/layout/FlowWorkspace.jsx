@@ -41,9 +41,14 @@ export default function FlowWorkspace({
             sx={{
                 height: "100%",
                 display: "flex",
-                borderRadius: 1,
+                borderRadius: 2,
                 overflow: "hidden",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+                border: "1px solid",
+                borderColor: "divider",
+                boxShadow: (theme) =>
+                    theme.palette.mode === "light"
+                        ? "0 16px 40px rgba(15,23,42,0.08)"
+                        : "0 18px 44px rgba(0,0,0,0.32)",
                 backgroundColor: "background.paper",
             }}
         >

@@ -29,7 +29,7 @@
   --pt-radius: 14px;
   --pt-shadow: 0 9px 22px rgba(15, 23, 42, 0.08);
   --pt-shadow-strong: 0 16px 34px rgba(15, 23, 42, 0.14);
-  --pt-font: "Manrope", "Avenir Next", "Segoe UI", "Inter", system-ui, -apple-system, sans-serif;
+  --pt-font: "Inter", "Segoe UI", "Roboto", "Helvetica Neue", Arial, system-ui, -apple-system, sans-serif;
 }
 
 /* ---------- Node chrome ---------- */
@@ -590,6 +590,29 @@
 .react-flow__node.selected .pt-device .pt-handle-tri,
 .react-flow__node:has(.pt-device) .connecting .pt-handle-tri {
   opacity: 1;
+}
+
+.pt-canvas .react-flow__controls {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.84);
+  backdrop-filter: blur(10px);
+}
+
+.pt-canvas .react-flow__controls-button {
+  width: 34px;
+  height: 34px;
+  border: none;
+  color: #334155;
+  background: transparent;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.pt-canvas .react-flow__controls-button:hover {
+  background: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
 }
 
 /* ---------- Semantic shells ---------- */
