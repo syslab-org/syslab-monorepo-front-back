@@ -3,7 +3,7 @@ import { useCallback } from "react";
 export function useCanvasInteractionController({ setNodes, initialNodes }) {
   const onDragOver = useCallback((event) => {
     event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
+    event.dataTransfer.dropEffect = "copy";
   }, []);
 
   const onNodeDragStart = useCallback(

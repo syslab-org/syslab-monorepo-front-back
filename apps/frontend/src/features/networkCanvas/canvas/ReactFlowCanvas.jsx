@@ -32,6 +32,7 @@ function ReactFlowCanvas({
 
     return (
         <ReactFlow
+            className="pt-canvas"
             nodes={nodes}
             edges={memoEdges}
             onlyRenderVisibleElements
@@ -66,6 +67,14 @@ function ReactFlowCanvas({
             onPaneClick={() => setNodes(nds => nds.map(n => ({ ...n, selected: false })))}
         >
             <Controls />
+            <Background
+                variant="lines"
+                gap={96}
+                size={1}
+                color={theme.palette.mode === "light"
+                    ? "rgba(148,163,184,0.08)"
+                    : "rgba(148,163,184,0.10)"}
+            />
             <Background
                 variant="dots"
                 gap={32}

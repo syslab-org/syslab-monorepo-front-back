@@ -11,6 +11,7 @@ import {
 import getNodeTitle from "@/features/networkCanvas/utils/getNodeTitle";
 import {
   clampToParentContent,
+  findFreePositionInParent,
   getNodeDefaultSize,
   toNumber,
 } from "@/features/networkCanvas/utils/nodeGeometry";
@@ -119,20 +120,27 @@ export default function useHandleDrop(
 
             const { x: px, y: py } = parent.position;
             const parentDefault = getNodeDefaultSize(parent.type);
-            const relativePosition = clampToParentContent({
-              childPosition: { x: pos.x - px, y: pos.y - py },
+            const parentSize = {
+              width: toNumber(
+                parent.width ?? parent.style?.width,
+                parentDefault.width,
+              ),
+              height: toNumber(
+                parent.height ?? parent.style?.height,
+                parentDefault.height,
+              ),
+            };
+            const siblingSubnets = all.filter(
+              (node) =>
+                node.type === TYPE_SUBNETWORK_NODE &&
+                (node.parentNode || node.parentId) === parent.id,
+            );
+            const relativePosition = findFreePositionInParent({
+              preferredPosition: { x: pos.x - px, y: pos.y - py },
               childSize: { width, height },
-              parentSize: {
-                width: toNumber(
-                  parent.width ?? parent.style?.width,
-                  parentDefault.width,
-                ),
-                height: toNumber(
-                  parent.height ?? parent.style?.height,
-                  parentDefault.height,
-                ),
-              },
+              parentSize,
               parentType: parent.type,
+              siblings: siblingSubnets,
             });
             newNode = {
               ...newNode,
@@ -212,20 +220,27 @@ export default function useHandleDrop(
             const absX = parent.position.x + (subnet.position?.x ?? 0);
             const absY = parent.position.y + (subnet.position?.y ?? 0);
             const subnetDefault = getNodeDefaultSize(subnet.type);
-            const relativePosition = clampToParentContent({
-              childPosition: { x: pos.x - absX, y: pos.y - absY },
+            const parentSize = {
+              width: toNumber(
+                subnet.width ?? subnet.style?.width,
+                subnetDefault.width,
+              ),
+              height: toNumber(
+                subnet.height ?? subnet.style?.height,
+                subnetDefault.height,
+              ),
+            };
+            const siblingInstances = all.filter(
+              (node) =>
+                restrictedNodes.includes(node.type) &&
+                (node.parentNode || node.parentId) === subnet.id,
+            );
+            const relativePosition = findFreePositionInParent({
+              preferredPosition: { x: pos.x - absX, y: pos.y - absY },
               childSize: { width, height },
-              parentSize: {
-                width: toNumber(
-                  subnet.width ?? subnet.style?.width,
-                  subnetDefault.width,
-                ),
-                height: toNumber(
-                  subnet.height ?? subnet.style?.height,
-                  subnetDefault.height,
-                ),
-              },
+              parentSize,
               parentType: subnet.type,
+              siblings: siblingInstances,
             });
 
             newNode = {
