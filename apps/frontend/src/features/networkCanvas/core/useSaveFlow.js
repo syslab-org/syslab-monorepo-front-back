@@ -1,33 +1,20 @@
-// frontend/src/components/flow/flow-hooks/useSaveFlow.js
-import { doc, setDoc } from "firebase/firestore";
 import { useCallback, useContext } from "react";
-import {
-  DB_FIRESTORE_VPCS,
-  ERROR_SAVING_FLOW_FIREBASE,
-} from "@/shared/constants";
-import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
-import { db } from "../../../infrastructure/firebase/firebaseConfig";
 
-/**
- * Sanea cualquier objeto para Firestore:
- * - Elimina claves con valor undefined en objetos.
- * - Reemplaza elementos undefined en arrays por null (Firestore no admite huecos).
- * - Mantiene Date (Firestore lo acepta).
- */
-function sanitizeForFirestore(value) {
-  if (value === undefined) return undefined; // en objetos, la clave se filtrará
+import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
+import { api } from "@/infrastructure/http/api";
+
+function sanitizeForStorage(value) {
+  if (value === undefined) return undefined;
   if (value === null || typeof value !== "object") return value;
-  if (value instanceof Date) return value;
+  if (value instanceof Date) return value.toISOString();
 
   if (Array.isArray(value)) {
-    // Firestore no admite elementos undefined; usa null en su lugar
-    return value.map((v) => (v === undefined ? null : sanitizeForFirestore(v)));
+    return value.map((v) => (v === undefined ? null : sanitizeForStorage(v)));
   }
 
-  // Objeto: elimina claves undefined y sanea recursivamente
   const entries = Object.entries(value)
-    .filter(([_, v]) => v !== undefined)
-    .map(([k, v]) => [k, sanitizeForFirestore(v)]);
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => [k, sanitizeForStorage(v)]);
   return Object.fromEntries(entries);
 }
 
@@ -35,28 +22,21 @@ const useSaveFlow = ({ reactFlowInstance, flowKey, vpcid }) => {
   const { setLoadingFlow } = useContext(LoadingFlowContext);
 
   return useCallback(async () => {
-    if (!reactFlowInstance) return;
+    if (!reactFlowInstance || !vpcid) return;
 
     setLoadingFlow(true);
 
     try {
       const vpcObject = reactFlowInstance.toObject();
-
-      // Fecha de expiración (15 días)
       const expirationDate = new Date();
       expirationDate.setDate(expirationDate.getDate() + 15);
 
-      const flowWithExpiration = { ...vpcObject, expiration: expirationDate };
-      const sanitizedFlow = sanitizeForFirestore(flowWithExpiration);
-
-      // Guardar copia local (JSON.stringify ya omite undefined en objetos)
+      const sanitizedFlow = sanitizeForStorage({ ...vpcObject, expiration: expirationDate });
       localStorage.setItem(flowKey, JSON.stringify(sanitizedFlow));
 
-      // Guardar en Firestore (crea o actualiza el doc)
-      const docRef = doc(db, DB_FIRESTORE_VPCS, vpcid);
-      await setDoc(docRef, { flow: sanitizedFlow }, { merge: true });
+      await api.updateLab(vpcid, { flow: sanitizedFlow });
     } catch (error) {
-      console.error(ERROR_SAVING_FLOW_FIREBASE, error);
+      console.error("Error saving flow data:", error);
     } finally {
       setLoadingFlow(false);
     }

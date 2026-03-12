@@ -155,7 +155,7 @@ export default function PacketToolbar({
 
         {/* Botones de acción */}
         <div className="pt-toolbar__group">
-          <Tooltip title="Guardar estado actual del canvas en Firestore">
+          <Tooltip title="Guardar estado actual del canvas en la API">
             <span>
               <Button
                 variant="outlined"
@@ -169,7 +169,7 @@ export default function PacketToolbar({
               </Button>
             </span>
           </Tooltip>
-          <Tooltip title="Restaurar última versión guardada desde Firestore">
+          <Tooltip title="Restaurar última versión guardada desde la API">
             <span>
               <Button
                 variant="outlined"

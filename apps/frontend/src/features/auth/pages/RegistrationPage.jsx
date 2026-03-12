@@ -1,7 +1,5 @@
-import { auth } from "@/infrastructure/firebase/firebaseConfig";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { LockClockOutlined } from "@mui/icons-material";
-import GoogleIcon from "@mui/icons-material/Google";
 import { Alert, Avatar, Box, Button, CssBaseline, Grid, Link, Paper, Snackbar, TextField, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -11,7 +9,7 @@ import { useRegistrationUserFormValidation } from '@/features/auth/hooks/useRegi
 
 const RegistrationPage = () => {
     const { userId } = useParams();
-    const { successMessage, isCheckingLink, isLinkValid, setError, error, registerWithGoogle, registerWithEmailPassword } = useUserRegistration(userId);
+    const { successMessage, isCheckingLink, isLinkValid, setError, error, registerWithEmailPassword } = useUserRegistration(userId);
     const validationSchema = useRegistrationUserFormValidation();
     const { register, handleSubmit, formState: { errors } } = useForm({
         resolver: yupResolver(validationSchema),
@@ -40,7 +38,6 @@ const RegistrationPage = () => {
         try {
             const isRegistered = await registerWithEmailPassword(data.email, data.password);
             if (isRegistered) {
-                await auth.signOut();
                 navigate('/login');
             }
         } catch (error) {
@@ -107,15 +104,6 @@ const RegistrationPage = () => {
                             />
                             <Button type="submit" fullWidth variant="contained" sx={{ mt: 3, mb: 2 }}>
                                 Sign Up
-                            </Button>
-                            <Button
-                                startIcon={<GoogleIcon />}
-                                fullWidth
-                                variant="contained"
-                                sx={{ mt: 3, mb: 2 }}
-                                onClick={registerWithGoogle}
-                            >
-                                Sign Up With Google
                             </Button>
                                 <Grid container>
                                     <Grid item>

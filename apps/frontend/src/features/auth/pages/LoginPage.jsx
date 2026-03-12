@@ -1,35 +1,37 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { loginWithEmail, loginWithGoogle } from '@/features/auth/services/authService'
+import { useAuth } from '@/app/providers/AuthContext'
 import { Avatar, Box, Button, Checkbox, CssBaseline, FormControlLabel, Grid, Link, Paper, TextField, Typography } from '@mui/material'
 import { LockClockOutlined } from '@mui/icons-material'
-import GoogleIcon from '@mui/icons-material/Google';
-
-
-
+import { GoogleLogin } from '@react-oauth/google';
 
 const LoginPage = () => {
-
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
+    const [error, setError] = useState('')
     const navigate = useNavigate()
+    const { completeLogin } = useAuth()
+    const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
 
     const handleLogin = async (e) => {
         e.preventDefault()
         try {
-            await loginWithEmail(email, password)
+            const authPayload = await loginWithEmail(email, password)
+            await completeLogin(authPayload)
             navigate('/')
         } catch (error) {
-            // console.log('Error loggin in with email:', error);
+            setError(error?.message || 'No se pudo iniciar sesion.')
         }
     }
 
-    const handleGoogleLogin = async () => {
+    const handleGoogleSuccess = async (credentialResponse) => {
         try {
-            await loginWithGoogle()
+            const authPayload = await loginWithGoogle(credentialResponse.credential, googleClientId)
+            await completeLogin(authPayload)
             navigate('/')
         } catch (error) {
-            // console.log('Error loggin in with Google')
+            setError(error?.message || 'No se pudo iniciar sesion con Google.')
         }
     }
 
@@ -67,6 +69,11 @@ const LoginPage = () => {
                         Sign In
                     </Typography>
                     <Box component="form" noValidate onSubmit={handleLogin} sx={{ mt: 1 }}>
+                        {error && (
+                            <Typography color="error" variant="body2">
+                                {error}
+                            </Typography>
+                        )}
                         <TextField
                             margin="normal"
                             required
@@ -103,15 +110,15 @@ const LoginPage = () => {
                         >
                             Login
                         </Button>
-                        <Button
-                            startIcon={<GoogleIcon />}
-                            fullWidth
-                            variant="contained"
-                            sx={{ mt: 3, mb: 2 }}
-                            onClick={handleGoogleLogin}
-                        >
-                            Sign In With Google
-                        </Button>
+                        {googleClientId && (
+                            <Box sx={{ mt: 1, mb: 2 }}>
+                                <GoogleLogin
+                                    onSuccess={handleGoogleSuccess}
+                                    onError={() => setError('No se pudo iniciar sesion con Google.')}
+                                    useOneTap={false}
+                                />
+                            </Box>
+                        )}
 
                         <Grid container>
                             <Grid item xs>

@@ -19,7 +19,7 @@ const columns = [
 export const UsersManagement = () => {
 
     const { setLoadingFlow } = useContext(LoadingFlowContext)
-    const { usersList, selectedUser, setSelectedUser, addUser, updateUser, fetchUsers } = useUsersFetch(setLoadingFlow)
+    const { usersList, courses, selectedUser, setSelectedUser, addUser, updateUser, fetchUsers } = useUsersFetch(setLoadingFlow)
     const [isCreateModalLayoutOpen, setIsCreateModalLayoutOpen] = useState(false)
     const [page, setPage] = useState(0)
     const [rowsPerPage, setRowsPerPage] = useState(10)
@@ -102,7 +102,9 @@ export const UsersManagement = () => {
                                                         </IconButton>
                                                     </Stack>
                                                 ) : (
-                                                    user[column.id]
+                                                    column.id === 'class'
+                                                        ? user?.course?.name || '-'
+                                                        : user[column.id]
                                                 )}
                                             </TableCell>
                                         ))}
@@ -130,6 +132,7 @@ export const UsersManagement = () => {
                     <InviteUserForm
                         closeModal={handleModalClose}
                         userData={selectedUser}
+                        courses={courses}
                     />} />
 
         </div>

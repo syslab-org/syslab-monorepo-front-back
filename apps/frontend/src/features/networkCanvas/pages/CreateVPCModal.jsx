@@ -1,10 +1,10 @@
-// apps/frontend/src/components/flow/pages/CreateVPCModal.jsx
-import { Box, Modal, Stack, Typography } from '@mui/material';
-import { addDoc, collection } from 'firebase/firestore';
-import { useContext } from 'react';
+import { Box, Modal } from '@mui/material';
+import { useContext, useEffect, useState } from 'react';
+
 import { useAuth } from '@/app/providers/AuthContext';
 import { LoadingFlowContext } from '@/app/providers/LoadingFlowContext';
-import { db } from '@/infrastructure/firebase/firebaseConfig';
+import { api } from '@/infrastructure/http/api';
+import { USER_ROL_STUDENT, USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER } from '@/shared/constants';
 import NewVLANForm from '../forms/NewVLANForm';
 import { useWizard } from "@/features/networkCanvas/context/WizardContext"
 import WizardModalLayout from '../components/WizardModalLayout';
@@ -14,90 +14,116 @@ const style = {
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
-
   width: 'min(720px, 92vw)',
   maxHeight: '90vh',
-
-  overflow: 'hidden',       // ⬅️ clave: el scroll lo hará el layout
+  overflow: 'hidden',
   bgcolor: 'background.paper',
   borderRadius: 3,
   boxShadow: 24,
-
-  // ⚠️ Ojo: quitamos p:4 de aquí, para que el layout controle padding
 };
-// eslint-disable-next-line react/prop-types
+
+const normalizeProviderValue = (raw) => {
+  if (Array.isArray(raw)) {
+    return normalizeProviderValue(raw[0])
+  }
+
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    if (trimmed.startsWith('[')) {
+      try {
+        return normalizeProviderValue(JSON.parse(trimmed))
+      } catch {
+        return trimmed.replace(/[[\]"]/g, '').trim().toLowerCase()
+      }
+    }
+    return trimmed.replace(/^"+|"+$/g, '').toLowerCase()
+  }
+
+  return String(raw || '').trim().toLowerCase()
+}
+
 const CreateVPCModal = ({ open, onClose, wizardMode = false }) => {
-  const { setLoadingFlow, loadingFlow } = useContext(LoadingFlowContext)
+  const { setLoadingFlow } = useContext(LoadingFlowContext)
   const { user } = useAuth()
-  const userId = user.userId
-
   const { active, currentStep, steps } = useWizard()
+  const [courses, setCourses] = useState([])
 
-
+  useEffect(() => {
+    let alive = true
+    const loadCourses = async () => {
+      if (!open) return
+      try {
+        const response = await api.listCourses()
+        if (alive) setCourses(Array.isArray(response) ? response : [])
+      } catch (error) {
+        console.error('Error loading courses:', error)
+      }
+    }
+    loadCourses()
+    return () => {
+      alive = false
+    }
+  }, [open])
 
   const handleCreateVPC = async (vpcData) => {
-    // console.log("loadingFlow",loadingFlow);
-    console.log("Creating VPC with data:", vpcData);
-
     setLoadingFlow(true)
-    const { vlanName, cloudProvider, cidrBlock, prefixLength, region, type } = vpcData
+    const { vlanName, cloudProvider, cidrBlock, prefixLength, region, type, course_id } = vpcData
+    const targetProvider = normalizeProviderValue(cloudProvider) || 'aws'
 
-    if (vlanName && cloudProvider && cidrBlock && prefixLength && type) {
-
+    if (vlanName && targetProvider && cidrBlock && prefixLength && type) {
       try {
-        const vpcDoc = await addDoc(collection(db, 'vpcs'), {
+        const lab = await api.createLab({
           name: vlanName,
-          cloudProvider,
-          cidrBlock,
-          userId,
-          prefixLength,
+          target_provider: targetProvider,
+          cidr_block: cidrBlock,
+          prefix_length: prefixLength,
           region,
-          type,
-          narrative: wizardMode ? "wizard" : "advanced",
-          labTemplate: vpcData?.labTemplate || null,
+          narrative: wizardMode ? 'wizard' : 'advanced',
+          lab_template: vpcData?.labTemplate || '',
+          visibility_scope: user?.role === USER_ROL_STUDENT ? 'owner' : 'course',
+          course_id: course_id || null,
+          metadata: {
+            type,
+          },
         })
 
-        // devolvemos datos del padre (VPCList) para actualizar la lista
         onClose(
-          vpcDoc.id,
+          lab.id,
           cidrBlock,
           prefixLength,
           vpcData.vlanName,
-          vpcData.region);
-
+          vpcData.region,
+        )
       } catch (error) {
-        // TODO: en un siguiente paso, aquí enganchamos snackbar global
-        console.error("Error creating VPC:", error)
-        setLoadingFlow(false);
+        console.error('Error creating lab:', error)
+        alert(error?.message || 'No se pudo crear el laboratorio.')
+        setLoadingFlow(false)
       }
-
     } else {
-      console.error("Error: Missing VPC name or cloud type")
-      setLoadingFlow(false);
+      console.error('Error: Missing VPC name or cloud type')
+      setLoadingFlow(false)
     }
   }
 
-  // ------- UI: títulos y textos según modo -------
-
   const isWizardActive = wizardMode && active;
 
-  let title = "Crear nueva VPC";
-  let subtitle = "Crea un laboratorio para simular topologías VLAN o para preparar una orquestación real en AWS. Define nombre, región y CIDR maestro.";
-  let stepLabel = "";
+  let title = 'Crear nueva VPC';
+  let subtitle = 'Crea un laboratorio para simular topologías VLAN o para preparar una orquestación real en AWS. Define nombre, región y CIDR maestro.';
+  let stepLabel = '';
 
   if (wizardMode) {
-    title = "Crear laboratorio";
-    subtitle = "Crea un laboratorio educativo guiado: modela topologías VLAN paso a paso y déjalo listo para una ejecución real en AWS.";
+    title = 'Crear laboratorio';
+    subtitle = 'Crea un laboratorio educativo guiado: modela topologías VLAN paso a paso y déjalo listo para una ejecución real en AWS.';
     if (isWizardActive && Array.isArray(steps) && steps.length > 0) {
       const idx = steps.indexOf(currentStep);
       const stepNumber = idx >= 0 ? idx + 1 : 1;
       stepLabel = `Paso ${stepNumber} de ${steps.length}`;
-
     } else {
-      stepLabel = "Laboratorio guiado";
+      stepLabel = 'Laboratorio guiado';
     }
   }
 
+  const canChooseCourse = user?.role === USER_ROL_TEACHER || user?.role === USER_ROL_SUPER_ADMIN
 
   return (
     <Modal
@@ -112,7 +138,12 @@ const CreateVPCModal = ({ open, onClose, wizardMode = false }) => {
           title={title}
           description={subtitle}
         >
-          <NewVLANForm onSave={handleCreateVPC} wizardMode={wizardMode} />
+          <NewVLANForm
+            onSave={handleCreateVPC}
+            wizardMode={wizardMode}
+            availableCourses={canChooseCourse ? courses : []}
+            requireCourseSelection={user?.role === USER_ROL_TEACHER}
+          />
         </WizardModalLayout>
       </Box>
     </Modal>

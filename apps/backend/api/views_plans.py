@@ -1,23 +1,24 @@
 import os
 from datetime import timedelta
 
+from celery.result import AsyncResult
 from django.db import IntegrityError, transaction
 from django.db.utils import ProgrammingError
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-
-from celery.result import AsyncResult
-
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from .helpers import ensure_lab_for_canvas, visible_plans_queryset
 from .models import Plan
-from .serializers import PlanListSerializer, PlanDetailSerializer
+from .serializers import PlanDetailSerializer, PlanListSerializer
 from .validators import validate_network_plan
 
 
 TERMINAL_TASK_STATES = {"SUCCESS", "FAILURE", "REVOKED"}
+
 
 
 def _reconcile_running_plan(plan: Plan) -> bool:
@@ -32,7 +33,7 @@ def _reconcile_running_plan(plan: Plan) -> bool:
         if plan.updated_at and now - plan.updated_at > timedelta(minutes=stale_minutes):
             plan.status = Plan.Status.FAILURE
             plan.error = (
-                f"La tarea {plan.task_id} quedó en estado PENDING por más de "
+                f"La tarea {plan.task_id} quedo en estado PENDING por mas de "
                 f"{stale_minutes} minutos. Marca reconciliada como fallo."
             )
             plan.updated_at = now
@@ -55,14 +56,12 @@ def _reconcile_running_plan(plan: Plan) -> bool:
     task_ok = not (isinstance(result, dict) and result.get("ok") is False)
     if task_ok:
         plan.status = Plan.Status.SUCCESS
-        if plan.last_action == "destroy":
+        if plan.last_action == Plan.LastAction.DESTROY:
             plan.applied = False
             plan.payload = {**(plan.payload or {}), "simulate_only": True}
             plan.error = ""
             plan.updated_at = now
-            plan.save(
-                update_fields=["status", "applied", "payload", "error", "updated_at"]
-            )
+            plan.save(update_fields=["status", "applied", "payload", "error", "updated_at"])
             return True
 
         if isinstance(result, dict) and "applied" in result:
@@ -73,21 +72,11 @@ def _reconcile_running_plan(plan: Plan) -> bool:
         return True
 
     plan.status = Plan.Status.FAILURE
-    plan.error = (
-        (result or {}).get("error")
-        if isinstance(result, dict)
-        else str(result or "La tarea finalizó con error.")
-    )
+    plan.error = (result or {}).get("error") if isinstance(result, dict) else str(result or "La tarea finalizo con error.")
     plan.updated_at = now
     plan.save(update_fields=["status", "error", "updated_at"])
     return True
 
-
-def _read_s3_text(bucket: str, key: str) -> str:
-    import boto3
-
-    obj = boto3.client("s3").get_object(Bucket=bucket, Key=key)
-    return obj["Body"].read().decode("utf-8", errors="replace")
 
 
 def _sanitize_payload_for_storage(payload: dict, fallback_firestore_vpc_id=None) -> dict:
@@ -101,27 +90,28 @@ def _sanitize_payload_for_storage(payload: dict, fallback_firestore_vpc_id=None)
             out[key] = value
 
     vlan_raw = raw.get("vlan") if isinstance(raw.get("vlan"), dict) else {}
-    resolved_firestore_vpc_id = (
+    resolved_canvas_id = (
         fallback_firestore_vpc_id
         or out.get("firestore_vpc_id")
         or out.get("vpcId")
+        or out.get("canvas_id")
         or vlan_raw.get("id")
     )
-    if resolved_firestore_vpc_id:
-        out["firestore_vpc_id"] = resolved_firestore_vpc_id
+    if resolved_canvas_id:
+        out["firestore_vpc_id"] = resolved_canvas_id
+        out["canvas_id"] = resolved_canvas_id
 
     return out
 
 
 class PlanViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    GET /api/network/plans/         -> lista de planes (sin payload)
-    GET /api/network/plans/<id>/    -> detalle del plan (con payload)
-    GET /api/network/plans/<id>/payload/ -> solo el JSON (payload "crudo")
-    GET /api/network/plans/<id>/logs/ -> log persistido de la última ejecución (apply o destroy)
-    """
+    permission_classes = [IsAuthenticated]
 
-    queryset = Plan.objects.all().order_by("-created_at")
+    def get_queryset(self):
+        return visible_plans_queryset(
+            self.request.user,
+            Plan.objects.select_related("lab", "lab__course", "lab__course__teacher"),
+        ).order_by("-created_at")
 
     def get_serializer_class(self):
         if self.action in ("retrieve", "payload"):
@@ -141,36 +131,21 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
 
-    @action(
-        detail=False,
-        methods=["post"],
-        url_path="sync-from-canvas",
-        url_name="sync-from-canvas",
-    )
+    @action(detail=False, methods=["post"], url_path="sync-from-canvas", url_name="sync-from-canvas")
     def sync_from_canvas(self, request):
         try:
-            # Accept canvas id from: canvas_id, firestore_vpc_id, vpcId
-            data = request.data
-            firestore_vpc_id = (
-                data.get("canvas_id")
-                or data.get("firestore_vpc_id")
-                or data.get("vpcId")
-            )
-            if not firestore_vpc_id:
-                return Response(
-                    {"ok": False, "error": "firestore_vpc_id/canvas_id es requerido."},
-                    status=400,
-                )
+            data = request.data or {}
+            canvas_id = data.get("canvas_id") or data.get("firestore_vpc_id") or data.get("vpcId")
+            if not canvas_id:
+                return Response({"ok": False, "error": "canvas_id es requerido."}, status=400)
 
-            payload = data.get("payload", None)
+            payload = data.get("payload")
             if payload is None:
                 payload = dict(data)
                 payload.pop("payload", None)
 
             try:
-                payload = _sanitize_payload_for_storage(
-                    payload, fallback_firestore_vpc_id=firestore_vpc_id
-                )
+                payload = _sanitize_payload_for_storage(payload, fallback_firestore_vpc_id=canvas_id)
             except Exception as e:
                 return Response({"ok": False, "error": str(e)}, status=400)
 
@@ -178,15 +153,14 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
             canvas_hash = data.get("canvas_hash")
             canvas_updated_at = data.get("canvas_updated_at")
 
-            dt_canvas_updated_at = None
-            if canvas_updated_at:
-                dt_canvas_updated_at = parse_datetime(canvas_updated_at)
-
+            dt_canvas_updated_at = parse_datetime(canvas_updated_at) if canvas_updated_at else None
+            lab = ensure_lab_for_canvas(request.user, str(canvas_id), name=name)
             created = False
 
             with transaction.atomic():
-                plan = Plan.objects.filter(firestore_vpc_id=firestore_vpc_id).first()
+                plan = self.get_queryset().filter(firestore_vpc_id=lab.canvas_id).first()
                 if plan:
+                    plan.lab = lab
                     plan.name = name or plan.name or ""
                     plan.payload = payload
                     plan.canvas_hash = canvas_hash
@@ -197,9 +171,10 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
                 else:
                     try:
                         plan = Plan.objects.create(
+                            lab=lab,
                             name=name or "",
                             payload=payload,
-                            firestore_vpc_id=firestore_vpc_id,
+                            firestore_vpc_id=lab.canvas_id,
                             canvas_hash=canvas_hash,
                             canvas_updated_at=dt_canvas_updated_at,
                             status=Plan.Status.PENDING,
@@ -207,8 +182,8 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
                         created = True
                         msg = "Plan creado desde canvas"
                     except IntegrityError:
-                        # Race: duplicate, fetch and update
-                        plan = Plan.objects.get(firestore_vpc_id=firestore_vpc_id)
+                        plan = Plan.objects.get(firestore_vpc_id=lab.canvas_id)
+                        plan.lab = lab
                         plan.name = name or plan.name or ""
                         plan.payload = payload
                         plan.canvas_hash = canvas_hash
@@ -217,22 +192,25 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
                         plan.save()
                         msg = "Plan actualizado desde canvas"
 
+            if lab.plan_canvas_hash != (canvas_hash or ""):
+                lab.plan_canvas_hash = canvas_hash or ""
+                lab.save(update_fields=["plan_canvas_hash", "updated_at"])
+
             return Response(
                 {
                     "ok": True,
                     "plan_id": str(plan.id),
                     "created": created,
                     "message": msg,
+                    "canvas_id": lab.canvas_id,
+                    "lab_id": str(lab.id),
                 }
             )
         except ProgrammingError as e:
             return Response(
                 {
                     "ok": False,
-                    "error": (
-                        "Error de esquema en la base de datos. Parece que faltan migraciones del modelo Plan. "
-                        "Ejecuta: python manage.py makemigrations api && python manage.py migrate"
-                    ),
+                    "error": "Error de esquema en la base de datos. Parece que faltan migraciones.",
                     "detail": str(e),
                 },
                 status=500,
@@ -247,53 +225,34 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
                 status=500,
             )
 
-    @action(
-        detail=False,
-        methods=["post"],
-        url_path="sync_from_canvas",
-        url_name="sync_from_canvas",
-    )
+    @action(detail=False, methods=["post"], url_path="sync_from_canvas", url_name="sync_from_canvas")
     def sync_from_canvas_legacy(self, request):
         return self.sync_from_canvas(request)
 
     @action(detail=True, methods=["get"])
     def payload(self, request, pk=None):
-        plan = self.get_object()
-        return Response(plan.payload)
+        return Response(self.get_object().payload)
 
     @action(detail=True, methods=["get"])
     def outputs(self, request, pk=None):
         plan = self.get_object()
-        return Response(
-            {
-                "plan_id": str(plan.id),
-                "applied": plan.applied,
-                "status": plan.status,
-                "outputs": plan.outputs or {},
-            }
-        )
+        return Response({
+            "plan_id": str(plan.id),
+            "applied": plan.applied,
+            "status": plan.status,
+            "outputs": plan.outputs or {},
+        })
 
     @action(detail=True, methods=["get"])
     def logs(self, request, pk=None):
         plan = self.get_object()
-
         if not plan.last_log:
-            return Response(
-                {
-                    "ok": False,
-                    "error": "Este plan aún no tiene logs persistidos.",
-                },
-                status=404,
-            )
+            return Response({"ok": False, "error": "Este plan aun no tiene logs persistidos."}, status=404)
 
         return Response(
             {
                 "plan_id": str(plan.id),
-                "updated_at": (
-                    plan.last_log_updated_at.isoformat()
-                    if plan.last_log_updated_at
-                    else None
-                ),
+                "updated_at": plan.last_log_updated_at.isoformat() if plan.last_log_updated_at else None,
                 "last_action": plan.last_action,
                 "status": plan.status,
                 "log": plan.last_log or "",

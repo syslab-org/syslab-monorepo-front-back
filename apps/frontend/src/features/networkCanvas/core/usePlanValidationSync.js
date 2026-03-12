@@ -1,10 +1,7 @@
-// features/networkCanvas/core/usePlanValidationSync.js
-
 import { useEffect } from "react";
-import { doc, setDoc } from "firebase/firestore";
+
 import { computeInfraHash } from "../utils/infraHash";
-import { db } from "../../../infrastructure/firebase/firebaseConfig";
-import { DB_FIRESTORE_VPCS } from "@/shared/constants";
+import { api } from "@/infrastructure/http/api";
 
 export const usePlanValidationSync = ({
   validationState,
@@ -28,15 +25,12 @@ export const usePlanValidationSync = ({
 
     const persist = async () => {
       try {
-        const ref = doc(db, DB_FIRESTORE_VPCS, vpcid);
-        await setDoc(
-          ref,
-          {
-            planId: pid,
-            planCanvasHash: okHash,
-          },
-          { merge: true },
-        );
+        const existing = await api.getLab(vpcid);
+        const metadata = { ...(existing?.metadata || {}), planId: pid };
+        await api.updateLab(vpcid, {
+          metadata,
+          plan_canvas_hash: okHash,
+        });
       } catch (e) {
         console.warn("No se pudo persistir planCanvasHash:", e);
       }

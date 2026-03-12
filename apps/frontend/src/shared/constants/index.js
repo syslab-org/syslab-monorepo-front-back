@@ -15,7 +15,8 @@ export const ERROR_SAVING_FLOW_FIREBASE =
   "Error saving flow data to Firebase: ";
 
 //USERS ROL
-export const USER_ROL_SUPER_ADMIN = "superadmin";
+export const USER_ROL_SUPER_ADMIN = "platform_admin";
+export const USER_ROL_SUPER_ADMIN_LEGACY = "superadmin";
 export const USER_ROL_TEACHER = "teacher";
 export const USER_ROL_STUDENT = "student";
 

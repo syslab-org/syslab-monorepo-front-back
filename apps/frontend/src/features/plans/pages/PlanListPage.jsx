@@ -112,7 +112,7 @@ export default function PlanListPage() {
         if (!q) return true;
         const name = (p.name || '').toLowerCase();
         const id = (p.id || '').toLowerCase();
-        const canvasId = (p.firestore_vpc_id || '').toLowerCase();
+        const canvasId = (p.canvas_id || p.firestore_vpc_id || '').toLowerCase();
         return name.includes(q) || id.includes(q) || canvasId.includes(q);
       });
   }, [items, query, statusFilter]);
@@ -328,13 +328,13 @@ export default function PlanListPage() {
                       <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
                         {p.id}
                       </Typography>
-                      {p.firestore_vpc_id && (
+                      {(p.canvas_id || p.firestore_vpc_id) && (
                         <Typography
                           variant="caption"
                           color="text.secondary"
                           sx={{ display: 'block', fontFamily: 'monospace' }}
                         >
-                          canvas: {p.firestore_vpc_id}
+                          canvas: {p.canvas_id || p.firestore_vpc_id}
                         </Typography>
                       )}
                     </TableCell>

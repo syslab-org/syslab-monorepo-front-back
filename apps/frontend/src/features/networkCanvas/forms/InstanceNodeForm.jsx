@@ -12,7 +12,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { TYPE_INSTANCE_NODE } from "../utils/constants";
 import { INSTANCE_TYPE_OPTIONS } from './options/instanceTypes';
@@ -43,6 +43,23 @@ const InstanceNodeForm = ({
     null,
     { existingIps: siblingIpsInSameSubnet },
     false
+  );
+
+  const amiOptions = useMemo(
+    () =>
+      (Array.isArray(amiList) ? amiList : [])
+        .map((entry) => {
+          const code = entry?.code || entry?.metadata?.amiCode || "";
+          if (!code) return null;
+          return {
+            key: entry?.id || code,
+            value: code,
+            label: entry?.label || code,
+            region: entry?.region || entry?.metadata?.region || "",
+          };
+        })
+        .filter(Boolean),
+    [amiList]
   );
 
   const {
@@ -118,7 +135,7 @@ const InstanceNodeForm = ({
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="pt-node-form">
       <Box className="pt-node-form__header">
-        <Typography className="pt-node-form__eyebrow">compute node</Typography>
+        <Typography className="pt-node-form__eyebrow">workload node</Typography>
         <Typography className="pt-node-form__title">Instance</Typography>
         <Typography className="pt-node-form__subtitle">
           Configure naming, addressing and runtime profile for this VM.
@@ -156,13 +173,18 @@ const InstanceNodeForm = ({
           <MenuItem value="">
             <em>Usar AMI por defecto</em>
           </MenuItem>
-          {amiList.map((a) => (
-            <MenuItem key={a.id || a.code} value={a.data.amiCode}>
-              {a.data.amiCode || a.id}
+          {amiOptions.map((ami) => (
+            <MenuItem key={ami.key} value={ami.value}>
+              {ami.region ? `${ami.label} (${ami.region})` : ami.label}
             </MenuItem>
           ))}
         </Select>
         {errors.ami && <FormHelperText>{errors.ami.message}</FormHelperText>}
+        {!errors.ami && amiOptions.length === 0 && (
+          <FormHelperText>
+            No hay AMIs configuradas en el catalogo. Si lo dejas vacio, el backend usara la AMI por defecto.
+          </FormHelperText>
+        )}
       </FormControl>
 
       <FormControl fullWidth margin="normal" error={!!errors.instanceType}>
