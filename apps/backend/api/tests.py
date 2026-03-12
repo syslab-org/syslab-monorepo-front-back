@@ -1,3 +1,6 @@
+from types import SimpleNamespace
+from unittest.mock import patch
+
 from django.contrib.auth.models import User
 from django.test import SimpleTestCase
 from rest_framework.test import APITestCase
@@ -288,3 +291,30 @@ class VisibilityApiTests(APITestCase):
         )
         self.assertEqual(res.status_code, 201)
         self.assertEqual(res.json()["target_provider"], "aws")
+
+    @patch("api.views.process_network_plan.delay")
+    @patch("api.views._can_run_real_terraform", return_value=True)
+    def test_redeploy_apply_is_allowed_for_applied_plan(self, _can_run_real_terraform, mocked_delay):
+        mocked_delay.return_value = SimpleNamespace(id="task-redeploy-1")
+        plan = Plan.objects.create(
+            name="Plan redeploy",
+            payload={"name": "Plan redeploy", "cloud": "aws", "vpcs": [], "simulate_only": False},
+            firestore_vpc_id="lab-redeploy",
+            lab=self.shared_teacher_lab,
+            applied=True,
+            status=Plan.Status.SUCCESS,
+            last_action=Plan.LastAction.APPLY,
+        )
+
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(
+            f"/api/network/plans/{plan.id}/deploy/",
+            {"simulate_only": False},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 202)
+        plan.refresh_from_db()
+        self.assertEqual(plan.status, Plan.Status.RUNNING)
+        self.assertEqual(plan.last_action, Plan.LastAction.APPLY)
+        self.assertEqual(plan.task_id, "task-redeploy-1")
