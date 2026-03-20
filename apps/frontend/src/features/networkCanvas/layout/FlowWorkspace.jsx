@@ -110,14 +110,14 @@ export default function FlowWorkspace({
                         >
                             <Box>
                                 <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                                    Diseña tu laboratorio de topologías
+                                    Diseña tu laboratorio de red
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                                    Simula una VLAN para aprendizaje o prepara una orquestación real en AWS.
+                                    Modela la topología en lenguaje neutral y luego revisa cómo se traduce antes del deploy.
                                 </Typography>
                                 {!isPaletteOpen && (
                                     <Typography variant="caption" color="text.secondary" sx={{ mt: 0.8, display: "block" }}>
-                                        Tip: abre Tool Palette desde la barra superior para comenzar a arrastrar componentes.
+                                        Tip: abre la Tool Palette desde la barra superior para comenzar a arrastrar componentes.
                                     </Typography>
                                 )}
                             </Box>

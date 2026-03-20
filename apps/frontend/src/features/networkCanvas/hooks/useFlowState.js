@@ -99,9 +99,9 @@ export function useFlowState() {
       // Mensaje claro de reglas:
       alert(
         "Conexión inválida. Reglas:\n" +
-          " - VPC ↔ Router\n" +
-          " - Subnet ↔ VPC\n" +
-          " - Instancia ↔ Subnet",
+          " - Network Segment ↔ Connectivity Policy\n" +
+          " - Zone Segment ↔ Network Segment\n" +
+          " - Workload ↔ Zone Segment",
       );
     }
     connectionCreated.current = false;

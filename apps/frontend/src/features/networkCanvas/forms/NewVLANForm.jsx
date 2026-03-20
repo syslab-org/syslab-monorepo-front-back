@@ -215,17 +215,14 @@ const NewVLANForm = ({ onSave, wizardMode = false, availableCourses = [], requir
           </FormControl>
         )}
 
-        {/* VLAN Name */}
         <TextField
-          label={wizardMode ? 'Nombre del laboratorio' : 'VLAN Name'}
-          placeholder={wizardMode ? 'Ej: Lab-Ruteo-1' : ''}
+          label="Nombre del laboratorio"
+          placeholder={wizardMode ? 'Ej: Lab-Ruteo-1' : 'Ej: Laboratorio-Peering-1'}
           {...register('vlanName')}
           error={!!errors.vlanName}
           helperText={
             errors.vlanName?.message ||
-            (wizardMode
-              ? 'Este nombre se verá en la lista y será la “historia” principal del flujo.'
-              : '')
+            'Este nombre se verá en la lista y será la referencia principal del laboratorio.'
           }
           fullWidth
           autoComplete="off"
@@ -256,9 +253,8 @@ const NewVLANForm = ({ onSave, wizardMode = false, availableCourses = [], requir
           </FormControl>
         )}
 
-        {/* CIDR */}
         <TextField
-          label={wizardMode ? 'Rango maestro (CIDR)' : 'VLAN master CIDR (e.g. 10.0.0.0/16)'}
+          label="Rango maestro (CIDR)"
           placeholder={wizardMode ? 'Ej: 10.20.0.0/16' : '10.30.0.0/20'}
           {...register('cidrBlock')}
           error={!!errors.cidrBlock}
@@ -274,12 +270,12 @@ const NewVLANForm = ({ onSave, wizardMode = false, availableCourses = [], requir
 
         {/* Region */}
         <FormControl fullWidth>
-          <InputLabel id="select-region-label">Region</InputLabel>
+          <InputLabel id="select-region-label">Región</InputLabel>
           <Select
             labelId="select-region-label"
             id="select-region"
             {...register('region')}
-            label="Region"
+            label="Región"
             defaultValue="us-east-1"
           >
             <MenuItem value="us-east-1">US East (N. Virginia)</MenuItem>
@@ -292,7 +288,7 @@ const NewVLANForm = ({ onSave, wizardMode = false, availableCourses = [], requir
         </FormControl>
 
         <Button type="submit" variant="contained" color="primary">
-          {wizardMode ? 'Continuar' : 'Create VLAN'}
+          {wizardMode ? 'Continuar' : 'Crear laboratorio'}
         </Button>
       </Stack>
     </form>

@@ -108,7 +108,7 @@ const CreateVPCModal = ({ open, onClose, wizardMode = false }) => {
   const isWizardActive = wizardMode && active;
 
   let title = 'Crear laboratorio de red';
-  let subtitle = 'Crea un laboratorio para modelar topologías de red y dejarlo listo para una orquestación real. Define nombre, región y CIDR maestro.';
+  let subtitle = 'Crea un laboratorio para modelar topologías de red y dejarlo listo para validación y despliegue. Define nombre, región y CIDR maestro.';
   let stepLabel = '';
 
   if (wizardMode) {
