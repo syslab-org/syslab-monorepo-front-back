@@ -246,7 +246,7 @@ def network_plan_create(request):
     lab = ensure_lab_for_canvas(request.user, str(canvas_id), name=sanitized_payload.get("name", ""))
 
     plan, created = Plan.objects.get_or_create(
-        firestore_vpc_id=lab.canvas_id,
+        **Plan.canvas_lookup(lab.canvas_id),
         defaults={
             "lab": lab,
             "name": sanitized_payload.get("name", ""),
@@ -356,7 +356,7 @@ def deploy_plan(request, plan_id: UUID):
 
     canvas_id = persisted_payload.get("canvas_id") or (persisted_payload.get("vlan") or {}).get("id")
     if canvas_id and not plan.firestore_vpc_id:
-        plan.firestore_vpc_id = canvas_id
+        plan.assign_canvas_id(canvas_id)
         plan.save(update_fields=["firestore_vpc_id"])
 
     task = process_network_plan.delay(plan_id=str(plan.id), payload=task_payload)

@@ -18,7 +18,7 @@ def visible_plans_queryset(user, base_qs=None):
     labs_qs = visible_labs_queryset(user)
     lab_ids = labs_qs.values_list("id", flat=True)
     canvas_ids = [lab.canvas_id for lab in labs_qs]
-    return qs.filter(Q(lab_id__in=lab_ids) | Q(lab__isnull=True, firestore_vpc_id__in=canvas_ids)).distinct()
+    return qs.filter(Q(lab_id__in=lab_ids) | Q(lab__isnull=True, **Plan.canvas_lookup_in(canvas_ids))).distinct()
 
 
 

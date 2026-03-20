@@ -153,7 +153,7 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
             created = False
 
             with transaction.atomic():
-                plan = self.get_queryset().filter(firestore_vpc_id=lab.canvas_id).first()
+                plan = self.get_queryset().filter(**Plan.canvas_lookup(lab.canvas_id)).first()
                 if plan:
                     payload_changed = plan.payload != payload
                     hash_changed = plan.canvas_hash != canvas_hash
@@ -174,7 +174,7 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
                             lab=lab,
                             name=name or "",
                             payload=payload,
-                            firestore_vpc_id=lab.canvas_id,
+                            **Plan.canvas_lookup(lab.canvas_id),
                             canvas_hash=canvas_hash,
                             canvas_updated_at=dt_canvas_updated_at,
                             status=Plan.Status.PENDING,
@@ -182,7 +182,7 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
                         created = True
                         msg = "Plan creado desde canvas"
                     except IntegrityError:
-                        plan = Plan.objects.get(firestore_vpc_id=lab.canvas_id)
+                        plan = Plan.objects.get(**Plan.canvas_lookup(lab.canvas_id))
                         plan.lab = lab
                         plan.name = name or plan.name or ""
                         plan.payload = payload
