@@ -100,18 +100,18 @@ function MainLayout() {
   const user = auth?.user;
   const logout = auth?.logout || (() => { });
 
-  const isMainFlowRoute = useMemo(
+  const isCanvasRoute = useMemo(
     () => /^\/admin\/(labs\/[^/]+\/canvas|vpcs\/[^/]+\/mainflow)$/.test(location.pathname),
     [location.pathname],
   );
 
   useEffect(() => {
-    if (isMainFlowRoute) {
+    if (isCanvasRoute) {
       setDrawerOpen(false);
       return;
     }
     setDrawerOpen(true);
-  }, [isMainFlowRoute]);
+  }, [isCanvasRoute]);
 
   const toggleDrawer = () => {
     setDrawerOpen((prev) => !prev);

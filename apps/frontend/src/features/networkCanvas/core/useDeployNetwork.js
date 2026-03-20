@@ -289,9 +289,8 @@ const useDeployNetwork = ({
   allowCrossVpcPingUI = null,
   labId,
   canvasId,
-  firestoreVpcId,
 }) => {
-  const resolvedCanvasId = canvasId || labId || firestoreVpcId;
+  const resolvedCanvasId = canvasId || labId;
   const { user } = useAuth();
   const navigate = useNavigate();
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -642,8 +641,6 @@ const useDeployNetwork = ({
       name: planDefaultName,
       target_provider: "aws",
       canvas_id: resolvedCanvasId || null,
-      firestore_vpc_id: resolvedCanvasId || null,
-      vpcId: resolvedCanvasId || null,
       metadata: {
         name: planDefaultName,
         canvas_id: resolvedCanvasId || null,

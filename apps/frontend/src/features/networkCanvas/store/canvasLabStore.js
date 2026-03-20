@@ -20,6 +20,4 @@ export const useCanvasLabStore = create((set) => ({
   setVlanRegion: (vlanRegion) => set({ vlanRegion, labRegion: vlanRegion }),
 }));
 
-export const useCidrBlockVPCStore = useCanvasLabStore;
-
 export default useCanvasLabStore;
