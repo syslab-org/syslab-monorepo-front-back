@@ -57,6 +57,7 @@ class PlanListSerializer(serializers.ModelSerializer):
     simulate_only = serializers.SerializerMethodField()
     can_destroy = serializers.SerializerMethodField()
     canvas_id = serializers.SerializerMethodField()
+    firestore_vpc_id = serializers.SerializerMethodField()
     lab = serializers.SerializerMethodField()
 
     class Meta:
@@ -87,6 +88,10 @@ class PlanListSerializer(serializers.ModelSerializer):
     def get_canvas_id(self, obj):
         return obj.canvas_id
 
+    def get_firestore_vpc_id(self, obj):
+        # Deprecated alias kept for backward compatibility with older clients.
+        return obj.canvas_id
+
     def get_lab(self, obj):
         if not obj.lab_id:
             return None
@@ -97,6 +102,7 @@ class PlanDetailSerializer(serializers.ModelSerializer):
     simulate_only = serializers.SerializerMethodField()
     can_destroy = serializers.SerializerMethodField()
     canvas_id = serializers.SerializerMethodField()
+    firestore_vpc_id = serializers.SerializerMethodField()
     lab = serializers.SerializerMethodField()
 
     class Meta:
@@ -134,6 +140,10 @@ class PlanDetailSerializer(serializers.ModelSerializer):
         return bool(getattr(obj, "can_destroy_now", False))
 
     def get_canvas_id(self, obj):
+        return obj.canvas_id
+
+    def get_firestore_vpc_id(self, obj):
+        # Deprecated alias kept for backward compatibility with older clients.
         return obj.canvas_id
 
     def get_lab(self, obj):
