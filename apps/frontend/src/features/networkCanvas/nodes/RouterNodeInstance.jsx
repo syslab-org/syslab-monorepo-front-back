@@ -19,12 +19,12 @@ const normalizeMode = (value) => {
 };
 
 const RouterNodeInstance = ({ data = {}, isConnectable, selected }) => {
-  const name = data.identifier || 'Router';
+  const name = data.identifier || 'Connectivity';
   const mode = normalizeMode(data.mode);
-  const modeLabel = mode === 'tgw' ? 'Transit Gateway' : 'Peering';
-  const modeShort = mode === 'tgw' ? 'TGW' : 'PEER';
+  const modeLabel = mode === 'tgw' ? 'Hub routing' : 'Direct links';
+  const modeShort = mode === 'tgw' ? 'HUB' : 'LINK';
   const modeHint =
-    mode === 'tgw' ? 'Hub central en AWS' : 'Enlaces por pares';
+    mode === 'tgw' ? 'Modelo centralizado' : 'Modelo directo entre pares';
   const routeCount = Array.isArray(data.routeTable)
     ? data.routeTable.filter((r) => r?.destCidr).length
     : 0;
@@ -89,7 +89,7 @@ const RouterNodeInstance = ({ data = {}, isConnectable, selected }) => {
           <div className={`pt-device__modehint pt-device__modehint--${mode}`}>
             {modeHint}
           </div>
-          <div className="pt-device__routes">{routeCount} rutas</div>
+          <div className="pt-device__routes">{routeCount} policies</div>
         </div>
         {data.region ? (
           <div className="pt-device__sublabel">{data.region}</div>

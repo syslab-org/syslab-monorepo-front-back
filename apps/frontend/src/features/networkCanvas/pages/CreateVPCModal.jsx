@@ -100,20 +100,20 @@ const CreateVPCModal = ({ open, onClose, wizardMode = false }) => {
         setLoadingFlow(false)
       }
     } else {
-      console.error('Error: Missing VPC name or cloud type')
+      console.error('Error: Missing lab name or cloud type')
       setLoadingFlow(false)
     }
   }
 
   const isWizardActive = wizardMode && active;
 
-  let title = 'Crear nueva VPC';
-  let subtitle = 'Crea un laboratorio para simular topologías VLAN o para preparar una orquestación real en AWS. Define nombre, región y CIDR maestro.';
+  let title = 'Crear laboratorio de red';
+  let subtitle = 'Crea un laboratorio para modelar topologías de red y dejarlo listo para una orquestación real. Define nombre, región y CIDR maestro.';
   let stepLabel = '';
 
   if (wizardMode) {
     title = 'Crear laboratorio';
-    subtitle = 'Crea un laboratorio educativo guiado: modela topologías VLAN paso a paso y déjalo listo para una ejecución real en AWS.';
+    subtitle = 'Crea un laboratorio educativo guiado: modela topologías de red paso a paso y déjalo listo para una ejecución real.';
     if (isWizardActive && Array.isArray(steps) && steps.length > 0) {
       const idx = steps.indexOf(currentStep);
       const stepNumber = idx >= 0 ? idx + 1 : 1;

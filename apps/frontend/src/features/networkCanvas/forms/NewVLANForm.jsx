@@ -22,14 +22,14 @@ import { useFormValidationSchema } from './validations/useFormValidations';
 const LAB_TEMPLATES = [
   {
     value: 'mvp1-single-vpc-bastion-private',
-    title: 'MVP 1 — 1 VPC (Bastion + App privada)',
+    title: 'MVP 1 — 1 segmento (Bastion + App privada)',
     desc: 'Topología simple para demostrar deploy, SSH vía bastion y validaciones de ruteo.',
     recommendedCidr: '10.20.0.0/16',
   },
   {
     value: 'case3-3vpcs-router-peering',
-    title: 'Caso 3 — 3 VPC conectadas por router',
-    desc: 'Pensado para demostrar conectividad controlada (ping entre VPCs conectadas).',
+    title: 'Caso 3 — 3 segmentos conectados por nodo de conectividad',
+    desc: 'Pensado para demostrar conectividad controlada (ping entre segmentos conectados).',
     recommendedCidr: '10.30.0.0/16',
   },
 ];
@@ -156,7 +156,7 @@ const NewVLANForm = ({ onSave, wizardMode = false, availableCourses = [], requir
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Define el nombre, la región y el rango padre (CIDR). Con esto podremos guiar el resto del flujo
-              (VPCs, subredes, instancias y pruebas).
+              (segmentos, zonas, workloads y pruebas).
             </Typography>
           </Box>
         )}
@@ -265,8 +265,8 @@ const NewVLANForm = ({ onSave, wizardMode = false, availableCourses = [], requir
           helperText={
             errors.cidrBlock?.message ||
             (wizardMode
-              ? 'Este será el bloque padre. Luego derivaremos VPCs/subnets desde aquí.'
-              : 'Rango padre del que se derivarán las VPC/subnets')
+              ? 'Este será el bloque padre. Luego derivaremos segmentos y zonas desde aquí.'
+              : 'Rango padre del que se derivarán los segmentos y zonas')
           }
           fullWidth
           autoComplete="off"
