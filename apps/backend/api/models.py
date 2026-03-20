@@ -215,6 +215,8 @@ class AmiCatalogEntry(models.Model):
 
 
 class Plan(models.Model):
+    CANVAS_STORAGE_FIELD = "firestore_vpc_id"
+
     class Status(models.TextChoices):
         PENDING = "PENDING"
         RUNNING = "RUNNING"
@@ -262,7 +264,7 @@ class Plan(models.Model):
         null=True,
         blank=True,
         db_index=True,
-        help_text="Legacy canvas id. Mantener por compatibilidad mientras se migra el frontend.",
+        help_text="Legacy storage column for canvas id. Mantener por compatibilidad mientras se migra el backend.",
     )
     canvas_hash = models.CharField(
         max_length=64,
@@ -321,11 +323,22 @@ class Plan(models.Model):
     def __str__(self) -> str:
         return f"{self.id} [{self.status}] {self.name}"
 
+    @classmethod
+    def canvas_lookup(cls, canvas_id):
+        return {cls.CANVAS_STORAGE_FIELD: canvas_id}
+
+    @classmethod
+    def canvas_lookup_in(cls, canvas_ids):
+        return {f"{cls.CANVAS_STORAGE_FIELD}__in": list(canvas_ids)}
+
     @property
     def canvas_id(self) -> str:
         if self.lab_id:
             return self.lab.canvas_id
         return self.firestore_vpc_id or ""
+
+    def assign_canvas_id(self, canvas_id: str):
+        self.firestore_vpc_id = canvas_id or None
 
     @property
     def payload_simulate_only(self) -> bool:
