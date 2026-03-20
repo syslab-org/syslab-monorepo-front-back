@@ -37,7 +37,7 @@ export default function useHandleDrop(
         const type = event.dataTransfer.getData("application/reactflow");
         if (!type) return;
 
-        // === VALIDACIÓN DE ORDEN LÓGICO (VPC -> SUBNET -> INSTANCIA) ===
+        // === VALIDACIÓN DE ORDEN LÓGICO (segment -> zone -> workload) ===
         const hasVpc = (nodes) => nodes.some((n) => n.type === TYPE_VPC_NODE);
         const hasSubnet = (nodes) =>
           nodes.some((n) => n.type === TYPE_SUBNETWORK_NODE);
@@ -67,14 +67,14 @@ export default function useHandleDrop(
           // Validación estructural mínima antes de posicionamiento
           if (type === TYPE_SUBNETWORK_NODE && !hasVpc(all)) {
             setCanvasUiError?.(
-              "Debes crear una VPC antes de agregar una Subnet.",
+              "Debes crear un segmento antes de agregar una zona.",
             );
             return nds;
           }
 
           if (restrictedNodes.includes(type) && !hasSubnet(all)) {
             setCanvasUiError?.(
-              "Debes crear una Subnet dentro de una VPC antes de agregar una instancia.",
+              "Debes crear una zona dentro de un segmento antes de agregar un workload.",
             );
             return nds;
           }
@@ -114,7 +114,7 @@ export default function useHandleDrop(
               );
             });
             if (!parent) {
-              setCanvasUiError?.("La Subnet debe colocarse dentro de una VPC.");
+              setCanvasUiError?.("La zona debe colocarse dentro de un segmento.");
               return nds;
             }
 
@@ -207,7 +207,7 @@ export default function useHandleDrop(
             });
             if (!subnet) {
               setCanvasUiError?.(
-                "La instancia debe colocarse dentro de una Subnet.",
+                "El workload debe colocarse dentro de una zona.",
               );
               return nds;
             }
