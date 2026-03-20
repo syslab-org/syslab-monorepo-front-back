@@ -5,19 +5,19 @@ Estos archivos siguen el mismo formato base de `plan.demo.json`.
 Objetivo:
 - cargar ejemplos rápidos de topología,
 - validar casos correctos e incorrectos,
-- comparar peering vs Transit Gateway,
+- comparar `direct links` vs `hub routing`,
 - revisar el flujo de validación, deploy y pruebas post-deploy.
 
 Archivos incluidos:
 - `index.json`: catálogo resumido de escenarios.
 - `canvas-recipes.md`: recetas manuales para recrear escenarios desde el canvas.
-- `01-single-vpc-public.json`: VPC única con subnet pública e IGW.
-- `02-single-vpc-public-private-nat.json`: VPC con subnet pública, privada y salida por NAT.
-- `03-two-vpcs-peering-bidirectional.json`: dos VPC con peering correcto y conectividad ida/vuelta.
-- `04-two-vpcs-isolated-baseline.json`: dos VPC sin conectividad entre sí para comparar contra peering/TGW.
-- `05-three-vpcs-tgw-full-mesh.json`: tres VPC conectadas por Transit Gateway.
-- `06-three-vpcs-peering-partial.json`: tres VPC con peering parcial para estudiar pares aislados.
-- `07-overlapping-subnets-invalid.json`: caso inválido por subnets solapadas.
+- `01-single-vpc-public.json`: un segmento con zona pública e internet edge.
+- `02-single-vpc-public-private-nat.json`: un segmento con zona pública, zona privada y salida administrada.
+- `03-two-vpcs-peering-bidirectional.json`: dos segmentos con `direct links` correctos y conectividad ida/vuelta.
+- `04-two-vpcs-isolated-baseline.json`: dos segmentos sin conectividad entre sí para comparar contra `direct links` y `hub routing`.
+- `05-three-vpcs-tgw-full-mesh.json`: tres segmentos conectados mediante `hub routing`.
+- `06-three-vpcs-peering-partial.json`: tres segmentos con `direct links` parciales para estudiar pares aislados.
+- `07-overlapping-subnets-invalid.json`: caso inválido por zonas solapadas.
 
 Uso recomendado:
 1. Crear o sincronizar un plan con uno de estos JSON.
@@ -26,8 +26,8 @@ Uso recomendado:
 4. Si aplica, desplegar y luego revisar `Plan Detail -> Pruebas`.
 
 Nota:
-- Los casos de peering/TGW están pensados para comparar la infraestructura final.
-- El caso de error por ruta de una sola vía está documentado en `canvas-recipes.md`, porque ese comportamiento vive en el canvas/router y no en el payload final.
+- Los casos de `direct links` y `hub routing` están pensados para comparar la traducción final por provider.
+- El caso de error por ruta de una sola vía está documentado en `canvas-recipes.md`, porque ese comportamiento vive en el canvas y en la policy de conectividad, no en el payload final.
 
 ## Generar flows de canvas automaticamente
 
@@ -53,10 +53,11 @@ Opciones utiles:
   --overwrite
 ```
 
-## Cargar canvas en Firestore (vpcs)
+## Carga legacy a Firestore
 
-Tambien puedes subir los flows generados directamente a Firestore para abrirlos
-desde la lista de laboratorios.
+Tambien puedes subir los flows generados a Firestore para pruebas legacy o
+para migrar escenarios viejos. El runtime actual usa backend + PostgreSQL
+como fuente de verdad para auth, laboratorios y ejecuciones.
 
 Primero revisa en modo simulacion:
 
@@ -81,5 +82,5 @@ Opciones recomendadas:
 
 - `--overwrite`: actualiza documentos existentes con el mismo `docId`.
 - `--user-id <users_doc_id>`: asigna propietario del laboratorio (clave para que
-  un estudiante vea sus labs en `VPCList`).
+  un estudiante vea sus laboratorios en la lista de labs).
 - `--collection vpcs`: por defecto ya usa `vpcs`.

@@ -9,7 +9,7 @@ Sirve como guía de referencia para el equipo y como documentación en el reposi
 
 Se creó un **monorepo** llamado `tesis-monorepo` con la siguiente estructura:
 
-- `apps/frontend/`: aplicación React (Vite + Zustand + Firebase).
+- `apps/frontend/`: aplicación React (Vite + Zustand) que consume el backend como fuente de verdad para auth, laboratorios y ejecuciones.
 - `apps/backend/`: backend en Django + Celery.
 - `tools/docker/`: Dockerfiles y configuraciones.
 - `infra/`: infraestructura como código con Terraform.

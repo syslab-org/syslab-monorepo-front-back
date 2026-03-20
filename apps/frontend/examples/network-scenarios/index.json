@@ -4,24 +4,24 @@
     "file": "01-single-vpc-public.json",
     "category": "baseline",
     "valid": true,
-    "focus": "IGW y salida publica",
-    "summary": "Una sola VPC con subnet publica y bastion."
+    "focus": "Internet edge y salida publica",
+    "summary": "Un solo segmento con zona publica y workload bastion."
   },
   {
     "id": "02-single-vpc-public-private-nat",
     "file": "02-single-vpc-public-private-nat.json",
     "category": "baseline",
     "valid": true,
-    "focus": "NAT para subred privada",
-    "summary": "Una VPC con subnet publica, subnet privada y salida privada por NAT."
+    "focus": "Salida administrada para zona privada",
+    "summary": "Un segmento con zona publica, zona privada y salida privada administrada."
   },
   {
     "id": "03-two-vpcs-peering-bidirectional",
     "file": "03-two-vpcs-peering-bidirectional.json",
     "category": "routing",
     "valid": true,
-    "focus": "Peering correcto",
-    "summary": "Dos VPC con ruteo bidireccional para validar peering."
+    "focus": "Direct links correctos",
+    "summary": "Dos segmentos con ruteo bidireccional para validar enlaces directos."
   },
   {
     "id": "04-two-vpcs-isolated-baseline",
@@ -29,23 +29,23 @@
     "category": "routing",
     "valid": true,
     "focus": "Sin conectividad",
-    "summary": "Dos VPC sin enlaces entre si para comparar el estado aislado contra peering o TGW."
+    "summary": "Dos segmentos sin enlaces entre si para comparar el estado aislado contra direct links o hub routing."
   },
   {
     "id": "05-three-vpcs-tgw-full-mesh",
     "file": "05-three-vpcs-tgw-full-mesh.json",
     "category": "routing",
     "valid": true,
-    "focus": "Transit Gateway",
-    "summary": "Tres VPC conectadas por TGW con rutas de ida y vuelta."
+    "focus": "Hub routing",
+    "summary": "Tres segmentos conectados mediante hub routing con rutas de ida y vuelta."
   },
   {
     "id": "06-three-vpcs-peering-partial",
     "file": "06-three-vpcs-peering-partial.json",
     "category": "routing",
     "valid": true,
-    "focus": "Peering parcial",
-    "summary": "Tres VPC donde solo algunos pares se conectan, para contrastar con TGW."
+    "focus": "Direct links parciales",
+    "summary": "Tres segmentos donde solo algunos pares se conectan, para contrastar con hub routing."
   },
   {
     "id": "07-overlapping-subnets-invalid",
@@ -53,6 +53,6 @@
     "category": "validation",
     "valid": false,
     "focus": "CIDR solapado",
-    "summary": "Una VPC con dos subnets que se solapan para probar validaciones de direccionamiento."
+    "summary": "Un segmento con dos zonas que se solapan para probar validaciones de direccionamiento."
   }
 ]
