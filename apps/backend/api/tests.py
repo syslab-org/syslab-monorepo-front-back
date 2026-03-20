@@ -396,6 +396,9 @@ class VisibilityApiTests(APITestCase):
         self.client.force_authenticate(self.teacher)
         res = self.client.get("/api/network/plans/")
         self.assertEqual(res.status_code, 200)
+        first = res.json()[0]
+        self.assertIn("canvas_id", first)
+        self.assertEqual(first["canvas_id"], first["firestore_vpc_id"])
         names = {item["name"] for item in res.json()}
         self.assertIn("Plan alumno", names)
         self.assertIn("Plan compartido", names)
