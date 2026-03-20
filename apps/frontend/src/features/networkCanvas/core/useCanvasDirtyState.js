@@ -3,7 +3,7 @@ import { computeInfraHash } from "@/features/networkCanvas/utils/infraHash";
 
 /**
  * Encapsulates canvas "dirty" detection and edit guard logic.
- * Extracted from MainFlow to reduce component complexity.
+ * Extracted from CanvasFlowPage to reduce component complexity.
  */
 export function useCanvasDirtyState({
   nodes,

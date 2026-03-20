@@ -2,7 +2,7 @@
 import useDeployNetwork from "@/features/networkCanvas/core/useDeployNetwork";
 
 /**
- * Thin controller that wraps useDeployNetwork so MainFlow
+ * Thin controller that wraps useDeployNetwork so CanvasFlowPage
  * does not directly depend on the deploy implementation.
  *
  * This prepares the architecture for later splitting:

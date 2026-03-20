@@ -6,7 +6,7 @@ import {
 
 /**
  * Keeps VPC nodes updated with the list of routers connected to them.
- * This logic was previously inside MainFlow and was extracted to reduce
+ * This logic was previously inside CanvasFlowPage and was extracted to reduce
  * component complexity and isolate network graph synchronization logic.
  */
 export function useVpcRouterSync({ nodes, edges, setNodes }) {
