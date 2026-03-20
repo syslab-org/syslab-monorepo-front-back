@@ -6,7 +6,7 @@ import { useAuth } from "@/app/providers/AuthContext";
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
 import { api } from "@/infrastructure/http/api";
 import { decideRouterMode } from "@/features/networkCanvas/domain/decideRouterMode";
-import { useCanvasLabStore } from "../store/cidrBlocksIp";
+import { useCanvasLabStore } from "../store/canvasLabStore";
 import { buildRoutingPreview } from "../utils/buildRoutingPreview";
 import {
   TYPE_ROUTER_NODE,

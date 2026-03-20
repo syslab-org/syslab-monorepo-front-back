@@ -9,7 +9,7 @@ import {
   SAVING_ERROR,
   UNKNOWN_EXPIRATION_FORMAT,
 } from "@/shared/constants";
-import { useCanvasLabStore } from "../store/cidrBlocksIp";
+import { useCanvasLabStore } from "../store/canvasLabStore";
 
 const saveFlowToLocalStorage = (key, flow) => {
   try {
