@@ -9,7 +9,7 @@ import {
   SAVING_ERROR,
   UNKNOWN_EXPIRATION_FORMAT,
 } from "@/shared/constants";
-import useCidrBlockVPCStore from "../store/cidrBlocksIp";
+import { useCanvasLabStore } from "../store/cidrBlocksIp";
 
 const saveFlowToLocalStorage = (key, flow) => {
   try {
@@ -56,9 +56,16 @@ const useRestoreFlow = ({
   flowKey,
   getId,
   setCanvasPlanId,
+  labId,
 }) => {
   const { vpcid } = useParams();
-  const { setCidrBlockVPC, setPrefixLength, setVlanName, setVlanRegion } = useCidrBlockVPCStore();
+  const resolvedLabId = labId || vpcid;
+  const {
+    setMasterCidrBlock,
+    setPrefixLength,
+    setLabName,
+    setLabRegion,
+  } = useCanvasLabStore();
   const { setLoadingFlow } = useContext(LoadingFlowContext);
 
   const restoreFlow = useCallback(async () => {
@@ -66,7 +73,7 @@ const useRestoreFlow = ({
 
     try {
       let flow = null;
-      const fetchedLab = await api.getLab(vpcid);
+      const fetchedLab = await api.getLab(resolvedLabId);
       const normalized = normalizeFetchedLab(fetchedLab);
 
       if (!normalized) {
@@ -75,10 +82,10 @@ const useRestoreFlow = ({
       }
 
       const { flow: fetchedFlow, cidrBlock, prefixLength, planId, labName, labRegion } = normalized;
-      if (cidrBlock) setCidrBlockVPC(cidrBlock);
+      if (cidrBlock) setMasterCidrBlock(cidrBlock);
       if (prefixLength !== undefined && prefixLength !== null) setPrefixLength(prefixLength || "");
-      if (labName) setVlanName(labName);
-      if (labRegion) setVlanRegion(labRegion);
+      if (labName) setLabName(labName);
+      if (labRegion) setLabRegion(labRegion);
       if (typeof setCanvasPlanId === "function") setCanvasPlanId(planId || null);
 
       flow = fetchedFlow || loadFlowFromLocalStorage(flowKey);
@@ -89,7 +96,7 @@ const useRestoreFlow = ({
 
       saveFlowToLocalStorage(flowKey, {
         ...flow,
-        id: vpcid,
+        id: resolvedLabId,
         cidrBlock,
         prefixLength: prefixLength || "",
         planId: planId || null,
@@ -119,7 +126,7 @@ const useRestoreFlow = ({
     } finally {
       setLoadingFlow(false);
     }
-  }, [flowKey, getId, setCanvasPlanId, setCidrBlockVPC, setEdges, setLoadingFlow, setNodes, setPrefixLength, setViewport, setVlanName, setVlanRegion, vpcid]);
+  }, [flowKey, getId, resolvedLabId, setCanvasPlanId, setEdges, setLabName, setLabRegion, setLoadingFlow, setMasterCidrBlock, setNodes, setPrefixLength, setViewport]);
 
   return restoreFlow;
 };

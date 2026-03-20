@@ -18,11 +18,12 @@ function sanitizeForStorage(value) {
   return Object.fromEntries(entries);
 }
 
-const useSaveFlow = ({ reactFlowInstance, flowKey, vpcid }) => {
+const useSaveFlow = ({ reactFlowInstance, flowKey, labId, vpcid }) => {
   const { setLoadingFlow } = useContext(LoadingFlowContext);
+  const resolvedLabId = labId || vpcid;
 
   return useCallback(async () => {
-    if (!reactFlowInstance || !vpcid) return;
+    if (!reactFlowInstance || !resolvedLabId) return;
 
     setLoadingFlow(true);
 
@@ -34,13 +35,13 @@ const useSaveFlow = ({ reactFlowInstance, flowKey, vpcid }) => {
       const sanitizedFlow = sanitizeForStorage({ ...vpcObject, expiration: expirationDate });
       localStorage.setItem(flowKey, JSON.stringify(sanitizedFlow));
 
-      await api.updateLab(vpcid, { flow: sanitizedFlow });
+      await api.updateLab(resolvedLabId, { flow: sanitizedFlow });
     } catch (error) {
       console.error("Error saving flow data:", error);
     } finally {
       setLoadingFlow(false);
     }
-  }, [reactFlowInstance, setLoadingFlow, flowKey, vpcid]);
+  }, [reactFlowInstance, setLoadingFlow, flowKey, resolvedLabId]);
 };
 
 export default useSaveFlow;

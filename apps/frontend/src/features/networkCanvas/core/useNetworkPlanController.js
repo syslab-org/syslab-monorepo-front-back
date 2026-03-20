@@ -15,12 +15,16 @@ export function useNetworkPlanController({
   nodes,
   edges,
   allowCrossVpcPingUI,
+  labId,
+  canvasId,
   firestoreVpcId,
 }) {
   const deploy = useDeployNetwork({
     nodes,
     edges,
     allowCrossVpcPingUI,
+    labId,
+    canvasId,
     firestoreVpcId,
   });
 

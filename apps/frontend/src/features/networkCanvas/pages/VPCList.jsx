@@ -30,7 +30,7 @@ import { useNavigate } from "react-router-dom";
 
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext.jsx";
 import { useWizard } from "@/features/networkCanvas/context/WizardContext";
-import useCidrBlockVPCStore from '../store/cidrBlocksIp';
+import { useCanvasLabStore } from '../store/cidrBlocksIp';
 import CreateVPCModal from "./CreateVPCModal";
 import { PageHeader } from '@/shared/ui/layouts/MainLayout';
 import { api } from "@/infrastructure/http/api";
@@ -87,7 +87,7 @@ const VPCList = () => {
 
   const navigate = useNavigate()
   const { setLoadingFlow } = useContext(LoadingFlowContext)
-  const { setCidrBlockVPC, setPrefixLength, setVlanName, setVlanRegion } = useCidrBlockVPCStore();
+  const { setMasterCidrBlock, setPrefixLength, setLabName, setLabRegion } = useCanvasLabStore();
 
   const { vpcs, fetchVPCs } = useFetchLabs(setLoadingFlow)
   const { start, finish, setStep } = useWizard()
@@ -161,10 +161,10 @@ const VPCList = () => {
     finish();
     setWizardMode(false);
 
-    if (cidrBlock) setCidrBlockVPC(cidrBlock);
+    if (cidrBlock) setMasterCidrBlock(cidrBlock);
     if (prefixLength) setPrefixLength(prefixLength);
-    if (vlanName) setVlanName(vlanName);
-    if (vlanRegion) setVlanRegion(vlanRegion);
+    if (vlanName) setLabName(vlanName);
+    if (vlanRegion) setLabRegion(vlanRegion);
 
     setIsCreateVPCModalOpen(false);
     setLoadingFlow(false);
@@ -177,12 +177,12 @@ const VPCList = () => {
 
   const handleLinkToFlow = (vpc) => {
     setLoadingFlow(true)
-    if (vpc?.cidr_block) setCidrBlockVPC(vpc.cidr_block)
+    if (vpc?.cidr_block) setMasterCidrBlock(vpc.cidr_block)
     if (vpc?.prefix_length !== undefined && vpc?.prefix_length !== null) {
       setPrefixLength(vpc.prefix_length)
     }
-    if (vpc?.name) setVlanName(vpc.name)
-    if (vpc?.region) setVlanRegion(vpc.region)
+    if (vpc?.name) setLabName(vpc.name)
+    if (vpc?.region) setLabRegion(vpc.region)
     setLoadingFlow(false)
     const qs = vpc.narrative === "wizard" ? "?wizard=1" : "";
     navigate(`/admin/vpcs/${vpc.id}/mainflow${qs}`);

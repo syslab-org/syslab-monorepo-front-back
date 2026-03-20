@@ -8,6 +8,7 @@ export const usePlanValidationSync = ({
   validationResult,
   nodes,
   edges,
+  labId,
   vpcid,
   setCanvasPlanId,
   setValidatedPlanHash,
@@ -19,15 +20,16 @@ export const usePlanValidationSync = ({
 
     const pid = validationResult.plan_id;
     setCanvasPlanId(pid);
+    const resolvedLabId = labId || vpcid;
 
     const okHash = computeInfraHash(nodes, edges);
     setValidatedPlanHash(okHash);
 
     const persist = async () => {
       try {
-        const existing = await api.getLab(vpcid);
+        const existing = await api.getLab(resolvedLabId);
         const metadata = { ...(existing?.metadata || {}), planId: pid };
-        await api.updateLab(vpcid, {
+        await api.updateLab(resolvedLabId, {
           metadata,
           plan_canvas_hash: okHash,
         });
@@ -40,5 +42,5 @@ export const usePlanValidationSync = ({
 
     setIsCanvasDirty(false);
     setHasValidatedInSession(true);
-  }, [validationState, validationResult?.plan_id]);
+  }, [validationState, validationResult?.plan_id, nodes, edges, labId, vpcid, setCanvasPlanId, setValidatedPlanHash, setIsCanvasDirty, setHasValidatedInSession]);
 };
