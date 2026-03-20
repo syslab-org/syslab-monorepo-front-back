@@ -1,23 +1,23 @@
 # Recetas de canvas
 
 Estas recetas sirven para construir manualmente escenarios en el canvas y observar:
-- guía de aprendizaje,
-- validaciones del formulario del router,
+- guía de modelado,
+- validaciones del formulario de conectividad,
 - preview de rutas,
-- diferencias visuales entre VLAN/laboratorio y AWS.
+- diferencias entre la vista neutral y la traducción AWS.
 
-## Caso A: Peering correcto entre dos VPC
+## Caso A: Direct links correctos entre dos segmentos
 
 Objetivo:
-- entender cuándo aparece un peering válido,
+- entender cuándo aparece un enlace directo válido,
 - verificar conectividad bidireccional.
 
 Pasos:
-1. Crear dos VPC con CIDR distintos.
-2. Crear una subnet pública en cada VPC.
-3. Crear una instancia en cada subnet.
-4. Conectar ambas VPC a un router.
-5. En el router seleccionar modo `Peering`.
+1. Crear dos segmentos con CIDR distintos.
+2. Crear una zona pública en cada segmento.
+3. Crear un workload en cada zona.
+4. Conectar ambos segmentos a un nodo de conectividad.
+5. En la policy de conectividad seleccionar modo `Direct links`.
 6. Crear dos rutas:
    - `VPC-A -> CIDR de VPC-B`
    - `VPC-B -> CIDR de VPC-A`
@@ -28,10 +28,10 @@ Resultado esperado:
 - el preview muestra conectividad completa,
 - al desplegar, `Plan Detail -> Pruebas` sugiere ping de ida y vuelta.
 
-## Caso B: Peering inválido por falta de retorno
+## Caso B: Direct link inválido por falta de retorno
 
 Objetivo:
-- ver por qué peering requiere rutas en ambos sentidos.
+- ver por qué un `direct link` requiere rutas en ambos sentidos.
 
 Pasos:
 1. Repetir el caso A.
@@ -40,36 +40,36 @@ Pasos:
 3. Intentar guardar el router.
 
 Resultado esperado:
-- el formulario del router advierte `Solo ida`,
+- el formulario de conectividad advierte `Solo ida`,
 - el guardado queda bloqueado,
-- la explicación indica que peering no es transitivo y necesita retorno.
+- la explicación indica que el enlace directo no es transitivo y necesita retorno.
 
-## Caso C: TGW con tres VPC
+## Caso C: Hub routing con tres segmentos
 
 Objetivo:
-- comparar peering vs TGW.
+- comparar `direct links` vs `hub routing`.
 
 Pasos:
-1. Crear tres VPC con subnets públicas.
-2. Crear una instancia en cada VPC.
-3. Conectar las tres VPC a un router.
-4. En el router seleccionar modo `Transit Gateway`.
-5. Crear rutas ida/vuelta entre cada par de VPC.
+1. Crear tres segmentos con zonas públicas.
+2. Crear un workload en cada segmento.
+3. Conectar los tres segmentos a un nodo de conectividad.
+4. En la policy de conectividad seleccionar modo `Hub routing`.
+5. Crear rutas ida/vuelta entre cada par de segmentos.
 6. Abrir `Previsualizar`.
 
 Resultado esperado:
-- el preview muestra `Transit Gateway`,
-- cada VPC queda con rutas hacia las demás por TGW,
-- el resumen del router muestra attachments en lugar de peerings.
+- el preview muestra un `routing hub`,
+- cada segmento queda con rutas hacia los demás mediante el hub,
+- la traducción AWS muestra attachments en lugar de peerings.
 
-## Caso D: Tres VPC con peering parcial
+## Caso D: Tres segmentos con direct links parciales
 
 Objetivo:
 - entender pares conectados y pares aislados.
 
 Pasos:
-1. Crear tres VPC.
-2. Conectarlas a un router en modo `Peering`.
+1. Crear tres segmentos.
+2. Conectarlos a un nodo de conectividad en modo `Direct links`.
 3. Crear solo estas rutas:
    - `VPC-A -> VPC-B`
    - `VPC-B -> VPC-A`
@@ -82,17 +82,17 @@ Resultado esperado:
 - `VPC-B <-> VPC-C` aparece conectada,
 - `VPC-A <-> VPC-C` aparece aislada.
 
-## Caso E: Error por subnets solapadas
+## Caso E: Error por zonas solapadas
 
 Objetivo:
 - probar validación de direccionamiento.
 
 Pasos:
-1. Crear una VPC.
-2. Crear una subnet `10.80.1.0/24`.
-3. Crear otra subnet `10.80.1.128/25`.
+1. Crear un segmento.
+2. Crear una zona `10.80.1.0/24`.
+3. Crear otra zona `10.80.1.128/25`.
 4. Ejecutar validación.
 
 Resultado esperado:
-- la validación reporta solapamiento de subnets,
+- la validación reporta solapamiento de zonas,
 - no se permite avanzar al deploy.
