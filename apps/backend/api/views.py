@@ -22,25 +22,22 @@ TERMINAL_TASK_STATES = {"SUCCESS", "FAILURE", "REVOKED"}
 
 
 
-def _sanitize_payload_for_storage(payload: dict, fallback_firestore_vpc_id=None) -> dict:
+def _sanitize_payload_for_storage(payload: dict, fallback_canvas_id=None) -> dict:
     sanitized = validate_network_plan(payload)
     raw = payload if isinstance(payload, dict) else {}
     out = dict(sanitized)
 
-    for key in ("firestore_vpc_id", "vpcId", "canvas_id"):
-        value = raw.get(key)
-        if value:
-            out[key] = value
-
     vlan_raw = raw.get("vlan") if isinstance(raw.get("vlan"), dict) else {}
-    resolved_firestore_vpc_id = (
-        fallback_firestore_vpc_id
-        or out.get("firestore_vpc_id")
-        or out.get("vpcId")
+    resolved_canvas_id = (
+        fallback_canvas_id
+        or out.get("canvas_id")
+        or raw.get("canvas_id")
+        or raw.get("firestore_vpc_id")
+        or raw.get("vpcId")
         or vlan_raw.get("id")
     )
-    if resolved_firestore_vpc_id:
-        out["firestore_vpc_id"] = resolved_firestore_vpc_id
+    if resolved_canvas_id:
+        out["canvas_id"] = resolved_canvas_id
 
     return out
 
@@ -230,11 +227,10 @@ def network_plan_create(request):
         return Response({"ok": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     canvas_id = (
-        sanitized_payload.get("firestore_vpc_id")
-        or sanitized_payload.get("vpcId")
+        sanitized_payload.get("canvas_id")
+        or payload.get("canvas_id")
         or payload.get("firestore_vpc_id")
         or payload.get("vpcId")
-        or payload.get("canvas_id")
         or payload.get("vlan", {}).get("id")
     )
     if not canvas_id:
@@ -333,9 +329,7 @@ def deploy_plan(request, plan_id: UUID):
 
     raw_payload = dict(plan.payload or {})
     try:
-        sanitized_payload = _sanitize_payload_for_storage(
-            raw_payload, fallback_firestore_vpc_id=plan.canvas_id
-        )
+        sanitized_payload = _sanitize_payload_for_storage(raw_payload, fallback_canvas_id=plan.canvas_id)
     except Exception as e:
         plan.status = Plan.Status.FAILURE
         plan.error = str(e)
@@ -360,11 +354,7 @@ def deploy_plan(request, plan_id: UUID):
     plan.lab = plan.lab or ensure_lab_for_canvas(request.user, plan.canvas_id, name=plan.name)
     plan.save(update_fields=["updated_at", "payload", "last_action", "lab"])
 
-    canvas_id = (
-        persisted_payload.get("firestore_vpc_id")
-        or persisted_payload.get("vpcId")
-        or (persisted_payload.get("vlan") or {}).get("id")
-    )
+    canvas_id = persisted_payload.get("canvas_id") or (persisted_payload.get("vlan") or {}).get("id")
     if canvas_id and not plan.firestore_vpc_id:
         plan.firestore_vpc_id = canvas_id
         plan.save(update_fields=["firestore_vpc_id"])

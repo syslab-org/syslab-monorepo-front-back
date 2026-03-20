@@ -7,7 +7,7 @@ from .models import AmiCatalogEntry, Course, Lab, Plan, UserProfile
 class PlanAdmin(admin.ModelAdmin):
     list_display = ("id", "name", "status", "lab", "created_at")
     list_filter = ("status", "created_at", "last_action")
-    search_fields = ("id", "name", "firestore_vpc_id")
+    search_fields = ("id", "name", "firestore_vpc_id", "lab__legacy_canvas_id")
 
 
 @admin.register(Lab)

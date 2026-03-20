@@ -79,26 +79,21 @@ def _reconcile_running_plan(plan: Plan) -> bool:
 
 
 
-def _sanitize_payload_for_storage(payload: dict, fallback_firestore_vpc_id=None) -> dict:
+def _sanitize_payload_for_storage(payload: dict, fallback_canvas_id=None) -> dict:
     sanitized = validate_network_plan(payload)
     raw = payload if isinstance(payload, dict) else {}
     out = dict(sanitized)
 
-    for key in ("firestore_vpc_id", "vpcId", "canvas_id"):
-        value = raw.get(key)
-        if value:
-            out[key] = value
-
     vlan_raw = raw.get("vlan") if isinstance(raw.get("vlan"), dict) else {}
     resolved_canvas_id = (
-        fallback_firestore_vpc_id
-        or out.get("firestore_vpc_id")
-        or out.get("vpcId")
+        fallback_canvas_id
         or out.get("canvas_id")
+        or raw.get("canvas_id")
+        or raw.get("firestore_vpc_id")
+        or raw.get("vpcId")
         or vlan_raw.get("id")
     )
     if resolved_canvas_id:
-        out["firestore_vpc_id"] = resolved_canvas_id
         out["canvas_id"] = resolved_canvas_id
 
     return out
@@ -145,7 +140,7 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
                 payload.pop("payload", None)
 
             try:
-                payload = _sanitize_payload_for_storage(payload, fallback_firestore_vpc_id=canvas_id)
+                payload = _sanitize_payload_for_storage(payload, fallback_canvas_id=canvas_id)
             except Exception as e:
                 return Response({"ok": False, "error": str(e)}, status=400)
 
