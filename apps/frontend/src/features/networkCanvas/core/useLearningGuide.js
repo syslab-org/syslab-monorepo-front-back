@@ -73,22 +73,22 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges }) => {
     const sshCidr = String(selectedNode.data?.allowedSshCidr || "").trim();
 
     return {
-      title: `VPC: ${label}`,
-      subtitle: "Qué significa en el laboratorio y cómo se traduce en AWS.",
+      title: `Network Segment: ${label}`,
+      subtitle: "Qué significa en el modelo neutral y cómo se traduce en AWS.",
       badges: [
         makeBadge(`CIDR ${selectedNode.data?.cidrBlock || "n/a"}/${selectedNode.data?.prefixLength || "?"}`),
-        makeBadge(hasIgw ? "IGW habilitado" : "Sin IGW", hasIgw ? "success" : "default"),
-        makeBadge(hasNat ? "NAT habilitado" : "Sin NAT", hasNat ? "warning" : "default"),
+        makeBadge(hasIgw ? "Internet edge activo" : "Sin internet edge", hasIgw ? "success" : "default"),
+        makeBadge(hasNat ? "Managed egress activo" : "Sin managed egress", hasNat ? "warning" : "default"),
         makeBadge(sshCidr ? "SSH desde IP definida" : "SSH no expuesto", sshCidr ? "info" : "default"),
       ],
       labLines: [
-        `Esta VPC representa un dominio principal de red dentro del laboratorio.`,
+        `Este segmento representa un dominio principal de red dentro del laboratorio.`,
         publicSubnets > 0
-          ? `Tienes ${publicSubnets} subnet(s) pública(s): sirven para bastions o servicios con salida directa.`
-          : "No hay subnets públicas; este dominio no está pensado para exposición directa.",
+          ? `Tienes ${publicSubnets} zona(s) pública(s): sirven para bastions o servicios con salida directa.`
+          : "No hay zonas públicas; este segmento no está pensado para exposición directa.",
         privateSubnets > 0
-          ? `Tienes ${privateSubnets} subnet(s) privada(s): sirven para workloads internos.`
-          : "No hay subnets privadas; toda la práctica está concentrada en segmentos públicos o no definidos.",
+          ? `Tienes ${privateSubnets} zona(s) privada(s): sirven para workloads internos.`
+          : "No hay zonas privadas; toda la práctica está concentrada en areas públicas o no definidas.",
       ],
       awsLines: [
         `AWS creará 1 VPC real en ${selectedNode.data?.region || "us-east-1"} con el CIDR indicado.`,
@@ -106,7 +106,7 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges }) => {
           : "No se abrirá SSH administrativo desde Internet salvo que lo habilites explícitamente.",
       ],
       whyItMatters:
-        "La VPC define el límite principal del laboratorio. A partir de aquí se decide segmentación, exposición y conectividad hacia otras redes.",
+        "Este segmento define el limite principal del laboratorio. A partir de aqui se decide segmentacion, exposicion y conectividad hacia otras redes.",
     };
   }
 
@@ -133,26 +133,26 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges }) => {
     ).length;
 
     return {
-      title: `Router: ${label}`,
-      subtitle: mode === "tgw" ? "Hub central de enrutamiento" : "Conectividad directa entre pares",
+      title: `Connectivity Policy: ${label}`,
+      subtitle: mode === "tgw" ? "Hub central de conectividad" : "Conectividad directa entre pares",
       badges: [
-        makeBadge(mode === "tgw" ? "Modo TGW" : "Modo Peering", mode === "tgw" ? "primary" : "secondary"),
-        makeBadge(`${connectedVpcs.size} VPC(s) conectadas`),
-        makeBadge(`${routeTable.length} ruta(s) declaradas`),
-        makeBadge(oneWayRoutes > 0 ? `${oneWayRoutes} posible(s) retorno(s) faltante(s)` : "Rutas ida/vuelta coherentes", oneWayRoutes > 0 ? "warning" : "success"),
+        makeBadge(mode === "tgw" ? "Modo hub routing" : "Modo direct links", mode === "tgw" ? "primary" : "secondary"),
+        makeBadge(`${connectedVpcs.size} segmento(s) conectados`),
+        makeBadge(`${routeTable.length} policy(s) declaradas`),
+        makeBadge(oneWayRoutes > 0 ? `${oneWayRoutes} retorno(s) faltante(s)` : "Policies ida/vuelta coherentes", oneWayRoutes > 0 ? "warning" : "success"),
       ],
       labLines: [
         mode === "tgw"
-          ? "En el laboratorio este nodo actúa como un hub: las VPCs envían tráfico al router para alcanzar otras redes."
-          : "En el laboratorio este nodo representa enlaces directos por pares: cada VPC necesita rutas explícitas hacia la otra.",
-        "Las filas de rutas no son decorativas: determinan quién puede hablar con quién.",
+          ? "En el laboratorio este nodo actua como un hub: los segmentos envian trafico al nodo para alcanzar otras redes."
+          : "En el laboratorio este nodo representa enlaces directos por pares: cada segmento necesita policies explicitas hacia el otro.",
+        "Las filas de policy no son decorativas: determinan quien puede hablar con quien.",
       ],
       awsLines: [
         mode === "tgw"
-          ? `AWS implementará 1 Transit Gateway y ${connectedVpcs.size} attachment(s) para las VPCs conectadas.`
-          : "AWS implementará conexiones VPC Peering entre los pares que realmente queden declarados por rutas.",
+          ? `AWS implementará 1 Transit Gateway y ${connectedVpcs.size} attachment(s) para los segmentos conectados.`
+          : "AWS implementará conexiones VPC Peering entre los pares que realmente queden declarados por policies.",
         mode === "tgw"
-          ? "Cada ruta hacia TGW enviará tráfico al hub central; luego el hub lo reencamina hacia la VPC destino."
+          ? "Cada policy hacia TGW enviara trafico al hub central; luego el hub lo reencamina hacia el segmento destino."
           : "En peering no existe tránsito implícito: A↔B y B↔C no conectan automáticamente A↔C.",
       ],
       whyItMatters:
@@ -164,8 +164,8 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges }) => {
     const subnetType = String(selectedNode.data?.subnetType || "").toLowerCase();
     const routeTable = selectedNode.data?.routeTable || "main";
     return {
-      title: `Subnet: ${label}`,
-      subtitle: "Segmento interno dentro de una VPC.",
+      title: `Zone Segment: ${label}`,
+      subtitle: "Zona interna dentro de un segmento principal.",
       badges: [
         makeBadge(subnetType === "public" ? "Pública" : "Privada", subnetType === "public" ? "success" : "default"),
         makeBadge(`CIDR ${selectedNode.data?.cidrBlock || "n/a"}`),
@@ -173,8 +173,8 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges }) => {
       ],
       labLines: [
         subnetType === "public"
-          ? "En el laboratorio esta subnet está pensada para bastions o workloads con salida directa."
-          : "En el laboratorio esta subnet está pensada para workloads internos o menos expuestos.",
+          ? "En el laboratorio esta zona esta pensada para bastions o workloads con salida directa."
+          : "En el laboratorio esta zona esta pensada para workloads internos o menos expuestos.",
       ],
       awsLines: [
         "AWS creará 1 aws_subnet con el CIDR indicado y la asociará a una route table.",
@@ -195,7 +195,7 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges }) => {
     const hasPublicIp = Boolean(selectedNode.data?.associatePublicIp);
     const keyPair = selectedNode.data?.ssh_access || selectedNode.data?.sshAccess || "n/a";
     return {
-      title: `Instancia: ${label}`,
+      title: `Workload: ${label}`,
       subtitle: "Host desde donde se materializa la práctica.",
       badges: [
         makeBadge(selectedNode.data?.instance_type || "tipo n/a"),
@@ -212,7 +212,7 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges }) => {
           : "Solo será alcanzable desde dentro de la red o mediante saltos intermedios.",
       ],
       whyItMatters:
-        "Las pruebas de ping y acceso SSH terminan ocurriendo aquí. Si la instancia está mal ubicada o mal protegida, el laboratorio no será verificable.",
+        "Las pruebas de ping y acceso SSH terminan ocurriendo aqui. Si el workload esta mal ubicado o mal protegido, el laboratorio no sera verificable.",
     };
   }
 
@@ -306,14 +306,14 @@ export function useLearningGuide({
     const steps = [
       {
         id: "vpc_base",
-        title: "Crear VPC base",
+        title: "Crear segmento base",
         description: "Define el contenedor principal del laboratorio.",
         completed: vpcs.length >= 1,
       },
       {
         id: "subnet_segment",
-        title: "Segmentar subredes",
-        description: "Crea al menos una subred publica y una privada.",
+        title: "Definir zonas",
+        description: "Crea al menos una zona publica y una privada.",
         completed:
           subnets.length >= 2 && publicSubnetCount >= 1 && privateSubnetCount >= 1,
       },
@@ -325,10 +325,10 @@ export function useLearningGuide({
       },
       {
         id: "router",
-        title: "Conectividad entre VPCs",
+        title: "Conectividad entre segmentos",
         description: needsRouter
-          ? "Conecta las VPCs con un router y sus enlaces."
-          : "Opcional en laboratorio de una sola VPC.",
+          ? "Conecta los segmentos con un nodo de conectividad y sus enlaces."
+          : "Opcional en laboratorio de un solo segmento.",
         completed: !needsRouter || (routers.length >= 1 && hasVpcRouterConnection),
       },
       {
@@ -371,9 +371,9 @@ export function useLearningGuide({
     }
 
     const vlanLines = [
-      `Estas modelando ${subnets.length} segmento(s) de red dentro de un laboratorio logico.`,
+      `Estas modelando ${subnets.length} zona(s) de red dentro de un laboratorio logico.`,
       needsRouter
-        ? "Tu practica requiere enrutar entre multiples dominios de red."
+        ? "Tu practica requiere enrutar entre multiples segmentos de red."
         : "Tu practica puede resolverse en un dominio principal.",
       routersWithRoutes > 0
         ? "Ya definiste rutas entre segmentos para analizar conectividad."
@@ -395,12 +395,12 @@ export function useLearningGuide({
     const conceptMap = [
       {
         concept: "Segmentacion",
-        vlanView: "VLAN y subredes logicas para practica",
+        vlanView: "Segmentos y zonas logicas para practica",
         awsView: "VPC y subnets con CIDR reales",
       },
       {
         concept: "Gateway",
-        vlanView: "Router del laboratorio",
+        vlanView: "Nodo de conectividad del laboratorio",
         awsView: "Route tables + IGW/NAT/TGW/Peering",
       },
       {
