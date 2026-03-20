@@ -26,7 +26,7 @@ import useRestoreFlow from '@/features/networkCanvas/core/useRestoreFlow';
 import useSaveFlow from '@/features/networkCanvas/core/useSaveFlow';
 import useNodeClick from '@/features/networkCanvas/hooks/useNodeClick';
 import FlowWorkspace from "@/features/networkCanvas/layout/FlowWorkspace";
-import useCidrBlockVPCStore from '@/features/networkCanvas/store/cidrBlocksIp';
+import { useCanvasLabStore } from '@/features/networkCanvas/store/cidrBlocksIp';
 import useClickedNodeIdStore from '@/features/networkCanvas/store/clickedNodeIdStore';
 
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -77,7 +77,8 @@ const useBodyClass = (className, enabled = true) => {
 // eslint-disable-next-line react-refresh/only-export-components
 function MainFlow() {
   const params = useParams();
-  const { vpcid } = params;
+  const { vpcid: routeLabId } = params;
+  const labId = routeLabId;
 
   useEffect(() => {
     console.log("ROUTE PARAMS", params);
@@ -160,10 +161,10 @@ function MainFlow() {
   // eslint-disable-next-line no-unused-vars
   const [clickedNodeId, setClickedNodeId] = useClickedNodeIdStore(state => [state.clickedNodeId, state.setClickedNodeId])
 
-  const [cidrBlockVPC, prefixLength, setCidrBlockVPC, setPrefixLength] = useCidrBlockVPCStore(state => [
-    state.cidrBlockVPC,
+  const [masterCidrBlock, prefixLength, setMasterCidrBlock, setPrefixLength] = useCanvasLabStore(state => [
+    state.masterCidrBlock || state.cidrBlockVPC,
     state.prefixLength,
-    state.setCidrBlockVPC,
+    state.setMasterCidrBlock,
     state.setPrefixLength
   ]);
 
@@ -196,7 +197,7 @@ function MainFlow() {
   // el estado del canvas. Esto es clave para la lógica de "dirty" y validación.
 
   usePlanMeta({
-    vpcid,
+    labId,
     setCanvasPlanId,
     setValidatedPlanHash
   });
@@ -216,8 +217,8 @@ function MainFlow() {
 
   const closeModal = closeNodeModal;
 
-  const onSaveFlow = useSaveFlow({ reactFlowInstance, flowKey, vpcid });
-  const onRestoreFlow = useRestoreFlow({ setNodes, setEdges, setViewport, flowKey, getId, setCanvasPlanId });
+  const onSaveFlow = useSaveFlow({ reactFlowInstance, flowKey, labId });
+  const onRestoreFlow = useRestoreFlow({ setNodes, setEdges, setViewport, flowKey, getId, setCanvasPlanId, labId });
   const { saveNodeData, deleteNodeInstance } = useNodeActions({
     nodes,
     setNodes,
@@ -252,7 +253,7 @@ function MainFlow() {
     nodes,
     edges,
     allowCrossVpcPingUI,
-    firestoreVpcId: vpcid
+    labId
   });
 
   const {
@@ -270,7 +271,7 @@ function MainFlow() {
     validationResult,
     nodes,
     edges,
-    vpcid,
+    labId,
     setCanvasPlanId,
     setValidatedPlanHash,
     setIsCanvasDirty,
@@ -304,7 +305,7 @@ function MainFlow() {
 
     return () => {
       // console.log("nodes useffect", nodes);
-      // console.log("cidrBlockVPC: ", cidrBlockVPC);
+      // console.log("masterCidrBlock: ", masterCidrBlock);
 
 
     }
@@ -312,9 +313,9 @@ function MainFlow() {
 
   useEffect(() => {
     if (restorationDone) {
-      // console.log("✅ CIDR restaurado:", cidrBlockVPC, prefixLength);
+      // console.log("✅ CIDR restaurado:", masterCidrBlock, prefixLength);
     }
-  }, [restorationDone, cidrBlockVPC, prefixLength]);
+  }, [restorationDone, masterCidrBlock, prefixLength]);
 
 
   // Hook para inicializar el canvas restaurando el flow guardado en backend (si existe)
@@ -432,7 +433,7 @@ function MainFlow() {
           amiList={amiList}
           saveNodeData={saveNodeData}
           deleteNodeInstance={deleteNodeInstance}
-          cidrBlockVPC={cidrBlockVPC}
+          cidrBlockVPC={masterCidrBlock}
           prefixLength={prefixLength}
         />
 

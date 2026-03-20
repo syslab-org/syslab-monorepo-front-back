@@ -6,7 +6,7 @@ import { useAuth } from "@/app/providers/AuthContext";
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
 import { api } from "@/infrastructure/http/api";
 import { decideRouterMode } from "@/features/networkCanvas/domain/decideRouterMode";
-import useCidrBlockVPCStore from "../store/cidrBlocksIp";
+import { useCanvasLabStore } from "../store/cidrBlocksIp";
 import { buildRoutingPreview } from "../utils/buildRoutingPreview";
 import {
   TYPE_ROUTER_NODE,
@@ -287,8 +287,11 @@ const useDeployNetwork = ({
   nodes,
   edges,
   allowCrossVpcPingUI = null,
+  labId,
+  canvasId,
   firestoreVpcId,
 }) => {
+  const resolvedCanvasId = canvasId || labId || firestoreVpcId;
   const { user } = useAuth();
   const navigate = useNavigate();
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -327,9 +330,9 @@ const useDeployNetwork = ({
   }, [planName]);
 
   const loadCanvasLabName = useCallback(async () => {
-    if (!firestoreVpcId) return "";
+    if (!resolvedCanvasId) return "";
     try {
-      const lab = await api.getLab(firestoreVpcId);
+      const lab = await api.getLab(resolvedCanvasId);
       const name = String(lab?.name || "").trim();
       if (name) setCanvasLabName(name);
       return name;
@@ -337,7 +340,7 @@ const useDeployNetwork = ({
       console.warn("No se pudo cargar nombre del canvas:", e);
       return "";
     }
-  }, [firestoreVpcId]);
+  }, [resolvedCanvasId]);
 
   // Hidrata nombre del plan desde el nombre real del laboratorio en backend.
   useEffect(() => {
@@ -365,10 +368,10 @@ const useDeployNetwork = ({
   };
 
   const { vlanName, vlanRegion, cidrBlockVPC, prefixLength } =
-    useCidrBlockVPCStore((s) => [
-      s.vlanName,
-      s.vlanRegion,
-      s.cidrBlockVPC,
+    useCanvasLabStore((s) => [
+      s.labName || s.vlanName,
+      s.labRegion || s.vlanRegion,
+      s.masterCidrBlock || s.cidrBlockVPC,
       s.prefixLength,
     ]);
 
@@ -638,18 +641,18 @@ const useDeployNetwork = ({
     const built = {
       name: planDefaultName,
       target_provider: "aws",
-      canvas_id: firestoreVpcId || null,
-      firestore_vpc_id: firestoreVpcId || null,
-      vpcId: firestoreVpcId || null,
+      canvas_id: resolvedCanvasId || null,
+      firestore_vpc_id: resolvedCanvasId || null,
+      vpcId: resolvedCanvasId || null,
       metadata: {
         name: planDefaultName,
-        canvas_id: firestoreVpcId || null,
+        canvas_id: resolvedCanvasId || null,
         source_format: "neutral_topology",
         schema_version: "2026-03-neutral-v1",
       },
       topology: buildNeutralTopology({
         planName: vlanNameFinal,
-        canvasId: firestoreVpcId || null,
+        canvasId: resolvedCanvasId || null,
         region: vlanRegionFinal,
         masterCidr,
         segments,
@@ -717,7 +720,7 @@ const useDeployNetwork = ({
 
       if (!planId) throw new Error("sync-from-canvas no devolvió plan_id");
       await persistPlanIdToCanvas({
-        canvasId: firestoreVpcId,
+        canvasId: resolvedCanvasId,
         planId,
         name: stableName,
         created: !!syncRes?.created,
@@ -736,7 +739,7 @@ const useDeployNetwork = ({
         setValidationState(PLAN_STATES.SUCCESS);
         setSuccessMessage("Validación OK (Terraform plan)");
         await persistPlanIdToCanvas({
-          canvasId: firestoreVpcId,
+          canvasId: resolvedCanvasId,
           planId,
           name: stableName,
           created: !!syncRes?.created,
@@ -748,7 +751,7 @@ const useDeployNetwork = ({
         setValidationError(msg);
         setErrorMessage(msg);
         await persistPlanIdToCanvas({
-          canvasId: firestoreVpcId,
+          canvasId: resolvedCanvasId,
           planId,
           name: stableName,
           created: !!syncRes?.created,
