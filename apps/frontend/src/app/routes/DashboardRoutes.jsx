@@ -6,7 +6,7 @@ import { LoadingFlowProvider } from '@/app/providers/LoadingFlowContext';
 import Dashboard from '@/features/admin/pages/Dashboard';
 import PlanDetailPage from '@/features/plans/pages/PlanDetailPage';
 import PlanListPage from '@/features/plans/pages/PlanListPage';
-import { MainFlow, VPCList, WizardProvider } from '@/features/networkCanvas';
+import { CanvasFlowPage, LabsPage, WizardProvider } from '@/features/networkCanvas';
 import MainLayout from '@/shared/ui/layouts/MainLayout';
 import PanelAdmin from '@/features/admin/pages/PanelAdmin';
 import ProfilePage from '@/features/admin/pages/ProfilePage';
@@ -15,7 +15,7 @@ import GeneralSettings from '@/features/settings/pages/GeneralSettings';
 import { UsersManagement } from '@/features/settings/pages/UsersManagement';
 import ProtectedRoute from '@/shared/ui/organisms/ProtectedRoute'
 
-const VpcsLayout = () => (
+const LabsLayout = () => (
   <WizardProvider>
     <Outlet />
   </WizardProvider>
@@ -41,17 +41,27 @@ const DashboardRoutes = () => {
 
           <Route path='settings/profile' element={<ProfilePage />} />
 
-          <Route path='vpcs' element={<VpcsLayout />}>
-            <Route index element={<VPCList />} />
+          <Route path='labs' element={<LabsLayout />}>
+            <Route index element={<LabsPage />} />
             <Route
-              path=':vpcid/mainflow'
+              path=':labId/canvas'
               element={
                 <ReactFlowProvider>
-                  <MainFlow />
+                  <CanvasFlowPage />
                 </ReactFlowProvider>
               }
             />
           </Route>
+
+          <Route path='vpcs' element={<Navigate to="/admin/labs" replace />} />
+          <Route
+            path='vpcs/:vpcid/mainflow'
+            element={
+              <ReactFlowProvider>
+                <CanvasFlowPage />
+              </ReactFlowProvider>
+            }
+          />
 
           <Route path='settings/general' element={
             <ProtectedRoute allowedRoles={[USER_ROL_STUDENT, USER_ROL_TEACHER]}>

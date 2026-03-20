@@ -79,7 +79,7 @@ export const MainListItems = () => {
       <ListItemButton
         variant="whiteStyle"
         component={NavLink}
-        to="/admin/vpcs"
+        to="/admin/labs"
         sx={(theme) => ({
           borderRadius: 12,
           margin: "2px 8px",

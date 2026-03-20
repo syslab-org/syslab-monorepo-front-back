@@ -72,7 +72,7 @@ function Dashboard() {
         title="Dashboard"
         subtitle="Resumen general del entorno de laboratorios y ejecuciones."
         actions={
-          <Button component={Link} to="/admin/vpcs" variant="contained">
+          <Button component={Link} to="/admin/labs" variant="contained">
             Crear laboratorio
           </Button>
         }
@@ -80,7 +80,7 @@ function Dashboard() {
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={4}>
-          <Card className="pt-panel" component={Link} to="/admin/vpcs" sx={{ cursor: "pointer", display: "block", color: "inherit", textDecoration: "none" }}>
+          <Card className="pt-panel" component={Link} to="/admin/labs" sx={{ cursor: "pointer", display: "block", color: "inherit", textDecoration: "none" }}>
             <CardContent>
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Box>
