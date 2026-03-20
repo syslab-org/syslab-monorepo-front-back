@@ -259,7 +259,7 @@ const VPCList = () => {
     <Box sx={{ p: 3 }}>
       <PageHeader
         title="Laboratorios"
-        subtitle="Gestiona tus laboratorios y abre el canvas para editar topologías y preparar despliegues en AWS."
+        subtitle="Gestiona tus laboratorios y abre el canvas para editar topologías, validar intención y preparar despliegues."
         actions={
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
             <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreateGuideLab}>
@@ -306,7 +306,7 @@ const VPCList = () => {
           <TableHead>
             <TableRow>
               <TableCell>Laboratorio</TableCell>
-              <TableCell>Provider</TableCell>
+              <TableCell>Provider destino</TableCell>
               <TableCell>Curso</TableCell>
               <TableCell>Visibilidad</TableCell>
               <TableCell>Actualizado</TableCell>
@@ -388,11 +388,11 @@ const VPCList = () => {
             helperText="Formato CIDR. Este es el rango padre del laboratorio."
           />
           <FormControl fullWidth margin="dense">
-            <InputLabel id="edit-region-label">Region</InputLabel>
+            <InputLabel id="edit-region-label">Región</InputLabel>
             <Select
               labelId="edit-region-label"
               value={editRegion}
-              label="Region"
+              label="Región"
               onChange={(e) => setEditRegion(e.target.value)}
             >
               <MenuItem value="us-east-1">US East (N. Virginia)</MenuItem>
