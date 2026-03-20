@@ -497,6 +497,8 @@ class VisibilityApiTests(APITestCase):
         self.assertEqual(res.status_code, 200)
         plan = Plan.objects.get(id=res.json()["plan_id"])
         self.assertEqual(plan.firestore_vpc_id, "canvas-legacy-123")
+        self.assertEqual(plan.payload["canvas_id"], "canvas-legacy-123")
+        self.assertNotIn("firestore_vpc_id", plan.payload)
         self.assertEqual(plan.payload["vpcs"][0]["name"], "Segment A")
         self.assertEqual(plan.payload["cloud"], "aws")
 

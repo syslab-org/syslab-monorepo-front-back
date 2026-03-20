@@ -186,17 +186,20 @@ class AwsProviderAdapter(ProviderAdapter):
         payload = validated["provider_payload"]
         legacy = validated["intent"].get("legacy_payload") or {}
         metadata = validated["intent"].get("metadata") or {}
+        canvas_id = (
+            metadata.get("canvas_id")
+            or legacy.get("canvas_id")
+            or legacy.get("firestore_vpc_id")
+            or legacy.get("vpcId")
+        )
         if legacy.get("name") or metadata.get("name"):
             payload["name"] = legacy.get("name") or metadata.get("name")
-        for key in ("firestore_vpc_id", "vpcId", "canvas_id"):
-            if legacy.get(key):
-                payload[key] = legacy[key]
-            elif metadata.get("canvas_id"):
-                payload[key] = metadata.get("canvas_id")
+        if canvas_id:
+            payload["canvas_id"] = canvas_id
         vlan_raw = legacy.get("vlan") if isinstance(legacy.get("vlan"), dict) else {}
-        if vlan_raw.get("id") or metadata.get("canvas_id"):
+        if vlan_raw.get("id") or canvas_id:
             payload.setdefault("vlan", {})
-            payload["vlan"]["id"] = vlan_raw.get("id") or metadata.get("canvas_id")
+            payload["vlan"]["id"] = vlan_raw.get("id") or canvas_id
         return {
             "provider": self.provider,
             "intent": validated["intent"],
