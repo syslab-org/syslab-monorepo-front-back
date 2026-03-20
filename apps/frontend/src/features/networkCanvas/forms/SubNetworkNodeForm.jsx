@@ -140,11 +140,11 @@ const SubNetworkNodeForm = ({
       </Box>
 
       <Alert severity="info" variant="outlined" sx={{ mb: 0.5 }}>
-        Public subnet allows ingress/egress by route policy. Private subnet keeps traffic internal.
+        Public zone allows broader ingress/egress by route policy. Private zone keeps traffic internal by default.
       </Alert>
 
       <TextField
-        label="Subnet Name"
+        label="Zone Name"
         {...register("subnetName")}
         error={!!errors.subnetName}
         helperText={errors.subnetName?.message}
@@ -153,7 +153,7 @@ const SubNetworkNodeForm = ({
       />
 
       <TextField
-        label={`Subnet's CIDR Block (inside ${parentVpcCidr || 'VPC'})`}
+        label={`Zone CIDR Block (inside ${parentVpcCidr || 'segment'})`}
         {...register("cidrBlock")}
         error={!!errors.cidrBlock}
         helperText={errors.cidrBlock?.message}
@@ -186,14 +186,14 @@ const SubNetworkNodeForm = ({
       </FormControl>
 
       <FormControl fullWidth margin="normal" error={!!errors.subnetType}>
-        <InputLabel id="subnet-type-label">Subnet Type</InputLabel>
+        <InputLabel id="subnet-type-label">Zone Type</InputLabel>
         <Controller
           name="subnetType"
           control={control}
           render={({ field }) => (
             <Select
               labelId="subnet-type-label"
-              label="Subnet Type"
+              label="Zone Type"
               {...field}
               value={field.value || "public"}
             >
@@ -226,7 +226,7 @@ const SubNetworkNodeForm = ({
             )}
           />
         }
-        label="Auto-assign public IPv4 (recomendado en subnets públicas)"
+        label="Auto-assign public IPv4 (recommended for public zones)"
       />
       {errors.map_public_ip_on_launch && (
         <FormHelperText error>{errors.map_public_ip_on_launch.message}</FormHelperText>

@@ -202,9 +202,9 @@ const VPCNodeForm = ({
         </Alert>
       </Snackbar>
 
-      {/* VPC Name */}
+      {/* Segment Name */}
       <TextField
-        label="VPC Name"
+        label="Segment Name"
         {...register("vpcName")}
         error={!!errors.vpcName}
         helperText={errors.vpcName?.message}
@@ -212,9 +212,9 @@ const VPCNodeForm = ({
         margin="normal"
       />
 
-      {/* CIDR VPC */}
+      {/* Segment CIDR */}
       <TextField
-        label={`VPC's CIDR Block (inside of ${vlanCidr || "VLAN"})`}
+        label={`Segment CIDR Block (inside ${vlanCidr || "network"})`}
         {...register("cidrBlock")}
         error={!!errors.cidrBlock}
         helperText={errors.cidrBlock?.message}
@@ -241,12 +241,12 @@ const VPCNodeForm = ({
         )}
       </FormControl>
 
-      {/* Internet Gateway */}
+      {/* Internet Edge */}
       <FormControl fullWidth margin="normal">
-        <InputLabel id="igw-label">Internet Gateway</InputLabel>
+        <InputLabel id="igw-label">Internet Edge</InputLabel>
         <Select
           labelId="igw-label"
-          label="Internet Gateway"
+          label="Internet Edge"
           {...register("internetGateway")}
           defaultValue={nodeData?.internetGateway ?? false}
         >
@@ -265,16 +265,16 @@ const VPCNodeForm = ({
           Qué significa este segmento
         </Typography>
         <Typography variant="caption" display="block" sx={{ mt: 0.4 }}>
-          - El CIDR define el rango principal de la red.
+          - El CIDR define el rango principal del segmento.
         </Typography>
         <Typography variant="caption" display="block">
-          - IGW habilita salida pública directa donde existan rutas adecuadas.
+          - Internet edge habilita salida pública directa donde existan rutas adecuadas.
         </Typography>
         <Typography variant="caption" display="block">
-          - NAT da salida a subnets privadas, pero no acceso entrante desde Internet.
+          - Managed egress da salida a zonas privadas, pero no acceso entrante desde Internet.
         </Typography>
         <Typography variant="caption" display="block">
-          - Si defines una Elastic IP para NAT, debe ser un Allocation ID real de AWS (`eipalloc-...`), no una IP pública.
+          - En AWS, si defines una Elastic IP para egress, debe ser un Allocation ID real (`eipalloc-...`), no una IP pública.
         </Typography>
         <Typography variant="caption" display="block">
           - Allowed SSH CIDR abre TCP/22 solo desde la IP o red que indiques.
@@ -284,13 +284,13 @@ const VPCNodeForm = ({
       <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 1 }}>
         <Chip
           size="small"
-          label={internetGatewayEnabled ? "AWS: crea IGW" : "AWS: sin IGW"}
+          label={internetGatewayEnabled ? "AWS: crea Internet Gateway" : "AWS: sin Internet Gateway"}
           color={internetGatewayEnabled ? "primary" : "default"}
           variant={internetGatewayEnabled ? "filled" : "outlined"}
         />
         <Chip
           size="small"
-          label={enableNat ? "AWS: crea NAT" : "AWS: sin NAT"}
+          label={enableNat ? "AWS: crea NAT Gateway" : "AWS: sin NAT Gateway"}
           color={enableNat ? "warning" : "default"}
           variant={enableNat ? "filled" : "outlined"}
         />
@@ -307,7 +307,7 @@ const VPCNodeForm = ({
         {!hasPublicSubnets && (
           <Alert severity="warning" sx={{ mb: 1 }}>
             No hay subnets públicas en esta VPC. Crea una para poder habilitar
-            el NAT Gateway.
+            la salida gestionada.
           </Alert>
         )}
 
@@ -326,7 +326,7 @@ const VPCNodeForm = ({
                 placement="top"
                 title={
                   willBlockTurnOn
-                    ? "Crea primero una subnet pública para habilitar NAT Gateway."
+                    ? "Crea primero una zona pública para habilitar salida gestionada."
                     : ""
                 }
               >
@@ -339,7 +339,7 @@ const VPCNodeForm = ({
                           // Bloquea encendido si no hay públicas (salvo feature flag)
                           if (willBlockTurnOn && checked) {
                             setSnackMsg(
-                              "Primero crea una subnet pública para habilitar NAT Gateway."
+                              "Primero crea una zona pública para habilitar salida gestionada."
                             );
                             setSnackSeverity("warning");
                             setSnackOpen(true);
@@ -350,7 +350,7 @@ const VPCNodeForm = ({
                         disabled={willBlockTurnOn}
                       />
                     }
-                    label="Enable NAT Gateway"
+                    label="Enable managed egress"
                   />
                 </span>
               </Tooltip>
@@ -359,26 +359,26 @@ const VPCNodeForm = ({
         />
       </Box>
 
-      {/* Select de Public Subnet para el NAT */}
+      {/* Select de Public Zone para egress */}
       <FormControl
         fullWidth
         margin="normal"
         disabled={!enableNat || !hasPublicSubnets}
         error={!!errors.natGatewayPublicSubnet}
       >
-        <InputLabel id="nat-subnet-label">Public Subnet for NAT</InputLabel>
+        <InputLabel id="nat-subnet-label">Public Zone for Egress</InputLabel>
         <Controller
           name="natGatewayPublicSubnet"
           control={control}
           render={({ field }) => (
             <Select
               labelId="nat-subnet-label"
-              label="Public Subnet for NAT"
+              label="Public Zone for Egress"
               {...field}
               value={field.value || ""}
             >
               <MenuItem value="">
-                <em>Selecciona una subnet pública</em>
+                <em>Select a public zone</em>
               </MenuItem>
               {publicSubnetNames.map((name) => (
                 <MenuItem key={name} value={name}>
@@ -390,7 +390,7 @@ const VPCNodeForm = ({
         />
         {!hasPublicSubnets && (
           <FormHelperText>
-            Crea primero una Subnet pública en esta VPC para alojar el NAT.
+            Crea primero una zona pública dentro de este segmento para alojar la salida gestionada.
           </FormHelperText>
         )}
         {errors.natGatewayPublicSubnet && (
@@ -400,13 +400,13 @@ const VPCNodeForm = ({
 
       {/* EIP opcional */}
       <TextField
-        label="Elastic IP Allocation ID (opcional)"
+        label="Elastic IP Allocation ID (optional, AWS)"
         {...register("natGatewayElasticIp")}
         placeholder="eipalloc-0123456789abcdef0"
         helperText={
           enableNat
             ? "Si la dejas vacía, AWS asignará una Elastic IP nueva. Si ya tienes una reservada, ingresa su Allocation ID real (`eipalloc-...`), no la IP pública."
-            : "Solo aplica si habilitas NAT Gateway."
+            : "Solo aplica si habilitas salida gestionada."
         }
         fullWidth
         margin="normal"
@@ -434,7 +434,7 @@ const VPCNodeForm = ({
           disableHoverListener={!disableSubmitForNat}
           title={
             disableSubmitForNat
-              ? "Selecciona una subnet pública para el NAT antes de guardar."
+              ? "Selecciona una zona pública para la salida gestionada antes de guardar."
               : ""
           }
         >
@@ -457,7 +457,7 @@ const VPCNodeForm = ({
         {/* Pista visual pequeña cuando el botón está deshabilitado */}
         {disableSubmitForNat && (
           <Typography variant="caption" sx={{ color: "warning.main", ml: 1.5 }}>
-            Debes seleccionar una subnet pública para el NAT.
+            Debes seleccionar una zona pública para la salida gestionada.
           </Typography>
         )}
       </Box>

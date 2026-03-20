@@ -167,8 +167,28 @@ const ConfirmDeployDialog = ({
     0,
   );
   const privateSubnets = Math.max(summary.totalZones - publicSubnets, 0);
+  const mixedExposure = segments.filter(
+    (segment) => String(segment?.exposure || "").toLowerCase() === "mixed",
+  ).length;
+  const publicExposure = segments.filter(
+    (segment) => String(segment?.exposure || "").toLowerCase() === "public",
+  ).length;
+  const privateExposure = segments.filter(
+    (segment) => String(segment?.exposure || "").toLowerCase() === "private",
+  ).length;
+  const isolatedExposure = segments.filter(
+    (segment) => String(segment?.internet_access || "").toLowerCase() === "isolated",
+  ).length;
+  const neutralInterpretation = [
+    `La red base contiene ${segments.length} segmento(s), ${summary.totalZones} zona(s) y ${summary.totalWorkloads} workload(s).`,
+    `Exposición del diseño: ${publicExposure} segmento(s) públicos, ${privateExposure} privados y ${mixedExposure} mixtos.`,
+    hubRouters > 0
+      ? `Conectividad modelada como ${hubRouters} hub(s) central(es) con ${hubAttachments} attachment(s).`
+      : `Conectividad modelada con ${directLinks} enlace(s) directo(s) entre pares de segmentos.`,
+    `Acceso y salida: SSH externo definido en ${vpcsWithSsh} segmento(s) y ${isolatedExposure} segmento(s) sin salida a internet declarada.`,
+  ];
   const awsInterpretation = [
-    `Se crearán ${segments.length} segmento(s) de red, ${summary.totalZones} zona(s) y ${summary.totalWorkloads} workload(s).`,
+    `AWS creará ${segments.length} VPC(s), ${summary.totalZones} subnet(s) y ${summary.totalWorkloads} instancia(s).`,
     `Exposición pública: IGW en ${vpcsWithIgw} VPC(s), ${publicSubnets} subnet(s) pública(s) y SSH externo definido en ${vpcsWithSsh} VPC(s).`,
     `Salida privada: NAT Gateway en ${vpcsWithNat} VPC(s) para ${privateSubnets} subnet(s) potencialmente privadas.`,
     hubRouters > 0
@@ -211,12 +231,25 @@ const ConfirmDeployDialog = ({
           </Box>
 
           <Alert severity="info" sx={{ mt: 2 }}>
-            Después del deploy, valida conectividad en <b>Plan Detail → Pruebas</b> con comandos de ping guiados entre VPCs.
+            Después del deploy, valida conectividad en <b>Plan Detail → Pruebas</b> con comandos de ping guiados entre segmentos.
           </Alert>
 
           <Box mt={3}>
             <Typography variant="subtitle1" gutterBottom>
-              Cómo AWS leerá este canvas
+              Intención neutral del laboratorio
+            </Typography>
+            <Stack spacing={1}>
+              {neutralInterpretation.map((line) => (
+                <Alert key={line} severity="info" variant="outlined">
+                  {line}
+                </Alert>
+              ))}
+            </Stack>
+          </Box>
+
+          <Box mt={3}>
+            <Typography variant="subtitle1" gutterBottom>
+              Traducción AWS
             </Typography>
             <Stack spacing={1}>
               {awsInterpretation.map((line) => (
@@ -242,6 +275,16 @@ const ConfirmDeployDialog = ({
                 <Stack direction="row" spacing={1} mt={1} flexWrap="wrap">
                   <Chip label={`CIDR: ${segment.cidr || segment.cidr_block}`} size="small" />
                   <Chip label={`Región: ${segment.region}`} size="small" />
+                  <Chip
+                    label={`Modelo: ${String(segment.exposure || "internal").replace(/_/g, " ")}`}
+                    size="small"
+                    variant="outlined"
+                  />
+                  <Chip
+                    label={`AWS: VPC`}
+                    size="small"
+                    variant="outlined"
+                  />
                   {aws.internet_gateway && (
                     <Chip label="IGW" size="small" color="primary" />
                   )}
