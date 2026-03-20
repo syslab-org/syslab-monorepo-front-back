@@ -101,7 +101,7 @@ function MainLayout() {
   const logout = auth?.logout || (() => { });
 
   const isMainFlowRoute = useMemo(
-    () => /^\/admin\/vpcs\/[^/]+\/mainflow$/.test(location.pathname),
+    () => /^\/admin\/(labs\/[^/]+\/canvas|vpcs\/[^/]+\/mainflow)$/.test(location.pathname),
     [location.pathname],
   );
 

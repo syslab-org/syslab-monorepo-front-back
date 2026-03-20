@@ -77,8 +77,8 @@ const useBodyClass = (className, enabled = true) => {
 // eslint-disable-next-line react-refresh/only-export-components
 function MainFlow() {
   const params = useParams();
-  const { vpcid: routeLabId } = params;
-  const labId = routeLabId;
+  const { labId: routeLabId, vpcid: legacyLabId } = params;
+  const labId = routeLabId || legacyLabId;
 
   useEffect(() => {
     console.log("ROUTE PARAMS", params);

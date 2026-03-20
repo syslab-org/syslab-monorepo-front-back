@@ -171,7 +171,7 @@ const VPCList = () => {
 
     if (newVPCId) {
       const qs = wasWizard ? "?wizard=1" : "";
-      navigate(`/admin/vpcs/${newVPCId}/mainflow${qs}`);
+      navigate(`/admin/labs/${newVPCId}/canvas${qs}`);
     }
   };
 
@@ -185,7 +185,7 @@ const VPCList = () => {
     if (vpc?.region) setLabRegion(vpc.region)
     setLoadingFlow(false)
     const qs = vpc.narrative === "wizard" ? "?wizard=1" : "";
-    navigate(`/admin/vpcs/${vpc.id}/mainflow${qs}`);
+    navigate(`/admin/labs/${vpc.id}/canvas${qs}`);
   }
 
   const handleCreateGuideLab = () => {
