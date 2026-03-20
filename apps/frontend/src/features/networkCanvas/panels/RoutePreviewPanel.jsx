@@ -43,56 +43,61 @@ const style = {
   overflow: "hidden",
 };
 
-/**
- * Devuelve el estilo visual para cada tipo de target (ruta)
- */
-const routeChip = (target) => {
+const routeChip = (target, viewMode = "neutral") => {
+  const isAws = viewMode === "aws";
   switch (target) {
+    case "segment_local":
     case "local":
       return (
         <Chip
           icon={<LanIcon />}
-          label="local"
+          label={isAws ? "local" : "segment local"}
           color="success"
           size="small"
           sx={{ fontWeight: 600 }}
         />
       );
+    case "internet_edge":
     case "igw":
       return (
         <Chip
           icon={<PublicIcon />}
-          label="Internet Gateway"
+          label={isAws ? "Internet Gateway" : "internet edge"}
           color="info"
           size="small"
           sx={{ fontWeight: 600 }}
         />
       );
+    case "egress_gateway":
     case "nat-gw":
       return (
         <Chip
           icon={<CloudUploadIcon />}
-          label="NAT Gateway"
+          label={isAws ? "NAT Gateway" : "egress gateway"}
           color="warning"
           size="small"
           sx={{ fontWeight: 600 }}
         />
       );
+    case "direct_links":
+    case "direct_link":
     case "peering":
       return (
         <Chip
           icon={<RouteIcon />}
-          label="Peering"
+          label={isAws ? "Peering" : "direct link"}
           color="secondary"
           size="small"
           sx={{ fontWeight: 600 }}
         />
       );
+    case "hub_routing":
+    case "routing_hub":
     case "tgw":
       return (
         <Chip
           icon={<HubIcon />}
-          label="Transit Gateway"
+          label={isAws ? "Transit Gateway" : "routing hub"}
           color="primary"
           size="small"
           sx={{ fontWeight: 600 }}
@@ -114,6 +119,7 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
   const [errors, setErrors] = useState([]);
   const [warnings, setWarnings] = useState([]);
   const [validated, setValidated] = useState(false);
+  const [viewMode, setViewMode] = useState("neutral");
 
   const preview = useMemo(() => buildRoutingPreview(nodes, edges), [nodes, edges]);
   const previewWarnings = useMemo(
@@ -136,6 +142,7 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
     setErrors(e);
     setWarnings(w);
     setValidated(false);
+    setViewMode("neutral");
   }, [open, nodes, edges]);
 
   const runValidation = () => {
@@ -150,18 +157,30 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
       <Box sx={style}>
         <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
           <Typography id="routes-preview-title" variant="h6">
-            Preview de rutas por VPC
+            Preview de conectividad y rutas
           </Typography>
           <IconButton onClick={onClose}><CloseIcon /></IconButton>
         </Stack>
 
         <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
-          Visualiza cómo se traduce el enrutamiento del laboratorio a AWS (Peering o TGW), con implicancias por router y conectividad esperada.
+          Revisa primero la intención de conectividad del laboratorio. Si lo necesitas, también puedes ver cómo AWS traducirá ese mismo diseño.
         </Typography>
 
-        <Stack direction="row" gap={1} sx={{ mb: 1 }}>
+        <Stack direction="row" gap={1} sx={{ mb: 1, flexWrap: "wrap" }}>
           <Button variant="contained" onClick={runValidation}>
             {validated ? "Revalidar rutas" : "Validar rutas"}
+          </Button>
+          <Button
+            variant={viewMode === "neutral" ? "contained" : "outlined"}
+            onClick={() => setViewMode("neutral")}
+          >
+            Vista neutral
+          </Button>
+          <Button
+            variant={viewMode === "aws" ? "contained" : "outlined"}
+            onClick={() => setViewMode("aws")}
+          >
+            Traducción AWS
           </Button>
           <Chip label={`warnings: ${allWarnings.length}`} color="warning" size="small" variant={allWarnings.length ? "filled" : "outlined"} />
           <Chip label={`errores: ${errors.length}`} color="error" size="small" variant={errors.length ? "filled" : "outlined"} />
@@ -204,7 +223,9 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
           {(preview?.routers || []).length > 0 && (
             <Box sx={{ mb: 2 }}>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                Cómo se implementará cada router en AWS
+                {viewMode === "aws"
+                  ? "Cómo AWS implementará cada nodo de conectividad"
+                  : "Cómo queda modelada la conectividad por nodo"}
               </Typography>
               <Stack spacing={1}>
                 {preview.routers.map((router) => (
@@ -221,10 +242,20 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
                       <Typography variant="body2" sx={{ fontWeight: 700, mr: "auto" }}>
                         {router.name}
                       </Typography>
-                      {routeChip(router.mode)}
+                      {routeChip(
+                        viewMode === "aws" ? router.providerMode : router.neutralMode,
+                        viewMode,
+                      )}
+                      {viewMode === "neutral" && (
+                        <Chip
+                          size="small"
+                          label={`AWS: ${router.providerMode === "tgw" ? "Transit Gateway" : "Peering por pares"}`}
+                          variant="outlined"
+                        />
+                      )}
                       <Chip
                         size="small"
-                        label={`VPCs conectadas: ${router.connectedCount}`}
+                        label={`Segmentos conectados: ${router.connectedCount}`}
                         variant="outlined"
                       />
                       {router.mode === "peering" ? (
@@ -244,7 +275,7 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
                       )}
                     </Stack>
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.6 }}>
-                      Rutas explícitas: {router.explicitRoutes} • Bidireccionales: {router.bidirectionalPairs} • Solo ida: {router.oneWayPairs}
+                      Policies explícitas: {router.explicitRoutes} • Bidireccionales: {router.bidirectionalPairs} • Solo ida: {router.oneWayPairs}
                     </Typography>
                   </Box>
                 ))}
@@ -255,13 +286,13 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
           {(preview?.connectivityPairs || []).length > 0 && (
             <Box sx={{ mb: 2 }}>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                Matriz pedagógica de conectividad esperada
+                Matriz de conectividad esperada
               </Typography>
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Par de VPCs</TableCell>
-                    <TableCell>Modo</TableCell>
+                    <TableCell>Par de segmentos</TableCell>
+                    <TableCell>{viewMode === "aws" ? "Implementación AWS" : "Modelo"}</TableCell>
                     <TableCell>Estado</TableCell>
                     <TableCell>Lectura</TableCell>
                   </TableRow>
@@ -275,7 +306,18 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        {pair.mode ? routeChip(pair.mode) : <Chip size="small" label="Sin modo" variant="outlined" />}
+                        {pair.mode ? (
+                          routeChip(
+                            viewMode === "aws" ? pair.providerMode : pair.neutralMode,
+                            viewMode,
+                          )
+                        ) : (
+                          <Chip
+                            size="small"
+                            label={viewMode === "aws" ? "Sin implementación" : "Sin modelo"}
+                            variant="outlined"
+                          />
+                        )}
                       </TableCell>
                       <TableCell>
                         <Chip
@@ -318,19 +360,21 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
                   <Typography variant="subtitle1" sx={{ mr: "auto" }}>{vpc.name}</Typography>
                   <Chip size="small" label={vpc.region || "region n/a"} />
                   <Chip size="small" label={vpc.cidr || "CIDR n/a"} variant="outlined" />
-                  <Chip size="small" label={`routers: ${(vpc.connectedRouters || []).length}`} variant="outlined" />
+                  <Chip size="small" label={`connectivity nodes: ${(vpc.connectedRouters || []).length}`} variant="outlined" />
                 </Stack>
               </AccordionSummary>
               <AccordionDetails>
                 <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                  Tabla de rutas: <b>main</b>
+                  {viewMode === "aws"
+                    ? <>Tabla de rutas AWS: <b>main</b></>
+                    : <>Policies de salida del segmento</>}
                 </Typography>
                 <Table size="small" sx={{ mt: 1 }}>
                   <TableHead>
                     <TableRow>
                       <TableCell>Destino (CIDR)</TableCell>
-                      <TableCell>Target</TableCell>
-                      <TableCell>via_router_id</TableCell>
+                      <TableCell>{viewMode === "aws" ? "Target" : "Destino lógico"}</TableCell>
+                      <TableCell>{viewMode === "aws" ? "via_router_id" : "Nodo intermedio"}</TableCell>
                       <TableCell>Direccionalidad</TableCell>
                     </TableRow>
                   </TableHead>
@@ -338,7 +382,12 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
                     {(vpc.main_route_table || []).map((r, i) => (
                       <TableRow key={i}>
                         <TableCell><Typography variant="body2">{r.dest_cidr}</Typography></TableCell>
-                        <TableCell>{routeChip(r.target)}</TableCell>
+                        <TableCell>
+                          {routeChip(
+                            viewMode === "aws" ? r.provider_target || r.target : r.neutral_target || r.target,
+                            viewMode,
+                          )}
+                        </TableCell>
                         <TableCell>
                           <Typography variant="body2" sx={{ color: r.via_router_id ? "text.primary" : "text.disabled" }}>
                             {r.via_router_id || "—"}
@@ -360,7 +409,11 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
                     {(!vpc.main_route_table || vpc.main_route_table.length === 0) && (
                       <TableRow>
                         <TableCell colSpan={4}>
-                          <Typography variant="body2" color="text.secondary">Sin rutas calculadas para esta VPC.</Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {viewMode === "aws"
+                              ? "Sin rutas AWS calculadas para este segmento."
+                              : "Sin policies calculadas para este segmento."}
+                          </Typography>
                         </TableCell>
                       </TableRow>
                     )}
@@ -372,7 +425,7 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
 
           {(preview?.vpcs || []).length === 0 && (
             <Typography variant="body2" color="text.secondary">
-              No hay VPCs en el canvas.
+              No hay segmentos de red en el canvas.
             </Typography>
           )}
         </Box>
