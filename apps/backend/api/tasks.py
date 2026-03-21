@@ -1,133 +1,11 @@
 import json
-import os
 import time
-from dataclasses import dataclass
 
 from celery import shared_task
 from django.db import transaction
 
 from .models import Plan
-from .providers.aws.payload import uses_tgw
-from .providers.aws.runtime import (
-    aws_creds_diagnostics,
-    can_call_aws_sts,
-    check_tgw_quota_preflight,
-    cleanup_residual_nat_gateways,
-    normalize_payload,
-)
-from .providers.aws.terraform import (
-    ensure_apply_succeeded,
-    ensure_destroy_succeeded,
-    ensure_init_succeeded,
-    ensure_plan_succeeded,
-    read_main_preview,
-    read_outputs_json,
-    render_workspace,
-    terraform_apply,
-    terraform_destroy,
-    terraform_init,
-    terraform_plan,
-)
-from provisioning.terraform_runner import cleanup  # solo usamos cleanup aquí
-
-
-@dataclass
-class AwsExecutionBundle:
-    plan_id: str
-    payload: dict
-    simulate_only: bool
-    diag: dict
-    sts_ok: bool
-    sts_reason: str
-    allow_local_apply: bool
-    creds_ok_for_apply: bool
-    workdir: str | None = None
-    state_path: str | None = None
-    tf_text: str = ""
-    full_log: str = ""
-
-    def append_log(self, text: str) -> None:
-        self.full_log += text
-
-
-def _normalize_incoming_payload(payload):
-    if isinstance(payload, str):
-        try:
-            payload = json.loads(payload or "{}")
-        except Exception:
-            payload = {}
-    return normalize_payload(payload if isinstance(payload, dict) else {})
-
-
-def _build_execution_bundle(plan_id: str, payload, *, force_simulate_only: bool | None = None) -> AwsExecutionBundle:
-    normalized_payload = _normalize_incoming_payload(payload)
-    if force_simulate_only is not None:
-        normalized_payload["simulate_only"] = force_simulate_only
-
-    diag = aws_creds_diagnostics()
-    allow_local_apply = diag["allow_local_apply"]
-    sts_ok, sts_reason = can_call_aws_sts()
-    creds_ok_for_apply = bool(diag["running_in_ecs"] or (allow_local_apply and sts_ok))
-
-    return AwsExecutionBundle(
-        plan_id=plan_id,
-        payload=normalized_payload,
-        simulate_only=bool(normalized_payload["simulate_only"]),
-        diag=diag,
-        sts_ok=sts_ok,
-        sts_reason=sts_reason,
-        allow_local_apply=allow_local_apply,
-        creds_ok_for_apply=creds_ok_for_apply,
-    )
-
-
-def _prepare_workspace(bundle: AwsExecutionBundle, *, prefix: str, include_debug_dumps: bool) -> None:
-    workdir, state_path, tf_text = render_workspace(
-        plan_id=bundle.plan_id,
-        payload=bundle.payload,
-        simulate_only=bundle.simulate_only,
-        prefix=prefix,
-    )
-    bundle.workdir = workdir
-    bundle.state_path = state_path
-    bundle.tf_text = tf_text
-
-    bundle.append_log(f"[state] backend local path={state_path}\n")
-
-    if include_debug_dumps:
-        try:
-            from .providers.aws.terraform import write_debug_dumps
-
-            write_debug_dumps(workdir, bundle.payload, tf_text)
-            bundle.append_log(f"[debug] dumps escritos en {workdir}\n")
-        except Exception as e:
-            bundle.append_log(f"[debug] no pude escribir dumps: {e}\n")
-
-        try:
-            preview = read_main_preview(workdir, lines=40)
-            bundle.append_log(
-                f"\n--- main.tf (primeras líneas) ---\n{preview}\n-------------------------------\n"
-            )
-        except Exception:
-            pass
-
-
-def _append_runtime_diagnostics(bundle: AwsExecutionBundle, *, action_label: str) -> None:
-    bundle.append_log(f"workdir={bundle.workdir}\n")
-    bundle.append_log(f"{action_label} simulate_only={bundle.simulate_only}\n")
-    bundle.append_log(
-        f"aws_diag={bundle.diag} sts_ok={bundle.sts_ok} "
-        f"sts_reason={bundle.sts_reason} ALLOW_LOCAL_APPLY={bundle.allow_local_apply}\n\n"
-    )
-
-
-def _blocked_credentials_message(action: str, bundle: AwsExecutionBundle) -> str:
-    return (
-        f"Terraform {action} BLOQUEADO: no hay credenciales AWS resolubles en este container. "
-        "En ECS se resuelve por task role. En local requiere ALLOW_LOCAL_APPLY=1 y credenciales disponibles "
-        "(env vars o AWS_PROFILE + ~/.aws montado). "
-        f"Diagnóstico: {bundle.diag} / sts_reason={bundle.sts_reason}"
-    )
+from .providers import get_provider_executor, get_provider_key
 
 
 # === TAREAS CELERY ===
@@ -146,7 +24,15 @@ def process_network_plan(self, plan_id: str, payload: dict):
     - simulate_only=True => modo simulación (sin aplicar)
     - simulate_only=False => apply real (requiere credenciales)
     """
-    bundle = _build_execution_bundle(plan_id, payload)
+    raw_payload = payload
+    if isinstance(raw_payload, str):
+        try:
+            raw_payload = json.loads(raw_payload or "{}")
+        except Exception:
+            raw_payload = {}
+    provider = get_provider_key((raw_payload or {}).get("cloud") if isinstance(raw_payload, dict) else None)
+    executor = get_provider_executor(provider)
+    bundle = executor.build_bundle(plan_id, raw_payload)
     plan_obj = None
     previous_applied = False
 
@@ -174,24 +60,16 @@ def process_network_plan(self, plan_id: str, payload: dict):
             )
 
         # === 2) Renderiza workspace Terraform ===
-        _prepare_workspace(
+        executor.prepare_workspace(
             bundle,
             prefix="tf-multi-",
             include_debug_dumps=True,
         )
-        _append_runtime_diagnostics(bundle, action_label="plan")
+        executor.append_runtime_diagnostics(bundle, action_label="plan")
 
         # === 5.1) Preflight TGW quota (solo apply real con TGW) ===
         if not bundle.simulate_only:
-            try:
-                tgw_ok, tgw_reason, tgw_info = check_tgw_quota_preflight(bundle.payload)
-            except Exception as e:
-                tgw_ok, tgw_reason, tgw_info = (
-                    False,
-                    f"TGW preflight error: {e}",
-                    {"used": uses_tgw(bundle.payload), "preflight_error": str(e)},
-                )
-
+            tgw_ok, tgw_reason, tgw_info = executor.preflight_apply(bundle)
             bundle.append_log(f"[preflight][tgw] reason={tgw_reason} info={tgw_info}\n\n")
 
             if not tgw_ok:
@@ -209,22 +87,22 @@ def process_network_plan(self, plan_id: str, payload: dict):
                 }
 
         # === 6) Terraform init ===
-        proc = terraform_init(bundle.workdir)
+        proc = executor.terraform_init(bundle)
         bundle.append_log(proc.log_block())
-        ensure_init_succeeded(proc)
+        executor.ensure_init_succeeded(proc)
 
         # === 7) Terraform plan ===
         # En preview mantenemos refresh=false para no depender de llamadas AWS.
         # En apply real usamos refresh=true para reconciliar drift manual en AWS.
-        proc = terraform_plan(bundle.workdir, simulate_only=bundle.simulate_only)
+        proc = executor.terraform_plan(bundle)
         bundle.append_log(f"\n{proc.log_block()}")
-        ensure_plan_succeeded(proc)
+        executor.ensure_plan_succeeded(proc)
 
         # === 8) Terraform apply (solo si simulate_only=False) ===
         applied = False
         if not bundle.simulate_only:
             if not bundle.creds_ok_for_apply:
-                msg = _blocked_credentials_message("apply", bundle)
+                msg = executor.blocked_credentials_message("apply", bundle)
                 bundle.append_log(f"\n[SEGURIDAD] {msg}\n")
                 plan_obj.mark_failure(error=msg, full_log=bundle.full_log, last_action="apply", applied=False)
 
@@ -235,14 +113,14 @@ def process_network_plan(self, plan_id: str, payload: dict):
                     "log": bundle.full_log,
                 }
 
-            proc = terraform_apply(bundle.workdir)
+            proc = executor.terraform_apply(bundle)
             bundle.append_log(f"\n{proc.log_block()}")
-            ensure_apply_succeeded(proc)
+            executor.ensure_apply_succeeded(proc)
             applied = True
 
             # Guardar outputs (solo después de apply real)
             try:
-                tf_outputs = read_outputs_json(bundle.workdir)
+                tf_outputs = executor.read_outputs(bundle)
                 plan_obj.outputs = tf_outputs
             except Exception as oe:
                 bundle.append_log(f"\n[outputs] No pude leer terraform output -json: {oe}\n")
@@ -253,7 +131,7 @@ def process_network_plan(self, plan_id: str, payload: dict):
         # Si fue solo plan (simulate), intentamos leer outputs pero puede no existir state.
         if not applied:
             try:
-                outputs = read_outputs_json(bundle.workdir)
+                outputs = executor.read_outputs(bundle)
             except Exception:
                 pass
 
@@ -286,17 +164,15 @@ def process_network_plan(self, plan_id: str, payload: dict):
 
     finally:
         # === Limpieza del directorio temporal ===
-        if bundle.workdir:
-            if os.getenv("KEEP_TF_DIRS", "0") == "1":
-                bundle.append_log(f"[debug] KEEP_TF_DIRS activo, conservando {bundle.workdir}\n")
-            else:
-                cleanup(bundle.workdir)
+        executor.cleanup_workspace(bundle)
 
 
 @shared_task(bind=True)
 def destroy_last_deploy(self, plan_id: str):
     plan = Plan.objects.get(id=plan_id)
-    bundle = _build_execution_bundle(plan_id, plan.payload or {}, force_simulate_only=False)
+    provider = get_provider_key((plan.payload or {}).get("cloud"))
+    executor = get_provider_executor(provider)
+    bundle = executor.build_bundle(plan_id, plan.payload or {}, force_simulate_only=False)
 
     # La validación de "si se puede destruir" se hace en la vista antes de encolar.
     # Aquí evitamos revalidar con `can_destroy_now` porque el plan ya viene en RUNNING.
@@ -313,7 +189,7 @@ def destroy_last_deploy(self, plan_id: str):
         }
 
     if not bundle.creds_ok_for_apply:
-        msg = _blocked_credentials_message("destroy", bundle)
+        msg = executor.blocked_credentials_message("destroy", bundle)
         plan.mark_failure(error=msg, full_log=bundle.full_log + msg, last_action="destroy")
         return {
             "ok": False,
@@ -336,34 +212,32 @@ def destroy_last_deploy(self, plan_id: str):
     )
 
     try:
-        _prepare_workspace(
+        executor.prepare_workspace(
             bundle,
             prefix="tf-destroy-",
             include_debug_dumps=False,
         )
-        _append_runtime_diagnostics(bundle, action_label="destroy")
+        executor.append_runtime_diagnostics(bundle, action_label="destroy")
 
         # 4) init
-        p_init = terraform_init(bundle.workdir)
+        p_init = executor.terraform_init(bundle)
         bundle.append_log(p_init.log_block())
-        ensure_init_succeeded(p_init)
+        executor.ensure_init_succeeded(p_init)
 
         # 5) destroy
-        p = terraform_destroy(bundle.workdir)
+        p = executor.terraform_destroy(bundle)
         bundle.append_log(p.log_block())
         nat_cleanup_error = ""
         nat_cleanup_summary = {}
         try:
-            nat_cleanup_summary = cleanup_residual_nat_gateways(
-                bundle.payload, plan.outputs or {}
-            )
+            nat_cleanup_summary = executor.cleanup_after_destroy(bundle, outputs=plan.outputs or {})
             bundle.append_log(
                 f"[cleanup][nat] {json.dumps(nat_cleanup_summary, indent=2, sort_keys=True)}\n"
             )
         except Exception as cleanup_exc:
             nat_cleanup_error = str(cleanup_exc)
             bundle.append_log(f"[cleanup][nat][error] {cleanup_exc}\n")
-        ensure_destroy_succeeded(p)
+        executor.ensure_destroy_succeeded(p)
         if nat_cleanup_error:
             raise RuntimeError(
                 f"destroy completed but NAT residual cleanup failed: {nat_cleanup_error}"
@@ -391,5 +265,4 @@ def destroy_last_deploy(self, plan_id: str):
         return {"ok": False, "error": str(e), "log": bundle.full_log}
 
     finally:
-        if bundle.workdir:
-            cleanup(bundle.workdir)
+        executor.cleanup_workspace(bundle)
