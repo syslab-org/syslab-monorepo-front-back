@@ -170,7 +170,13 @@ class Lab(models.Model):
     region = models.CharField(max_length=32, blank=True, default="")
     narrative = models.CharField(max_length=32, blank=True, default="advanced")
     lab_template = models.CharField(max_length=128, blank=True, default="")
-    legacy_canvas_id = models.CharField(max_length=128, blank=True, null=True, unique=True)
+    legacy_canvas_id = models.CharField(
+        max_length=128,
+        blank=True,
+        null=True,
+        unique=True,
+        help_text="Alias legacy del canvas. Se mantiene por compatibilidad con ids historicos ya emitidos.",
+    )
     plan_canvas_hash = models.CharField(max_length=64, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -215,7 +221,7 @@ class AmiCatalogEntry(models.Model):
 
 
 class Plan(models.Model):
-    CANVAS_STORAGE_FIELD = "firestore_vpc_id"
+    CANVAS_STORAGE_FIELD = "canvas_id"
 
     class Status(models.TextChoices):
         PENDING = "PENDING"
@@ -259,12 +265,12 @@ class Plan(models.Model):
         help_text="(Reservado) Key de logs en S3. En DEV/local se usa last_log en DB.",
     )
     error = models.TextField(blank=True, default="")
-    firestore_vpc_id = models.CharField(
+    canvas_id = models.CharField(
         max_length=128,
         null=True,
         blank=True,
         db_index=True,
-        help_text="Legacy storage column for canvas id. Mantener por compatibilidad mientras se migra el backend.",
+        help_text="Identificador canónico del canvas asociado a este plan.",
     )
     canvas_hash = models.CharField(
         max_length=64,
@@ -331,14 +337,17 @@ class Plan(models.Model):
     def canvas_lookup_in(cls, canvas_ids):
         return {f"{cls.CANVAS_STORAGE_FIELD}__in": list(canvas_ids)}
 
-    @property
-    def canvas_id(self) -> str:
-        if self.lab_id:
-            return self.lab.canvas_id
-        return self.firestore_vpc_id or ""
-
     def assign_canvas_id(self, canvas_id: str):
-        self.firestore_vpc_id = canvas_id or None
+        self.canvas_id = canvas_id or None
+
+    @property
+    def firestore_vpc_id(self) -> str:
+        # Deprecated alias kept for compatibility with older code paths.
+        return self.canvas_id or ""
+
+    @firestore_vpc_id.setter
+    def firestore_vpc_id(self, value: str):
+        self.canvas_id = value or None
 
     @property
     def payload_simulate_only(self) -> bool:
@@ -365,8 +374,8 @@ class Plan(models.Model):
         ordering = ["-updated_at"]
         constraints = [
             models.UniqueConstraint(
-                fields=["firestore_vpc_id"],
-                condition=models.Q(firestore_vpc_id__isnull=False),
-                name="uniq_plan_firestore_vpc_id",
+                fields=["canvas_id"],
+                condition=models.Q(canvas_id__isnull=False),
+                name="uniq_plan_canvas_id",
             )
         ]

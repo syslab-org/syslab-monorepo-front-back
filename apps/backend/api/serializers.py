@@ -71,8 +71,8 @@ class PlanListSerializer(serializers.ModelSerializer):
             "created_at",
             "simulate_only",
             "can_destroy",
-            "firestore_vpc_id",
             "canvas_id",
+            "firestore_vpc_id",
             "lab",
         )
         read_only_fields = fields
@@ -123,8 +123,8 @@ class PlanDetailSerializer(serializers.ModelSerializer):
             "can_destroy",
             "last_deploy_task_id",
             "last_destroy_task_id",
-            "firestore_vpc_id",
             "canvas_id",
+            "firestore_vpc_id",
             "canvas_hash",
             "canvas_updated_at",
             "lab",
@@ -274,6 +274,7 @@ class LabSerializer(serializers.ModelSerializer):
     course = CourseSummarySerializer(read_only=True)
     course_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
     canvas_id = serializers.SerializerMethodField()
+    legacy_canvas_id = serializers.SerializerMethodField()
     visibility_scope = serializers.ChoiceField(choices=VisibilityScopeChoices.choices, required=False)
     target_provider = CanonicalProviderChoiceField(choices=ProviderChoices.choices, required=False)
 
@@ -319,6 +320,9 @@ class LabSerializer(serializers.ModelSerializer):
 
     def get_canvas_id(self, obj):
         return obj.canvas_id
+
+    def get_legacy_canvas_id(self, obj):
+        return obj.legacy_canvas_id
 
 
 class LabCreateSerializer(serializers.Serializer):

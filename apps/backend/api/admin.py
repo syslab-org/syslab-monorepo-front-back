@@ -5,16 +5,24 @@ from .models import AmiCatalogEntry, Course, Lab, Plan, UserProfile
 
 @admin.register(Plan)
 class PlanAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "status", "lab", "created_at")
+    list_display = ("id", "name", "canvas_id_display", "status", "lab", "created_at")
     list_filter = ("status", "created_at", "last_action")
-    search_fields = ("id", "name", "firestore_vpc_id", "lab__legacy_canvas_id")
+    search_fields = ("id", "name", "canvas_id", "lab__legacy_canvas_id")
+
+    @admin.display(description="Canvas ID")
+    def canvas_id_display(self, obj):
+        return obj.canvas_id
 
 
 @admin.register(Lab)
 class LabAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "target_provider", "visibility_scope", "owner_user", "course", "updated_at")
+    list_display = ("id", "name", "canvas_id_display", "target_provider", "visibility_scope", "owner_user", "course", "updated_at")
     list_filter = ("target_provider", "visibility_scope", "created_by_role")
     search_fields = ("id", "name", "legacy_canvas_id")
+
+    @admin.display(description="Canvas ID")
+    def canvas_id_display(self, obj):
+        return obj.canvas_id
 
 
 @admin.register(Course)
