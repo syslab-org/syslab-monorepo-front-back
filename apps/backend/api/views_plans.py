@@ -80,6 +80,7 @@ def _reconcile_running_plan(plan: Plan) -> bool:
 
 
 def _sanitize_payload_for_storage(payload: dict, fallback_canvas_id=None) -> dict:
+    """Valida y normaliza payloads del plan usando `canvas_id` como clave canónica."""
     sanitized = validate_network_plan(payload)
     raw = payload if isinstance(payload, dict) else {}
     out = dict(sanitized)
@@ -128,6 +129,11 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="sync-from-canvas", url_name="sync-from-canvas")
     def sync_from_canvas(self, request):
+        """Sincroniza el plan visible para un canvas/lab.
+
+        Acepta aliases legacy del identificador para no romper payloads
+        históricos, pero siempre devuelve y persiste `canvas_id`.
+        """
         try:
             data = request.data or {}
             canvas_id = data.get("canvas_id") or data.get("firestore_vpc_id") or data.get("vpcId")
@@ -227,6 +233,7 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="sync_from_canvas", url_name="sync_from_canvas")
     def sync_from_canvas_legacy(self, request):
+        """Alias legacy del endpoint `sync-from-canvas`."""
         return self.sync_from_canvas(request)
 
     @action(detail=True, methods=["get"])

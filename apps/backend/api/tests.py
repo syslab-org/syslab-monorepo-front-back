@@ -8,8 +8,7 @@ from rest_framework.test import APITestCase
 from .domain.network_intent import normalize_network_intent
 from .models import Course, Lab, Plan, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, STATUS_ACTIVE, VISIBILITY_COURSE, VISIBILITY_OWNER
 from .providers import get_provider_adapter
-
-from .tasks import build_nat_cleanup_targets
+from .providers.aws.runtime import build_nat_cleanup_targets
 from .validators import validate_network_plan
 
 
@@ -358,19 +357,19 @@ class VisibilityApiTests(APITestCase):
         Plan.objects.create(
             name="Plan alumno",
             payload={"name": "Plan alumno", "cloud": "aws", "vpcs": []},
-            firestore_vpc_id=self.student_lab.canvas_id,
+            canvas_id=self.student_lab.canvas_id,
             lab=self.student_lab,
         )
         Plan.objects.create(
             name="Plan compartido",
             payload={"name": "Plan compartido", "cloud": "aws", "vpcs": []},
-            firestore_vpc_id=self.shared_teacher_lab.canvas_id,
+            canvas_id=self.shared_teacher_lab.canvas_id,
             lab=self.shared_teacher_lab,
         )
         Plan.objects.create(
             name="Plan ajeno",
             payload={"name": "Plan ajeno", "cloud": "aws", "vpcs": []},
-            firestore_vpc_id=self.other_course_lab.canvas_id,
+            canvas_id=self.other_course_lab.canvas_id,
             lab=self.other_course_lab,
         )
 
@@ -499,6 +498,7 @@ class VisibilityApiTests(APITestCase):
 
         self.assertEqual(res.status_code, 200)
         plan = Plan.objects.get(id=res.json()["plan_id"])
+        self.assertEqual(plan.canvas_id, "canvas-legacy-123")
         self.assertEqual(plan.firestore_vpc_id, "canvas-legacy-123")
         self.assertEqual(plan.payload["canvas_id"], "canvas-legacy-123")
         self.assertNotIn("firestore_vpc_id", plan.payload)
@@ -512,7 +512,7 @@ class VisibilityApiTests(APITestCase):
         plan = Plan.objects.create(
             name="Plan redeploy",
             payload={"name": "Plan redeploy", "cloud": "aws", "vpcs": [], "simulate_only": False},
-            firestore_vpc_id="lab-redeploy",
+            canvas_id="lab-redeploy",
             lab=self.shared_teacher_lab,
             applied=True,
             status=Plan.Status.SUCCESS,

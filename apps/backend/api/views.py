@@ -1,7 +1,6 @@
 import os
-import re
-from uuid import UUID
 from typing import Optional
+from uuid import UUID
 
 import boto3
 from botocore.exceptions import ClientError
@@ -14,6 +13,7 @@ from rest_framework.response import Response
 
 from .helpers import ensure_lab_for_canvas, visible_plans_queryset
 from .models import Plan
+from .providers.aws.payload import get_network_id, get_region
 from .tasks import destroy_last_deploy, process_network_plan, prueba_larga
 from .validators import validate_network_plan
 
@@ -23,6 +23,11 @@ TERMINAL_TASK_STATES = {"SUCCESS", "FAILURE", "REVOKED"}
 
 
 def _sanitize_payload_for_storage(payload: dict, fallback_canvas_id=None) -> dict:
+    """Valida y persiste payloads usando `canvas_id` como identificador canónico.
+
+    Se aceptan aliases legacy (`firestore_vpc_id`, `vpcId`, `vlan.id`) solo
+    para compatibilidad con clientes y datos históricos.
+    """
     sanitized = validate_network_plan(payload)
     raw = payload if isinstance(payload, dict) else {}
     out = dict(sanitized)
@@ -96,22 +101,8 @@ def _can_run_real_terraform() -> bool:
 
 
 
-def _resolve_payload_region(payload: dict) -> str:
-    raw = (
-        (payload.get("vlan") or {}).get("region")
-        or ((payload.get("vpcs") or [{}])[0] or {}).get("region")
-        or os.getenv("AWS_REGION")
-        or os.getenv("AWS_DEFAULT_REGION")
-        or "us-east-1"
-    )
-    region = str(raw or "us-east-1").strip().lower()
-    if re.match(r"^[a-z]{2}(-[a-z0-9-]+)+-\d+[a-z]$", region):
-        return region[:-1]
-    return region
-
-
-
 def _probe_plan_live_vpcs(plan: Plan):
+    """Detecta si el despliegue AWS aún existe usando los VPC ids del último apply."""
     outputs = plan.outputs or {}
     if not isinstance(outputs, dict):
         return None, "missing_outputs"
@@ -125,7 +116,7 @@ def _probe_plan_live_vpcs(plan: Plan):
         return None, "missing_vpc_ids"
 
     payload = plan.payload or {}
-    region = _resolve_payload_region(payload)
+    region = get_region(payload)
     profile = os.getenv("AWS_PROFILE")
     session = boto3.Session(profile_name=profile) if profile else boto3.Session()
     ec2 = session.client("ec2", region_name=region)
@@ -231,7 +222,7 @@ def network_plan_create(request):
         or payload.get("canvas_id")
         or payload.get("firestore_vpc_id")
         or payload.get("vpcId")
-        or payload.get("vlan", {}).get("id")
+        or get_network_id(payload)
     )
     if not canvas_id:
         return Response(
@@ -354,10 +345,10 @@ def deploy_plan(request, plan_id: UUID):
     plan.lab = plan.lab or ensure_lab_for_canvas(request.user, plan.canvas_id, name=plan.name)
     plan.save(update_fields=["updated_at", "payload", "last_action", "lab"])
 
-    canvas_id = persisted_payload.get("canvas_id") or (persisted_payload.get("vlan") or {}).get("id")
-    if canvas_id and not plan.firestore_vpc_id:
+    canvas_id = persisted_payload.get("canvas_id") or get_network_id(persisted_payload)
+    if canvas_id and not plan.canvas_id:
         plan.assign_canvas_id(canvas_id)
-        plan.save(update_fields=["firestore_vpc_id"])
+        plan.save(update_fields=["canvas_id"])
 
     task = process_network_plan.delay(plan_id=str(plan.id), payload=task_payload)
     plan.task_id = task.id
