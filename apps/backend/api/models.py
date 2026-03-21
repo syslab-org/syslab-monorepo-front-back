@@ -340,6 +340,109 @@ class Plan(models.Model):
     def assign_canvas_id(self, canvas_id: str):
         self.canvas_id = canvas_id or None
 
+    def mark_running(self, *, task_id: str, last_action: str, payload=None, deploy: bool = False, destroy: bool = False):
+        if payload is not None:
+            self.payload = payload
+        self.status = self.Status.RUNNING
+        self.error = ""
+        self.s3_key = ""
+        self.task_id = task_id
+        if deploy:
+            self.last_deploy_task_id = task_id
+        if destroy:
+            self.last_destroy_task_id = task_id
+        self.last_action = last_action
+        self.last_log = ""
+        self.last_log_updated_at = timezone.now()
+        self.updated_at = timezone.now()
+
+        update_fields = [
+            "status",
+            "error",
+            "s3_key",
+            "task_id",
+            "last_action",
+            "last_log",
+            "last_log_updated_at",
+            "updated_at",
+        ]
+        if payload is not None:
+            update_fields.append("payload")
+        if deploy:
+            update_fields.append("last_deploy_task_id")
+        if destroy:
+            update_fields.append("last_destroy_task_id")
+        self.save(update_fields=update_fields)
+
+    def mark_failure(self, *, error: str, full_log: str, last_action: str | None = None, applied=None):
+        self.last_log = full_log + ("" if full_log.endswith("\n") else "")
+        self.last_log_updated_at = timezone.now()
+        self.status = self.Status.FAILURE
+        self.error = str(error)
+        if last_action is not None:
+            self.last_action = last_action
+        if applied is not None:
+            self.applied = applied
+        self.updated_at = timezone.now()
+
+        update_fields = [
+            "status",
+            "error",
+            "last_log",
+            "last_log_updated_at",
+            "updated_at",
+        ]
+        if last_action is not None:
+            update_fields.append("last_action")
+        if applied is not None:
+            update_fields.append("applied")
+        self.save(update_fields=update_fields)
+
+    def mark_success(self, *, full_log: str, applied: bool, last_action: str, outputs=None):
+        self.last_log = full_log
+        self.last_log_updated_at = timezone.now()
+        self.status = self.Status.SUCCESS
+        self.s3_key = ""
+        self.error = ""
+        self.applied = applied
+        self.last_action = last_action
+        self.updated_at = timezone.now()
+        if outputs is not None:
+            self.outputs = outputs
+        self.save(
+            update_fields=[
+                "status",
+                "s3_key",
+                "error",
+                "applied",
+                "last_action",
+                "outputs",
+                "last_log",
+                "last_log_updated_at",
+                "updated_at",
+            ]
+        )
+
+    def mark_destroy_noop(self, *, message: str, full_log: str):
+        self.status = self.Status.SUCCESS
+        self.error = ""
+        self.applied = False
+        self.last_action = self.LastAction.DESTROY
+        self.last_log = full_log + message
+        self.last_log_updated_at = timezone.now()
+        self.updated_at = timezone.now()
+        self.save(
+            update_fields=[
+                "status",
+                "error",
+                "applied",
+                "last_action",
+                "last_log",
+                "last_log_updated_at",
+                "updated_at",
+            ]
+        )
+
     @property
     def firestore_vpc_id(self) -> str:
         # Deprecated alias kept for compatibility with older code paths.
