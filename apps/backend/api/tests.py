@@ -7,7 +7,7 @@ from rest_framework.test import APITestCase
 
 from .domain.network_intent import normalize_network_intent
 from .models import Course, Lab, Plan, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, STATUS_ACTIVE, VISIBILITY_COURSE, VISIBILITY_OWNER
-from .providers import get_provider_adapter
+from .providers import get_provider_adapter, get_provider_executor
 from .providers.aws.runtime import build_nat_cleanup_targets
 from .validators import validate_network_plan
 
@@ -273,6 +273,18 @@ class NetworkIntentTests(SimpleTestCase):
         self.assertEqual(compiled["vlan"]["id"], "canvas-neutral-1")
         self.assertEqual(compiled["vpcs"][0]["name"], "Segment A")
         self.assertEqual(compiled["vpcs"][0]["subnets"][0]["instances"][0]["ssh_access"], "tesis-key")
+
+    def test_planned_provider_executors_resolve_and_fail_explicitly(self):
+        for provider in ("gcp", "azure"):
+            executor = get_provider_executor(provider)
+            bundle = executor.build_bundle("plan-123", {"cloud": provider})
+
+            self.assertEqual(bundle.provider, provider)
+            self.assertFalse(bundle.creds_ok_for_apply)
+            self.assertIn("not implemented yet", bundle.full_log.lower())
+
+            with self.assertRaisesMessage(NotImplementedError, "not implemented yet"):
+                executor.terraform_init(bundle)
 
 
 class VisibilityApiTests(APITestCase):
