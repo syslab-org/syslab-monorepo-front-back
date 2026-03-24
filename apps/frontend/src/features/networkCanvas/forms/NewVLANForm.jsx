@@ -13,10 +13,10 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { VLAN_FORM } from "@/features/networkCanvas/utils/constants";
-import { CLOUD_AWS_LABEL, CLOUD_AWS_VALUE } from '@/shared/constants';
+import { CLOUD_AWS_VALUE } from '@/shared/constants';
 import { useFormValidationSchema } from './validations/useFormValidations';
 
 const LAB_TEMPLATES = [
@@ -70,7 +70,21 @@ const parseAndValidateCidr = (raw) => {
 };
 
 // eslint-disable-next-line react/prop-types
-const NewVLANForm = ({ onSave, wizardMode = false, availableCourses = [], requireCourseSelection = false }) => {
+const providerLabels = {
+  aws: 'AWS',
+  gcp: 'GCP',
+  azure: 'Azure',
+}
+
+// eslint-disable-next-line react/prop-types
+const NewVLANForm = ({
+  onSave,
+  wizardMode = false,
+  availableCourses = [],
+  requireCourseSelection = false,
+  providerCapabilities = [],
+  defaultProvider = CLOUD_AWS_VALUE,
+}) => {
   const validationSchema = useFormValidationSchema(VLAN_FORM, null, null, {}, true);
 
   const defaultCidr = useMemo(() => {
@@ -96,6 +110,36 @@ const NewVLANForm = ({ onSave, wizardMode = false, availableCourses = [], requir
       courseId: '',
     },
   });
+
+  const normalizedProviderCapabilities = useMemo(() => {
+    if (!Array.isArray(providerCapabilities) || providerCapabilities.length === 0) {
+      return [{ provider: CLOUD_AWS_VALUE, status: 'ready', features: {} }];
+    }
+
+    return providerCapabilities
+      .map((item) => ({
+        provider: String(item?.provider || '').trim().toLowerCase(),
+        status: item?.status || 'unknown',
+        features: item?.features || {},
+      }))
+      .filter((item) => item.provider);
+  }, [providerCapabilities]);
+
+  const selectedProvider = normalizeProviderValue(watch('cloudProvider')) || defaultProvider;
+  const selectedProviderCapability = useMemo(
+    () =>
+      normalizedProviderCapabilities.find((item) => item.provider === selectedProvider)
+      || normalizedProviderCapabilities[0]
+      || { provider: defaultProvider, status: 'unknown', features: {} },
+    [defaultProvider, normalizedProviderCapabilities, selectedProvider],
+  );
+
+  useEffect(() => {
+    const current = normalizeProviderValue(watch('cloudProvider'));
+    if (!current && defaultProvider) {
+      setValue('cloudProvider', defaultProvider, { shouldValidate: true });
+    }
+  }, [defaultProvider, setValue, watch]);
 
   const region = watch('region');
   const labTemplate = watch('labTemplate');
@@ -177,10 +221,24 @@ const NewVLANForm = ({ onSave, wizardMode = false, availableCourses = [], requir
             label="Cloud Provider"
             defaultValue={CLOUD_AWS_VALUE}
           >
-            <MenuItem value={CLOUD_AWS_VALUE}>{CLOUD_AWS_LABEL}</MenuItem>
+            {normalizedProviderCapabilities.map((providerCapability) => (
+              <MenuItem
+                key={providerCapability.provider}
+                value={providerCapability.provider}
+                disabled={providerCapability.status !== 'ready'}
+              >
+                {providerLabels[providerCapability.provider] || providerCapability.provider.toUpperCase()}
+                {providerCapability.status !== 'ready' ? ' · Planned' : ''}
+              </MenuItem>
+            ))}
           </Select>
           <FormHelperText>
-            Inicialmente trabajamos con AWS, tanto para simulación educativa de topologías como para orquestación real.
+            {selectedProviderCapability?.status === 'ready'
+              ? `Provider listo para validación y despliegue. Capacidades activas: ${Object.entries(selectedProviderCapability.features || {})
+                .filter(([, enabled]) => !!enabled)
+                .map(([feature]) => feature.replace(/_/g, ' '))
+                .join(', ') || 'base'}`
+              : 'Este provider aún está en estado planned. Puedes modelarlo más adelante, pero todavía no está habilitado para deploy.'}
           </FormHelperText>
         </FormControl>
 

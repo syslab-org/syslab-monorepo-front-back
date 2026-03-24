@@ -5,6 +5,7 @@ import { useAuth } from '@/app/providers/AuthContext';
 import { LoadingFlowContext } from '@/app/providers/LoadingFlowContext';
 import { api } from '@/infrastructure/http/api';
 import { USER_ROL_STUDENT, USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER } from '@/shared/constants';
+import { useProviderCapabilities } from '@/features/networkCanvas/core/useProviderCapabilities';
 import NewVLANForm from '../forms/NewVLANForm';
 import { useWizard } from "@/features/networkCanvas/context/WizardContext"
 import WizardModalLayout from '../components/WizardModalLayout';
@@ -47,6 +48,7 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
   const { user } = useAuth()
   const { active, currentStep, steps } = useWizard()
   const [courses, setCourses] = useState([])
+  const { capabilities, getCapability, readyProviders } = useProviderCapabilities()
 
   useEffect(() => {
     let alive = true
@@ -69,6 +71,10 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
     setLoadingFlow(true)
     const { vlanName, cloudProvider, cidrBlock, prefixLength, region, type, course_id } = vpcData
     const targetProvider = normalizeProviderValue(cloudProvider) || 'aws'
+    const providerCapability = getCapability(targetProvider)
+    const enabledFeatures = Object.entries(providerCapability.features || {})
+      .filter(([, enabled]) => !!enabled)
+      .map(([feature]) => feature)
 
     if (vlanName && targetProvider && cidrBlock && prefixLength && type) {
       try {
@@ -82,8 +88,10 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
           lab_template: vpcData?.labTemplate || '',
           visibility_scope: user?.role === USER_ROL_STUDENT ? 'owner' : 'course',
           course_id: course_id || null,
+          capabilities: enabledFeatures,
           metadata: {
             type,
+            provider_status: providerCapability.status || 'unknown',
           },
         })
 
@@ -143,6 +151,8 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
             wizardMode={wizardMode}
             availableCourses={canChooseCourse ? courses : []}
             requireCourseSelection={user?.role === USER_ROL_TEACHER}
+            providerCapabilities={capabilities}
+            defaultProvider={readyProviders[0] || 'aws'}
           />
         </WizardModalLayout>
       </Box>

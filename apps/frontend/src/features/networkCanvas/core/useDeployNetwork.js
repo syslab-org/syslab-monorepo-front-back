@@ -5,6 +5,7 @@ import { RouterPolicy } from "@/features/networkCanvas/utils/networking";
 import { useAuth } from "@/app/providers/AuthContext";
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
 import { api } from "@/infrastructure/http/api";
+import { useProviderCapabilities } from "@/features/networkCanvas/core/useProviderCapabilities";
 import { decideRouterMode } from "@/features/networkCanvas/domain/decideRouterMode";
 import { useCanvasLabStore } from "../store/canvasLabStore";
 import { buildRoutingPreview } from "../utils/buildRoutingPreview";
@@ -366,13 +367,16 @@ const useDeployNetwork = ({
     return planNameRef.current;
   };
 
-  const { vlanName, vlanRegion, cidrBlockVPC, prefixLength } =
+  const { vlanName, vlanRegion, cidrBlockVPC, prefixLength, targetProvider } =
     useCanvasLabStore((s) => [
       s.labName || s.vlanName,
       s.labRegion || s.vlanRegion,
       s.masterCidrBlock || s.cidrBlockVPC,
       s.prefixLength,
+      s.targetProvider || "aws",
     ]);
+  const { getCapability } = useProviderCapabilities();
+  const providerCapability = getCapability(targetProvider);
 
   // persist plan metadata in the lab record
   const persistPlanIdToCanvas = async ({
@@ -639,13 +643,14 @@ const useDeployNetwork = ({
     // Construimos el payload neutral que el backend traduce al provider.
     const built = {
       name: planDefaultName,
-      target_provider: "aws",
+      target_provider: targetProvider || "aws",
       canvas_id: resolvedCanvasId || null,
       metadata: {
         name: planDefaultName,
         canvas_id: resolvedCanvasId || null,
         source_format: "neutral_topology",
         schema_version: "2026-03-neutral-v1",
+        provider_status: providerCapability?.status || "unknown",
       },
       topology: buildNeutralTopology({
         planName: vlanNameFinal,
@@ -696,6 +701,16 @@ const useDeployNetwork = ({
         setValidationState(PLAN_STATES.ERROR);
         setValidationError("No hay datos transformados para validar.");
         setErrorMessage("No hay datos transformados para validar.");
+        return;
+      }
+
+      if (providerCapability?.status !== "ready") {
+        const providerLabel = String(targetProvider || "aws").toUpperCase();
+        const message = `El provider ${providerLabel} todavía está en estado planned. La validación y el deploy siguen habilitados solo para providers ready.`;
+        setLoadingFlow(false);
+        setValidationState(PLAN_STATES.ERROR);
+        setValidationError(message);
+        setErrorMessage(message);
         return;
       }
 
