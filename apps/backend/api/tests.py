@@ -334,6 +334,15 @@ class VisibilityApiTests(APITestCase):
         self.other_student.profile.status = STATUS_ACTIVE
         self.other_student.profile.save()
 
+        self.unassigned_student = User.objects.create_user(
+            username="unassigned@example.com",
+            email="unassigned@example.com",
+            password="secret123",
+        )
+        self.unassigned_student.profile.role = ROLE_STUDENT
+        self.unassigned_student.profile.status = STATUS_ACTIVE
+        self.unassigned_student.profile.save()
+
         self.course = Course.objects.create(name="Redes 1", teacher=self.teacher)
         self.other_course = Course.objects.create(name="Redes 2", teacher=self.other_teacher)
         self.student.profile.course = self.course
@@ -414,6 +423,15 @@ class VisibilityApiTests(APITestCase):
         self.assertIn("Plan alumno", names)
         self.assertIn("Plan compartido", names)
         self.assertNotIn("Plan ajeno", names)
+
+    def test_teacher_sees_unassigned_students_but_not_other_teacher_students(self):
+        self.client.force_authenticate(self.teacher)
+        res = self.client.get("/api/users/")
+        self.assertEqual(res.status_code, 200)
+        emails = {item["email"] for item in res.json()}
+        self.assertIn("student@example.com", emails)
+        self.assertIn("unassigned@example.com", emails)
+        self.assertNotIn("other-student@example.com", emails)
 
     def test_lab_create_accepts_legacy_provider_payload_shapes(self):
         self.client.force_authenticate(self.teacher)

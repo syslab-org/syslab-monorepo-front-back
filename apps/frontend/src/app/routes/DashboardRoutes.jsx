@@ -12,6 +12,7 @@ import PanelAdmin from '@/features/admin/pages/PanelAdmin';
 import ProfilePage from '@/features/admin/pages/ProfilePage';
 import { SettingsPage } from "@/features/settings";
 import GeneralSettings from '@/features/settings/pages/GeneralSettings';
+import CoursesManagement from '@/features/settings/pages/CoursesManagement';
 import { UsersManagement } from '@/features/settings/pages/UsersManagement';
 import ProtectedRoute from '@/shared/ui/organisms/ProtectedRoute'
 
@@ -36,6 +37,11 @@ const DashboardRoutes = () => {
           <Route path='settings/usersmanagement' element={
             <ProtectedRoute allowedRoles={[USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER]}>
               <UsersManagement />
+            </ProtectedRoute>
+          } />
+          <Route path='settings/courses' element={
+            <ProtectedRoute allowedRoles={[USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER]}>
+              <CoursesManagement />
             </ProtectedRoute>
           } />
 
