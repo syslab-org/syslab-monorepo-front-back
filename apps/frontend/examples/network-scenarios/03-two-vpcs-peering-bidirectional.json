@@ -13,7 +13,7 @@
       "name": "VPC-A",
       "region": "us-east-1",
       "cidr_block": "10.40.0.0/16",
-      "allowed_ssh_cidr": "190.20.221.154/32",
+      "allowed_ssh_cidr": "190.20.220.72/32",
       "internet_gateway": true,
       "nat_gateway": {
         "enabled": false,
@@ -59,7 +59,7 @@
       "name": "VPC-B",
       "region": "us-east-1",
       "cidr_block": "10.41.0.0/16",
-      "allowed_ssh_cidr": "190.20.221.154/32",
+      "allowed_ssh_cidr": "190.20.220.72/32",
       "internet_gateway": true,
       "nat_gateway": {
         "enabled": false,

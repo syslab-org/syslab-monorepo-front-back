@@ -45,6 +45,7 @@ const normalizeFetchedLab = (labData) => {
     planId: labData.metadata?.planId || null,
     labName: labData.name || null,
     labRegion: labData.region || null,
+    targetProvider: labData.target_provider || 'aws',
     planCanvasHash: labData.plan_canvas_hash || null,
   };
 };
@@ -65,6 +66,7 @@ const useRestoreFlow = ({
     setPrefixLength,
     setLabName,
     setLabRegion,
+    setTargetProvider,
   } = useCanvasLabStore();
   const { setLoadingFlow } = useContext(LoadingFlowContext);
 
@@ -81,11 +83,12 @@ const useRestoreFlow = ({
         return;
       }
 
-      const { flow: fetchedFlow, cidrBlock, prefixLength, planId, labName, labRegion } = normalized;
+      const { flow: fetchedFlow, cidrBlock, prefixLength, planId, labName, labRegion, targetProvider } = normalized;
       if (cidrBlock) setMasterCidrBlock(cidrBlock);
       if (prefixLength !== undefined && prefixLength !== null) setPrefixLength(prefixLength || "");
       if (labName) setLabName(labName);
       if (labRegion) setLabRegion(labRegion);
+      if (targetProvider) setTargetProvider(targetProvider);
       if (typeof setCanvasPlanId === "function") setCanvasPlanId(planId || null);
 
       flow = fetchedFlow || loadFlowFromLocalStorage(flowKey);
@@ -126,7 +129,7 @@ const useRestoreFlow = ({
     } finally {
       setLoadingFlow(false);
     }
-  }, [flowKey, getId, resolvedLabId, setCanvasPlanId, setEdges, setLabName, setLabRegion, setLoadingFlow, setMasterCidrBlock, setNodes, setPrefixLength, setViewport]);
+  }, [flowKey, getId, resolvedLabId, setCanvasPlanId, setEdges, setLabName, setLabRegion, setLoadingFlow, setMasterCidrBlock, setNodes, setPrefixLength, setTargetProvider, setViewport]);
 
   return restoreFlow;
 };

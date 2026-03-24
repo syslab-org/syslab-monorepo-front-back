@@ -9,6 +9,7 @@ export const useCanvasLabStore = create((set) => ({
   vlanName: null,
   labRegion: "us-east-1",
   vlanRegion: "us-east-1",
+  targetProvider: "aws",
   setMasterCidrBlock: (masterCidrBlock) =>
     set({ masterCidrBlock, cidrBlockVPC: masterCidrBlock }),
   setCidrBlockVPC: (cidrBlockVPC) =>
@@ -18,6 +19,7 @@ export const useCanvasLabStore = create((set) => ({
   setVlanName: (vlanName) => set({ vlanName, labName: vlanName }),
   setLabRegion: (labRegion) => set({ labRegion, vlanRegion: labRegion }),
   setVlanRegion: (vlanRegion) => set({ vlanRegion, labRegion: vlanRegion }),
+  setTargetProvider: (targetProvider) => set({ targetProvider }),
 }));
 
 export default useCanvasLabStore;
