@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -18,7 +19,10 @@ class UserViewSet(viewsets.ViewSet):
         if is_platform_admin(request.user):
             return qs
         if is_teacher(request.user):
-            return qs.filter(profile__course__teacher=request.user).exclude(id=request.user.id).distinct()
+            return qs.filter(
+                Q(profile__course__teacher=request.user)
+                | Q(profile__role=ROLE_STUDENT, profile__course__isnull=True)
+            ).exclude(id=request.user.id).distinct()
         return qs.filter(id=request.user.id)
 
     def list(self, request):

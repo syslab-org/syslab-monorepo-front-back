@@ -6,6 +6,7 @@ export const useUsersFetch = (setLoadingFlow) => {
     const [usersList, setUsersList] = useState([])
     const [courses, setCourses] = useState([])
     const [selectedUser, setSelectedUser] = useState(null)
+    const [latestInvite, setLatestInvite] = useState(null)
 
     const fetchUsers = useCallback(async () => {
         setLoadingFlow(true)
@@ -27,7 +28,13 @@ export const useUsersFetch = (setLoadingFlow) => {
         setLoadingFlow(true)
         try {
             const created = await api.createUser(data)
-            alert(`Invitacion creada: ${created?.invite_url || ''}`)
+            setLatestInvite({
+                email: created?.email || data?.email || '',
+                invite_url: created?.invite_url || '',
+                invite_token: created?.invite_token || '',
+                role: created?.role || data?.role || '',
+                course_id: created?.course?.id || data?.course_id || null,
+            })
             await fetchUsers()
         } catch (error) {
             console.error('Error adding user:', error)
@@ -53,6 +60,8 @@ export const useUsersFetch = (setLoadingFlow) => {
     return {
         usersList,
         courses,
+        latestInvite,
+        setLatestInvite,
         selectedUser,
         setSelectedUser,
         fetchUsers,
