@@ -705,8 +705,7 @@ const useDeployNetwork = ({
       }
 
       if (providerCapability?.status !== "ready") {
-        const providerLabel = String(targetProvider || "aws").toUpperCase();
-        const message = `El provider ${providerLabel} todavía está en estado planned. La validación y el deploy siguen habilitados solo para providers ready.`;
+        const message = "La configuración actual del laboratorio no está disponible para validación y despliegue.";
         setLoadingFlow(false);
         setValidationState(PLAN_STATES.ERROR);
         setValidationError(message);

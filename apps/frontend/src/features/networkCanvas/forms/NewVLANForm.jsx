@@ -122,7 +122,7 @@ const NewVLANForm = ({
         status: item?.status || 'unknown',
         features: item?.features || {},
       }))
-      .filter((item) => item.provider);
+      .filter((item) => item.provider && item.status === 'ready');
   }, [providerCapabilities]);
 
   const selectedProvider = normalizeProviderValue(watch('cloudProvider')) || defaultProvider;
@@ -225,20 +225,13 @@ const NewVLANForm = ({
               <MenuItem
                 key={providerCapability.provider}
                 value={providerCapability.provider}
-                disabled={providerCapability.status !== 'ready'}
               >
                 {providerLabels[providerCapability.provider] || providerCapability.provider.toUpperCase()}
-                {providerCapability.status !== 'ready' ? ' · Planned' : ''}
               </MenuItem>
             ))}
           </Select>
           <FormHelperText>
-            {selectedProviderCapability?.status === 'ready'
-              ? `Provider listo para validación y despliegue. Capacidades activas: ${Object.entries(selectedProviderCapability.features || {})
-                .filter(([, enabled]) => !!enabled)
-                .map(([feature]) => feature.replace(/_/g, ' '))
-                .join(', ') || 'base'}`
-              : 'Este provider aún está en estado planned. Puedes modelarlo más adelante, pero todavía no está habilitado para deploy.'}
+            Inicialmente trabajamos con la configuración actualmente disponible para validación y despliegue.
           </FormHelperText>
         </FormControl>
 
