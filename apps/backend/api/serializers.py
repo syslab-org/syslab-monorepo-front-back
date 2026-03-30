@@ -361,7 +361,7 @@ class LabUpdateSerializer(serializers.Serializer):
     provider_overrides = serializers.JSONField(required=False)
     visibility_scope = serializers.ChoiceField(choices=VisibilityScopeChoices.choices, required=False)
     course_id = serializers.UUIDField(required=False, allow_null=True)
-    plan_canvas_hash = serializers.CharField(required=False, allow_blank=True)
+    plan_canvas_hash = serializers.CharField(required=False, allow_blank=True, max_length=64)
 
 
 class AmiCatalogEntrySerializer(serializers.ModelSerializer):

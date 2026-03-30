@@ -7,6 +7,7 @@ import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
 import { api } from "@/infrastructure/http/api";
 import { useProviderCapabilities } from "@/features/networkCanvas/core/useProviderCapabilities";
 import { decideRouterMode } from "@/features/networkCanvas/domain/decideRouterMode";
+import { parseTerraformPlanSummary } from "@/features/plans/utils/parseTerraformPlanSummary";
 import { useCanvasLabStore } from "../store/canvasLabStore";
 import { buildRoutingPreview } from "../utils/buildRoutingPreview";
 import {
@@ -745,10 +746,25 @@ const useDeployNetwork = ({
 
       const finalPlan = await pollPlanUntilDone(planId);
       const finalStatus = String(finalPlan?.status || "");
+      const isRedeployPreview = Boolean(finalPlan?.applied);
+      let planRiskSummary = null;
+
+      try {
+        const logsResponse = await api.getPlanLogs(planId);
+        planRiskSummary = parseTerraformPlanSummary(logsResponse?.log || "");
+      } catch (logError) {
+        console.warn("No se pudo resumir terraform plan desde logs:", logError);
+      }
 
       if (finalStatus === "SUCCESS") {
         setValidationState(PLAN_STATES.SUCCESS);
         setSuccessMessage("Validación OK (Terraform plan)");
+        setValidationResult({
+          plan_id: planId,
+          created: !!syncRes?.created,
+          is_redeploy_preview: isRedeployPreview,
+          plan_risk_summary: planRiskSummary,
+        });
         await persistPlanIdToCanvas({
           canvasId: resolvedCanvasId,
           planId,
@@ -761,6 +777,12 @@ const useDeployNetwork = ({
         setValidationState(PLAN_STATES.ERROR);
         setValidationError(msg);
         setErrorMessage(msg);
+        setValidationResult({
+          plan_id: planId,
+          created: !!syncRes?.created,
+          is_redeploy_preview: isRedeployPreview,
+          plan_risk_summary: planRiskSummary,
+        });
         await persistPlanIdToCanvas({
           canvasId: resolvedCanvasId,
           planId,
@@ -816,8 +838,12 @@ const useDeployNetwork = ({
       return;
     }
 
-    const txt = window.prompt("Para confirmar escribe: DEPLOY");
-    if (txt !== "DEPLOY") {
+    const confirmationWord = validationResult?.is_redeploy_preview ? "REDEPLOY" : "DEPLOY";
+    const confirmationPrompt = validationResult?.is_redeploy_preview
+      ? "Vas a aplicar cambios sobre infraestructura AWS ya activa. Para confirmar escribe: REDEPLOY"
+      : "Para confirmar escribe: DEPLOY";
+    const txt = window.prompt(confirmationPrompt);
+    if (txt !== confirmationWord) {
       setErrorMessage("Deploy cancelado por el usuario.");
       return;
     }

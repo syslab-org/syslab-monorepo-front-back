@@ -24,6 +24,7 @@ import {
 
 import { TASK_STATE_PENDING, TASK_STATE_RUNNING } from '@/shared/constants';
 import { api } from '@/infrastructure/http/api';
+import { parseTerraformPlanSummary } from '@/features/plans/utils/parseTerraformPlanSummary';
 
 const POLL_MS = 2000;
 
@@ -53,6 +54,7 @@ function computeLifecycle(plan) {
 
   const isDestroyed = lastAction === 'destroy';
   const hasRealInfra = applied && !isDestroyed;
+  const hasPendingActivePreview = applied && lastAction === 'plan';
   const failedRealApply =
     status === 'FAILURE' &&
     lastAction === 'apply' &&
@@ -85,7 +87,9 @@ function computeLifecycle(plan) {
     return {
       key: 'ACTIVE',
       label: 'ACTIVE',
-      helper: 'Infraestructura activa en AWS.',
+      helper: hasPendingActivePreview
+        ? 'Infraestructura activa en AWS. El último plan fue una previsualización sobre el stack existente; el próximo apply actualizará recursos en el mismo despliegue.'
+        : 'Infraestructura activa en AWS.',
       chip: { variant: 'filled', color: 'success' },
       allowDestroy: true,
     };
@@ -552,6 +556,7 @@ export default function PlanDetailPage() {
   const [outputsLoading, setOutputsLoading] = useState(false);
 
   const [logText, setLogText] = useState(null);
+  const [planRiskSummary, setPlanRiskSummary] = useState(null);
   const [lastDestroyTaskId, setLastDestroyTaskId] = useState(null);
   const [consoleGuideOpen, setConsoleGuideOpen] = useState(false);
 
@@ -589,6 +594,13 @@ export default function PlanDetailPage() {
   );
 
   const busy = deploying || destroying;
+  const riskSeverity = planRiskSummary?.severity || 'none';
+  const riskAlertSeverity =
+    riskSeverity === 'destructive'
+      ? 'error'
+      : riskSeverity === 'caution'
+        ? 'warning'
+        : 'info';
 
   function getConflictMessage(e, fallback) {
     const payload = e?.data ?? e?.response?.data;
@@ -707,8 +719,10 @@ export default function PlanDetailPage() {
       const ts = await api.taskStatus(taskId);
       const log = ts?.result?.log || ts?.result?.error || ts?.error || '(sin log)';
       setLogText(log);
+      setPlanRiskSummary(parseTerraformPlanSummary(log));
     } catch (e) {
       setLogText(`No se pudo leer el log: ${String(e)}`);
+      setPlanRiskSummary(null);
     }
   }
 
@@ -719,7 +733,9 @@ export default function PlanDetailPage() {
     try {
       const resp = await api.getPlanLogs(id);
       const text = resp?.log ?? '';
-      setLogText(text && String(text).trim().length > 0 ? text : '(sin log guardado)');
+      const finalText = text && String(text).trim().length > 0 ? text : '(sin log guardado)';
+      setLogText(finalText);
+      setPlanRiskSummary(parseTerraformPlanSummary(finalText));
     } catch (e) {
       // Fallback: intenta leer el log desde task_status si existe task_id
       if (plan?.task_id) {
@@ -729,6 +745,7 @@ export default function PlanDetailPage() {
       const backendMsg = e?.response?.data?.error || e?.response?.data?.detail;
       const msg = backendMsg || e?.message || String(e);
       setErr(`No pude cargar logs: ${msg}`);
+      setPlanRiskSummary(null);
     }
   }
 
@@ -1132,6 +1149,44 @@ export default function PlanDetailPage() {
 
               <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Riesgo del último plan
+                </Typography>
+                {!planRiskSummary ? (
+                  <Alert severity="info" variant="outlined">
+                    Carga la pestaña de logs para resumir qué detectó Terraform en el último plan.
+                  </Alert>
+                ) : (
+                  <Stack spacing={1.5}>
+                    <Alert severity={riskAlertSeverity} variant="outlined">
+                      {riskSeverity === 'destructive'
+                        ? 'Se detectaron cambios con destrucción o reemplazo de recursos.'
+                        : riskSeverity === 'caution'
+                          ? 'Se detectaron cambios sobre recursos existentes.'
+                          : riskSeverity === 'safe'
+                            ? 'Se detectaron cambios aditivos.'
+                            : 'No se detectaron cambios en el último plan.'}
+                    </Alert>
+                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                      <Chip label={`Add: ${planRiskSummary.add}`} size="small" />
+                      <Chip label={`Change: ${planRiskSummary.change}`} size="small" />
+                      <Chip label={`Destroy: ${planRiskSummary.destroy}`} size="small" color={planRiskSummary.destroy > 0 ? 'error' : 'default'} />
+                      <Chip label={`Replace: ${planRiskSummary.replace}`} size="small" color={planRiskSummary.replace > 0 ? 'error' : 'default'} />
+                    </Stack>
+                    {Array.isArray(planRiskSummary.examples) && planRiskSummary.examples.length > 0 && (
+                      <Stack spacing={0.5}>
+                        {planRiskSummary.examples.map((item) => (
+                          <Typography key={`${item.action}-${item.resource}`} variant="caption" color="text.secondary">
+                            {item.action.toUpperCase()}: {item.resource}
+                          </Typography>
+                        ))}
+                      </Stack>
+                    )}
+                  </Stack>
+                )}
+              </Paper>
+
+              <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
                   Costo, residuos y lectura técnica
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
@@ -1420,6 +1475,11 @@ export default function PlanDetailPage() {
                     <Alert severity="info" sx={{ mb: 1 }}>
                       Este log corresponde a la última ejecución del plan.
                     </Alert>
+                    {planRiskSummary && (
+                      <Alert severity={riskAlertSeverity} sx={{ mb: 1 }}>
+                        Resumen Terraform: {planRiskSummary.add} add, {planRiskSummary.change} change, {planRiskSummary.destroy} destroy, {planRiskSummary.replace} replace.
+                      </Alert>
+                    )}
                     <Paper
                       variant="outlined"
                       sx={{ mt: 2, p: 2, bgcolor: 'background.default', overflow: 'auto' }}
