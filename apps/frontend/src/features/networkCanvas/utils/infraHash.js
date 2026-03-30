@@ -30,6 +30,18 @@ export const stableStringify = (value) => {
   return JSON.stringify(norm(value));
 };
 
+const fnv1a64 = (input) => {
+  let hash = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= BigInt(input.charCodeAt(i));
+    hash = BigInt.asUintN(64, hash * prime);
+  }
+
+  return hash.toString(16).padStart(16, "0");
+};
+
 // Genera un hash basado en la infraestructura real (preview)
 export const computeInfraHash = (nodesArr, edgesArr) => {
   try {
@@ -39,9 +51,9 @@ export const computeInfraHash = (nodesArr, edgesArr) => {
       vpcs: preview?.vpcs || [],
     };
 
-    return stableStringify(payloadLite);
+    return fnv1a64(stableStringify(payloadLite));
   } catch (err) {
     console.warn("computeInfraHash fallback:", err);
-    return `infra:n${(nodesArr || []).length}-e${(edgesArr || []).length}`;
+    return fnv1a64(`infra:n${(nodesArr || []).length}-e${(edgesArr || []).length}`);
   }
 };

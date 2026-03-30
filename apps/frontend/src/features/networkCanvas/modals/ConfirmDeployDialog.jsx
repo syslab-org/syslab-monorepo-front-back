@@ -116,6 +116,16 @@ const ConfirmDeployDialog = ({
     const impl = String(hub?.implementation || hub?.type || "").toLowerCase();
     return impl === "tgw";
   }).length;
+  const isRedeployPreview = Boolean(validationResult?.is_redeploy_preview);
+  const planRiskSummary = validationResult?.plan_risk_summary || null;
+  const riskSeverity = planRiskSummary?.severity || 'none';
+
+  const riskAlertSeverity =
+    riskSeverity === 'destructive'
+      ? 'error'
+      : riskSeverity === 'caution'
+        ? 'warning'
+        : 'info';
 
   const renderBanner = () => {
     if (isSyncing) {
@@ -202,6 +212,44 @@ const ConfirmDeployDialog = ({
       <DialogContent dividers>
         <Box>
           {renderBanner()}
+
+          {isRedeployPreview && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              Esta validación se hizo sobre infraestructura ya activa. Si despliegas ahora, Terraform actualizará el stack existente en AWS y algunos cambios podrían reemplazar o eliminar recursos.
+            </Alert>
+          )}
+
+          {planRiskSummary?.hasChanges && (
+            <Box mt={2}>
+              <Alert severity={riskAlertSeverity}>
+                {riskSeverity === 'destructive'
+                  ? 'Terraform detectó cambios potencialmente destructivos o con reemplazo de recursos.'
+                  : riskSeverity === 'caution'
+                    ? 'Terraform detectó actualizaciones sobre recursos existentes.'
+                    : 'Terraform detectó cambios aditivos sobre la infraestructura.'}
+              </Alert>
+              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1.5 }}>
+                <Chip label={`Add: ${planRiskSummary.add}`} size="small" />
+                <Chip label={`Change: ${planRiskSummary.change}`} size="small" />
+                <Chip label={`Destroy: ${planRiskSummary.destroy}`} size="small" color={planRiskSummary.destroy > 0 ? 'error' : 'default'} />
+                <Chip label={`Replace: ${planRiskSummary.replace}`} size="small" color={planRiskSummary.replace > 0 ? 'error' : 'default'} />
+              </Stack>
+              {Array.isArray(planRiskSummary.examples) && planRiskSummary.examples.length > 0 && (
+                <Box mt={1}>
+                  <Typography variant="body2" color="text.secondary">
+                    Recursos sensibles detectados:
+                  </Typography>
+                  <Stack spacing={0.5} sx={{ mt: 0.75 }}>
+                    {planRiskSummary.examples.map((item) => (
+                      <Typography key={`${item.action}-${item.resource}`} variant="caption" color="text.secondary">
+                        {item.action.toUpperCase()}: {item.resource}
+                      </Typography>
+                    ))}
+                  </Stack>
+                </Box>
+              )}
+            </Box>
+          )}
 
           <Box mt={3}>
             <Typography variant="subtitle1" gutterBottom>
@@ -338,7 +386,7 @@ const ConfirmDeployDialog = ({
           onClick={onDeploy}
           disabled={!isValidated || loadingFlow}
         >
-          Desplegar
+          {isRedeployPreview ? 'Aplicar cambios' : 'Desplegar'}
         </Button>
       </DialogActions>
     </Dialog>
