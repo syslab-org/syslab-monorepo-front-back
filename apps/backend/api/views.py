@@ -252,7 +252,6 @@ def network_plan_create(request):
         plan.lab = lab
         plan.name = sanitized_payload.get("name", plan.name or "")
         plan.payload = sanitized_payload
-        plan.applied = False
         plan.last_action = Plan.LastAction.CANVAS_UPDATE
         plan.updated_at = timezone.now()
         plan.status = Plan.Status.PENDING
@@ -265,7 +264,6 @@ def network_plan_create(request):
                 "updated_at",
                 "status",
                 "error",
-                "applied",
                 "last_action",
             ]
         )
