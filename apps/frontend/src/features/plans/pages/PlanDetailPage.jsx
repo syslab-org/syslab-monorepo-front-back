@@ -905,6 +905,41 @@ export default function PlanDetailPage() {
     connectivityScenarios.length > 0 &&
     hasOutputsData;
 
+  const isRedeployAvailable = lifecycle.key === 'ACTIVE' || lifecycle.key === 'FAILED_REAL_APPLY';
+  const deployActionLabel = isRedeployAvailable
+    ? applyMode
+      ? 'Redeploy (APPLY)'
+      : 'Redeploy (PLAN)'
+    : applyMode
+      ? 'Deploy (APPLY)'
+      : 'Deploy (PLAN)';
+  const actionAvailability = isRunning
+    ? {
+        severity: 'info',
+        text: 'Hay una ejecución en curso. Espera a que termine para lanzar otra acción.',
+      }
+    : canDestroy && isRedeployAvailable
+      ? {
+          severity: 'warning',
+          text: 'Infraestructura activa: puedes revalidar, redeployar sobre el mismo stack o destruirlo.',
+        }
+      : canDeploy && lifecycle.key === 'NOT_APPLIED'
+        ? {
+            severity: 'info',
+            text: 'Plan listo para su primer deploy. Destroy no aplica todavía porque no hay infraestructura activa.',
+          }
+        : canDeploy && lifecycle.key === 'PREVIEW'
+          ? {
+              severity: 'info',
+              text: 'Plan en modo preview: puedes seguir validando o lanzar el primer deploy real.',
+            }
+          : canDestroy
+            ? {
+                severity: 'warning',
+                text: 'Hay recursos o estado recuperable: destroy está disponible para limpiar el stack.',
+              }
+            : null;
+
   const header = (
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
       <Box sx={{ flex: 1 }}>
@@ -1045,18 +1080,15 @@ export default function PlanDetailPage() {
                   label={applyMode ? 'Modo APPLY (real)' : 'Modo PLAN (preview)'}
                 />
 
-                {/* Solo mostrar Deploy si lifecycle.key !== 'ACTIVE' */}
-                {lifecycle.key !== 'ACTIVE' && (
-                  <Button
-                    variant="contained"
-                    onClick={handleDeploy}
-                    disabled={!canDeploy || busy}
-                  >
-                    {deploying ? 'Lanzando…' : applyMode ? 'Deploy (APPLY)' : 'Deploy (PLAN)'}
-                  </Button>
-                )}
+                <Button
+                  variant="contained"
+                  onClick={handleDeploy}
+                  disabled={!canDeploy || busy}
+                  color={isRedeployAvailable ? 'warning' : 'primary'}
+                >
+                  {deploying ? 'Lanzando…' : deployActionLabel}
+                </Button>
 
-                {/* Mostrar Destroy siempre que backend lo permita */}
                 {canDestroy && (
                   <Button
                     variant="outlined"
@@ -1070,6 +1102,12 @@ export default function PlanDetailPage() {
               </>
             </Stack>
           </Stack>
+
+          {actionAvailability && (
+            <Alert severity={actionAvailability.severity} sx={{ mt: 2 }}>
+              {actionAvailability.text}
+            </Alert>
+          )}
 
           {isRunning && (
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
