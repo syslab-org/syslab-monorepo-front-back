@@ -119,6 +119,8 @@ const ConfirmDeployDialog = ({
   const isRedeployPreview = Boolean(validationResult?.is_redeploy_preview);
   const planRiskSummary = validationResult?.plan_risk_summary || null;
   const riskSeverity = planRiskSummary?.severity || 'none';
+  const primaryActionLabel = isRedeployPreview ? "Redeploy en AWS" : "Deploy en AWS";
+  const secondaryActionLabel = isRedeployPreview ? "Revalidar redeploy" : "Validar deploy";
 
   const riskAlertSeverity =
     riskSeverity === 'destructive'
@@ -218,6 +220,21 @@ const ConfirmDeployDialog = ({
               Esta validación se hizo sobre infraestructura ya activa. Si despliegas ahora, Terraform actualizará el stack existente en AWS y algunos cambios podrían reemplazar o eliminar recursos.
             </Alert>
           )}
+
+          <Box mt={2}>
+            <Stack direction="row" spacing={1} flexWrap="wrap">
+              <Chip
+                label={isRedeployPreview ? "Acción principal: REDEPLOY" : "Acción principal: DEPLOY"}
+                color={isRedeployPreview ? "warning" : "primary"}
+                variant="filled"
+              />
+              <Chip
+                label={isRedeployPreview ? "Destroy disponible si el plan sigue activo" : "Destroy no aplica hasta crear recursos"}
+                color={isRedeployPreview ? "error" : "default"}
+                variant={isRedeployPreview ? "outlined" : "outlined"}
+              />
+            </Stack>
+          </Box>
 
           {planRiskSummary?.hasChanges && (
             <Box mt={2}>
@@ -364,7 +381,7 @@ const ConfirmDeployDialog = ({
           onClick={onValidate}
           disabled={loadingFlow}
         >
-          Validar
+          {secondaryActionLabel}
         </Button>
         <Button
           variant="outlined"
@@ -382,11 +399,11 @@ const ConfirmDeployDialog = ({
         </Button>
         <Button
           variant="contained"
-          color="success"
+          color={isRedeployPreview ? "warning" : "success"}
           onClick={onDeploy}
           disabled={!isValidated || loadingFlow}
         >
-          {isRedeployPreview ? 'Aplicar cambios' : 'Desplegar'}
+          {isRedeployPreview ? 'Aplicar redeploy' : 'Desplegar'}
         </Button>
       </DialogActions>
     </Dialog>

@@ -1,4 +1,11 @@
-const PLAN_TOTALS_REGEX = /Plan:\s+(\d+)\s+to add,\s+(\d+)\s+to change,\s+(\d+)\s+to destroy\./i
+const PLAN_TOTALS_REGEX = /Plan:\s+(\d+)\s+to add,\s+(\d+)\s+to change,\s+(\d+)\s+to destroy\./gi
+
+const ACTION_PRIORITY = {
+  replace: 4,
+  destroy: 3,
+  change: 2,
+  add: 1,
+}
 
 function classifyResourceLine(line) {
   const trimmed = String(line || '').trim()
@@ -30,20 +37,37 @@ export function parseTerraformPlanSummary(logText) {
   const text = String(logText || '')
   if (!text.trim()) return null
 
-  const totalsMatch = text.match(PLAN_TOTALS_REGEX)
+  const totalsMatches = [...text.matchAll(PLAN_TOTALS_REGEX)]
   const lines = text.split('\n')
-  const resourceActions = lines
+  const rawResourceActions = lines
     .map(classifyResourceLine)
     .filter(Boolean)
 
+  const resourceActionMap = new Map()
+  rawResourceActions.forEach((item) => {
+    const previous = resourceActionMap.get(item.resource)
+    if (!previous || ACTION_PRIORITY[item.action] > ACTION_PRIORITY[previous.action]) {
+      resourceActionMap.set(item.resource, item)
+    }
+  })
+
+  const resourceActions = Array.from(resourceActionMap.values())
   const replaceCount = resourceActions.filter((item) => item.action === 'replace').length
   const examples = resourceActions
     .filter((item) => item.action === 'replace' || item.action === 'destroy')
     .slice(0, 5)
 
-  const add = totalsMatch ? Number(totalsMatch[1]) : resourceActions.filter((item) => item.action === 'add').length
-  const change = totalsMatch ? Number(totalsMatch[2]) : resourceActions.filter((item) => item.action === 'change').length
-  const destroy = totalsMatch ? Number(totalsMatch[3]) : resourceActions.filter((item) => item.action === 'destroy').length
+  const latestTotals = totalsMatches.length > 0 ? totalsMatches[totalsMatches.length - 1] : null
+
+  const add = latestTotals
+    ? Number(latestTotals[1])
+    : resourceActions.filter((item) => item.action === 'add').length
+  const change = latestTotals
+    ? Number(latestTotals[2])
+    : resourceActions.filter((item) => item.action === 'change').length
+  const destroy = latestTotals
+    ? Number(latestTotals[3])
+    : resourceActions.filter((item) => item.action === 'destroy').length
 
   const severity = destroy > 0 || replaceCount > 0
     ? 'destructive'

@@ -279,6 +279,11 @@ export default function RouterNodeForm({
       : 0;
   const hasPendingReverseForPeering =
     normalizedMode === "peering" && routePairStats.oneWay > 0;
+  const hasExplicitPolicies = routes.length > 0;
+  const hasEffectiveConnectivity =
+    normalizedMode === "tgw"
+      ? hasExplicitPolicies
+      : routePairStats.bidirectional > 0;
 
   const modeSummary = useMemo(() => {
     if (normalizedMode === "tgw") {
@@ -497,11 +502,33 @@ export default function RouterNodeForm({
           label={`Solo ida: ${routePairStats.oneWay}`}
           variant={routePairStats.oneWay > 0 ? "filled" : "outlined"}
         />
+        <Chip
+          size="small"
+          color={hasEffectiveConnectivity ? "success" : "warning"}
+          label={
+            hasEffectiveConnectivity
+              ? `Payload efectivo: ${normalizedMode === "tgw" ? "hub routing activo" : "direct links activos"}`
+              : "Payload efectivo: aislado"
+          }
+          variant="filled"
+        />
       </Stack>
 
       {hasPendingReverseForPeering && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           En modo <b>Direct links</b> necesitas rutas de ida y vuelta por cada par de segmentos para que ese enlace se materialice.
+        </Alert>
+      )}
+
+      {!hasExplicitPolicies && connectedVpcCount >= 2 && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Hay segmentos conectados visualmente a este nodo, pero no has definido policies. Si despliegas así, el payload saldrá <b>aislado</b> aunque el edge hacia el router siga visible en el canvas.
+        </Alert>
+      )}
+
+      {hasExplicitPolicies && !hasEffectiveConnectivity && connectedVpcCount >= 2 && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          El nodo ya tiene policies, pero todavía no generan conectividad efectiva. En peering eso suele significar que falta la ruta de retorno del otro segmento.
         </Alert>
       )}
 
@@ -517,6 +544,10 @@ export default function RouterNodeForm({
 
       <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
         {routingCopy.explainer}
+      </Alert>
+
+      <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
+        Los edges del canvas solo indican qué segmentos están conectados a este nodo de políticas. La conectividad que realmente se traducirá a AWS sale de las rutas/policies definidas abajo.
       </Alert>
 
       <Alert severity="info" sx={{ mb: 2 }}>
