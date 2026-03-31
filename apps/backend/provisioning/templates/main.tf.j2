@@ -120,12 +120,17 @@ locals {
   inst_map = { for i in local.all_instances : "${i.vpc_id_key}:${i.name}" => i }
 }
 
-{% if not sim %}
 # ---------------------- AMI base ----------------------
 data "aws_ssm_parameter" "al2023_ami" {
+  count = {{ 0 if sim else 1 }}
   name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64"
 }
-locals { default_ami_id = data.aws_ssm_parameter.al2023_ami.value }
+locals {
+  # En preview/simulación no consultamos AWS para resolver la AMI por defecto.
+  # El payload de este proyecto suele traer una AMI explícita; si no viene,
+  # usamos un placeholder estable para evitar que desaparezca la configuración.
+  default_ami_id = {{ '"ami-simulated-preview"' if sim else 'data.aws_ssm_parameter.al2023_ami[0].value' }}
+}
 
 # ---------------------- SECURITY GROUPS ----------------------
 resource "aws_security_group" "vm_sg" {
@@ -137,8 +142,10 @@ resource "aws_security_group" "vm_sg" {
     ]) > 0
   }
 
-  name        = "${each.value.name}-vm-sg"
-  description = "Security group for VMs in ${each.value.name}"
+  # Mantener name/description estables evita reemplazos del SG cuando el
+  # usuario solo renombra el segmento en el canvas.
+  name        = "vm-sg-${substr(replace(each.key, "-", ""), 0, 12)}"
+  description = "Security group for VMs in segment ${each.key}"
   vpc_id      = aws_vpc.vpc[each.key].id
 
   # ICMP dentro de la misma VPC
@@ -297,7 +304,6 @@ resource "aws_instance" "vm" {
     create = "20m"
   }
 }
-{% endif %}
 
 
 # =========================

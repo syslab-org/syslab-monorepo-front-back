@@ -9,6 +9,7 @@ from .domain.network_intent import normalize_network_intent
 from .models import Course, Lab, Plan, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, STATUS_ACTIVE, VISIBILITY_COURSE, VISIBILITY_OWNER
 from .providers import get_provider_adapter, get_provider_executor
 from .providers.aws.runtime import build_nat_cleanup_targets
+from .providers.aws.terraform import render_workspace
 from .validators import validate_network_plan
 
 
@@ -287,6 +288,62 @@ class NetworkIntentTests(SimpleTestCase):
                 executor.terraform_init(bundle)
 
 
+class TerraformTemplateRenderTests(SimpleTestCase):
+    def test_preview_render_keeps_vm_resources_in_configuration(self):
+        payload = {
+            "name": "Lab render",
+            "cloud": "aws",
+            "simulate_only": True,
+            "vpcs": [
+                {
+                    "id": "vpc-a",
+                    "name": "VPC-A",
+                    "region": "us-east-1",
+                    "cidr_block": "10.30.0.0/16",
+                    "internet_gateway": True,
+                    "allowed_ssh_cidr": "203.0.113.10/32",
+                    "nat_gateway": {"enabled": False, "public_subnet": "", "elastic_ip": ""},
+                    "route_tables": [{"name": "public", "routes": [{"dest_cidr": "0.0.0.0/0", "target": "igw"}]}],
+                    "subnets": [
+                        {
+                            "name": "public-a1",
+                            "cidr_block": "10.30.1.0/24",
+                            "availability_zone": "us-east-1a",
+                            "subnet_type": "public",
+                            "map_public_ip_on_launch": True,
+                            "route_table": "public",
+                            "instances": [
+                                {
+                                    "id": "vm-a1",
+                                    "name": "bastion-a1",
+                                    "ami": "ami-0123456789abcdef0",
+                                    "instance_type": "t2.micro",
+                                    "ip_address": "10.30.1.10",
+                                    "ssh_access": "tesis-key",
+                                    "associate_public_ip": True,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "links": [],
+            "routers": [],
+        }
+
+        workdir, _state_path, tf_text = render_workspace(
+            plan_id="plan-render-preview",
+            payload=payload,
+            simulate_only=True,
+            prefix="tf-test-",
+        )
+
+        self.assertTrue(workdir)
+        self.assertIn('resource "aws_security_group" "vm_sg"', tf_text)
+        self.assertIn('resource "aws_instance" "vm"', tf_text)
+        self.assertIn('count = 0', tf_text)
+
+
 class VisibilityApiTests(APITestCase):
     def setUp(self):
         self.admin = User.objects.create_user(
@@ -561,3 +618,50 @@ class VisibilityApiTests(APITestCase):
         self.assertEqual(plan.status, Plan.Status.RUNNING)
         self.assertEqual(plan.last_action, Plan.LastAction.APPLY)
         self.assertEqual(plan.task_id, "task-redeploy-1")
+
+    def test_network_plan_create_preserves_applied_state_for_existing_active_plan(self):
+        redeploy_lab = Lab.objects.create(
+            name="Lab redeploy",
+            owner_user=self.teacher,
+            course=self.course,
+            visibility_scope=VISIBILITY_COURSE,
+            created_by_role=ROLE_TEACHER,
+            legacy_canvas_id="lab-redeploy-active",
+        )
+        plan = Plan.objects.create(
+            name="Plan activo",
+            payload={"name": "Plan activo", "cloud": "aws", "vpcs": [], "simulate_only": False},
+            canvas_id=redeploy_lab.canvas_id,
+            lab=redeploy_lab,
+            applied=True,
+            status=Plan.Status.SUCCESS,
+            last_action=Plan.LastAction.APPLY,
+        )
+
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(
+            "/api/network/plan/",
+            {
+                "name": "Plan activo",
+                "canvas_id": redeploy_lab.canvas_id,
+                "target_provider": "aws",
+                "metadata": {"name": "Plan activo"},
+                "topology": {
+                    "network": {
+                        "id": redeploy_lab.canvas_id,
+                        "name": "Plan activo",
+                        "region": "us-east-1",
+                        "cidr": "10.0.0.0/16",
+                    },
+                    "segments": [],
+                    "connectivity": {"mode": "isolated", "hubs": [], "links": []},
+                },
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 200)
+        plan.refresh_from_db()
+        self.assertTrue(plan.applied)
+        self.assertEqual(plan.status, Plan.Status.PENDING)
+        self.assertEqual(plan.last_action, Plan.LastAction.CANVAS_UPDATE)
