@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { computeInfraHash } from "@/features/networkCanvas/utils/infraHash";
+import {
+  computeInfraHash,
+  computeLegacyInfraHash,
+  isLegacyInfraHash,
+} from "@/features/networkCanvas/utils/infraHash";
 
 /**
  * Encapsulates canvas "dirty" detection and edit guard logic.
@@ -10,6 +14,7 @@ export function useCanvasDirtyState({
   edges,
   canvasPlanId,
   validatedPlanHash,
+  setValidatedPlanHash,
   restorationDone,
   hasValidatedInSession,
   isCanvasLocked,
@@ -25,18 +30,34 @@ export function useCanvasDirtyState({
   useEffect(() => {
     if (!restorationDone) return;
 
-    if (!canvasPlanId || !validatedPlanHash) {
+    if (!canvasPlanId) {
       setIsCanvasDirty(false);
       return;
     }
 
     if (!dirtyInitializedRef.current) {
       dirtyInitializedRef.current = true;
+
+      if (!validatedPlanHash) {
+        setValidatedPlanHash?.(computeInfraHash(nodes, edges));
+        setIsCanvasDirty(false);
+        return;
+      }
+
+      if (isLegacyInfraHash(validatedPlanHash)) {
+        const legacyCurrent = computeLegacyInfraHash(nodes, edges);
+        if (legacyCurrent === validatedPlanHash) {
+          setValidatedPlanHash?.(computeInfraHash(nodes, edges));
+        }
+      }
+
       setIsCanvasDirty(false);
       return;
     }
 
-    const current = computeInfraHash(nodes, edges);
+    const current = isLegacyInfraHash(validatedPlanHash)
+      ? computeLegacyInfraHash(nodes, edges)
+      : computeInfraHash(nodes, edges);
 
     if (!validatedPlanHash) {
       setIsCanvasDirty(false);
@@ -53,6 +74,7 @@ export function useCanvasDirtyState({
     nodes,
     edges,
     validatedPlanHash,
+    setValidatedPlanHash,
     canvasPlanId,
     restorationDone,
     hasValidatedInSession,
