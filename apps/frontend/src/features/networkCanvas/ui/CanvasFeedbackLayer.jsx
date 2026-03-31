@@ -26,6 +26,7 @@ export default function CanvasFeedbackLayer({
     handleCancelDeploy,
     validationState,
     canvasState,
+    planStatus,
     validationResult,
     transformedData,
     handleValidatePlan,
@@ -106,12 +107,13 @@ export default function CanvasFeedbackLayer({
                 onClose={handleCancelDeploy}
                 validationState={validationState}
                 canvasState={canvasState}
+                planStatus={planStatus}
                 validationResult={validationResult}
                 transformedData={transformedData}
                 onValidate={handleValidatePlan}
                 onDeploy={handleApplyReal}
                 onViewPlan={() =>
-                    handleOpenPlanDetails(validationResult?.plan_id)
+                    handleOpenPlanDetails(validationResult?.plan_id || planStatus?.id)
                 }
                 loadingFlow={loadingFlow}
             />

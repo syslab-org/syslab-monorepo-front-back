@@ -138,6 +138,56 @@ Conclusión:
 - El redeploy destruye solo conectividad.
 - El sistema puede converger tras un fallo transitorio de reconciliación de reglas SG.
 
+### Incidente asociado: peering creado pero `ping` roto tras redeploy
+
+Síntoma observado:
+
+- Se recreó correctamente el peering:
+  - `peering_ids["0qs41rig--35qwoshy"] = pcx-064e44abd1aadea2a`
+- Las rutas entre VPCs existían.
+- Aun así, desde `bastion-a1` fallaba:
+  - `ping -c 4 10.41.1.10`
+- El fallo era bidireccional a nivel ICMP.
+
+Evidencia encontrada en logs:
+
+- Terraform tenía recursos separados:
+  - `aws_security_group_rule.cross_vpc_ping_peering_a[...]`
+  - `aws_security_group_rule.cross_vpc_ping_peering_b[...]`
+- Pero en el mismo redeploy el recurso inline `aws_security_group.vm_sg[...]` removía ingress ICMP del peer:
+  - `Allow ICMP from peer 35qwoshy`
+  - `Allow ICMP from peer 0qs41rig`
+
+Causa raíz:
+
+- El template estaba mezclando dos estrategias sobre el mismo Security Group:
+  - reglas `ingress` inline dentro de `aws_security_group.vm_sg`
+  - reglas `aws_security_group_rule` separadas para ICMP cross-VPC
+- En redeploys `in-place`, Terraform terminaba reconciliando el SG inline y revocando reglas creadas por fuera del recurso.
+
+Fix aplicado:
+
+- Se unificaron las reglas ICMP entre VPCs conectadas dentro del mismo `aws_security_group.vm_sg`.
+- Se eliminaron los recursos separados `aws_security_group_rule.cross_vpc_ping_peering_*` y `aws_security_group_rule.cross_vpc_ping_tgw_*`.
+- Referencia técnica:
+  - [main.tf.j2](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/provisioning/templates/main.tf.j2#L128)
+  - [main.tf.j2](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/provisioning/templates/main.tf.j2#L205)
+
+Resultado tras revalidar y redeployar:
+
+- El canvas detectó correctamente estado `OUTDATED`.
+- `Aplicar redeploy` quedó bloqueado hasta revalidar.
+- Tras el redeploy corregido, el peering volvió a responder `ping` entre:
+  - `10.40.2.20`
+  - `10.41.1.10`
+
+Conclusión:
+
+- Este no fue un fallo del peering de AWS.
+- Fue un problema de reconciliación Terraform sobre Security Groups.
+- El aprendizaje queda incorporado como regla de diseño:
+  - no mezclar `ingress` inline y `aws_security_group_rule` separados sobre el mismo SG si se espera estabilidad en redeploy.
+
 ### Caso 3: Cambio de `allowed_ssh_cidr`
 
 - Cambio en canvas:

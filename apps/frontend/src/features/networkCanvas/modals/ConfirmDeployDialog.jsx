@@ -87,6 +87,7 @@ const ConfirmDeployDialog = ({
   onClose,
   validationState,
   canvasState,
+  planStatus,
   validationResult,
   transformedData,
   onValidate,
@@ -94,9 +95,17 @@ const ConfirmDeployDialog = ({
   onViewPlan,
   loadingFlow,
 }) => {
+  const hasActiveInfra = planStatus?.applied === true;
+  const hasReusablePlanId = Boolean(validationResult?.plan_id || planStatus?.id);
+  const hasSuccessfulPlanSnapshot =
+    String(planStatus?.status || "").toUpperCase() === "SUCCESS";
   const isValidated =
     validationState === "SUCCESS" ||
-    (canvasState === "PLAN_VALIDATED" && Boolean(validationResult?.plan_id));
+    (
+      hasReusablePlanId &&
+      hasSuccessfulPlanSnapshot &&
+      (canvasState === "PLAN_VALIDATED" || canvasState === "PLAN_SYNCED")
+    );
   const hasError = validationState === "ERROR";
   const isSyncing =
     validationState === "SYNCING" ||
@@ -118,7 +127,9 @@ const ConfirmDeployDialog = ({
     const impl = String(hub?.implementation || hub?.type || "").toLowerCase();
     return impl === "tgw";
   }).length;
-  const isRedeployPreview = Boolean(validationResult?.is_redeploy_preview);
+  const isRedeployPreview = Boolean(
+    validationResult?.is_redeploy_preview ?? hasActiveInfra,
+  );
   const planRiskSummary = validationResult?.plan_risk_summary || null;
   const riskSeverity = planRiskSummary?.severity || 'none';
   const primaryActionLabel = isRedeployPreview ? "Redeploy en AWS" : "Deploy en AWS";
@@ -395,7 +406,7 @@ const ConfirmDeployDialog = ({
         <Button
           variant="outlined"
           onClick={onViewPlan}
-          disabled={!validationResult?.plan_id}
+          disabled={!hasReusablePlanId}
         >
           Ver plan
         </Button>
@@ -403,7 +414,7 @@ const ConfirmDeployDialog = ({
           variant="contained"
           color={isRedeployPreview ? "warning" : "success"}
           onClick={onDeploy}
-          disabled={!isValidated || loadingFlow}
+          disabled={!isValidated || !hasReusablePlanId || loadingFlow}
         >
           {isRedeployPreview ? 'Aplicar redeploy' : 'Desplegar'}
         </Button>
