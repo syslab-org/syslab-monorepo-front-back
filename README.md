@@ -219,6 +219,20 @@ Terraform define:
     ```bash
     make aws-down
     ```
+
+---
+
+## 12) Matriz de Redeploy
+
+Se documentó una matriz de pruebas manuales de redeploy sobre AWS, incluyendo:
+
+- rename de segmento sin reemplazo destructivo
+- eliminación de peering con destrucción acotada a conectividad
+- hallazgos sobre preview, lifecycle del plan y reconciliación de Security Groups
+
+Documento:
+
+- [docs/redeploy-matrix.md](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/redeploy-matrix.md)
 - **S3 + DynamoDB** del state cuestan muy poco; conviene **mantenerlos**.
 
 ---
