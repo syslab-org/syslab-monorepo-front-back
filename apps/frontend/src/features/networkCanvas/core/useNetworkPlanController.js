@@ -17,6 +17,8 @@ export function useNetworkPlanController({
   allowCrossVpcPingUI,
   labId,
   canvasId,
+  canvasPlanId,
+  validatedPlanHash,
 }) {
   const deploy = useDeployNetwork({
     nodes,
@@ -24,6 +26,8 @@ export function useNetworkPlanController({
     allowCrossVpcPingUI,
     labId,
     canvasId,
+    canvasPlanId,
+    validatedPlanHash,
   });
 
   return deploy;

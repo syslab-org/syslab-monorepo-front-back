@@ -1,5 +1,5 @@
 // apps/frontend/src/components/flow/flow-hooks/useDeployNetwork.js
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { RouterPolicy } from "@/features/networkCanvas/utils/networking";
 import { useAuth } from "@/app/providers/AuthContext";
@@ -10,6 +10,7 @@ import { decideRouterMode } from "@/features/networkCanvas/domain/decideRouterMo
 import { parseTerraformPlanSummary } from "@/features/plans/utils/parseTerraformPlanSummary";
 import { useCanvasLabStore } from "../store/canvasLabStore";
 import { buildRoutingPreview } from "../utils/buildRoutingPreview";
+import { computeInfraHash } from "../utils/infraHash";
 import {
   TYPE_ROUTER_NODE,
   TYPE_SERVER_NODE,
@@ -291,6 +292,8 @@ const useDeployNetwork = ({
   allowCrossVpcPingUI = null,
   labId,
   canvasId,
+  canvasPlanId,
+  validatedPlanHash,
 }) => {
   const resolvedCanvasId = canvasId || labId;
   const { user } = useAuth();
@@ -378,6 +381,15 @@ const useDeployNetwork = ({
     ]);
   const { getCapability } = useProviderCapabilities();
   const providerCapability = getCapability(targetProvider);
+  const currentInfraHash = useMemo(
+    () => computeInfraHash(nodes, edges),
+    [nodes, edges],
+  );
+  const hasPersistedValidatedPlan = Boolean(
+    canvasPlanId &&
+      validatedPlanHash &&
+      currentInfraHash === validatedPlanHash,
+  );
 
   // persist plan metadata in the lab record
   const persistPlanIdToCanvas = async ({
@@ -671,9 +683,22 @@ const useDeployNetwork = ({
     // Abrimos el modal inmediatamente (UX reactiva)
     setShowConfirmation(true);
 
-    // No sincronizamos ni creamos plan aquí.
-    // El plan se crea / sincroniza únicamente cuando el usuario presiona "Validar".
-    setValidationState(PLAN_STATES.IDLE);
+    // Si el canvas sigue coincidiendo con el último plan validado,
+    // rehidratamos ese estado para que el modal no "olvide" que ya está listo
+    // para deploy al cerrarse y abrirse de nuevo.
+    if (hasPersistedValidatedPlan && canvasPlanId) {
+      setValidationState(PLAN_STATES.SUCCESS);
+      setValidationResult((prev) => ({
+        plan_id: prev?.plan_id || canvasPlanId,
+        created: prev?.created || false,
+        is_redeploy_preview: prev?.is_redeploy_preview || false,
+        plan_risk_summary: prev?.plan_risk_summary || null,
+      }));
+    } else {
+      // No sincronizamos ni creamos plan aquí.
+      // El plan se crea / sincroniza únicamente cuando el usuario presiona "Validar".
+      setValidationState(PLAN_STATES.IDLE);
+    }
   };
 
   const pollPlanUntilDone = async (
@@ -812,7 +837,11 @@ const useDeployNetwork = ({
   };
 
   const handleApplyReal = async () => {
-    if (validationState !== PLAN_STATES.SUCCESS) {
+    const isValidationReady =
+      validationState === PLAN_STATES.SUCCESS ||
+      (hasPersistedValidatedPlan && Boolean(validationResult?.plan_id || canvasPlanId));
+
+    if (!isValidationReady) {
       setErrorMessage(
         "Primero valida la topologia en modo simulacion antes de desplegar en AWS.",
       );
@@ -827,7 +856,7 @@ const useDeployNetwork = ({
       return;
     }
 
-    const planId = validationResult?.plan_id;
+    const planId = validationResult?.plan_id || canvasPlanId;
     if (!planId) {
       setErrorMessage("Primero valida el plan.");
       return;

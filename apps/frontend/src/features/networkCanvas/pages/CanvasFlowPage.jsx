@@ -253,7 +253,9 @@ function CanvasFlowPage() {
     nodes,
     edges,
     allowCrossVpcPingUI,
-    labId
+    labId,
+    canvasPlanId,
+    validatedPlanHash,
   });
 
   const {
@@ -378,7 +380,7 @@ function CanvasFlowPage() {
               onZoomIn: handleZoomIn,
               onZoomOut: handleZoomOut,
               onFitView: handleFitView,
-              title: "Architecture Studio",
+              title: "Canvas de arquitectura",
               onPreviewRoutes: openRoutesPreview,
               planStatus: canvasPlanInfo,
               canvasState,

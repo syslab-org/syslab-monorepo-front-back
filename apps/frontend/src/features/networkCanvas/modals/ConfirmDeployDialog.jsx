@@ -94,7 +94,9 @@ const ConfirmDeployDialog = ({
   onViewPlan,
   loadingFlow,
 }) => {
-  const isValidated = validationState === "SUCCESS";
+  const isValidated =
+    validationState === "SUCCESS" ||
+    (canvasState === "PLAN_VALIDATED" && Boolean(validationResult?.plan_id));
   const hasError = validationState === "ERROR";
   const isSyncing =
     validationState === "SYNCING" ||

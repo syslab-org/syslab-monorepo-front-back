@@ -376,6 +376,46 @@ Conclusión:
 - Clasificación: `destructive acotado a subnet`
 - El cambio de `CIDR` de subnet debe tratarse como reemplazo encadenado de subnet + asociación + VM(s) residentes.
 
+## Estado actual del flujo Canvas/Plan
+
+Además de la matriz de redeploy en AWS, esta ronda dejó estabilizada la lectura visual del estado del canvas para que el usuario entienda qué acción tiene sentido en cada momento.
+
+### Regla visual actual
+
+- Sin infraestructura activa y con canvas validado:
+  - la acción principal visible es `DEPLOY`
+  - `Destroy` no aplica todavía
+- Con infraestructura activa:
+  - la acción principal visible es `REDEPLOY`
+  - `Destroy` aparece como acción permitida
+- Con plan en ejecución:
+  - el canvas queda bloqueado
+  - la acción principal visible pasa a `ESPERAR`
+- Con canvas desactualizado respecto al último plan:
+  - la UI marca el estado como `OUTDATED`
+  - se fuerza la recomendación de `REVALIDAR`
+
+### Componentes alineados
+
+- `PacketToolbar`
+  - muestra chips de estado y acción principal
+  - diferencia `VALIDAR`, `DEPLOY`, `REDEPLOY` y `ESPERAR`
+- `FlowWorkspace`
+  - resume el estado operativo del canvas dentro del workspace
+  - refuerza cuándo el usuario está listo para deploy, redeploy o revalidación
+- `ConfirmDeployDialog`
+  - distingue explícitamente primer deploy vs redeploy
+  - informa si `Destroy` aplica o no según el estado
+- `PlanDetailPage`
+  - conserva visibles las acciones válidas sobre un plan activo
+  - muestra `Redeploy (PLAN)` y `Destroy` cuando corresponde
+
+### Decisión de producto validada
+
+- El canvas no debe tratar `deploy` y `redeploy` como el mismo momento de UX.
+- La acción visible debe depender del lifecycle real del plan y no solo del último resultado de validación.
+- La UI debe advertir cuando el canvas ya no representa exactamente el último plan validado.
+
 ## Hallazgos técnicos
 
 ### 1. Rename del segmento y Security Group
