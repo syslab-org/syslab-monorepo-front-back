@@ -21,6 +21,7 @@ import {
   Tabs,
   Typography,
 } from '@mui/material';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
 import { TASK_STATE_PENDING, TASK_STATE_RUNNING } from '@/shared/constants';
 import { api } from '@/infrastructure/http/api';
@@ -222,6 +223,170 @@ function buildVpcInfraCatalog(plan, outputsResponse) {
     natGatewayId: natGatewayIds[vpc.id] || null,
     natEipAllocationId: natEipAllocationIds[vpc.id] || null,
   }));
+}
+
+function splitRouterAttachmentKey(key) {
+  const raw = String(key || '');
+  const idx = raw.indexOf(':');
+  if (idx === -1) return { routerId: raw, vpcId: '' };
+  return {
+    routerId: raw.slice(0, idx),
+    vpcId: raw.slice(idx + 1),
+  };
+}
+
+function buildTransitGatewayCatalog(plan, outputsResponse) {
+  const payload = safeObject(plan?.payload);
+  const outputs = safeObject(outputsResponse?.outputs);
+  const routers = Array.isArray(payload?.routers) ? payload.routers : [];
+  const vpcs = Array.isArray(payload?.vpcs) ? payload.vpcs : [];
+
+  const tgwIds = safeObject(outputs?.tgw_ids);
+  const tgwAttachmentIds = safeObject(outputs?.tgw_attachment_ids);
+  const tgwRouteTableIds = safeObject(outputs?.tgw_route_table_ids);
+
+  const vpcById = new Map(vpcs.map((vpc) => [vpc.id, vpc]));
+  const routerById = new Map(
+    routers
+      .filter((router) => String(router?.type || '').toLowerCase() === 'tgw')
+      .map((router) => [router.id, router]),
+  );
+
+  const routerIds = Array.from(
+    new Set([
+      ...routerById.keys(),
+      ...Object.keys(tgwIds),
+      ...Object.keys(tgwRouteTableIds),
+      ...Object.keys(tgwAttachmentIds).map((key) => splitRouterAttachmentKey(key).routerId),
+    ]),
+  );
+
+  return routerIds.map((routerId) => {
+    const router = routerById.get(routerId) || null;
+    const attachments = Object.entries(tgwAttachmentIds)
+      .filter(([key]) => splitRouterAttachmentKey(key).routerId === routerId)
+      .map(([key, attachmentId]) => {
+        const { vpcId } = splitRouterAttachmentKey(key);
+        const vpc = vpcById.get(vpcId) || null;
+        return {
+          key,
+          vpcId,
+          vpcName: vpc?.name || vpcId || 'VPC',
+          attachmentId,
+        };
+      })
+      .sort((a, b) => a.vpcName.localeCompare(b.vpcName));
+
+    return {
+      routerId,
+      name: router?.name || routerId,
+      tgwId: tgwIds[routerId] || null,
+      routeTableId: tgwRouteTableIds[routerId] || null,
+      attachments,
+    };
+  });
+}
+
+function buildConnectivityOverview(plan, outputsResponse, connectivityScenarios) {
+  const payload = safeObject(plan?.payload);
+  const outputs = safeObject(outputsResponse?.outputs);
+  const links = Array.isArray(payload?.links) ? payload.links : [];
+  const routers = Array.isArray(payload?.routers) ? payload.routers : [];
+
+  const peeringDeclared = links.filter((link) => String(link?.type || '').toLowerCase() === 'peering').length;
+  const tgwDeclared = routers.filter((router) => String(router?.type || '').toLowerCase() === 'tgw').length;
+  const tgwAttachmentsDeclared = links.filter((link) => String(link?.type || '').toLowerCase() === 'tgw-attach').length;
+  const peeringActive = Object.keys(safeObject(outputs?.peering_ids)).length;
+  const tgwActive = Object.keys(safeObject(outputs?.tgw_ids)).length;
+  const tgwAttachmentsActive = Object.keys(safeObject(outputs?.tgw_attachment_ids)).length;
+
+  let modeLabel = 'Aislado';
+  if (tgwDeclared > 0 || tgwActive > 0 || tgwAttachmentsDeclared > 0 || tgwAttachmentsActive > 0) {
+    modeLabel = 'Transit Gateway';
+  } else if (peeringDeclared > 0 || peeringActive > 0) {
+    modeLabel = 'Peering';
+  }
+
+  return {
+    modeLabel,
+    connectedPairs: connectivityScenarios.length,
+    peeringDeclared,
+    peeringActive,
+    tgwDeclared,
+    tgwActive,
+    tgwAttachmentsDeclared,
+    tgwAttachmentsActive,
+  };
+}
+
+function describeConnectivityMode(modeLabel, overview) {
+  if (modeLabel === 'Transit Gateway') {
+    return `El laboratorio usa un hub central en AWS para enrutar tráfico entre segmentos. TGW activos: ${overview.tgwActive}.`;
+  }
+  if (modeLabel === 'Peering') {
+    return `Las VPC se comunican por enlaces directos entre pares. Peerings activos: ${overview.peeringActive}.`;
+  }
+  return 'No hay conectividad cruzada activa entre segmentos; cada VPC funciona de forma aislada.';
+}
+
+function AwsOutputsInfoDialog({ open, onClose }) {
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle>Guía rápida de infraestructura AWS</DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2}>
+          <Alert severity="info" variant="outlined">
+            Esta vista resume la traducción del canvas a recursos reales en AWS. Los códigos como
+            `vpc-...`, `igw-...`, `tgw-...` y `tgw-attach-...` son IDs reales creados por AWS.
+          </Alert>
+
+          <Box>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Conectividad
+            </Typography>
+            <Stack spacing={1}>
+              <Typography variant="body2"><b>Modo declarado</b>: el modelo de conectividad que el canvas está pidiendo. Puede ser Aislado, Peering o Transit Gateway.</Typography>
+              <Typography variant="body2"><b>Pares conectados esperados</b>: cuántos pares de segmentos deberían poder comunicarse según el payload y las rutas definidas.</Typography>
+              <Typography variant="body2"><b>Peerings activos</b>: cantidad de conexiones VPC Peering realmente creadas en AWS.</Typography>
+              <Typography variant="body2"><b>TGW activos</b>: cantidad de Transit Gateways realmente creados en AWS.</Typography>
+              <Typography variant="body2"><b>Attachments TGW</b>: uniones entre una VPC y el Transit Gateway. Sin attachment, la VPC no entra al hub.</Typography>
+            </Stack>
+          </Box>
+
+          <Box>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Infraestructura por VPC
+            </Typography>
+            <Stack spacing={1}>
+              <Typography variant="body2"><b>VPC</b>: red virtual principal del segmento en AWS.</Typography>
+              <Typography variant="body2"><b>IGW</b>: Internet Gateway. Permite salida/entrada a internet para subredes públicas con rutas adecuadas.</Typography>
+              <Typography variant="body2"><b>NAT</b>: NAT Gateway. Permite que subredes privadas salgan a internet sin volverse públicas.</Typography>
+              <Typography variant="body2"><b>NAT EIP</b>: Elastic IP asociada al NAT Gateway.</Typography>
+            </Stack>
+          </Box>
+
+          <Box>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Infraestructura Transit Gateway
+            </Typography>
+            <Stack spacing={1}>
+              <Typography variant="body2"><b>Router lógico</b>: identificador del nodo del canvas. Sirve para relacionar el diseño con los recursos AWS.</Typography>
+              <Typography variant="body2"><b>TGW</b>: Transit Gateway de AWS. Actúa como hub central de conectividad.</Typography>
+              <Typography variant="body2"><b>TGW RT</b>: tabla de rutas interna del Transit Gateway.</Typography>
+              <Typography variant="body2"><b>Attachment</b>: conexión física/lógica entre una VPC y el TGW.</Typography>
+            </Stack>
+          </Box>
+
+          <Alert severity="warning" variant="outlined">
+            Regla práctica: primero mira el modo de conectividad y los pares esperados; después baja a IDs solo si necesitas depurar o verificar un recurso puntual en AWS.
+          </Alert>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cerrar</Button>
+      </DialogActions>
+    </Dialog>
+  );
 }
 
 function buildPlanAdvisories(plan, outputsResponse, lifecycle) {
@@ -554,6 +719,8 @@ export default function PlanDetailPage() {
 
   const [outputsResponse, setOutputsResponse] = useState(null); // { plan_id, applied, status, outputs }
   const [outputsLoading, setOutputsLoading] = useState(false);
+  const [outputsInfoOpen, setOutputsInfoOpen] = useState(false);
+  const [outputsJsonOpen, setOutputsJsonOpen] = useState(false);
 
   const [logText, setLogText] = useState(null);
   const [planRiskSummary, setPlanRiskSummary] = useState(null);
@@ -579,8 +746,16 @@ export default function PlanDetailPage() {
     () => buildVpcInfraCatalog(plan, outputsResponse),
     [plan, outputsResponse],
   );
+  const transitGatewayCatalog = useMemo(
+    () => buildTransitGatewayCatalog(plan, outputsResponse),
+    [plan, outputsResponse],
+  );
   const consoleGuide = useMemo(
     () => buildConsoleTestGuide(plan, outputsResponse, connectivityScenarios),
+    [plan, outputsResponse, connectivityScenarios],
+  );
+  const connectivityOverview = useMemo(
+    () => buildConnectivityOverview(plan, outputsResponse, connectivityScenarios),
     [plan, outputsResponse, connectivityScenarios],
   );
   const planAdvisories = useMemo(
@@ -1282,9 +1457,16 @@ export default function PlanDetailPage() {
                 <Box sx={{ flex: 1 }}>
                   <Typography variant="h6">Outputs</Typography>
                   <Typography component="div" variant="body2" color="text.secondary">
-                    Útil para depurar sin ir a la consola de AWS.
+                    Resumen pensado para entender rápido qué quedó creado en AWS sin perderte en demasiados IDs.
                   </Typography>
                 </Box>
+                <Button
+                  variant="text"
+                  startIcon={<InfoOutlinedIcon />}
+                  onClick={() => setOutputsInfoOpen(true)}
+                >
+                  Info AWS
+                </Button>
                 <Button
                   variant="outlined"
                   onClick={fetchOutputs}
@@ -1319,10 +1501,50 @@ export default function PlanDetailPage() {
                       </Alert>
                     ) : null}
 
+                    <Box sx={{ mt: 2 }}>
+                      <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                        Resumen de conectividad
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                        Primero mira estas tres tarjetas. Si necesitas depurar algo puntual, baja luego a los IDs por VPC o TGW.
+                      </Typography>
+                      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
+                        <Paper variant="outlined" sx={{ p: 1.5, flex: 1 }}>
+                          <Typography variant="caption" color="text.secondary">Modelo</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5 }}>{connectivityOverview.modeLabel}</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                            {describeConnectivityMode(connectivityOverview.modeLabel, connectivityOverview)}
+                          </Typography>
+                        </Paper>
+                        <Paper variant="outlined" sx={{ p: 1.5, flex: 1 }}>
+                          <Typography variant="caption" color="text.secondary">Conectividad esperada</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5 }}>
+                            {connectivityOverview.connectedPairs} par(es) conectados
+                          </Typography>
+                          <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
+                            <Chip size="small" label={`Peerings activos: ${connectivityOverview.peeringActive}`} variant="outlined" />
+                            <Chip size="small" label={`TGW activos: ${connectivityOverview.tgwActive}`} variant="outlined" />
+                          </Stack>
+                        </Paper>
+                        <Paper variant="outlined" sx={{ p: 1.5, flex: 1 }}>
+                          <Typography variant="caption" color="text.secondary">Traducción AWS</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5 }}>
+                            {connectivityOverview.tgwAttachmentsActive || connectivityOverview.tgwAttachmentsDeclared} attachment(s) TGW
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                            Declarados: peerings {connectivityOverview.peeringDeclared}, TGW {connectivityOverview.tgwDeclared}.
+                          </Typography>
+                        </Paper>
+                      </Stack>
+                    </Box>
+
                     {vpcInfraCatalog.length > 0 && (
                       <Box sx={{ mt: 2 }}>
                         <Typography variant="subtitle2" sx={{ mb: 1 }}>
                           Infraestructura destacada por VPC
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                          Aquí ves solo los identificadores más útiles de cada segmento en AWS.
                         </Typography>
                         <Stack spacing={1.5}>
                           {vpcInfraCatalog.map((item) => (
@@ -1361,27 +1583,106 @@ export default function PlanDetailPage() {
                       </Box>
                     )}
 
-                    <Paper
-                      variant="outlined"
-                      sx={{ mt: 2, p: 2, bgcolor: 'background.default', overflow: 'auto' }}
-                    >
-                      <Box
-                        component="pre"
-                        sx={{
-                          m: 0,
-                          whiteSpace: 'pre-wrap',
-                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                          fontSize: 12,
-                        }}
-                      >
-                        {JSON.stringify(outputsResponse?.outputs ?? outputsResponse, null, 2)}
+                    {transitGatewayCatalog.length > 0 && (
+                      <Box sx={{ mt: 2 }}>
+                        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                          Infraestructura Transit Gateway
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                          Este bloque solo aparece si el laboratorio usa un hub central de AWS Transit Gateway.
+                        </Typography>
+                        <Stack spacing={1.5}>
+                          {transitGatewayCatalog.map((item) => (
+                            <Paper key={item.routerId} variant="outlined" sx={{ p: 2 }}>
+                              <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                                {item.name}
+                              </Typography>
+                              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: item.attachments.length > 0 ? 1.5 : 0 }}>
+                                <Chip size="small" label={`Router lógico: ${item.routerId}`} variant="outlined" />
+                                <Chip
+                                  size="small"
+                                  label={item.tgwId ? `TGW: ${item.tgwId}` : 'TGW: —'}
+                                  color={item.tgwId ? 'secondary' : 'default'}
+                                  variant={item.tgwId ? 'filled' : 'outlined'}
+                                />
+                                <Chip
+                                  size="small"
+                                  label={item.routeTableId ? `TGW RT: ${item.routeTableId}` : 'TGW RT: —'}
+                                  color={item.routeTableId ? 'warning' : 'default'}
+                                  variant={item.routeTableId ? 'filled' : 'outlined'}
+                                />
+                              </Stack>
+
+                              {item.attachments.length > 0 && (
+                                <Stack spacing={1}>
+                                  {item.attachments.map((attachment) => (
+                                    <Paper key={attachment.key} variant="outlined" sx={{ p: 1.5, bgcolor: 'background.default' }}>
+                                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                                        Attachment
+                                      </Typography>
+                                      <Stack direction="row" spacing={1} flexWrap="wrap">
+                                        <Chip size="small" label={`VPC: ${attachment.vpcName}`} variant="outlined" />
+                                        <Chip size="small" label={attachment.attachmentId ? `ID: ${attachment.attachmentId}` : 'ID: —'} color={attachment.attachmentId ? 'info' : 'default'} variant={attachment.attachmentId ? 'filled' : 'outlined'} />
+                                      </Stack>
+                                    </Paper>
+                                  ))}
+                                </Stack>
+                              )}
+                            </Paper>
+                          ))}
+                        </Stack>
                       </Box>
-                    </Paper>
+                    )}
+
+                    <Box sx={{ mt: 2 }}>
+                      <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        spacing={1}
+                        alignItems={{ sm: 'center' }}
+                        justifyContent="space-between"
+                        sx={{ mb: outputsJsonOpen ? 1.5 : 0 }}
+                      >
+                        <Box>
+                          <Typography variant="subtitle2">JSON completo</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Solo si necesitas inspeccionar todos los outputs crudos del backend.
+                          </Typography>
+                        </Box>
+                        <Button
+                          size="small"
+                          variant={outputsJsonOpen ? 'contained' : 'outlined'}
+                          onClick={() => setOutputsJsonOpen((prev) => !prev)}
+                        >
+                          {outputsJsonOpen ? 'Ocultar JSON' : 'Ver JSON completo'}
+                        </Button>
+                      </Stack>
+
+                      {outputsJsonOpen && (
+                        <Paper
+                          variant="outlined"
+                          sx={{ p: 2, bgcolor: 'background.default', overflow: 'auto' }}
+                        >
+                          <Box
+                            component="pre"
+                            sx={{
+                              m: 0,
+                              whiteSpace: 'pre-wrap',
+                              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                              fontSize: 12,
+                            }}
+                          >
+                            {JSON.stringify(outputsResponse?.outputs ?? outputsResponse, null, 2)}
+                          </Box>
+                        </Paper>
+                      )}
+                    </Box>
                   </>
                 )}
               </Box>
             </Box>
           )}
+
+          <AwsOutputsInfoDialog open={outputsInfoOpen} onClose={() => setOutputsInfoOpen(false)} />
 
           {tab === 'tests' && (
             <Box sx={{ p: 3 }}>
