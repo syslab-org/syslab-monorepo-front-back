@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -134,6 +135,7 @@ const ConfirmDeployDialog = ({
   const riskSeverity = planRiskSummary?.severity || 'none';
   const primaryActionLabel = isRedeployPreview ? "Redeploy en AWS" : "Deploy en AWS";
   const secondaryActionLabel = isRedeployPreview ? "Revalidar redeploy" : "Validar deploy";
+  const isBusy = Boolean(loadingFlow || isSyncing);
 
   const riskAlertSeverity =
     riskSeverity === 'destructive'
@@ -222,10 +224,57 @@ const ConfirmDeployDialog = ({
   ];
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog
+      open={open}
+      onClose={(_event, reason) => {
+        if (isBusy && (reason === "backdropClick" || reason === "escapeKeyDown")) return;
+        if (isBusy) return;
+        onClose?.();
+      }}
+      disableEscapeKeyDown={isBusy}
+      maxWidth="md"
+      fullWidth
+    >
       <DialogTitle>Confirmar infraestructura</DialogTitle>
       <DialogContent dividers>
-        <Box>
+        <Box sx={{ position: "relative" }}>
+          {isBusy && (
+            <Box
+              sx={{
+                position: "absolute",
+                inset: 0,
+                zIndex: 2,
+                bgcolor: "rgba(255,255,255,0.64)",
+                backdropFilter: "blur(1px)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 1,
+              }}
+            >
+              <Stack
+                spacing={1.5}
+                alignItems="center"
+                sx={{
+                  px: 3,
+                  py: 2,
+                  borderRadius: 2,
+                  bgcolor: "background.paper",
+                  boxShadow: 3,
+                }}
+              >
+                <CircularProgress size={28} />
+                <Typography variant="subtitle2">
+                  {isSyncing
+                    ? "Validando infraestructura. Espera un momento..."
+                    : "Procesando la operación. No cierres este modal todavía."}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" textAlign="center">
+                  Mientras corre esta acción, se ha bloqueamos el modal para evitar estados inconsistentes.
+                </Typography>
+              </Stack>
+            </Box>
+          )}
           {renderBanner()}
 
           {isRedeployPreview && (
@@ -342,71 +391,72 @@ const ConfirmDeployDialog = ({
             {segments.map((segment) => {
               const aws = segment?.provider_overrides?.aws || {};
               return (
-              <Box
-                key={segment.id}
-                mb={2}
-                p={2}
-                border="1px solid #eee"
-                borderRadius={2}
-              >
-                <Typography variant="subtitle2">{segment.name}</Typography>
-                <Stack direction="row" spacing={1} mt={1} flexWrap="wrap">
-                  <Chip label={`CIDR: ${segment.cidr || segment.cidr_block}`} size="small" />
-                  <Chip label={`Región: ${segment.region}`} size="small" />
-                  <Chip
-                    label={`Modelo: ${String(segment.exposure || "internal").replace(/_/g, " ")}`}
-                    size="small"
-                    variant="outlined"
-                  />
-                  <Chip
-                    label={`AWS: VPC`}
-                    size="small"
-                    variant="outlined"
-                  />
-                  {aws.internet_gateway && (
-                    <Chip label="IGW" size="small" color="primary" />
-                  )}
-                  {aws.nat_gateway?.enabled && (
-                    <Chip label="NAT" size="small" color="secondary" />
-                  )}
-                  {aws.nat_gateway?.enabled && aws.nat_gateway?.elastic_ip && (
+                <Box
+                  key={segment.id}
+                  mb={2}
+                  p={2}
+                  border="1px solid #eee"
+                  borderRadius={2}
+                >
+                  <Typography variant="subtitle2">{segment.name}</Typography>
+                  <Stack direction="row" spacing={1} mt={1} flexWrap="wrap">
+                    <Chip label={`CIDR: ${segment.cidr || segment.cidr_block}`} size="small" />
+                    <Chip label={`Región: ${segment.region}`} size="small" />
                     <Chip
-                      label={`NAT EIP: ${aws.nat_gateway.elastic_ip}`}
+                      label={`Modelo: ${String(segment.exposure || "internal").replace(/_/g, " ")}`}
                       size="small"
-                      color="warning"
+                      variant="outlined"
                     />
+                    <Chip
+                      label={`AWS: VPC`}
+                      size="small"
+                      variant="outlined"
+                    />
+                    {aws.internet_gateway && (
+                      <Chip label="IGW" size="small" color="primary" />
+                    )}
+                    {aws.nat_gateway?.enabled && (
+                      <Chip label="NAT" size="small" color="secondary" />
+                    )}
+                    {aws.nat_gateway?.enabled && aws.nat_gateway?.elastic_ip && (
+                      <Chip
+                        label={`NAT EIP: ${aws.nat_gateway.elastic_ip}`}
+                        size="small"
+                        color="warning"
+                      />
+                    )}
+                  </Stack>
+                  {aws.nat_gateway?.enabled && (
+                    <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+                      Si defines una EIP para el NAT, debe ser un Allocation ID real de AWS (`eipalloc-...`), no una IP pública.
+                    </Typography>
                   )}
-                </Stack>
-                {aws.nat_gateway?.enabled && (
-                  <Typography variant="caption" color="text.secondary" display="block" mt={1}>
-                    Si defines una EIP para el NAT, debe ser un Allocation ID real de AWS (`eipalloc-...`), no una IP pública.
-                  </Typography>
-                )}
-              </Box>
-            )})}
+                </Box>
+              )
+            })}
           </Box>
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancelar</Button>
+        <Button onClick={onClose} disabled={isBusy}>Cancelar</Button>
         <Button
           variant="contained"
           onClick={onValidate}
-          disabled={loadingFlow}
+          disabled={isBusy}
         >
           {secondaryActionLabel}
         </Button>
         <Button
           variant="outlined"
           onClick={() => exportPlanToJson(transformedData, transformedData?.name || "plan")}
-          disabled={!transformedData}
+          disabled={!transformedData || isBusy}
         >
           Exportar JSON
         </Button>
         <Button
           variant="outlined"
           onClick={onViewPlan}
-          disabled={!hasReusablePlanId}
+          disabled={!hasReusablePlanId || isBusy}
         >
           Ver plan
         </Button>
@@ -414,7 +464,7 @@ const ConfirmDeployDialog = ({
           variant="contained"
           color={isRedeployPreview ? "warning" : "success"}
           onClick={onDeploy}
-          disabled={!isValidated || !hasReusablePlanId || loadingFlow}
+          disabled={!isValidated || !hasReusablePlanId || isBusy}
         >
           {isRedeployPreview ? 'Aplicar redeploy' : 'Desplegar'}
         </Button>
