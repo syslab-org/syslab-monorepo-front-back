@@ -6,6 +6,7 @@ import { LoadingFlowContext } from '@/app/providers/LoadingFlowContext';
 import { api } from '@/infrastructure/http/api';
 import { USER_ROL_STUDENT, USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER } from '@/shared/constants';
 import { useProviderCapabilities } from '@/features/networkCanvas/core/useProviderCapabilities';
+import { buildTemplateFlow, getLabTemplateByValue } from '@/features/networkCanvas/utils/labTemplates';
 import NewVLANForm from '../forms/NewVLANForm';
 import { useWizard } from "@/features/networkCanvas/context/WizardContext"
 import WizardModalLayout from '../components/WizardModalLayout';
@@ -69,12 +70,14 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
 
   const handleCreateVPC = async (vpcData) => {
     setLoadingFlow(true)
-    const { vlanName, cloudProvider, cidrBlock, prefixLength, region, type, course_id } = vpcData
+    const { vlanName, cloudProvider, cidrBlock, prefixLength, region, type, course_id, labTemplate } = vpcData
     const targetProvider = normalizeProviderValue(cloudProvider) || 'aws'
     const providerCapability = getCapability(targetProvider)
     const enabledFeatures = Object.entries(providerCapability.features || {})
       .filter(([, enabled]) => !!enabled)
       .map(([feature]) => feature)
+    const selectedTemplate = getLabTemplateByValue(labTemplate)
+    const templateFlow = wizardMode ? buildTemplateFlow(labTemplate) : null
 
     if (vlanName && targetProvider && cidrBlock && prefixLength && type) {
       try {
@@ -85,13 +88,17 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
           prefix_length: prefixLength,
           region,
           narrative: wizardMode ? 'wizard' : 'advanced',
-          lab_template: vpcData?.labTemplate || '',
+          lab_template: labTemplate || '',
+          flow: templateFlow || {},
           visibility_scope: user?.role === USER_ROL_STUDENT ? 'owner' : 'course',
           course_id: course_id || null,
           capabilities: enabledFeatures,
           metadata: {
             type,
             provider_status: providerCapability.status || 'unknown',
+            template_seed: labTemplate || '',
+            template_title: selectedTemplate?.title || '',
+            template_recommended_cidr: selectedTemplate?.recommendedCidr || '',
           },
         })
 
