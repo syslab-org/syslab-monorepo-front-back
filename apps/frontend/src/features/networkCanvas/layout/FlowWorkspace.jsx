@@ -40,6 +40,10 @@ export default function FlowWorkspace({
         toolbarProps?.canvasState,
         toolbarProps?.validationState,
     );
+    const isExpandedWorkspaceState =
+        toolbarProps?.canvasState === "PLAN_OUTDATED" ||
+        toolbarProps?.canvasState === "PLAN_RUNNING" ||
+        workspaceActionState.workspaceSeverity === "warning";
 
     return (
         <Box
@@ -93,39 +97,62 @@ export default function FlowWorkspace({
                 <Box
                     sx={{
                         px: { xs: 1.5, md: 2 },
-                        py: 1,
+                        py: isExpandedWorkspaceState ? 1 : 0.75,
                         borderBottom: "1px solid",
                         borderColor: "divider",
                         backgroundColor: (t) =>
                             t.palette.mode === "light" ? "rgba(248,250,252,0.94)" : "rgba(15,23,42,0.7)",
                     }}
                 >
-                    <Stack
-                        direction={{ xs: "column", md: "row" }}
-                        spacing={1.25}
-                        alignItems={{ xs: "flex-start", md: "center" }}
-                        justifyContent="space-between"
-                    >
-                        <Box sx={{ minWidth: 0 }}>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.25 }}>
-                                {workspaceActionState.workspaceTitle}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
+                    {isExpandedWorkspaceState ? (
+                        <Stack
+                            direction={{ xs: "column", md: "row" }}
+                            spacing={1.25}
+                            alignItems={{ xs: "flex-start", md: "center" }}
+                            justifyContent="space-between"
+                        >
+                            <Box sx={{ minWidth: 0 }}>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.25 }}>
+                                    {workspaceActionState.workspaceTitle}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    {workspaceActionState.workspaceDetail}
+                                </Typography>
+                            </Box>
+                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                {workspaceActionState.chips.map((chip) => (
+                                    <Chip
+                                        key={chip.label}
+                                        size="small"
+                                        label={chip.label}
+                                        color={chip.color}
+                                        variant={chip.variant}
+                                    />
+                                ))}
+                            </Stack>
+                        </Stack>
+                    ) : (
+                        <Stack
+                            direction={{ xs: "column", md: "row" }}
+                            spacing={1}
+                            alignItems={{ xs: "flex-start", md: "center" }}
+                            justifyContent="space-between"
+                        >
+                            <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0 }}>
+                                <Box component="span" sx={{ fontWeight: 700, color: "text.primary" }}>
+                                    {workspaceActionState.workspaceTitle}
+                                </Box>
+                                {" · "}
                                 {workspaceActionState.workspaceDetail}
                             </Typography>
-                        </Box>
-                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                            {workspaceActionState.chips.map((chip) => (
-                                <Chip
-                                    key={chip.label}
-                                    size="small"
-                                    label={chip.label}
-                                    color={chip.color}
-                                    variant={chip.variant}
-                                />
-                            ))}
+                            <Chip
+                                size="small"
+                                label={workspaceActionState.chips?.[0]?.label || workspaceActionState.actionLabel}
+                                color={workspaceActionState.chips?.[0]?.color || "default"}
+                                variant={workspaceActionState.chips?.[0]?.variant || "outlined"}
+                            />
                         </Stack>
-                    </Stack>
+                    )}
                 </Box>
 
                 <Box
