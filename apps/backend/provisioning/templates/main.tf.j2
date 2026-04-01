@@ -792,6 +792,22 @@ output "peering_ids" {
   value = { for k, p in aws_vpc_peering_connection.peer : k => p.id }
 }
 
+output "tgw_ids" {
+  value = {
+    for router in local.tgw_routers : router.id => aws_ec2_transit_gateway.tgw[0].id
+  }
+}
+
+output "tgw_attachment_ids" {
+  value = { for k, attachment in aws_ec2_transit_gateway_vpc_attachment.tgw_attach : k => attachment.id }
+}
+
+output "tgw_route_table_ids" {
+  value = {
+    for router in local.tgw_routers : router.id => aws_ec2_transit_gateway_route_table.tgw_rt[0].id
+  }
+}
+
 {% if not sim %}
 # Security groups creados por el template (uno por VPC con instancias)
 output "vm_security_group_ids" {
