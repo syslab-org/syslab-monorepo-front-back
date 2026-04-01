@@ -426,6 +426,67 @@ Conclusión:
 - Clasificación: `destructive acotado a subnet`
 - El cambio de `CIDR` de subnet debe tratarse como reemplazo encadenado de subnet + asociación + VM(s) residentes.
 
+### Caso 7: Transición `peering -> TGW`
+
+- Cambio en canvas:
+  - el router pasó de conectividad por `peering` a conectividad por `tgw`
+  - se mantuvieron las mismas 2 VPCs
+  - se mantuvieron las mismas 2 subnets
+  - se mantuvieron las mismas 2 instancias
+- Conectividad:
+  - se eliminó el `peering`
+  - se crearon attachments hacia un `Transit Gateway`
+  - se declararon rutas VPC -> TGW en ambos sentidos
+
+Resultado del `Validate`:
+
+- `Add: 10`
+- `Change: 2`
+- `Destroy: 3`
+- `Replace: 0`
+
+Recursos destruidos detectados:
+
+- `aws_route.peer_a_to_b["a-0qs41rig-35qwoshy:public"]`
+- `aws_route.peer_b_to_a["b-0qs41rig-35qwoshy:public"]`
+- `aws_vpc_peering_connection.peer["0qs41rig--35qwoshy"]`
+
+Recursos creados detectados:
+
+- `aws_ec2_transit_gateway.tgw[0]`
+- `aws_ec2_transit_gateway_vpc_attachment.tgw_attach["l8wb5j71:0qs41rig"]`
+- `aws_ec2_transit_gateway_vpc_attachment.tgw_attach["l8wb5j71:35qwoshy"]`
+- `aws_ec2_transit_gateway_route_table.tgw_rt[0]`
+- `aws_ec2_transit_gateway_route_table_association.tgw_rt_assoc[...]`
+- `aws_ec2_transit_gateway_route.tgw_to_vpcs[...]`
+- `aws_route.tgw_routes[...]`
+
+Resultado final del `Apply`:
+
+- `Apply complete! Resources: 10 added, 0 changed, 3 destroyed.`
+
+Outputs finales relevantes:
+
+- `peering_ids = {}`
+- Sin cambios en:
+  - `vpc_ids`
+  - `subnet_ids`
+  - `instance_ids`
+  - `instance_private_ips`
+  - `instance_public_ips`
+  - `vm_security_group_ids`
+
+Interpretación:
+
+- La transición destruye únicamente la conectividad anterior por `peering`.
+- Terraform crea una nueva capa de conectividad basada en `TGW` sin recrear VPCs, subnets o instancias.
+- El impacto quedó concentrado en recursos de conectividad y control de rutas.
+
+Conclusión:
+
+- Clasificación: `destructive pero controlado`
+- La transición `peering -> TGW` puede tratarse como migración de conectividad sin impacto destructivo sobre infraestructura base.
+
 ## Estado actual del flujo Canvas/Plan
 
 Además de la matriz de redeploy en AWS, esta ronda dejó estabilizada la lectura visual del estado del canvas para que el usuario entienda qué acción tiene sentido en cada momento.
@@ -560,7 +621,6 @@ Resultado:
 
 - Cambiar AMI
 - Cambiar CIDR de VPC
-- Transición peering -> TGW
 - Transición TGW -> isolated
 
 ## Recomendación operativa
