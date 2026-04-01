@@ -487,6 +487,67 @@ Conclusión:
 - Clasificación: `destructive pero controlado`
 - La transición `peering -> TGW` puede tratarse como migración de conectividad sin impacto destructivo sobre infraestructura base.
 
+### Caso 8: Transición `TGW -> isolated`
+
+- Secuencia usada para validar el caso:
+  - se restauró primero la conectividad `TGW` sobre el stack activo
+  - luego se eliminó completamente el router del canvas
+  - el payload final quedó con:
+    - `routers = []`
+    - `links = []`
+- Conectividad:
+  - se eliminaron el `Transit Gateway`, sus attachments y sus rutas
+  - se mantuvieron las mismas 2 VPCs
+  - se mantuvieron las mismas 2 subnets
+  - se mantuvieron las mismas 2 instancias
+
+Resultado del `Validate`:
+
+- `Add: 0`
+- `Change: 4`
+- `Destroy: 10`
+- `Replace: 0`
+
+Recursos destruidos detectados:
+
+- `aws_ec2_transit_gateway.tgw[0]`
+- `aws_ec2_transit_gateway_route.tgw_to_vpcs["0qs41rig"]`
+- `aws_ec2_transit_gateway_route.tgw_to_vpcs["35qwoshy"]`
+- `aws_ec2_transit_gateway_route_table.tgw_rt[0]`
+- `aws_ec2_transit_gateway_route_table_association.tgw_rt_assoc[...]`
+- `aws_ec2_transit_gateway_vpc_attachment.tgw_attach[...]`
+- `aws_route.tgw_routes[...]`
+
+Recursos actualizados detectados:
+
+- `aws_security_group.vm_sg["0qs41rig"]`
+- `aws_security_group.vm_sg["35qwoshy"]`
+
+Interpretación del `Change`:
+
+- Los Security Groups quitaron reglas ICMP cross-VPC asociadas a la conectividad previa.
+- No hubo `replace` de infraestructura base.
+
+Resultado final del `Apply`:
+
+- `Apply complete! Resources: 0 added, 2 changed, 10 destroyed.`
+
+Outputs finales relevantes:
+
+- `peering_ids = {}`
+- Sin cambios en:
+  - `vpc_ids`
+  - `subnet_ids`
+  - `instance_ids`
+  - `instance_private_ips`
+  - `instance_public_ips`
+  - `vm_security_group_ids`
+
+Conclusión:
+
+- Clasificación: `destructive pero controlado`
+- La transición `TGW -> isolated` elimina conectividad y reglas cross-VPC, pero conserva infraestructura base.
+
 ## Estado actual del flujo Canvas/Plan
 
 Además de la matriz de redeploy en AWS, esta ronda dejó estabilizada la lectura visual del estado del canvas para que el usuario entienda qué acción tiene sentido en cada momento.
@@ -599,6 +660,8 @@ Resultado:
 - Eliminar peering
 - Eliminar rutas de conectividad
 - Eliminar reglas cross-VPC asociadas a peering
+- Transición `peering -> TGW`
+- Transición `TGW -> isolated`
 
 ### Destructive acotado a VM
 
@@ -621,7 +684,6 @@ Resultado:
 
 - Cambiar AMI
 - Cambiar CIDR de VPC
-- Transición TGW -> isolated
 
 ## Recomendación operativa
 
