@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { computeInfraHash } from "../utils/infraHash";
 import { api } from "@/infrastructure/http/api";
@@ -15,10 +15,17 @@ export const usePlanValidationSync = ({
   setIsCanvasDirty,
   setHasValidatedInSession,
 }) => {
+  const lastSyncedValidationRef = useRef(null);
+
   useEffect(() => {
     if (validationState !== "SUCCESS" || !validationResult?.plan_id) return;
 
     const pid = validationResult.plan_id;
+    const syncKey = validationResult;
+
+    if (lastSyncedValidationRef.current === syncKey) return;
+    lastSyncedValidationRef.current = syncKey;
+
     setCanvasPlanId(pid);
     const resolvedLabId = labId || vpcid;
 
@@ -42,5 +49,5 @@ export const usePlanValidationSync = ({
 
     setIsCanvasDirty(false);
     setHasValidatedInSession(true);
-  }, [validationState, validationResult?.plan_id, nodes, edges, labId, vpcid, setCanvasPlanId, setValidatedPlanHash, setIsCanvasDirty, setHasValidatedInSession]);
+  }, [validationState, validationResult, nodes, edges, labId, vpcid, setCanvasPlanId, setValidatedPlanHash, setIsCanvasDirty, setHasValidatedInSession]);
 };

@@ -28,6 +28,12 @@ export function useCanvasDirtyState({
   const editGuardRef = useRef({ fn: null, args: null });
 
   useEffect(() => {
+    if (!canvasPlanId) {
+      dirtyInitializedRef.current = false;
+    }
+  }, [canvasPlanId]);
+
+  useEffect(() => {
     if (!restorationDone) return;
 
     if (!canvasPlanId) {
@@ -44,14 +50,20 @@ export function useCanvasDirtyState({
         return;
       }
 
+      let baselineHash = validatedPlanHash;
+
       if (isLegacyInfraHash(validatedPlanHash)) {
         const legacyCurrent = computeLegacyInfraHash(nodes, edges);
         if (legacyCurrent === validatedPlanHash) {
-          setValidatedPlanHash?.(computeInfraHash(nodes, edges));
+          baselineHash = computeInfraHash(nodes, edges);
+          setValidatedPlanHash?.(baselineHash);
+          setIsCanvasDirty(false);
+          return;
         }
       }
 
-      setIsCanvasDirty(false);
+      const current = computeInfraHash(nodes, edges);
+      setIsCanvasDirty(current !== baselineHash);
       return;
     }
 
