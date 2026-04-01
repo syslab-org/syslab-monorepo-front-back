@@ -69,7 +69,10 @@ function VPCNodeInstance({ data = {}, isConnectable }) {
         </NodeChrome>
       </div>
 
-      <Handle type="source" position={Position.Top} className="pt-handle" isConnectable={isConnectable} />
+      <Handle id="vpc-source-top" type="source" position={Position.Top} className="pt-handle" isConnectable={isConnectable} />
+      <Handle id="vpc-source-right" type="source" position={Position.Right} className="pt-handle" isConnectable={isConnectable} />
+      <Handle id="vpc-source-bottom" type="source" position={Position.Bottom} className="pt-handle" isConnectable={isConnectable} />
+      <Handle id="vpc-source-left" type="source" position={Position.Left} className="pt-handle" isConnectable={isConnectable} />
     </div>
   );
 }

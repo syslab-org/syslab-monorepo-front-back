@@ -10,7 +10,7 @@ import SchoolIcon from '@mui/icons-material/School';
 import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
-import { Alert, Box, Button, Chip, IconButton, Tooltip } from '@mui/material';
+import { Button, Chip, IconButton, Tooltip } from '@mui/material';
 import { computePlanActionState } from '@/features/networkCanvas/utils/planActionUi';
 import { useThemeMode } from '@/shared/ui/theme/AppThemeProvider';
 
@@ -248,46 +248,6 @@ export default function PacketToolbar({
         </div>
 
       </div>
-
-      {/* Mensajes visibles de estado (canvas) */}
-      {canvasState === "PLAN_RUNNING" && (
-        <Box sx={{ mt: 1 }}>
-          <Alert severity="warning" variant="outlined">
-            Hay un plan ejecutándose. El canvas está bloqueado.
-          </Alert>
-        </Box>
-      )}
-
-      {canvasState === "PLAN_OUTDATED" && (
-        <Box sx={{ mt: 1 }}>
-          <Alert severity="info" variant="outlined">
-            El canvas cambió desde la última validación. Revalida antes de aplicar (deploy real).
-          </Alert>
-        </Box>
-      )}
-
-      {actionState?.chips?.length > 0 && (
-        <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          {actionState.chips.map((chip) => (
-            <Chip
-              key={chip.label}
-              size="small"
-              label={chip.label}
-              color={chip.color}
-              variant={chip.variant}
-            />
-          ))}
-        </Box>
-      )}
-
-      {actionState?.helper && canvasState !== "PLAN_RUNNING" && (
-        <Box sx={{ mt: 1 }}>
-          <Alert severity={actionState.helperSeverity} variant="outlined">
-            {actionState.helper}
-          </Alert>
-        </Box>
-      )}
-
     </div>
   );
 }

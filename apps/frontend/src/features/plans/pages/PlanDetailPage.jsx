@@ -762,6 +762,13 @@ export default function PlanDetailPage() {
     () => buildPlanAdvisories(plan, outputsResponse, lifecycle),
     [plan, outputsResponse, lifecycle],
   );
+  const linkedCanvasId =
+    plan?.canvas_id ||
+    plan?.canvasId ||
+    plan?.payload?.canvas_id ||
+    plan?.payload?.canvasId ||
+    plan?.lab?.id ||
+    null;
   const hasOutputsData = Boolean(
     outputsResponse?.outputs &&
       typeof outputsResponse.outputs === 'object' &&
@@ -1160,6 +1167,14 @@ export default function PlanDetailPage() {
         <Button variant="outlined" onClick={() => navigate('/admin/plans')}>
           Volver
         </Button>
+        {linkedCanvasId && (
+          <Button
+            variant="contained"
+            onClick={() => navigate(`/admin/labs/${linkedCanvasId}/canvas`)}
+          >
+            Ir al canvas
+          </Button>
+        )}
       </Stack>
     </Stack>
   );
