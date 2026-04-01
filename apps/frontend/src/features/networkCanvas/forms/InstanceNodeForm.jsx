@@ -14,6 +14,7 @@ import {
 } from "@mui/material";
 import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
+import CidrLearningGuideButton from '@/features/networkCanvas/ui/CidrLearningGuideButton';
 import { TYPE_INSTANCE_NODE } from "../utils/constants";
 import { INSTANCE_TYPE_OPTIONS } from './options/instanceTypes';
 import { useFormValidationSchema } from './validations/useFormValidations';
@@ -160,6 +161,27 @@ const InstanceNodeForm = ({
         fullWidth
         margin="normal"
       />
+
+      <Alert severity="info" variant="outlined" sx={{ mt: 0.2, mb: 0.8 }}>
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+          Qué significa este workload
+        </Typography>
+        <Typography variant="caption" display="block" sx={{ mt: 0.4 }}>
+          - La private IP debe pertenecer a la subred padre.
+        </Typography>
+        <Typography variant="caption" display="block">
+          - Si la dejas vacía o escribes `auto`, el provider asignará una IP disponible automáticamente.
+        </Typography>
+        <Typography variant="caption" display="block">
+          - La IP pública depende del tipo de subred y de la política de despliegue, no reemplaza la private IP interna.
+        </Typography>
+        <Typography variant="caption" display="block">
+          - La SSH key define con qué par de llaves podrás entrar si habilitas acceso remoto.
+        </Typography>
+        <Box sx={{ mt: 1.25 }}>
+          <CidrLearningGuideButton buttonLabel="Ayuda con CIDR e IPs" />
+        </Box>
+      </Alert>
 
       <FormControl fullWidth margin="normal" error={!!errors.ami}>
         <InputLabel id="ami-label">AMI</InputLabel>

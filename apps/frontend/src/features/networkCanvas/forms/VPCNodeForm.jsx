@@ -22,6 +22,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 
 import { VPC_CHILD_FORM, } from "@/features/networkCanvas/utils/constants";
+import CidrLearningGuideButton from '@/features/networkCanvas/ui/CidrLearningGuideButton';
 import { useFormValidationSchema } from "./validations/useFormValidations";
 
 const VPCNodeForm = ({
@@ -279,6 +280,9 @@ const VPCNodeForm = ({
         <Typography variant="caption" display="block">
           - Allowed SSH CIDR abre TCP/22 solo desde la IP o red que indiques.
         </Typography>
+        <Box sx={{ mt: 1.25 }}>
+          <CidrLearningGuideButton buttonLabel="Ayuda con CIDR e IPs" />
+        </Box>
       </Alert>
 
       <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 1 }}>
