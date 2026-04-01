@@ -20,6 +20,7 @@ import {
   Tab,
   Tabs,
   Typography,
+  LinearProgress,
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
@@ -155,6 +156,44 @@ function statusChipProps(status) {
     default:
       return { label: status || '—', color: 'default', variant: 'outlined' };
   }
+}
+
+function describeRunningPhase(plan, lifecycle) {
+  const lastAction = String(plan?.last_action || plan?.lastAction || '').toLowerCase();
+
+  if (lastAction === 'apply') {
+    return {
+      title: 'Aplicando cambios en AWS',
+      description:
+        'Terraform está ejecutando el apply real sobre la infraestructura. Los recursos pueden tardar unos minutos en completarse y esta vista se actualizará automáticamente.',
+      nextStep: 'Si quieres detalle técnico, abre la pestaña Logs y sigue el progreso del apply.',
+    };
+  }
+
+  if (lastAction === 'destroy') {
+    return {
+      title: 'Eliminando infraestructura en AWS',
+      description:
+        'El destroy está desmontando el stack actual. Durante esta fase bloqueamos nuevas acciones para evitar estados inconsistentes.',
+      nextStep: 'Cuando termine, revisa Outputs y Logs para confirmar que no quedaron recursos activos.',
+    };
+  }
+
+  if (lastAction === 'plan') {
+    return {
+      title: 'Generando previsualización del plan',
+      description:
+        'Terraform está calculando el impacto del cambio antes de aplicar nada en AWS. En cuanto termine, podrás revisar el resumen de riesgo.',
+      nextStep: 'Espera a que aparezca SUCCESS o FAILURE antes de lanzar otra acción.',
+    };
+  }
+
+  return {
+    title: lifecycle.key === 'DEPLOYING' ? 'Procesando ejecución del plan' : 'Procesando solicitud',
+    description:
+      'Hay una operación en curso sobre este plan y la página está haciendo polling automático para reflejar el resultado en cuanto esté disponible.',
+    nextStep: 'Mientras tanto, evita cerrar el flujo o lanzar acciones paralelas sobre el mismo plan.',
+  };
 }
 
 const safeObject = (value) =>
@@ -738,6 +777,7 @@ export default function PlanDetailPage() {
   const isRunning = plan?.status === TASK_STATE_RUNNING || plan?.status === TASK_STATE_PENDING;
 
   const lifecycle = useMemo(() => computeLifecycle(plan), [plan]);
+  const runningPhase = useMemo(() => describeRunningPhase(plan, lifecycle), [plan, lifecycle]);
   const connectivityScenarios = useMemo(
     () => buildConnectivityScenarios(plan, outputsResponse),
     [plan, outputsResponse],
@@ -1300,12 +1340,67 @@ export default function PlanDetailPage() {
           )}
 
           {isRunning && (
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
-              <CircularProgress size={16} />
-              <Typography component="div" variant="body2" color="text.secondary">
-                Procesando… (se actualiza automáticamente)
-              </Typography>
-            </Stack>
+            <Paper
+              variant="outlined"
+              sx={{
+                mt: 2,
+                p: 2,
+                borderColor: 'info.light',
+                bgcolor: 'info.50',
+              }}
+            >
+              <Stack spacing={1.5}>
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={1.5}
+                  alignItems={{ xs: 'flex-start', sm: 'center' }}
+                  justifyContent="space-between"
+                >
+                  <Stack direction="row" spacing={1.25} alignItems="center">
+                    <CircularProgress size={18} />
+                    <Box>
+                      <Typography variant="subtitle2">
+                        {runningPhase.title}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {runningPhase.description}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                  <Chip
+                    size="small"
+                    color="info"
+                    variant="filled"
+                    label="Actualización automática activa"
+                  />
+                </Stack>
+
+                <LinearProgress />
+
+                <Stack
+                  direction={{ xs: 'column', md: 'row' }}
+                  spacing={1.5}
+                  alignItems={{ md: 'center' }}
+                  justifyContent="space-between"
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    {runningPhase.nextStep}
+                  </Typography>
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`Task: ${plan?.task_id || 'pendiente'}`}
+                    />
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`Última acción: ${plan?.last_action || plan?.lastAction || '—'}`}
+                    />
+                  </Stack>
+                </Stack>
+              </Stack>
+            </Paper>
           )}
         </Paper>
 
