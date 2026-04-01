@@ -1,4 +1,4 @@
-import { Alert, Box, Chip, Stack, Typography } from "@mui/material";
+import { Box, Chip, Stack, Typography } from "@mui/material";
 import { useState } from "react";
 import SidebarFlow from "@/features/networkCanvas/panels/SidebarFlow";
 import ReactFlowCanvas from "@/features/networkCanvas/canvas/ReactFlowCanvas";
@@ -93,7 +93,7 @@ export default function FlowWorkspace({
                 <Box
                     sx={{
                         px: { xs: 1.5, md: 2 },
-                        py: 1.25,
+                        py: 1,
                         borderBottom: "1px solid",
                         borderColor: "divider",
                         backgroundColor: (t) =>
@@ -107,7 +107,7 @@ export default function FlowWorkspace({
                         justifyContent="space-between"
                     >
                         <Box sx={{ minWidth: 0 }}>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.25 }}>
                                 {workspaceActionState.workspaceTitle}
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
@@ -126,11 +126,6 @@ export default function FlowWorkspace({
                             ))}
                         </Stack>
                     </Stack>
-                    {toolbarProps?.canvasState === "PLAN_OUTDATED" && (
-                        <Alert severity="warning" variant="outlined" sx={{ mt: 1.25 }}>
-                            Los cambios del canvas todavía no forman parte del último plan. Revalida antes de aplicar infraestructura.
-                        </Alert>
-                    )}
                 </Box>
 
                 <Box

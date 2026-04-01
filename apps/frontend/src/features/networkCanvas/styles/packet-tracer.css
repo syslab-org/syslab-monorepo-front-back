@@ -352,6 +352,16 @@
   box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.24);
 }
 
+.pt-node--vpc-shell .pt-handle {
+  opacity: 0.95;
+}
+
+.pt-node--vpc-shell:hover .pt-handle,
+.react-flow__node.selected .pt-node--vpc-shell .pt-handle {
+  transform: scale(1.12);
+  box-shadow: 0 0 0 4px rgba(47, 111, 237, 0.18);
+}
+
 /* separa los handles del borde */
 .react-flow__handle {
   transform: translateY(-2px);
