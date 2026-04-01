@@ -16,6 +16,7 @@ import {
 } from "@mui/material";
 import { useEffect, useMemo } from 'react';
 import { Controller, useForm } from "react-hook-form";
+import CidrLearningGuideButton from '@/features/networkCanvas/ui/CidrLearningGuideButton';
 import { TYPE_SUBNETWORK_NODE } from "../utils/constants";
 import { useFormValidationSchema } from './validations/useFormValidations';
 
@@ -140,7 +141,21 @@ const SubNetworkNodeForm = ({
       </Box>
 
       <Alert severity="info" variant="outlined" sx={{ mb: 0.5 }}>
-        Public zone allows broader ingress/egress by route policy. Private zone keeps traffic internal by default.
+        <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.35 }}>
+          Qué significa esta zona
+        </Typography>
+        <Typography variant="caption" display="block">
+          - La zona debe vivir dentro del CIDR del segmento padre.
+        </Typography>
+        <Typography variant="caption" display="block">
+          - Las zonas no deben solaparse entre sí dentro del mismo segmento.
+        </Typography>
+        <Typography variant="caption" display="block">
+          - Public zone allows broader ingress/egress by route policy. Private zone keeps traffic internal by default.
+        </Typography>
+        <Box sx={{ mt: 1.25 }}>
+          <CidrLearningGuideButton buttonLabel="Ayuda con CIDR e IPs" />
+        </Box>
       </Alert>
 
       <TextField

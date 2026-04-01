@@ -201,3 +201,48 @@ Si AWS no está disponible o el deploy no conviene durante la presentación:
 - pruebas visibles
 - redeploy menor definido
 - destroy disponible o explicado
+
+## QA pedagógica del flujo guiado
+
+Antes de presentar, conviene hacer una pasada no solo técnica sino también didáctica:
+
+### 1. Comprensión inicial
+
+- el usuario entiende qué significa `Plantilla de laboratorio`
+- el selector de provider deja claro que `AWS` es el provider listo para deploy real
+- el mensaje sobre `CIDR` no suena críptico
+
+### 2. Ayuda contextual
+
+- el botón `¿Cómo calcular?` se ve donde hace falta
+- la guía explica jerarquía:
+  - laboratorio
+  - segmento
+  - subred
+  - workload
+- la guía explica también el cálculo numérico:
+  - `/16`
+  - `/24`
+  - pertenencia de IP a subred
+- la guía diferencia bien `private IP` vs `public IP`
+
+### 3. Consistencia al editar
+
+- la misma ayuda está disponible al crear laboratorio
+- también aparece al editar segmento
+- también aparece al editar zona
+- también aparece al editar workload
+
+### 4. Señales de riesgo
+
+- si se cambia el CIDR recomendado de una plantilla, la UI avisa que hay que revisar direccionamiento
+- el usuario entiende que la plantilla no recalcula automáticamente todas las IPs
+
+### 5. Criterio de aprobación
+
+Podemos dar por bueno este flujo si una persona que no conoce el código:
+
+- entiende qué rango está definiendo
+- entiende dónde viven las IPs privadas
+- entiende cuándo una VM debería tener IP pública
+- y puede seguir el camino guiado sin necesitar explicación constante del presentador

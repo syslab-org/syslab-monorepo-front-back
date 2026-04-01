@@ -18,6 +18,7 @@ import { useForm } from 'react-hook-form';
 import { VLAN_FORM } from "@/features/networkCanvas/utils/constants";
 import { LAB_TEMPLATES } from '@/features/networkCanvas/utils/labTemplates';
 import { CLOUD_AWS_VALUE } from '@/shared/constants';
+import CidrLearningGuideButton from '@/features/networkCanvas/ui/CidrLearningGuideButton';
 import { useFormValidationSchema } from './validations/useFormValidations';
 
 const normalizeProviderValue = (raw) => {
@@ -211,7 +212,13 @@ const NewVLANForm = ({
         )}
 
         {wizardMode && (
-          <Alert severity="info" sx={{ alignItems: 'center' }}>
+          <Alert
+            severity="info"
+            sx={{ alignItems: 'center' }}
+            action={(
+              <CidrLearningGuideButton buttonSx={{ whiteSpace: 'nowrap' }} />
+            )}
+          >
             Consejo: usa un rango /16 para que tengas espacio cómodo para subredes (/24) sin pelearte con el IP plan.
           </Alert>
         )}
@@ -374,6 +381,7 @@ const NewVLANForm = ({
           {wizardMode ? 'Continuar' : 'Crear laboratorio'}
         </Button>
       </Stack>
+
     </form>
   );
 };
