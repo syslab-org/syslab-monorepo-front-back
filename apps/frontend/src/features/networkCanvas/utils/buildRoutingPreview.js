@@ -30,7 +30,6 @@ const getVpcCidr = (vpcNode) => {
 };
 
 const pairKey = (a, b) => (a < b ? `${a}::${b}` : `${b}::${a}`);
-
 export function buildRoutingPreview(nodes, edges) {
   if (!Array.isArray(nodes) || !nodes.length) {
     return { vpcs: [], routers: [], warnings: [], connectivityPairs: [] };
@@ -82,6 +81,8 @@ export function buildRoutingPreview(nodes, edges) {
       {
         dest_cidr: cidr,
         target: "local",
+        provider_target: "local",
+        neutral_target: "segment_local",
         via_router_id: null,
         directionality: "n/a",
       },
@@ -91,6 +92,8 @@ export function buildRoutingPreview(nodes, edges) {
       routes.push({
         dest_cidr: "0.0.0.0/0",
         target: "igw",
+        provider_target: "igw",
+        neutral_target: "internet_edge",
         via_router_id: null,
         directionality: "n/a",
       });
@@ -100,6 +103,8 @@ export function buildRoutingPreview(nodes, edges) {
       routes.push({
         dest_cidr: "0.0.0.0/0",
         target: "nat-gw",
+        provider_target: "nat-gw",
+        neutral_target: "egress_gateway",
         via_router_id: null,
         directionality: "n/a",
       });
@@ -142,6 +147,9 @@ export function buildRoutingPreview(nodes, edges) {
           routes.push({
             dest_cidr: destCidr,
             target: routerMode === "tgw" ? "tgw" : "peering",
+            provider_target: routerMode === "tgw" ? "tgw" : "peering",
+            neutral_target:
+              routerMode === "tgw" ? "routing_hub" : "direct_link",
             via_router_id: routerId,
             via_mode: routerMode,
             dest_vpc_id: destVpcId,
@@ -234,6 +242,8 @@ export function buildRoutingPreview(nodes, edges) {
       id: routerNode.id,
       name: routerNode.data?.identifier || routerNode.data?.name || routerNode.id,
       mode,
+      neutralMode: mode === "tgw" ? "hub_routing" : "direct_links",
+      providerMode: mode,
       connectedVpcIds,
       connectedVpcNames,
       connectedCount,
@@ -283,6 +293,10 @@ export function buildRoutingPreview(nodes, edges) {
         bName: b.name,
         bCidr: b.cidr,
         mode: routeAToB?.target || routeBToA?.target || null,
+        providerMode:
+          routeAToB?.provider_target || routeBToA?.provider_target || null,
+        neutralMode:
+          routeAToB?.neutral_target || routeBToA?.neutral_target || null,
         status,
         sharedRouters,
         reason:

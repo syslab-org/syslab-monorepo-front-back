@@ -1,6 +1,7 @@
 // #apps/frontend/src/components/theme/dashboard/listItems.jsx
 import { Hub, Storage } from "@mui/icons-material";
 import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
+import SchoolOutlinedIcon from "@mui/icons-material/SchoolOutlined";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import LayersIcon from "@mui/icons-material/Layers";
@@ -79,7 +80,7 @@ export const MainListItems = () => {
       <ListItemButton
         variant="whiteStyle"
         component={NavLink}
-        to="/admin/vpcs"
+        to="/admin/labs"
         sx={(theme) => ({
           borderRadius: 12,
           margin: "2px 8px",
@@ -204,6 +205,31 @@ export const SecondaryListItems = () => {
               <ManageAccountsIcon />
             </ListItemIcon>
             <ListItemText primary="User Management" />
+          </ListItemButton>
+        )}
+      {(role === USER_ROL_SUPER_ADMIN ||
+        role === USER_ROL_TEACHER) && (
+          <ListItemButton
+            variant="whiteStyle"
+            component={NavLink}
+            to="/admin/settings/courses"
+            sx={(theme) => ({
+              borderRadius: 12,
+              margin: "2px 8px",
+              transition: "all .15s ease",
+              "&:hover": {
+                backgroundColor:
+                  theme.palette.mode === "light"
+                    ? "rgba(0,0,0,0.035)"
+                    : "rgba(255,255,255,0.06)",
+              },
+              "&.active": activeItemStyle(theme),
+            })}
+          >
+            <ListItemIcon variant="whiteStyle">
+              <SchoolOutlinedIcon />
+            </ListItemIcon>
+            <ListItemText primary="Gestión de Cursos" />
           </ListItemButton>
         )}
 

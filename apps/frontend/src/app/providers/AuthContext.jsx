@@ -1,75 +1,68 @@
-import { onAuthStateChanged, signOut } from "firebase/auth";
-import { useEffect, useState, createContext, useContext } from "react";
-import { auth, db } from "@/infrastructure/firebase/firebaseConfig";
-import { DB_FIRESTORE_USERS } from "@/shared/constants";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+
+import { api, clearAuthToken, getAuthToken, setAuthToken } from "@/infrastructure/http/api";
 
 const AuthContext = createContext();
 
-// eslint-disable-next-line react/prop-types
 export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const navigate = useNavigate();
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
-    useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
-            if (authUser) {
-                try {
-                    const usersCollectionRef = collection(db, DB_FIRESTORE_USERS);
-                    const q = query(usersCollectionRef, where('authUid', '==', authUser.uid));
-                    const querySnapshot = await getDocs(q);
+  const refreshUser = async () => {
+    const token = getAuthToken();
+    if (!token) {
+      setUser(null);
+      setLoading(false);
+      return null;
+    }
 
-                    if (!querySnapshot.empty) {
-                        const userDoc = querySnapshot.docs[0];
-                        const userData = userDoc.data();
+    try {
+      const me = await api.me();
+      setUser(me);
+      return me;
+    } catch (error) {
+      clearAuthToken();
+      setUser(null);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
 
-                        // Combina los datos de autenticación con los datos de Firestore
-                        setUser({
-                            uid: authUser.uid,
-                            displayName: authUser.displayName,
-                            email: authUser.email,
-                            photoURL: authUser.photoURL,
-                            ...userData, // Incluye datos adicionales, como el rol
-                            userId: userDoc.id
-                        });
-                    } else {
-                        console.warn('No se encontró el usuario en Firestore con authUid:', authUser.uid);
-                        setUser(null);
-                        navigate("/login"); // Redirige a login si no se encuentra el usuario
-                    }
+  useEffect(() => {
+    refreshUser();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-                } catch (error) {
-                    console.error('Error al obtener los datos del usuario de Firestore:', error);
-                    setUser(null);
-                } finally {
-                    setLoading(false);
-                }
-            } else {
-                setUser(null);
-                setLoading(false);
-            }
-        });
+  const completeLogin = async (authPayload) => {
+    if (authPayload?.token) {
+      setAuthToken(authPayload.token);
+    }
+    const me = authPayload?.user || (await api.me());
+    setUser(me);
+    return me;
+  };
 
-        return () => unsubscribe();
-    }, [navigate]);
+  const logout = async () => {
+    try {
+      await api.logout();
+    } catch {
+      // ignore server logout errors; local token is source of truth for the SPA session
+    } finally {
+      clearAuthToken();
+      setUser(null);
+      navigate("/login");
+    }
+  };
 
-    const logout = async () => {
-        await signOut(auth);
-        setUser(null); // Limpia el usuario al cerrar sesión
-        navigate("/login"); // Redirige a login después de cerrar sesión
-    };
+  const value = useMemo(
+    () => ({ user, loading, logout, refreshUser, completeLogin }),
+    [user, loading],
+  );
 
-    return (
-        <AuthContext.Provider value={{ user, logout, loading }}>
-            {children}
-        </AuthContext.Provider>
-    );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-// Custom Hook para utilizar el contexto de autenticación
-// eslint-disable-next-line react-refresh/only-export-components
-export const useAuth = () => {
-    return useContext(AuthContext);
-};
+export const useAuth = () => useContext(AuthContext);

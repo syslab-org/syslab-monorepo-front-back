@@ -16,6 +16,7 @@ import {
 } from "@mui/material";
 import { useEffect, useMemo } from 'react';
 import { Controller, useForm } from "react-hook-form";
+import CidrLearningGuideButton from '@/features/networkCanvas/ui/CidrLearningGuideButton';
 import { TYPE_SUBNETWORK_NODE } from "../utils/constants";
 import { useFormValidationSchema } from './validations/useFormValidations';
 
@@ -132,19 +133,40 @@ const SubNetworkNodeForm = ({
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="pt-node-form">
       <Box className="pt-node-form__header">
-        <Typography className="pt-node-form__eyebrow">subnet node</Typography>
-        <Typography className="pt-node-form__title">Subnet Segment</Typography>
+        <Typography className="pt-node-form__eyebrow">network zone</Typography>
+        <Typography className="pt-node-form__title">Zone Segment</Typography>
         <Typography className="pt-node-form__subtitle">
-          Segment traffic behavior and addressing inside the parent VPC.
+          Define traffic behavior and addressing inside the parent network segment. AWS translation: subnet.
         </Typography>
       </Box>
 
       <Alert severity="info" variant="outlined" sx={{ mb: 0.5 }}>
-        Public subnet allows ingress/egress by route policy. Private subnet keeps traffic internal.
+        <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.35 }}>
+          Qué significa esta zona
+        </Typography>
+        <Typography variant="caption" display="block">
+          - La zona debe vivir dentro del CIDR del segmento padre.
+        </Typography>
+        <Typography variant="caption" display="block">
+          - Las zonas no deben solaparse entre sí dentro del mismo segmento.
+        </Typography>
+        <Typography variant="caption" display="block">
+          - Public zone allows broader ingress/egress by route policy. Private zone keeps traffic internal by default.
+        </Typography>
+        <Box sx={{ mt: 1.25 }}>
+          <CidrLearningGuideButton buttonLabel="Ayuda con CIDR e IPs" />
+        </Box>
       </Alert>
 
+      {watch("subnetType") === "private" && (
+        <Alert severity="info" sx={{ mb: 1.5 }}>
+          Esta zona es privada. Si después necesitas salida a Internet sin exponerla públicamente,
+          habilita <b>managed egress</b> desde el <b>Network Segment</b> padre.
+        </Alert>
+      )}
+
       <TextField
-        label="Subnet Name"
+        label="Zone Name"
         {...register("subnetName")}
         error={!!errors.subnetName}
         helperText={errors.subnetName?.message}
@@ -153,7 +175,7 @@ const SubNetworkNodeForm = ({
       />
 
       <TextField
-        label={`Subnet's CIDR Block (inside ${parentVpcCidr || 'VPC'})`}
+        label={`Zone CIDR Block (inside ${parentVpcCidr || 'segment'})`}
         {...register("cidrBlock")}
         error={!!errors.cidrBlock}
         helperText={errors.cidrBlock?.message}
@@ -186,14 +208,14 @@ const SubNetworkNodeForm = ({
       </FormControl>
 
       <FormControl fullWidth margin="normal" error={!!errors.subnetType}>
-        <InputLabel id="subnet-type-label">Subnet Type</InputLabel>
+        <InputLabel id="subnet-type-label">Zone Type</InputLabel>
         <Controller
           name="subnetType"
           control={control}
           render={({ field }) => (
             <Select
               labelId="subnet-type-label"
-              label="Subnet Type"
+              label="Zone Type"
               {...field}
               value={field.value || "public"}
             >
@@ -226,7 +248,7 @@ const SubNetworkNodeForm = ({
             )}
           />
         }
-        label="Auto-assign public IPv4 (recomendado en subnets públicas)"
+        label="Auto-assign public IPv4 (recommended for public zones)"
       />
       {errors.map_public_ip_on_launch && (
         <FormHelperText error>{errors.map_public_ip_on_launch.message}</FormHelperText>

@@ -26,6 +26,7 @@ export default function CanvasFeedbackLayer({
     handleCancelDeploy,
     validationState,
     canvasState,
+    planStatus,
     validationResult,
     transformedData,
     handleValidatePlan,
@@ -58,13 +59,13 @@ export default function CanvasFeedbackLayer({
                 maxWidth="sm"
                 fullWidth
             >
-                <DialogTitle>Canvas desactualizado vs Plan</DialogTitle>
+                <DialogTitle>Canvas desactualizado respecto al plan</DialogTitle>
 
                 <DialogContent>
                     <Typography variant="body2" color="text.secondary">
                         Este canvas cambió desde la última validación asociada al plan.
-                        Si sigues editando, el plan ya no representa exactamente lo que
-                        estás viendo.
+                        Si sigues editando, el plan dejará de representar exactamente lo
+                        que estás viendo en pantalla.
                     </Typography>
                 </DialogContent>
 
@@ -85,7 +86,7 @@ export default function CanvasFeedbackLayer({
                             processJsonToCloud();
                         }}
                     >
-                        Re-validar
+                        Revalidar
                     </Button>
 
                     <Button
@@ -106,12 +107,13 @@ export default function CanvasFeedbackLayer({
                 onClose={handleCancelDeploy}
                 validationState={validationState}
                 canvasState={canvasState}
+                planStatus={planStatus}
                 validationResult={validationResult}
                 transformedData={transformedData}
                 onValidate={handleValidatePlan}
                 onDeploy={handleApplyReal}
                 onViewPlan={() =>
-                    handleOpenPlanDetails(validationResult?.plan_id)
+                    handleOpenPlanDetails(validationResult?.plan_id || planStatus?.id)
                 }
                 loadingFlow={loadingFlow}
             />

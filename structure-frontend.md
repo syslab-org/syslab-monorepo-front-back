@@ -91,15 +91,15 @@ apps/frontend/src
 │   │   │   ├── SubNetworkNodeInstance.jsx
 │   │   │   └── VPCNodeInstance.jsx
 │   │   ├── pages
-│   │   │   ├── CreateVPCModal.jsx
-│   │   │   ├── MainFlow.jsx
-│   │   │   └── VPCList.jsx
+│   │   │   ├── CanvasFlowPage.jsx
+│   │   │   ├── CreateLabModal.jsx
+│   │   │   └── LabsPage.jsx
 │   │   ├── panels
 │   │   │   ├── PacketToolbar.jsx
 │   │   │   ├── RoutePreviewPanel.jsx
 │   │   │   └── SidebarFlow.jsx
 │   │   ├── store
-│   │   │   ├── cidrBlocksIp.js
+│   │   │   ├── canvasLabStore.js
 │   │   │   └── clickedNodeIdStore.js
 │   │   ├── styles
 │   │   │   └── packet-tracer.css
@@ -130,8 +130,6 @@ apps/frontend/src
 │           ├── SettingsPage.jsx
 │           └── UsersManagement.jsx
 ├── infrastructure
-│   ├── firebase
-│   │   └── firebaseConfig.js
 │   └── http
 │       └── api.js
 ├── main.jsx

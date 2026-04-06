@@ -31,7 +31,7 @@ export function useCanvasRuntimeController({
   } = useCanvasController(initialNodes);
 
   const { isValidConnection, onConnectStart, onConnect, onConnectEnd } =
-    useFlowState();
+    useFlowState(setCanvasUiError);
 
   const nodeSelection = useNodeSelection();
 

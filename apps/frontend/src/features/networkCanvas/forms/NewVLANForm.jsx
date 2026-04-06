@@ -13,26 +13,33 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { VLAN_FORM } from "@/features/networkCanvas/utils/constants";
-import { CLOUD_AWS_LABEL, CLOUD_AWS_VALUE } from '@/shared/constants';
+import { LAB_TEMPLATES } from '@/features/networkCanvas/utils/labTemplates';
+import { CLOUD_AWS_VALUE } from '@/shared/constants';
+import CidrLearningGuideButton from '@/features/networkCanvas/ui/CidrLearningGuideButton';
 import { useFormValidationSchema } from './validations/useFormValidations';
 
-const LAB_TEMPLATES = [
-  {
-    value: 'mvp1-single-vpc-bastion-private',
-    title: 'MVP 1 — 1 VPC (Bastion + App privada)',
-    desc: 'Topología simple para demostrar deploy, SSH vía bastion y validaciones de ruteo.',
-    recommendedCidr: '10.20.0.0/16',
-  },
-  {
-    value: 'case3-3vpcs-router-peering',
-    title: 'Caso 3 — 3 VPC conectadas por router',
-    desc: 'Pensado para demostrar conectividad controlada (ping entre VPCs conectadas).',
-    recommendedCidr: '10.30.0.0/16',
-  },
-];
+const normalizeProviderValue = (raw) => {
+  if (Array.isArray(raw)) {
+    return normalizeProviderValue(raw[0]);
+  }
+
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('[')) {
+      try {
+        return normalizeProviderValue(JSON.parse(trimmed));
+      } catch {
+        return trimmed.replace(/[[\]"]/g, '').trim().toLowerCase();
+      }
+    }
+    return trimmed.replace(/^"+|"+$/g, '').toLowerCase();
+  }
+
+  return String(raw || '').trim().toLowerCase();
+};
 
 const parseAndValidateCidr = (raw) => {
   const value = String(raw || '').trim();
@@ -50,12 +57,32 @@ const parseAndValidateCidr = (raw) => {
 };
 
 // eslint-disable-next-line react/prop-types
-const NewVLANForm = ({ onSave, wizardMode = false }) => {
+const providerLabels = {
+  aws: 'AWS',
+  gcp: 'GCP',
+  azure: 'Azure',
+}
+
+const providerStatusLabels = {
+  ready: 'Listo para validación y deploy',
+  planned: 'Próximamente',
+  unknown: 'Disponibilidad no confirmada',
+}
+
+// eslint-disable-next-line react/prop-types
+const NewVLANForm = ({
+  onSave,
+  wizardMode = false,
+  availableCourses = [],
+  requireCourseSelection = false,
+  providerCapabilities = [],
+  defaultProvider = CLOUD_AWS_VALUE,
+}) => {
   const validationSchema = useFormValidationSchema(VLAN_FORM, null, null, {}, true);
 
   const defaultCidr = useMemo(() => {
     // default “bonito” cuando wizard está activo
-    return wizardMode ? '10.20.0.0/16' : '';
+    return wizardMode ? (LAB_TEMPLATES[0]?.recommendedCidr || '10.30.0.0/16') : '';
   }, [wizardMode]);
 
   const {
@@ -73,14 +100,62 @@ const NewVLANForm = ({ onSave, wizardMode = false }) => {
       cidrBlock: defaultCidr,
       region: 'us-east-1',
       labTemplate: 'mvp1-single-vpc-bastion-private', // solo se usa si wizardMode=true
+      courseId: '',
     },
   });
 
+  const normalizedProviderCapabilities = useMemo(() => {
+    if (!Array.isArray(providerCapabilities) || providerCapabilities.length === 0) {
+      return [{ provider: CLOUD_AWS_VALUE, status: 'ready', features: {} }];
+    }
+
+    return providerCapabilities
+      .map((item) => ({
+        provider: String(item?.provider || '').trim().toLowerCase(),
+        status: item?.status || 'unknown',
+        features: item?.features || {},
+      }))
+      .filter((item) => item.provider);
+  }, [providerCapabilities]);
+
+  const selectedProvider = normalizeProviderValue(watch('cloudProvider')) || defaultProvider;
+  const selectedProviderCapability = useMemo(
+    () =>
+      normalizedProviderCapabilities.find((item) => item.provider === selectedProvider)
+      || normalizedProviderCapabilities.find((item) => item.status === 'ready')
+      || normalizedProviderCapabilities[0]
+      || { provider: defaultProvider, status: 'unknown', features: {} },
+    [defaultProvider, normalizedProviderCapabilities, selectedProvider],
+  );
+
+  useEffect(() => {
+    const current = normalizeProviderValue(watch('cloudProvider'));
+    if (!current && defaultProvider) {
+      setValue('cloudProvider', defaultProvider, { shouldValidate: true });
+    }
+  }, [defaultProvider, setValue, watch]);
+
   const region = watch('region');
   const labTemplate = watch('labTemplate');
+  const cidrBlockValue = watch('cidrBlock');
   const selectedTemplate = LAB_TEMPLATES.find(t => t.value === labTemplate);
+  const hasCustomTemplateCidr = Boolean(
+    wizardMode
+    && selectedTemplate?.recommendedCidr
+    && String(cidrBlockValue || '').trim()
+    && String(cidrBlockValue || '').trim() !== selectedTemplate.recommendedCidr,
+  );
+
+  useEffect(() => {
+    if (!wizardMode || !selectedTemplate?.recommendedCidr) return;
+    setValue('cidrBlock', selectedTemplate.recommendedCidr, { shouldValidate: true });
+  }, [selectedTemplate?.recommendedCidr, setValue, wizardMode]);
 
   const onSubmit = (data) => {
+    if (requireCourseSelection && !data.courseId) {
+      setError('courseId', { type: 'manual', message: 'Debes seleccionar un curso.' });
+      return;
+    }
     const cidrCheck = parseAndValidateCidr(data.cidrBlock);
     if (!cidrCheck.ok) {
       setError('cidrBlock', { type: 'manual', message: cidrCheck.message });
@@ -88,12 +163,13 @@ const NewVLANForm = ({ onSave, wizardMode = false }) => {
     }
 
     const { base, prefix } = cidrCheck;
+    const provider = normalizeProviderValue(data.cloudProvider) || CLOUD_AWS_VALUE;
 
     onSave({
       type: 'vlan',
 
       // compat con lo que ya guarda el canvas
-      cloudProvider: data.cloudProvider,
+      cloudProvider: provider,
       vlanName: data.vlanName,
       cidrBlock: base,
       prefixLength: prefix,
@@ -111,6 +187,7 @@ const NewVLANForm = ({ onSave, wizardMode = false }) => {
           narrative: 'wizard',
         }
         : {}),
+      course_id: data.courseId || null,
     });
   };
 
@@ -129,14 +206,29 @@ const NewVLANForm = ({ onSave, wizardMode = false }) => {
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Define el nombre, la región y el rango padre (CIDR). Con esto podremos guiar el resto del flujo
-              (VPCs, subredes, instancias y pruebas).
+              (segmentos, zonas, workloads y pruebas).
             </Typography>
           </Box>
         )}
 
         {wizardMode && (
-          <Alert severity="info" sx={{ alignItems: 'center' }}>
+          <Alert
+            severity="info"
+            sx={{ alignItems: 'center' }}
+            action={(
+              <CidrLearningGuideButton buttonSx={{ whiteSpace: 'nowrap' }} />
+            )}
+          >
             Consejo: usa un rango /16 para que tengas espacio cómodo para subredes (/24) sin pelearte con el IP plan.
+          </Alert>
+        )}
+
+        {wizardMode && (
+          <Alert severity="info" sx={{ alignItems: 'center' }}>
+            En este MVP el deploy real está habilitado para
+            {' '}
+            <b>AWS</b>
+            . Otros providers se muestran como referencia de roadmap, pero aún no están disponibles para ejecución.
           </Alert>
         )}
 
@@ -150,10 +242,22 @@ const NewVLANForm = ({ onSave, wizardMode = false }) => {
             label="Cloud Provider"
             defaultValue={CLOUD_AWS_VALUE}
           >
-            <MenuItem value={CLOUD_AWS_VALUE}>{CLOUD_AWS_LABEL}</MenuItem>
+            {normalizedProviderCapabilities.map((providerCapability) => (
+              <MenuItem
+                key={providerCapability.provider}
+                value={providerCapability.provider}
+                disabled={providerCapability.status !== 'ready'}
+              >
+                {providerLabels[providerCapability.provider] || providerCapability.provider.toUpperCase()}
+                {' '}
+                {providerCapability.status !== 'ready' ? `(Próximamente)` : ''}
+              </MenuItem>
+            ))}
           </Select>
           <FormHelperText>
-            Inicialmente trabajamos con AWS, tanto para simulación educativa de topologías como para orquestación real.
+            {selectedProviderCapability.status === 'ready'
+              ? `${providerLabels[selectedProviderCapability.provider] || selectedProviderCapability.provider.toUpperCase()}: ${providerStatusLabels[selectedProviderCapability.status]}.`
+              : `${providerLabels[selectedProviderCapability.provider] || selectedProviderCapability.provider.toUpperCase()}: ${providerStatusLabels[selectedProviderCapability.status]}. Para este MVP usa AWS si quieres desplegar infraestructura real.`}
           </FormHelperText>
         </FormControl>
 
@@ -183,38 +287,72 @@ const NewVLANForm = ({ onSave, wizardMode = false }) => {
                 <Button size="small" variant="outlined" onClick={applyTemplateCidr}>
                   Usar CIDR recomendado ({selectedTemplate.recommendedCidr})
                 </Button>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                  Al crear el laboratorio, esta plantilla cargará un canvas inicial coherente con el caso elegido.
+                </Typography>
               </Box>
+            )}
+
+            {hasCustomTemplateCidr && (
+              <Alert severity="warning" sx={{ mt: 1.25 }}>
+                Esta plantilla fue preparada sobre el CIDR sugerido
+                {' '}
+                <b>{selectedTemplate.recommendedCidr}</b>
+                . Si cambias el rango maestro, luego revisa en el canvas los CIDR de segmentos,
+                subredes e IPs fijas para ajustarlos manualmente si hace falta.
+              </Alert>
             )}
           </FormControl>
         )}
 
-        {/* VLAN Name */}
         <TextField
-          label={wizardMode ? 'Nombre del laboratorio' : 'VLAN Name'}
-          placeholder={wizardMode ? 'Ej: Lab-Ruteo-1' : ''}
+          label="Nombre del laboratorio"
+          placeholder={wizardMode ? 'Ej: Lab-Ruteo-1' : 'Ej: Laboratorio-Peering-1'}
           {...register('vlanName')}
           error={!!errors.vlanName}
           helperText={
             errors.vlanName?.message ||
-            (wizardMode
-              ? 'Este nombre se verá en la lista y será la “historia” principal del flujo.'
-              : '')
+            'Este nombre se verá en la lista y será la referencia principal del laboratorio.'
           }
           fullWidth
           autoComplete="off"
         />
 
-        {/* CIDR */}
+        {availableCourses.length > 0 && (
+          <FormControl fullWidth error={requireCourseSelection && !watch('courseId')}>
+            <InputLabel id="course-select-label">Curso</InputLabel>
+            <Select
+              labelId="course-select-label"
+              id="course-select"
+              {...register('courseId')}
+              label="Curso"
+              defaultValue=""
+            >
+              {!requireCourseSelection && <MenuItem value="">Sin curso</MenuItem>}
+              {availableCourses.map((course) => (
+                <MenuItem key={course.id} value={course.id}>
+                  {course.name}
+                </MenuItem>
+              ))}
+            </Select>
+            <FormHelperText>
+              {requireCourseSelection
+                ? 'Selecciona el curso al que se compartirá el laboratorio.'
+                : 'Opcional para administradores.'}
+            </FormHelperText>
+          </FormControl>
+        )}
+
         <TextField
-          label={wizardMode ? 'Rango maestro (CIDR)' : 'VLAN master CIDR (e.g. 10.0.0.0/16)'}
+          label="Rango maestro (CIDR)"
           placeholder={wizardMode ? 'Ej: 10.20.0.0/16' : '10.30.0.0/20'}
           {...register('cidrBlock')}
           error={!!errors.cidrBlock}
           helperText={
             errors.cidrBlock?.message ||
             (wizardMode
-              ? 'Este será el bloque padre. Luego derivaremos VPCs/subnets desde aquí.'
-              : 'Rango padre del que se derivarán las VPC/subnets')
+              ? 'Este será el bloque padre. Si usas plantilla y lo cambias, revisa luego el direccionamiento precargado en el canvas.'
+              : 'Rango padre del que se derivarán los segmentos y zonas')
           }
           fullWidth
           autoComplete="off"
@@ -222,12 +360,12 @@ const NewVLANForm = ({ onSave, wizardMode = false }) => {
 
         {/* Region */}
         <FormControl fullWidth>
-          <InputLabel id="select-region-label">Region</InputLabel>
+          <InputLabel id="select-region-label">Región</InputLabel>
           <Select
             labelId="select-region-label"
             id="select-region"
             {...register('region')}
-            label="Region"
+            label="Región"
             defaultValue="us-east-1"
           >
             <MenuItem value="us-east-1">US East (N. Virginia)</MenuItem>
@@ -240,9 +378,10 @@ const NewVLANForm = ({ onSave, wizardMode = false }) => {
         </FormControl>
 
         <Button type="submit" variant="contained" color="primary">
-          {wizardMode ? 'Continuar' : 'Create VLAN'}
+          {wizardMode ? 'Continuar' : 'Crear laboratorio'}
         </Button>
       </Stack>
+
     </form>
   );
 };

@@ -93,21 +93,21 @@ const isUnidirectional = (route, routes, connectedVpcs) => {
  * - duplicada
  */
 const routeError = (r, idx, routes, connectedVpcs) => {
-  if (!r.sourceVpcId) return "Selecciona la VPC de origen";
+  if (!r.sourceVpcId) return "Selecciona el segmento de origen";
 
   const srcVpc = findVpcById(connectedVpcs, r.sourceVpcId);
-  if (!srcVpc) return "La VPC de origen no está conectada a este router";
+  if (!srcVpc) return "El segmento de origen no está conectado a esta policy";
 
   const dest = normalizeCidr(r.destCidr);
-  if (!dest) return "Destination CIDR es requerido";
-  if (!isValidCidr(dest)) return "Destination CIDR inválido";
+  if (!dest) return "El CIDR destino es requerido";
+  if (!isValidCidr(dest)) return "El CIDR destino es inválido";
 
   if (r.destVpcId) {
     const dstVpc = findVpcById(connectedVpcs, r.destVpcId);
-    if (!dstVpc) return "La VPC destino no está conectada a este router";
+    if (!dstVpc) return "El segmento destino no está conectado a esta policy";
     const vpcCidr = normalizeCidr(dstVpc.cidr || "");
     if (vpcCidr && !(dest === vpcCidr || cidrWithin(dest, vpcCidr))) {
-      return `El CIDR destino debe ser ${vpcCidr} o estar contenido en esa VPC`;
+      return `El CIDR destino debe ser ${vpcCidr} o estar contenido en ese segmento`;
     }
   }
 
@@ -163,9 +163,9 @@ export default function RouterNodeForm({
     if (count < 2) {
       return {
         type: "info",
-        title: "Sin conectividad entre VPCs",
+        title: "Sin conectividad entre segmentos",
         message:
-          "Este router necesita al menos 2 VPCs conectadas para poder enrutar tráfico entre ellas.",
+          "Este nodo necesita al menos 2 segmentos conectados para poder modelar tráfico entre ellos.",
       };
     }
 
@@ -174,7 +174,7 @@ export default function RouterNodeForm({
         type: "success",
         title: "Topología punto a punto",
         message:
-          "Con 2 VPCs conectadas, el router actuará como un intermediario simple. Solo habrá comunicación si defines rutas explícitas.",
+          "Con 2 segmentos conectados, este nodo actuará como un intermediario simple. Solo habrá comunicación si defines policies explícitas.",
       };
     }
 
@@ -182,7 +182,7 @@ export default function RouterNodeForm({
       type: "warning",
       title: "Topología multipunto",
       message:
-        "Con más de 2 VPCs conectadas, este router centraliza el enrutamiento. Debes definir rutas claras para controlar qué VPC puede comunicarse con cuál.",
+        "Con más de 2 segmentos conectados, este nodo centraliza la conectividad. Debes definir policies claras para controlar qué segmento puede comunicarse con cuál.",
     };
   })();
 
@@ -279,19 +279,24 @@ export default function RouterNodeForm({
       : 0;
   const hasPendingReverseForPeering =
     normalizedMode === "peering" && routePairStats.oneWay > 0;
+  const hasExplicitPolicies = routes.length > 0;
+  const hasEffectiveConnectivity =
+    normalizedMode === "tgw"
+      ? hasExplicitPolicies
+      : routePairStats.bidirectional > 0;
 
   const modeSummary = useMemo(() => {
     if (normalizedMode === "tgw") {
       return {
         severity: connectedVpcCount >= 3 ? "success" : "warning",
-        title: "Transit Gateway (hub-and-spoke)",
+        title: "Hub routing",
         detail:
           connectedVpcCount >= 3
-            ? `Se creará 1 TGW con ${connectedVpcCount} attachment(s). Escala mejor cuando hay varias VPC.`
-            : "Con pocas VPC, TGW puede ser más complejo y costoso que peering.",
+            ? `La topología se implementará como un hub central con ${connectedVpcCount} attachment(s).`
+            : "Con pocos segmentos, el modo hub puede ser más complejo que un enlace directo.",
         bullets: [
-          "Implementación AWS: 1 Transit Gateway + 1 attachment por VPC conectada.",
-          "El tráfico pasa por el hub central; no hay malla de peerings entre pares.",
+          "Traducción AWS: 1 Transit Gateway + 1 attachment por segmento conectado.",
+          "El tráfico pasa por el hub central; no existe una malla de enlaces directos entre pares.",
           "Para ping bidireccional, define rutas de ida y vuelta en la tabla del router.",
         ],
       };
@@ -299,13 +304,13 @@ export default function RouterNodeForm({
 
     return {
       severity: hasPendingReverseForPeering ? "warning" : "info",
-      title: "VPC Peering (enlace por pares)",
-      detail: `Con tu topología actual, el máximo son ${potentialPairs} peering(s).`,
+      title: "Direct links",
+      detail: `Con tu topología actual, el máximo son ${potentialPairs} enlace(s) directos entre pares.`,
       bullets: [
-        "Implementación AWS: 1 conexión peering por par con rutas declaradas en ambos sentidos.",
+        "Traducción AWS: 1 conexión peering por par con rutas declaradas en ambos sentidos.",
         "No es transitivo: A↔B y B↔C no habilita A↔C automáticamente.",
         connectedVpcCount > 2
-          ? "Con varias VPC aumenta el número de pares y el mantenimiento de rutas."
+          ? "Con varios segmentos aumenta el número de pares y el mantenimiento de rutas."
           : "Es ideal para laboratorios pequeños y directos.",
       ],
     };
@@ -319,26 +324,26 @@ export default function RouterNodeForm({
   const routingCopy = useMemo(() => {
     if (normalizedMode === "tgw") {
       return {
-        sectionTitle: "Rutas hacia el hub",
+        sectionTitle: "Policies toward the hub",
         intro:
-          "Cada fila indica qué tráfico sale desde una VPC y se envía al Transit Gateway para alcanzar otra red conectada al hub.",
+          "Cada fila indica qué tráfico sale desde un segmento y se envía al hub para alcanzar otra red conectada.",
         explainer:
           "Aquí no defines un enlace directo entre pares. Defines qué destinos deben enviarse al hub central.",
-        sourceLabel: "VPC que envía al hub",
-        destVpcLabel: "VPC alcanzada vía hub",
+        sourceLabel: "Segmento que envía al hub",
+        destVpcLabel: "Segmento alcanzado vía hub",
         destCidrLabel: "CIDR enviado al hub",
         oneWayLabel: "Falta retorno",
       };
     }
 
     return {
-      sectionTitle: "Rutas entre pares",
+      sectionTitle: "Policies between direct peers",
       intro:
-        "Cada fila representa un destino directo entre VPCs. En peering, el par solo queda operativo cuando declaras ida y vuelta.",
+        "Cada fila representa un destino directo entre segmentos. En enlaces directos, el par solo queda operativo cuando declaras ida y vuelta.",
       explainer:
-        "Aquí sí estás modelando conectividad directa entre dos VPC específicas.",
-      sourceLabel: "VPC de origen",
-      destVpcLabel: "VPC destino directa",
+        "Aquí sí estás modelando conectividad directa entre dos segmentos específicos.",
+      sourceLabel: "Segmento de origen",
+      destVpcLabel: "Segmento destino directo",
       destCidrLabel: "CIDR destino",
       oneWayLabel: "Solo ida",
     };
@@ -364,10 +369,10 @@ export default function RouterNodeForm({
   return (
     <Box sx={{ minWidth: 560 }} className="pt-node-form">
       <Box className="pt-node-form__header">
-        <Typography className="pt-node-form__eyebrow">routing node</Typography>
-        <Typography className="pt-node-form__title">Router</Typography>
+        <Typography className="pt-node-form__eyebrow">connectivity node</Typography>
+        <Typography className="pt-node-form__title">Connectivity Policy</Typography>
         <Typography className="pt-node-form__subtitle">
-          Define routing mode and traffic policies between connected VPCs.
+          Define connectivity mode and traffic policies between connected network segments.
         </Typography>
       </Box>
 
@@ -381,7 +386,7 @@ export default function RouterNodeForm({
 
       <Box sx={{ mb: 1 }}>
         <Typography variant="body2" sx={{ mb: 1 }}>
-          VPCs conectadas a este router:
+          Segmentos conectados a este nodo:
         </Typography>
         <Stack direction="row" gap={1} flexWrap="wrap">
           {connectedVpcs.map((v) => (
@@ -394,7 +399,7 @@ export default function RouterNodeForm({
           ))}
           {!connectedVpcs.length && (
             <Typography variant="body2" color="text.secondary">
-              (ninguna)
+              (ninguno)
             </Typography>
           )}
         </Stack>
@@ -413,7 +418,7 @@ export default function RouterNodeForm({
       {/* Selector de modo real de despliegue */}
       <Box sx={{ mb: 2 }}>
         <Typography variant="body2" sx={{ mb: 0.5 }}>
-          Cómo se construirá en AWS
+          Connectivity model
         </Typography>
         <Select
           size="small"
@@ -422,16 +427,16 @@ export default function RouterNodeForm({
           onChange={(e) => setMode(e.target.value)}
         >
           <MenuItem value="peering">
-            Peering (modo seguro por defecto)
+            Direct links (AWS: Peering)
           </MenuItem>
           <MenuItem value="tgw">
-            Transit Gateway (explícito)
+            Hub routing (AWS: Transit Gateway)
           </MenuItem>
         </Select>
 
         <Typography variant="caption" color="text.secondary">
-          Este selector define cómo AWS implementa el enrutamiento: Peering por pares o Transit Gateway central.
-          La conectividad final depende de las rutas que declares.
+          Este selector define el modelo neutral de conectividad. La traducción AWS puede ser peering por pares o un Transit Gateway central.
+          La conectividad final depende de las policies que declares.
         </Typography>
       </Box>
 
@@ -454,7 +459,7 @@ export default function RouterNodeForm({
       <Stack direction="row" gap={1} flexWrap="wrap" sx={{ mb: 2 }}>
         <Chip
           size="small"
-          label={normalizedMode === "tgw" ? "AWS: 1 hub central" : "AWS: enlaces por pares"}
+          label={normalizedMode === "tgw" ? "AWS: 1 hub central" : "AWS: enlaces directos por pares"}
           color={normalizedMode === "tgw" ? "primary" : "secondary"}
           variant="filled"
         />
@@ -463,7 +468,7 @@ export default function RouterNodeForm({
           label={
             normalizedMode === "tgw"
               ? "Lectura: el tráfico pasa por el hub"
-              : "Lectura: el tráfico va directo entre VPCs"
+              : "Lectura: el tráfico va directo entre segmentos"
           }
           variant="outlined"
         />
@@ -471,8 +476,8 @@ export default function RouterNodeForm({
           size="small"
           label={
             normalizedMode === "tgw"
-              ? "Escala mejor con varias VPCs"
-              : "Más simple con pocas VPCs"
+              ? "Escala mejor con varios segmentos"
+              : "Más simple para laboratorios pequeños"
           }
           color={normalizedMode === "tgw" ? "success" : "default"}
           variant={normalizedMode === "tgw" ? "filled" : "outlined"}
@@ -497,11 +502,33 @@ export default function RouterNodeForm({
           label={`Solo ida: ${routePairStats.oneWay}`}
           variant={routePairStats.oneWay > 0 ? "filled" : "outlined"}
         />
+        <Chip
+          size="small"
+          color={hasEffectiveConnectivity ? "success" : "warning"}
+          label={
+            hasEffectiveConnectivity
+              ? `Payload efectivo: ${normalizedMode === "tgw" ? "hub routing activo" : "direct links activos"}`
+              : "Payload efectivo: aislado"
+          }
+          variant="filled"
+        />
       </Stack>
 
       {hasPendingReverseForPeering && (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          En modo <b>Peering</b> necesitas rutas de ida y vuelta por cada par de VPC para que ese enlace se despliegue.
+          En modo <b>Direct links</b> necesitas rutas de ida y vuelta por cada par de segmentos para que ese enlace se materialice.
+        </Alert>
+      )}
+
+      {!hasExplicitPolicies && connectedVpcCount >= 2 && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Hay segmentos conectados visualmente a este nodo, pero no has definido policies. Si despliegas así, el payload saldrá <b>aislado</b> aunque el edge hacia el router siga visible en el canvas.
+        </Alert>
+      )}
+
+      {hasExplicitPolicies && !hasEffectiveConnectivity && connectedVpcCount >= 2 && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          El nodo ya tiene policies, pero todavía no generan conectividad efectiva. En peering eso suele significar que falta la ruta de retorno del otro segmento.
         </Alert>
       )}
 
@@ -519,21 +546,25 @@ export default function RouterNodeForm({
         {routingCopy.explainer}
       </Alert>
 
+      <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
+        Los edges del canvas solo indican qué segmentos están conectados a este nodo de políticas. La conectividad que realmente se traducirá a AWS sale de las rutas/policies definidas abajo.
+      </Alert>
+
       <Alert severity="info" sx={{ mb: 2 }}>
         <Typography variant="body2" sx={{ fontWeight: 600 }}>
           Cómo leer esta tabla
         </Typography>
         <Typography variant="caption" display="block" sx={{ mt: 0.4 }}>
-          - Origen: VPC desde la que sale el tráfico.
+          - Origen: segmento desde el que sale el tráfico.
         </Typography>
         <Typography variant="caption" display="block">
           - Destino: red que quieres alcanzar.
         </Typography>
         <Typography variant="caption" display="block">
-          - En peering modelas conectividad directa entre pares.
+          - En direct links modelas conectividad directa entre pares.
         </Typography>
         <Typography variant="caption" display="block">
-          - En TGW modelas qué destinos deben enviarse al hub central.
+          - En hub routing modelas qué destinos deben enviarse al hub central.
         </Typography>
       </Alert>
 
@@ -551,7 +582,6 @@ export default function RouterNodeForm({
             gap={1}
             sx={{ mb: 1.5, flexWrap: "wrap" }}
           >
-            {/* Source VPC */}
             <Box sx={{ minWidth: 200 }}>
               <Typography variant="caption">{routingCopy.sourceLabel}</Typography>
               <Select
@@ -568,7 +598,6 @@ export default function RouterNodeForm({
               </Select>
             </Box>
 
-            {/* Dest VPC (opcional) */}
             <Box sx={{ minWidth: 220 }}>
               <Typography variant="caption">{routingCopy.destVpcLabel}</Typography>
               <Select
@@ -579,7 +608,7 @@ export default function RouterNodeForm({
                 fullWidth
               >
                 <MenuItem value="">
-                  <em>— Ninguna —</em>
+                  <em>— Ninguno —</em>
                 </MenuItem>
                 {connectedVpcs
                   .filter((v) => v.id !== r.sourceVpcId)
@@ -591,7 +620,6 @@ export default function RouterNodeForm({
               </Select>
             </Box>
 
-            {/* Dest CIDR */}
             <Box sx={{ flex: 1, minWidth: 220 }}>
               <Typography variant="caption">{routingCopy.destCidrLabel}</Typography>
               <TextField
@@ -630,7 +658,7 @@ export default function RouterNodeForm({
           Guardar
         </Button>
         <Button color="error" onClick={deleteNode}>
-          Delete Node
+          Eliminar nodo
         </Button>
       </Stack>
     </Box>

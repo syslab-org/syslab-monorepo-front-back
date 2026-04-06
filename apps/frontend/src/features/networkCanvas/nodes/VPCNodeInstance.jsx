@@ -14,7 +14,7 @@ function VPCNodeInstance({ data = {}, isConnectable }) {
     data.vpcName ||
     data.name ||
     data.title ||
-    'VPC';
+    'Network Segment';
 
   // región
   const region = data.region || 'region n/a';
@@ -47,12 +47,12 @@ function VPCNodeInstance({ data = {}, isConnectable }) {
           title={name}
           subtitle={`${cidr} • ${region}`}
           status="up"
-          rightArea={<span className="pt-badge">AWS</span>}
+          rightArea={<span className="pt-badge">SEGMENT</span>}
         >
           <div className="pt-vpc-surface">
             <div className="pt-badges pt-badges--services">
-              <span className={`pt-badge ${igwOn ? 'pt-badge--up' : 'pt-badge--muted'}`}>IGW {igwOn ? 'ON' : 'OFF'}</span>
-              <span className={`pt-badge ${natEnabled ? 'pt-badge--up' : 'pt-badge--muted'}`}>NAT {natEnabled ? 'ON' : 'OFF'}</span>
+              <span className={`pt-badge ${igwOn ? 'pt-badge--up' : 'pt-badge--muted'}`}>EDGE {igwOn ? 'ON' : 'OFF'}</span>
+              <span className={`pt-badge ${natEnabled ? 'pt-badge--up' : 'pt-badge--muted'}`}>EGRESS {natEnabled ? 'ON' : 'OFF'}</span>
               <span className="pt-badge pt-badge--ghost">Perimeter control</span>
             </div>
             <div className="pt-vpc-core">
@@ -69,7 +69,10 @@ function VPCNodeInstance({ data = {}, isConnectable }) {
         </NodeChrome>
       </div>
 
-      <Handle type="source" position={Position.Top} className="pt-handle" isConnectable={isConnectable} />
+      <Handle id="vpc-source-top" type="source" position={Position.Top} className="pt-handle" isConnectable={isConnectable} />
+      <Handle id="vpc-source-right" type="source" position={Position.Right} className="pt-handle" isConnectable={isConnectable} />
+      <Handle id="vpc-source-bottom" type="source" position={Position.Bottom} className="pt-handle" isConnectable={isConnectable} />
+      <Handle id="vpc-source-left" type="source" position={Position.Left} className="pt-handle" isConnectable={isConnectable} />
     </div>
   );
 }

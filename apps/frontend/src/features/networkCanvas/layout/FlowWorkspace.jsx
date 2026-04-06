@@ -1,10 +1,11 @@
-import { Box, Typography } from "@mui/material";
+import { Box, Chip, Stack, Typography } from "@mui/material";
 import { useState } from "react";
 import SidebarFlow from "@/features/networkCanvas/panels/SidebarFlow";
 import ReactFlowCanvas from "@/features/networkCanvas/canvas/ReactFlowCanvas";
 import PacketToolbar from "@/features/networkCanvas/panels/PacketToolbar";
 import CanvasFeedbackLayer from "@/features/networkCanvas/ui/CanvasFeedbackLayer";
 import LearningGuidePanel from "@/features/networkCanvas/panels/LearningGuidePanel";
+import { computePlanActionState } from "@/features/networkCanvas/utils/planActionUi";
 
 export default function FlowWorkspace({
     reactFlowWrapper,
@@ -34,6 +35,15 @@ export default function FlowWorkspace({
 }) {
     const [isPaletteOpen, setIsPaletteOpen] = useState(false);
     const [isGuideOpen, setIsGuideOpen] = useState(false);
+    const workspaceActionState = computePlanActionState(
+        toolbarProps?.planStatus,
+        toolbarProps?.canvasState,
+        toolbarProps?.validationState,
+    );
+    const isExpandedWorkspaceState =
+        toolbarProps?.canvasState === "PLAN_OUTDATED" ||
+        toolbarProps?.canvasState === "PLAN_RUNNING" ||
+        workspaceActionState.workspaceSeverity === "warning";
 
     return (
         <Box
@@ -86,6 +96,67 @@ export default function FlowWorkspace({
 
                 <Box
                     sx={{
+                        px: { xs: 1.5, md: 2 },
+                        py: isExpandedWorkspaceState ? 1 : 0.75,
+                        borderBottom: "1px solid",
+                        borderColor: "divider",
+                        backgroundColor: (t) =>
+                            t.palette.mode === "light" ? "rgba(248,250,252,0.94)" : "rgba(15,23,42,0.7)",
+                    }}
+                >
+                    {isExpandedWorkspaceState ? (
+                        <Stack
+                            direction={{ xs: "column", md: "row" }}
+                            spacing={1.25}
+                            alignItems={{ xs: "flex-start", md: "center" }}
+                            justifyContent="space-between"
+                        >
+                            <Box sx={{ minWidth: 0 }}>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.25 }}>
+                                    {workspaceActionState.workspaceTitle}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    {workspaceActionState.workspaceDetail}
+                                </Typography>
+                            </Box>
+                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                {workspaceActionState.chips.map((chip) => (
+                                    <Chip
+                                        key={chip.label}
+                                        size="small"
+                                        label={chip.label}
+                                        color={chip.color}
+                                        variant={chip.variant}
+                                    />
+                                ))}
+                            </Stack>
+                        </Stack>
+                    ) : (
+                        <Stack
+                            direction={{ xs: "column", md: "row" }}
+                            spacing={1}
+                            alignItems={{ xs: "flex-start", md: "center" }}
+                            justifyContent="space-between"
+                        >
+                            <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0 }}>
+                                <Box component="span" sx={{ fontWeight: 700, color: "text.primary" }}>
+                                    {workspaceActionState.workspaceTitle}
+                                </Box>
+                                {" · "}
+                                {workspaceActionState.workspaceDetail}
+                            </Typography>
+                            <Chip
+                                size="small"
+                                label={workspaceActionState.chips?.[0]?.label || workspaceActionState.actionLabel}
+                                color={workspaceActionState.chips?.[0]?.color || "default"}
+                                variant={workspaceActionState.chips?.[0]?.variant || "outlined"}
+                            />
+                        </Stack>
+                    )}
+                </Box>
+
+                <Box
+                    sx={{
                         flex: 1,
                         minHeight: 0,
                         position: "relative",
@@ -110,14 +181,14 @@ export default function FlowWorkspace({
                         >
                             <Box>
                                 <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                                    Diseña tu laboratorio de topologías
+                                    Diseña tu laboratorio de red
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                                    Simula una VLAN para aprendizaje o prepara una orquestación real en AWS.
+                                    Modela la topología en lenguaje neutral, valida su traducción a AWS y decide si corresponde un deploy o un redeploy.
                                 </Typography>
                                 {!isPaletteOpen && (
                                     <Typography variant="caption" color="text.secondary" sx={{ mt: 0.8, display: "block" }}>
-                                        Tip: abre Tool Palette desde la barra superior para comenzar a arrastrar componentes.
+                                        Tip: abre la paleta de herramientas desde la barra superior para comenzar a arrastrar componentes.
                                     </Typography>
                                 )}
                             </Box>

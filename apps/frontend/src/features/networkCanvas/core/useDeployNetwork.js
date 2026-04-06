@@ -1,16 +1,16 @@
 // apps/frontend/src/components/flow/flow-hooks/useDeployNetwork.js
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import { db } from "../../../infrastructure/firebase/firebaseConfig";
-import { DB_FIRESTORE_VPCS } from "@/shared/constants";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { RouterPolicy } from "@/features/networkCanvas/utils/networking";
 import { useAuth } from "@/app/providers/AuthContext";
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
 import { api } from "@/infrastructure/http/api";
+import { useProviderCapabilities } from "@/features/networkCanvas/core/useProviderCapabilities";
 import { decideRouterMode } from "@/features/networkCanvas/domain/decideRouterMode";
-import useCidrBlockVPCStore from "../store/cidrBlocksIp";
+import { parseTerraformPlanSummary } from "@/features/plans/utils/parseTerraformPlanSummary";
+import { useCanvasLabStore } from "../store/canvasLabStore";
 import { buildRoutingPreview } from "../utils/buildRoutingPreview";
+import { computeInfraHash } from "../utils/infraHash";
 import {
   TYPE_ROUTER_NODE,
   TYPE_SERVER_NODE,
@@ -218,12 +218,84 @@ function buildLinksFromEdges(nodes, edges) {
   return { links, routers };
 }
 
+function buildNeutralConnectivity(links, routers) {
+  const hubs = (Array.isArray(routers) ? routers : [])
+    .filter((router) => String(router?.type || "").toLowerCase() === "tgw")
+    .map((router) => ({
+      id: router.id,
+      name: router.name || router.id,
+      kind: "routing_hub",
+      implementation: "tgw",
+    }));
+
+  const normalizedLinks = (Array.isArray(links) ? links : []).map((link) => {
+    const type = String(link?.type || "").toLowerCase();
+    if (type === "tgw-attach") {
+      return {
+        type: "hub_attachment",
+        implementation: "tgw",
+        hub_id: link.router_id || "",
+        segment_id: link.vpc_id || "",
+        attachment_zones: Array.isArray(link.subnet_names)
+          ? link.subnet_names
+          : [],
+        routes: Array.isArray(link?.routes?.to_router)
+          ? link.routes.to_router
+          : [],
+        provider_overrides: {
+          aws: { ...link },
+        },
+      };
+    }
+
+    return {
+      type: "direct_link",
+      implementation: "peering",
+      segment_a_id: link.vpc_a_id || "",
+      segment_b_id: link.vpc_b_id || "",
+      provider_overrides: {
+        aws: { ...link },
+      },
+    };
+  });
+
+  return {
+    mode: hubs.length > 0 ? "hub" : normalizedLinks.length > 0 ? "direct" : "isolated",
+    hubs,
+    links: normalizedLinks,
+  };
+}
+
+function buildNeutralTopology({
+  planName,
+  canvasId,
+  region,
+  masterCidr,
+  segments,
+  connectivity,
+}) {
+  return {
+    network: {
+      id: canvasId || "",
+      name: planName,
+      region,
+      cidr: masterCidr,
+    },
+    segments,
+    connectivity,
+  };
+}
+
 const useDeployNetwork = ({
   nodes,
   edges,
   allowCrossVpcPingUI = null,
-  firestoreVpcId,
+  labId,
+  canvasId,
+  canvasPlanId,
+  validatedPlanHash,
 }) => {
+  const resolvedCanvasId = canvasId || labId;
   const { user } = useAuth();
   const navigate = useNavigate();
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -262,20 +334,19 @@ const useDeployNetwork = ({
   }, [planName]);
 
   const loadCanvasLabName = useCallback(async () => {
-    if (!firestoreVpcId) return "";
+    if (!resolvedCanvasId) return "";
     try {
-      const snap = await getDoc(doc(db, DB_FIRESTORE_VPCS, firestoreVpcId));
-      if (!snap.exists()) return "";
-      const name = String(snap.data()?.name || "").trim();
+      const lab = await api.getLab(resolvedCanvasId);
+      const name = String(lab?.name || "").trim();
       if (name) setCanvasLabName(name);
       return name;
     } catch (e) {
       console.warn("No se pudo cargar nombre del canvas:", e);
       return "";
     }
-  }, [firestoreVpcId]);
+  }, [resolvedCanvasId]);
 
-  // Hidrata nombre del plan desde el nombre real del laboratorio en Firestore.
+  // Hidrata nombre del plan desde el nombre real del laboratorio en backend.
   useEffect(() => {
     let cancelled = false;
     const loadCanvasName = async () => {
@@ -300,15 +371,27 @@ const useDeployNetwork = ({
     return planNameRef.current;
   };
 
-  const { vlanName, vlanRegion, cidrBlockVPC, prefixLength } =
-    useCidrBlockVPCStore((s) => [
-      s.vlanName,
-      s.vlanRegion,
-      s.cidrBlockVPC,
+  const { vlanName, vlanRegion, cidrBlockVPC, prefixLength, targetProvider } =
+    useCanvasLabStore((s) => [
+      s.labName || s.vlanName,
+      s.labRegion || s.vlanRegion,
+      s.masterCidrBlock || s.cidrBlockVPC,
       s.prefixLength,
+      s.targetProvider || "aws",
     ]);
+  const { getCapability } = useProviderCapabilities();
+  const providerCapability = getCapability(targetProvider);
+  const currentInfraHash = useMemo(
+    () => computeInfraHash(nodes, edges),
+    [nodes, edges],
+  );
+  const hasPersistedValidatedPlan = Boolean(
+    canvasPlanId &&
+      validatedPlanHash &&
+      currentInfraHash === validatedPlanHash,
+  );
 
-  // persist planId in the canvas Firestore doc
+  // persist plan metadata in the lab record
   const persistPlanIdToCanvas = async ({
     canvasId,
     planId,
@@ -319,24 +402,28 @@ const useDeployNetwork = ({
   }) => {
     if (!canvasId || !planId) return;
     try {
-      const docRef = doc(db, DB_FIRESTORE_VPCS, canvasId);
-      const payload = {
+      const existing = await api.getLab(canvasId);
+      const metadata = {
+        ...(existing?.metadata || {}),
         planId,
         planName: name || "",
         planCreatedFromCanvas: !!created,
         planValidationOk:
           typeof validationOk === "boolean" ? validationOk : null,
-        planUpdatedAt: new Date(),
+        planUpdatedAt: new Date().toISOString(),
+      };
+      const payload = {
+        metadata,
       };
 
       // Solo persistimos hash cuando viene explícitamente definido
       if (typeof canvasHash === "string") {
-        payload.planCanvasHash = canvasHash;
+        payload.plan_canvas_hash = canvasHash;
       }
 
-      await setDoc(docRef, payload, { merge: true });
+      await api.updateLab(canvasId, payload);
     } catch (e) {
-      console.warn("No se pudo persistir planId en Firestore:", e);
+      console.warn("No se pudo persistir planId en backend:", e);
     }
   };
 
@@ -498,35 +585,120 @@ const useDeployNetwork = ({
       setPlanName(planDefaultName);
     }
 
-    // Construimos el payload final que el backend espera para crear el plan.
+    const segments = vpcsPayload.map((vpc) => {
+      const zones = (vpc.subnets || []).map((subnet) => {
+        const workloads = (subnet.instances || []).map((instance) => ({
+          id: instance.id,
+          name: instance.name,
+          kind: "workload",
+          image: instance.ami || "",
+          size: instance.instance_type || "t2.micro",
+          private_ip: instance.ip_address || "",
+          zone_id: subnet.name,
+          access: {
+            ssh_key: instance.ssh_access || "",
+            public_ip: !!instance.associate_public_ip,
+          },
+          provider_overrides: {
+            aws: { ...instance },
+          },
+        }));
+
+        return {
+          id: subnet.name,
+          name: subnet.name,
+          cidr: subnet.cidr_block,
+          kind: subnet.subnet_type || (subnet.map_public_ip_on_launch ? "public" : "private"),
+          availability_zone: subnet.availability_zone,
+          map_public_ip_on_launch: !!subnet.map_public_ip_on_launch,
+          route_table: subnet.route_table || "",
+          workloads,
+          provider_overrides: {
+            aws: {
+              subnet_type: subnet.subnet_type || "",
+              route_table: subnet.route_table || "",
+            },
+          },
+        };
+      });
+
+      const workloads = zones.flatMap((zone) => zone.workloads || []);
+      const hasPublic = zones.some((zone) => zone.kind === "public");
+      const hasPrivate = zones.some((zone) => zone.kind === "private");
+      const exposure = hasPublic && hasPrivate ? "mixed" : hasPublic ? "public" : hasPrivate ? "private" : "internal";
+      const internetAccess = vpc.internet_gateway ? "direct" : vpc.nat_gateway?.enabled ? "egress_only" : "isolated";
+
+      return {
+        id: vpc.id,
+        name: vpc.name,
+        region: vpc.region,
+        cidr: vpc.cidr_block,
+        exposure,
+        internet_access: internetAccess,
+        ingress: {
+          ssh_cidr: vpc.allowed_ssh_cidr || "",
+        },
+        zones,
+        workloads,
+        provider_overrides: {
+          aws: {
+            resource_kind: "vpc",
+            internet_gateway: !!vpc.internet_gateway,
+            nat_gateway: { ...(vpc.nat_gateway || { enabled: false, public_subnet: "", elastic_ip: "" }) },
+            route_tables: Array.isArray(vpc.route_tables) ? vpc.route_tables : [],
+          },
+        },
+      };
+    });
+
+    const connectivity = buildNeutralConnectivity(links, routers);
+
+    // Construimos el payload neutral que el backend traduce al provider.
     const built = {
       name: planDefaultName,
-      cloud: "aws",
-      firestore_vpc_id: firestoreVpcId || null, // ✅ top-level (el backend lo lee directo)
-      vpcId: firestoreVpcId || null, // ✅ alias opcional (por si algún lado lo usa)
-      vlan: {
-        id: firestoreVpcId || null, // ✅ para compatibilidad con payload antiguo
-        name: vlanNameFinal,
-        region: vlanRegionFinal,
-        master_cidr: masterCidr,
+      target_provider: targetProvider || "aws",
+      canvas_id: resolvedCanvasId || null,
+      metadata: {
+        name: planDefaultName,
+        canvas_id: resolvedCanvasId || null,
+        source_format: "neutral_topology",
+        schema_version: "2026-03-neutral-v1",
+        provider_status: providerCapability?.status || "unknown",
       },
-      vpcs: vpcsPayload,
-      links,
-      routers,
+      topology: buildNeutralTopology({
+        planName: vlanNameFinal,
+        canvasId: resolvedCanvasId || null,
+        region: vlanRegionFinal,
+        masterCidr,
+        segments,
+        connectivity,
+      }),
     };
 
     setTransformedData(built);
     console.log("processJsonToCloud - transformedData:", {
-      cloud: "aws",
       ...built,
     });
 
     // Abrimos el modal inmediatamente (UX reactiva)
     setShowConfirmation(true);
 
-    // No sincronizamos ni creamos plan aquí.
-    // El plan se crea / sincroniza únicamente cuando el usuario presiona "Validar".
-    setValidationState(PLAN_STATES.IDLE);
+    // Si el canvas sigue coincidiendo con el último plan validado,
+    // rehidratamos ese estado para que el modal no "olvide" que ya está listo
+    // para deploy al cerrarse y abrirse de nuevo.
+    if (hasPersistedValidatedPlan && canvasPlanId) {
+      setValidationState(PLAN_STATES.SUCCESS);
+      setValidationResult((prev) => ({
+        plan_id: prev?.plan_id || canvasPlanId,
+        created: prev?.created || false,
+        is_redeploy_preview: prev?.is_redeploy_preview || false,
+        plan_risk_summary: prev?.plan_risk_summary || null,
+      }));
+    } else {
+      // No sincronizamos ni creamos plan aquí.
+      // El plan se crea / sincroniza únicamente cuando el usuario presiona "Validar".
+      setValidationState(PLAN_STATES.IDLE);
+    }
   };
 
   const pollPlanUntilDone = async (
@@ -558,6 +730,15 @@ const useDeployNetwork = ({
         return;
       }
 
+      if (providerCapability?.status !== "ready") {
+        const message = "La configuración actual del laboratorio no está disponible para validación y despliegue.";
+        setLoadingFlow(false);
+        setValidationState(PLAN_STATES.ERROR);
+        setValidationError(message);
+        setErrorMessage(message);
+        return;
+      }
+
       setValidationState(PLAN_STATES.SYNCING);
       const latestCanvasName = await loadCanvasLabName();
       if (latestCanvasName) {
@@ -576,7 +757,7 @@ const useDeployNetwork = ({
 
       if (!planId) throw new Error("sync-from-canvas no devolvió plan_id");
       await persistPlanIdToCanvas({
-        canvasId: firestoreVpcId,
+        canvasId: resolvedCanvasId,
         planId,
         name: stableName,
         created: !!syncRes?.created,
@@ -590,12 +771,27 @@ const useDeployNetwork = ({
 
       const finalPlan = await pollPlanUntilDone(planId);
       const finalStatus = String(finalPlan?.status || "");
+      const isRedeployPreview = Boolean(finalPlan?.applied);
+      let planRiskSummary = null;
+
+      try {
+        const logsResponse = await api.getPlanLogs(planId);
+        planRiskSummary = parseTerraformPlanSummary(logsResponse?.log || "");
+      } catch (logError) {
+        console.warn("No se pudo resumir terraform plan desde logs:", logError);
+      }
 
       if (finalStatus === "SUCCESS") {
         setValidationState(PLAN_STATES.SUCCESS);
         setSuccessMessage("Validación OK (Terraform plan)");
+        setValidationResult({
+          plan_id: planId,
+          created: !!syncRes?.created,
+          is_redeploy_preview: isRedeployPreview,
+          plan_risk_summary: planRiskSummary,
+        });
         await persistPlanIdToCanvas({
-          canvasId: firestoreVpcId,
+          canvasId: resolvedCanvasId,
           planId,
           name: stableName,
           created: !!syncRes?.created,
@@ -606,8 +802,14 @@ const useDeployNetwork = ({
         setValidationState(PLAN_STATES.ERROR);
         setValidationError(msg);
         setErrorMessage(msg);
+        setValidationResult({
+          plan_id: planId,
+          created: !!syncRes?.created,
+          is_redeploy_preview: isRedeployPreview,
+          plan_risk_summary: planRiskSummary,
+        });
         await persistPlanIdToCanvas({
-          canvasId: firestoreVpcId,
+          canvasId: resolvedCanvasId,
           planId,
           name: stableName,
           created: !!syncRes?.created,
@@ -620,7 +822,7 @@ const useDeployNetwork = ({
       const code = error?.data?.code;
       const msg =
         code === "PLAN_ALREADY_APPLIED"
-          ? "El plan ya está aplicado. Puedes validar en preview, pero no aplicar de nuevo sin Destroy."
+          ? "El plan ya está aplicado y no aceptó redeploy. Revisa el estado del plan."
           : error?.message || "Error desconocido";
       setLoadingFlow(false);
       setValidationState(PLAN_STATES.ERROR);
@@ -635,7 +837,11 @@ const useDeployNetwork = ({
   };
 
   const handleApplyReal = async () => {
-    if (validationState !== PLAN_STATES.SUCCESS) {
+    const isValidationReady =
+      validationState === PLAN_STATES.SUCCESS ||
+      (hasPersistedValidatedPlan && Boolean(validationResult?.plan_id || canvasPlanId));
+
+    if (!isValidationReady) {
       setErrorMessage(
         "Primero valida la topologia en modo simulacion antes de desplegar en AWS.",
       );
@@ -650,7 +856,7 @@ const useDeployNetwork = ({
       return;
     }
 
-    const planId = validationResult?.plan_id;
+    const planId = validationResult?.plan_id || canvasPlanId;
     if (!planId) {
       setErrorMessage("Primero valida el plan.");
       return;
@@ -661,8 +867,12 @@ const useDeployNetwork = ({
       return;
     }
 
-    const txt = window.prompt("Para confirmar escribe: DEPLOY");
-    if (txt !== "DEPLOY") {
+    const confirmationWord = validationResult?.is_redeploy_preview ? "REDEPLOY" : "DEPLOY";
+    const confirmationPrompt = validationResult?.is_redeploy_preview
+      ? "Vas a aplicar cambios sobre infraestructura AWS ya activa. Para confirmar escribe: REDEPLOY"
+      : "Para confirmar escribe: DEPLOY";
+    const txt = window.prompt(confirmationPrompt);
+    if (txt !== confirmationWord) {
       setErrorMessage("Deploy cancelado por el usuario.");
       return;
     }
@@ -693,9 +903,16 @@ const useDeployNetwork = ({
     } catch (error) {
       setLoadingFlow(false);
       const code = error?.data?.code;
+      if (error?.status === 403 && code === "PLAN_EXECUTION_FORBIDDEN") {
+        setErrorMessage(
+          error?.data?.error ||
+            "Solo el dueño del laboratorio puede ejecutar deploy real o destroy sobre esta infraestructura.",
+        );
+        return;
+      }
       if (code === "PLAN_ALREADY_APPLIED") {
         setErrorMessage(
-          "Este plan ya está aplicado en AWS. Si necesitas cambios, primero ejecuta Destroy.",
+          "El backend rechazó el redeploy de este plan. Revisa el estado y vuelve a intentar.",
         );
         return;
       }

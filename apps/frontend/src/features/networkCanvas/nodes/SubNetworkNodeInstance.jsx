@@ -8,9 +8,9 @@ import {
 } from '@/features/networkCanvas/utils/constants';
 
 function SubNetworkNodeInstance({ data = {}, isConnectable, parentId }) {
-  const title = data.subnetName || data.title || 'SubNetwork';
+  const title = data.subnetName || data.title || 'Zone Segment';
   const cidr = data.cidrBlock || 'CIDR n/a';
-  const az = data.availabilityZone || 'AZ n/a';
+  const az = data.availabilityZone || 'Zone n/a';
   const subnetKind = String(data.subnetType || 'public').toLowerCase();
   const routeTable = String(data.route_table || 'main').toUpperCase();
   const autoPublicIp = !!data.map_public_ip_on_launch;
@@ -28,8 +28,8 @@ function SubNetworkNodeInstance({ data = {}, isConnectable, parentId }) {
   const status = cidr === 'CIDR n/a' || az === 'AZ n/a' ? 'warn' : 'up';
   const eyebrow = subnetKind === 'private' ? 'private segment' : 'public segment';
   const laneLabel = subnetKind === 'public'
-    ? (hasInternetGateway ? 'Public ingress enabled' : 'Public segment without IGW')
-    : (hasNatGateway ? 'Private egress via NAT' : 'Internal-only subnet');
+    ? (hasInternetGateway ? 'Public ingress enabled' : 'Public segment without internet edge')
+    : (hasNatGateway ? 'Private egress via managed egress' : 'Internal-only zone');
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
