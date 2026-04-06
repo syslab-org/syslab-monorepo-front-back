@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Callable
 
 
 @dataclass
@@ -17,9 +18,12 @@ class ProviderExecutionBundle:
     state_path: str | None = None
     tf_text: str = ""
     full_log: str = ""
+    on_log_append: Callable[["ProviderExecutionBundle"], None] | None = field(default=None, repr=False, compare=False)
 
     def append_log(self, text: str) -> None:
         self.full_log += text
+        if self.on_log_append:
+            self.on_log_append(self)
 
 
 class ProviderExecutor(ABC):
