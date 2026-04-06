@@ -762,6 +762,8 @@ export default function PlanDetailPage() {
   const [outputsJsonOpen, setOutputsJsonOpen] = useState(false);
 
   const [logText, setLogText] = useState(null);
+  const [logUpdatedAt, setLogUpdatedAt] = useState(null);
+  const [highlightedLogLineStart, setHighlightedLogLineStart] = useState(null);
   const [planRiskSummary, setPlanRiskSummary] = useState(null);
   const [lastDestroyTaskId, setLastDestroyTaskId] = useState(null);
   const [consoleGuideOpen, setConsoleGuideOpen] = useState(false);
@@ -771,8 +773,11 @@ export default function PlanDetailPage() {
 
   const timerRef = useRef(null);
   const msgTimerRef = useRef(null);
+  const logHighlightTimerRef = useRef(null);
   const prevStatusRef = useRef(null);
   const actionLockRef = useRef(false);
+  const logContainerRef = useRef(null);
+  const lastLogLineCountRef = useRef(0);
 
   const isRunning = plan?.status === TASK_STATE_RUNNING || plan?.status === TASK_STATE_PENDING;
 
@@ -949,9 +954,11 @@ export default function PlanDetailPage() {
       const ts = await api.taskStatus(taskId);
       const log = ts?.result?.log || ts?.result?.error || ts?.error || '(sin log)';
       setLogText(log);
+      setLogUpdatedAt(new Date().toISOString());
       setPlanRiskSummary(parseTerraformPlanSummary(log));
     } catch (e) {
       setLogText(`No se pudo leer el log: ${String(e)}`);
+      setLogUpdatedAt(null);
       setPlanRiskSummary(null);
     }
   }
@@ -965,6 +972,7 @@ export default function PlanDetailPage() {
       const text = resp?.log ?? '';
       const finalText = text && String(text).trim().length > 0 ? text : '(sin log guardado)';
       setLogText(finalText);
+      setLogUpdatedAt(resp?.updated_at || null);
       setPlanRiskSummary(parseTerraformPlanSummary(finalText));
     } catch (e) {
       // Fallback: intenta leer el log desde task_status si existe task_id
@@ -975,6 +983,7 @@ export default function PlanDetailPage() {
       const backendMsg = e?.response?.data?.error || e?.response?.data?.detail;
       const msg = backendMsg || e?.message || String(e);
       setErr(`No pude cargar logs: ${msg}`);
+      setLogUpdatedAt(null);
       setPlanRiskSummary(null);
     }
   }
@@ -986,6 +995,7 @@ export default function PlanDetailPage() {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
       if (msgTimerRef.current) clearTimeout(msgTimerRef.current);
+      if (logHighlightTimerRef.current) clearTimeout(logHighlightTimerRef.current);
     };
   }, [fetchPlan, id]);
 
@@ -1012,6 +1022,35 @@ export default function PlanDetailPage() {
     };
   }, [msg]);
 
+  useEffect(() => {
+    if (tab !== 'logs' || !isRunning || !logText || !logContainerRef.current) return;
+    const el = logContainerRef.current;
+    el.scrollTop = el.scrollHeight;
+  }, [logText, isRunning, tab]);
+
+  useEffect(() => {
+    const currentLineCount = String(logText || '').split('\n').length;
+
+    if (!logText) {
+      lastLogLineCountRef.current = 0;
+      setHighlightedLogLineStart(null);
+      return;
+    }
+
+    const previousLineCount = lastLogLineCountRef.current;
+    const hasNewLines = currentLineCount > previousLineCount;
+
+    if (isRunning && hasNewLines && previousLineCount > 0) {
+      setHighlightedLogLineStart(previousLineCount);
+      if (logHighlightTimerRef.current) clearTimeout(logHighlightTimerRef.current);
+      logHighlightTimerRef.current = setTimeout(() => {
+        setHighlightedLogLineStart(null);
+      }, 3500);
+    }
+
+    lastLogLineCountRef.current = currentLineCount;
+  }, [logText, isRunning]);
+
   const handleDeploy = async () => {
     if (actionLockRef.current) return;
     actionLockRef.current = true;
@@ -1023,6 +1062,7 @@ export default function PlanDetailPage() {
     setMsg(null);
     setErr(null);
     setLogText(null);
+    setLogUpdatedAt(null);
     if (msgTimerRef.current) clearTimeout(msgTimerRef.current);
     prevStatusRef.current = plan?.status ?? null;
     try {
@@ -1088,6 +1128,7 @@ export default function PlanDetailPage() {
     setMsg(null);
     setErr(null);
     setLogText(null);
+    setLogUpdatedAt(null);
 
     if (msgTimerRef.current) clearTimeout(msgTimerRef.current);
     prevStatusRef.current = plan?.status ?? null;
@@ -1915,6 +1956,14 @@ export default function PlanDetailPage() {
                     El log corresponde siempre a la última ejecución (deploy o destroy).
                   </Typography>
                 </Box>
+                {isRunning && (
+                  <Chip
+                    size="small"
+                    color="info"
+                    variant="filled"
+                    label="Streaming activo"
+                  />
+                )}
                 <Button variant="contained" onClick={fetchPlanLogs}>
                   Ver log del plan
                 </Button>
@@ -1932,14 +1981,37 @@ export default function PlanDetailPage() {
                     <Alert severity="info" sx={{ mb: 1 }}>
                       Este log corresponde a la última ejecución del plan.
                     </Alert>
+                    <Stack
+                      direction={{ xs: 'column', sm: 'row' }}
+                      spacing={1}
+                      alignItems={{ sm: 'center' }}
+                      justifyContent="space-between"
+                      sx={{ mb: 1 }}
+                    >
+                      <Typography variant="caption" color="text.secondary">
+                        Última actualización del log:{' '}
+                        <b>{logUpdatedAt ? formatDateTime(logUpdatedAt) : '—'}</b>
+                      </Typography>
+                      {isRunning && (
+                        <Typography variant="caption" color="info.main">
+                          El visor baja automáticamente al final mientras la ejecución sigue activa.
+                        </Typography>
+                      )}
+                    </Stack>
                     {planRiskSummary && (
                       <Alert severity={riskAlertSeverity} sx={{ mb: 1 }}>
                         Resumen Terraform: {planRiskSummary.add} add, {planRiskSummary.change} change, {planRiskSummary.destroy} destroy, {planRiskSummary.replace} replace.
                       </Alert>
                     )}
+                    {highlightedLogLineStart !== null && (
+                      <Alert severity="success" variant="outlined" sx={{ mb: 1 }}>
+                        Se resaltan las líneas nuevas recién agregadas al log.
+                      </Alert>
+                    )}
                     <Paper
                       variant="outlined"
-                      sx={{ mt: 2, p: 2, bgcolor: 'background.default', overflow: 'auto' }}
+                      ref={logContainerRef}
+                      sx={{ mt: 2, p: 2, bgcolor: 'background.default', overflow: 'auto', maxHeight: 560 }}
                     >
                       <Box
                         component="pre"
@@ -1950,7 +2022,29 @@ export default function PlanDetailPage() {
                           fontSize: 12,
                         }}
                       >
-                        {logText}
+                        {String(logText)
+                          .split('\n')
+                          .map((line, index, lines) => {
+                            const isNewLine =
+                              highlightedLogLineStart !== null && index >= highlightedLogLineStart;
+                            return (
+                              <Box
+                                key={`${index}-${line}`}
+                                component="span"
+                                sx={{
+                                  display: 'block',
+                                  px: 0.5,
+                                  mx: -0.5,
+                                  borderRadius: 0.5,
+                                  bgcolor: isNewLine ? 'success.50' : 'transparent',
+                                  transition: 'background-color 300ms ease',
+                                }}
+                              >
+                                {line}
+                                {index < lines.length - 1 ? '\n' : ''}
+                              </Box>
+                            );
+                          })}
                       </Box>
                     </Paper>
                   </>
