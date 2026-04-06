@@ -1,0 +1,109 @@
+# Validación Técnica para Tesis
+
+Esta carpeta reúne la evidencia técnica más útil para redactar la documentación del MVP y preparar la presentación de tesis.
+
+## Qué contiene
+
+### 1. Redeploy sobre AWS
+
+Documento fuente principal:
+- [Matriz de Redeploy AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/redeploy-matrix.md)
+
+Qué resume:
+- pruebas reales de `deploy`, `redeploy` y `destroy`
+- clasificación de cambios `safe` vs `destructive pero controlado`
+- transiciones de conectividad entre `peering`, `TGW` e `isolated`
+- incidente real de reglas ICMP/`Security Group` y fix aplicado
+- estabilización visual de estados como `OUTDATED`, `REDEPLOY` y `Destroy`
+
+Casos ya cubiertos allí:
+- rename de segmento
+- eliminación de peering
+- cambio de `allowed_ssh_cidr`
+- cambio de `instance_type`
+- `peering -> TGW`
+- `TGW -> isolated`
+
+### 2. Managed Egress en AWS
+
+Documento específico:
+- [Matriz de Managed Egress AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/managed-egress-matrix.md)
+
+Qué resume:
+- cómo se interpreta `Enable managed egress` en el producto
+- qué traduce Terraform en AWS
+- casos válidos, casos débiles y casos bloqueados por UX/validación
+- hallazgos de pedagogía y copy para tesis/demo
+
+Casos cubiertos:
+- `public + private + NAT`
+- `public only + NAT`
+- `private only + managed egress`
+
+### 3. Cierre del MVP
+
+Documento estratégico:
+- [Plan de Cierre del MVP para Tesis](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/mvp-thesis-plan.md)
+
+Útil para redactar:
+- objetivo del MVP
+- alcance real del provider (`AWS-first`)
+- decisiones de producto
+- prioridades de cierre
+- límites conocidos
+
+### 4. Guion de presentación
+
+Documento operativo:
+- [Guion Oficial de Demo para Tesis](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/demo-thesis-script.md)
+
+Útil para redactar:
+- narrativa de demo
+- orden de pantallas
+- cambios recomendados para redeploy en presentación
+- riesgos y plan B
+- QA pedagógica
+
+## Lectura recomendada para redactar la tesis
+
+### Si quieres escribir la sección de validación técnica
+
+1. leer la [Matriz de Redeploy AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/redeploy-matrix.md)
+2. leer la [Matriz de Managed Egress AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/managed-egress-matrix.md)
+3. extraer desde ahí:
+   - casos seguros
+   - casos destructivos controlados
+   - límites del sistema
+   - decisiones de UX/validación
+
+### Si quieres escribir la sección de alcance del MVP
+
+1. leer el [Plan de Cierre del MVP para Tesis](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/mvp-thesis-plan.md)
+2. usar como idea central:
+   - `AWS-first`
+   - multi-cloud como extensibilidad arquitectónica, no como capacidad cerrada del MVP
+
+### Si quieres preparar la defensa/demo
+
+1. seguir el [Guion Oficial de Demo para Tesis](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/demo-thesis-script.md)
+2. complementar con evidencia de:
+   - redeploy real
+   - outputs
+   - logs
+   - pruebas guiadas
+
+## Hallazgos transversales ya consolidados
+
+- El flujo `Canvas -> Validate -> Deploy/Redeploy -> Plan Detail` está suficientemente maduro para demo.
+- El estado `OUTDATED` ya funciona como guardrail real antes de redeploy.
+- `Plan Detail` ya centraliza suficiente observabilidad para no depender tanto de AWS Console.
+- `Managed egress` debe mantenerse como decisión explícita del usuario; no conviene autoactivarlo al crear una zona pública.
+- La pedagogía mejora cuando la UI distingue entre:
+  - intención neutral
+  - traducción AWS
+  - exposición efectiva
+  - diseño técnicamente válido pero débil
+
+## Recomendación de uso
+
+Usa esta carpeta como punto de entrada de documentación. Los documentos existentes siguen siendo válidos y más detallados; aquí solo quedan organizados con una ruta de lectura clara.
