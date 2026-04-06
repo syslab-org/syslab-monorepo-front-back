@@ -100,18 +100,18 @@ function MainLayout() {
   const user = auth?.user;
   const logout = auth?.logout || (() => { });
 
-  const isMainFlowRoute = useMemo(
-    () => /^\/admin\/vpcs\/[^/]+\/mainflow$/.test(location.pathname),
+  const isCanvasRoute = useMemo(
+    () => /^\/admin\/(labs\/[^/]+\/canvas|vpcs\/[^/]+\/mainflow)$/.test(location.pathname),
     [location.pathname],
   );
 
   useEffect(() => {
-    if (isMainFlowRoute) {
+    if (isCanvasRoute) {
       setDrawerOpen(false);
       return;
     }
     setDrawerOpen(true);
-  }, [isMainFlowRoute]);
+  }, [isCanvasRoute]);
 
   const toggleDrawer = () => {
     setDrawerOpen((prev) => !prev);
@@ -185,8 +185,8 @@ function MainLayout() {
                 onClick={handleOpenUserMenu}
               >
                 <Avatar
-                  alt={user?.displayName || "User"}
-                  src={user?.photoURL || "https://i.pravatar.cc/100"}
+                  alt={user?.display_name || user?.email || "User"}
+                  src={user?.photo_url || "https://i.pravatar.cc/100"}
                 />
               </IconButton>
             </Tooltip>

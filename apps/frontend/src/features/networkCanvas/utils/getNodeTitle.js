@@ -14,13 +14,13 @@ const getNodeTitle = ({ type }) => {
     case TYPE_PRINTER_NODE:
       return "Printer";
     case TYPE_SERVER_NODE:
-      return "Server";
+      return "Workload";
     case TYPE_SUBNETWORK_NODE:
-      return "SubNetwork";
+      return "Zone Segment";
     case TYPE_ROUTER_NODE:
-      return "Router";
+      return "Connectivity";
     case TYPE_VPC_NODE:
-      return "VPC";
+      return "Network Segment";
     default:
       return "Instance";
   }

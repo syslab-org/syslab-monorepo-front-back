@@ -1,210 +1,127 @@
 import * as yup from 'yup';
-import { useAuth } from '@/app/providers/AuthContext';
 import { useContext, useEffect, useState } from 'react';
-import { LoadingFlowContext } from '@/app/providers/LoadingFlowContext';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
-import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
-import { auth, db, storage } from '@/infrastructure/firebase/firebaseConfig';
-import { DB_FIRESTORE_USERS } from '@/shared/constants';
-import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
-import { Avatar, Button, IconButton, Paper, Stack, TextField, Typography } from '@mui/material';
-import { PhotoCamera } from '@mui/icons-material';
-import { updateEmail, updateProfile } from 'firebase/auth';
+import { Avatar, Button, Paper, Stack, TextField, Typography } from '@mui/material';
+
+import { useAuth } from '@/app/providers/AuthContext';
+import { LoadingFlowContext } from '@/app/providers/LoadingFlowContext';
+import { api } from '@/infrastructure/http/api';
 
 const schema = yup.object({
-    name: yup.string().required('Name is required'),
-    email: yup.string().email('Must be a valid email').required('Email is required'),
+  first_name: yup.string().required('Name is required'),
+  last_name: yup.string().optional(),
+  email: yup.string().email('Must be a valid email').required('Email is required'),
+  photo_url: yup.string().url('Must be a valid URL').optional().nullable(),
 }).required();
 
 const ProfilePage = () => {
-    const { user } = useAuth();
-    const { setLoadingFlow } = useContext(LoadingFlowContext);
-    const [userData, setUserData] = useState(null);
-    const [profileImage, setProfileImage] = useState('');
-    const [imageFile, setImageFile] = useState(null);
+  const { user, refreshUser } = useAuth();
+  const { setLoadingFlow } = useContext(LoadingFlowContext);
+  const [saveError, setSaveError] = useState('');
 
-    const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm({
-        resolver: yupResolver(schema),
-        defaultValues: {
-            name: '',
-            email: '',
-        },
+  const { register, handleSubmit, reset, formState: { errors } } = useForm({
+    resolver: yupResolver(schema),
+    defaultValues: {
+      first_name: '',
+      last_name: '',
+      email: '',
+      photo_url: '',
+    },
+  });
+
+  useEffect(() => {
+    if (!user) return;
+    reset({
+      first_name: user.first_name || user.display_name || '',
+      last_name: user.last_name || '',
+      email: user.email || '',
+      photo_url: user.photo_url || '',
     });
+  }, [user, reset]);
 
-    useEffect(() => {
-        const fetchUserProfile = async () => {
-            if (user?.uid) {
-                setLoadingFlow(true);
-                try {
-                    const usersCollectionRef = collection(db, DB_FIRESTORE_USERS);
-                    const q = query(usersCollectionRef, where('authUid', '==', user.uid));
-                    const querySnapshot = await getDocs(q);
-
-                    if (!querySnapshot.empty) {
-                        const userDoc = querySnapshot.docs[0];
-                        const data = userDoc.data();
-                        setUserData(data);
-
-                        // Prioridad de la imagen: `photoURL` de Auth, luego `profileImage` de Firestore
-                        setProfileImage(user.photoURL || data.profileImage || '');
-
-                        // Establecer valores en el formulario
-                        setValue('name', user.displayName || data.name || '');
-                        setValue('email', user.email || data.email || '');
-                    } else {
-                        console.warn('User not found in Firestore with the provided authUid');
-                    }
-                } catch (error) {
-                    console.error('Error fetching user profile: ', error);
-                } finally {
-                    setLoadingFlow(false);
-                }
-            }
-        };
-
-        fetchUserProfile();
-    }, [user, setLoadingFlow, setValue]);
-
-    const handleImageChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            setImageFile(file);
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setProfileImage(reader.result);
-            };
-            reader.readAsDataURL(file);
-        }
-    };
-
-    const uploadProfileImage = async () => {
-        if (!imageFile || !user?.uid) return null;
-
-        const storageRef = ref(storage, `profileImages/${user.uid}`);
-        const uploadTask = uploadBytesResumable(storageRef, imageFile);
-
-        return new Promise((resolve, reject) => {
-            uploadTask.on(
-                'state_changed',
-                null,
-                (error) => reject(error),
-                async () => {
-                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                    resolve(downloadURL);
-                }
-            );
-        });
-    };
-
-    const onSubmit = async (data) => {
-        if (user?.uid) {
-            setLoadingFlow(true);
-            try {
-                let profileImageUrl = userData?.profileImage;
-
-                if (imageFile) {
-                    profileImageUrl = await uploadProfileImage();
-                }
-
-                const displayName = data.name || user.displayName || 'Unnamed';
-                const photoURL = profileImageUrl || user.photoURL || '';
-
-                // Actualizar `displayName` y `photoURL` en Auth
-                await updateProfile(auth.currentUser, {
-                    displayName,
-                    photoURL,
-                });
-
-                // Actualizar el `email` en Auth si ha cambiado
-                if (data.email && data.email !== user.email) {
-                    await updateEmail(auth.currentUser, data.email);
-                }
-
-                // Actualizar la información adicional en Firestore
-                if (userData?.id) {
-                    const userRef = doc(db, 'users', userData.id);
-                    await updateDoc(userRef, {
-                        profileImage: photoURL,
-                    });
-                } else {
-                    console.warn('UserData or User ID is undefined. Cannot update Firestore.');
-                }
-
-                alert('Profile updated successfully!');
-                setUserData({ ...userData, profileImage: profileImageUrl });
-            } catch (error) {
-                console.error('Error updating profile: ', error);
-                alert('Failed to update profile.');
-            } finally {
-                setLoadingFlow(false);
-            }
-        }
-    };
-
-    // Si los datos del usuario aún no están cargados, mostrar un mensaje de carga
-    if (!userData) {
-        return <Typography>Cargando datos del perfil...</Typography>;
+  const onSubmit = async (data) => {
+    setLoadingFlow(true);
+    setSaveError('');
+    try {
+      await api.updateMe({
+        first_name: data.first_name,
+        last_name: data.last_name,
+        email: data.email,
+        photo_url: data.photo_url || '',
+      });
+      await refreshUser();
+    } catch (error) {
+      setSaveError(error?.message || 'No se pudo actualizar el perfil.');
+    } finally {
+      setLoadingFlow(false);
     }
+  };
 
-    return (
-        <Paper sx={{ p: 4, maxWidth: 600, margin: 'auto' }}>
-            <Typography variant="h4" gutterBottom>
-                Profile
-            </Typography>
-            <Stack direction="column" alignItems="center" spacing={2} sx={{ mb: 2 }}>
-                <Avatar
-                    src={profileImage || 'https://i.pravatar.cc/100'}
-                    alt="Profile"
-                    sx={{ width: 120, height: 120 }}
-                />
-                <input
-                    type="file"
-                    accept="image/*"
-                    style={{ display: 'none' }}
-                    id="profile-image-upload"
-                    onChange={handleImageChange}
-                />
-                <label htmlFor="profile-image-upload">
-                    <IconButton color="primary" component="span">
-                        <PhotoCamera />
-                    </IconButton>
-                </label>
-            </Stack>
-            <form onSubmit={handleSubmit(onSubmit)}>
-                <Stack spacing={2}>
-                    <TextField
-                        label="Name"
-                        value={watch('name') || ''}
-                        onChange={(e) => setValue('name', e.target.value)}
-                        error={!!errors.name}
-                        placeholder="Set Name"
-                        helperText={errors.name?.message}
-                        fullWidth
-                        InputLabelProps={{ shrink: true }}
-                    />
-                    <TextField
-                        label="Email"
-                        value={watch('email') || ''}
-                        onChange={(e) => setValue('email', e.target.value)}
-                        error={!!errors.email}
-                        helperText={errors.email?.message}
-                        fullWidth
-                        InputLabelProps={{ shrink: true }}
-                    />
-                    <TextField
-                        label="Role"
-                        value={userData?.role || 'N/A'}
-                        disabled
-                        fullWidth
-                    />
-                    <Button type="submit" variant="contained" color="primary">
-                        Update Profile
-                    </Button>
-                </Stack>
-            </form>
-        </Paper>
-    );
+  if (!user) {
+    return <Typography>Cargando datos del perfil...</Typography>;
+  }
+
+  return (
+    <Paper sx={{ p: 4, maxWidth: 600, margin: 'auto' }}>
+      <Typography variant="h4" gutterBottom>
+        Profile
+      </Typography>
+      <Stack direction="column" alignItems="center" spacing={2} sx={{ mb: 3 }}>
+        <Avatar
+          src={user.photo_url || 'https://i.pravatar.cc/100'}
+          alt="Profile"
+          sx={{ width: 120, height: 120 }}
+        />
+      </Stack>
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <Stack spacing={2}>
+          <TextField
+            label="Name"
+            {...register('first_name')}
+            error={!!errors.first_name}
+            helperText={errors.first_name?.message}
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+          />
+          <TextField
+            label="Last name"
+            {...register('last_name')}
+            error={!!errors.last_name}
+            helperText={errors.last_name?.message}
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+          />
+          <TextField
+            label="Email"
+            {...register('email')}
+            error={!!errors.email}
+            helperText={errors.email?.message}
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+          />
+          <TextField
+            label="Avatar URL"
+            {...register('photo_url')}
+            error={!!errors.photo_url}
+            helperText={errors.photo_url?.message}
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+          />
+          <TextField
+            label="Role"
+            value={user?.role || 'N/A'}
+            disabled
+            fullWidth
+          />
+          {saveError && <Typography color="error">{saveError}</Typography>}
+          <Button type="submit" variant="contained" color="primary">
+            Update Profile
+          </Button>
+        </Stack>
+      </form>
+    </Paper>
+  );
 };
 
 export default ProfilePage;

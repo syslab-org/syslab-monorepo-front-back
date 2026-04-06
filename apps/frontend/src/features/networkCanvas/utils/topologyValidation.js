@@ -73,7 +73,7 @@ const INSTANCE_TYPES = new Set([
 ]);
 
 /**
- * Valida VPCs, Subnets, Routers e instancias.
+ * Valida segmentos, zonas, nodos de conectividad e instancias.
  * Devuelve { errors: string[], warnings: string[] }
  */
 export function validateTopology(nodes, edges) {
@@ -115,9 +115,9 @@ export function validateTopology(nodes, edges) {
     const name = v.data?.vpcName || v.data?.title || v.id;
     const cidr = vpcFullCidr(v);
     if (!cidr)
-      errors.push(`VPC "${name}": falta CIDR (cidrBlock/prefixLength).`);
+      errors.push(`Segment "${name}": falta CIDR (cidrBlock/prefixLength).`);
     else if (!isValidCidr(cidr))
-      errors.push(`VPC "${name}": CIDR inválido (${cidr}).`);
+      errors.push(`Segment "${name}": CIDR invalido (${cidr}).`);
   });
 
   /* --- Subnets: datos + pertenencia + containment --- */
@@ -125,7 +125,7 @@ export function validateTopology(nodes, edges) {
     const sName = s.data?.subnetName || s.id;
     const vpcParent = idToNode.get(s.parentId);
     if (!vpcParent || vpcParent.type !== TYPE_VPC_NODE) {
-      errors.push(`Subnet "${sName}": no tiene VPC padre (parentId inválido).`);
+      errors.push(`Zone "${sName}": no tiene segmento padre (parentId invalido).`);
       return;
     }
 
@@ -133,18 +133,18 @@ export function validateTopology(nodes, edges) {
     const vpcCidr = vpcFullCidr(vpcParent);
 
     if (!s.data?.cidrBlock) {
-      errors.push(`Subnet "${sName}" en VPC "${vpcName}": falta CIDR.`);
+      errors.push(`Zone "${sName}" en segmento "${vpcName}": falta CIDR.`);
       return;
     }
     if (!isValidCidr(s.data.cidrBlock)) {
       errors.push(
-        `Subnet "${sName}" en VPC "${vpcName}": CIDR inválido (${s.data.cidrBlock}).`,
+        `Zone "${sName}" en segmento "${vpcName}": CIDR invalido (${s.data.cidrBlock}).`,
       );
       return;
     }
     if (vpcCidr && !within(s.data.cidrBlock, vpcCidr)) {
       errors.push(
-        `Subnet "${sName}" (${s.data.cidrBlock}) no está contenida en la VPC "${vpcName}" (${vpcCidr}).`,
+        `Zone "${sName}" (${s.data.cidrBlock}) no esta contenida en el segmento "${vpcName}" (${vpcCidr}).`,
       );
     }
   });
@@ -167,7 +167,7 @@ export function validateTopology(nodes, edges) {
         const overlap = ca.contains(cb.base) || cb.contains(ca.base);
         if (overlap) {
           errors.push(
-            `Subnets solapadas en VPC "${vpcName}": ` +
+            `Zonas solapadas en segmento "${vpcName}": ` +
               `"${a.data?.subnetName || a.id}" (${a.data?.cidrBlock}) ↔ ` +
               `"${b.data?.subnetName || b.id}" (${b.data?.cidrBlock}).`,
           );
@@ -195,13 +195,13 @@ export function validateTopology(nodes, edges) {
       const srcVpc = idToNode.get(rt.sourceVpcId);
       if (!srcVpc || srcVpc.type !== TYPE_VPC_NODE) {
         errors.push(
-          `${row}: sourceVpcId "${rt.sourceVpcId}" no corresponde a una VPC del canvas.`,
+          `${row}: sourceVpcId "${rt.sourceVpcId}" no corresponde a un segmento del canvas.`,
         );
         return;
       }
       if (!vpcsOnThisRouter.has(srcVpc.id)) {
         errors.push(
-          `${row}: la VPC origen "${srcVpc.data?.vpcName || srcVpc.id}" no está conectada a este router.`,
+          `${row}: el segmento origen "${srcVpc.data?.vpcName || srcVpc.id}" no esta conectado a este nodo.`,
         );
       }
 
@@ -211,7 +211,7 @@ export function validateTopology(nodes, edges) {
         const node = idToNode.get(rt.destVpcId);
         if (!node || node.type !== TYPE_VPC_NODE) {
           errors.push(
-            `${row}: destVpcId "${rt.destVpcId}" no corresponde a una VPC del canvas.`,
+            `${row}: destVpcId "${rt.destVpcId}" no corresponde a un segmento del canvas.`,
           );
         } else {
           dstVpc = node;
@@ -232,15 +232,15 @@ export function validateTopology(nodes, edges) {
       if (dstVpc) {
         if (dstVpc.id === srcVpc.id) {
           errors.push(
-            `${row}: source y destination VPC no pueden ser la misma.`,
+            `${row}: source y destination segment no pueden ser el mismo.`,
           );
         }
         const srcOk = vpcsOnThisRouter.has(srcVpc.id);
         const dstOk = vpcsOnThisRouter.has(dstVpc.id);
         if (!srcOk || !dstOk) {
           errors.push(
-            `VPC ${dstVpc.data?.vpcName || dstVpc.id}: ruta a ${vpcFullCidr(srcVpc) || "(CIDR origen)"} ` +
-              `(VPC ${srcVpc.data?.vpcName || srcVpc.id}) no cuelga del router ${r.id}. ` +
+            `Segment ${dstVpc.data?.vpcName || dstVpc.id}: ruta a ${vpcFullCidr(srcVpc) || "(CIDR origen)"} ` +
+              `(segmento ${srcVpc.data?.vpcName || srcVpc.id}) no cuelga del nodo ${r.id}. ` +
               `No se permiten saltos transitivos.`,
           );
         }
@@ -275,26 +275,26 @@ export function validateTopology(nodes, edges) {
 
       if (routerMode === "peering" && !hasBothDirections) {
         errors.push(
-          `Router "${rName}": en modo peering, ${aName} ↔ ${bName} requiere rutas en ambos sentidos.`,
+          `Connectivity "${rName}": en modo direct links, ${aName} ↔ ${bName} requiere policies en ambos sentidos.`,
         );
       }
 
       if (routerMode === "tgw" && !hasBothDirections) {
         warnings.push(
-          `Router "${rName}": ${aName} ↔ ${bName} tiene ruta solo de ida en TGW; el ping de retorno fallará.`,
+          `Connectivity "${rName}": ${aName} ↔ ${bName} tiene policy solo de ida en hub routing; el ping de retorno fallara.`,
         );
       }
     });
 
     if (routerMode === "peering" && vpcsOnThisRouter.size > 2) {
       warnings.push(
-        `Router "${rName}": peering con ${vpcsOnThisRouter.size} VPC puede ser difícil de mantener por cantidad de pares.`,
+        `Connectivity "${rName}": direct links con ${vpcsOnThisRouter.size} segmentos puede ser dificil de mantener por cantidad de pares.`,
       );
     }
 
     if (routerMode === "tgw" && vpcsOnThisRouter.size > 0 && vpcsOnThisRouter.size < 3) {
       warnings.push(
-        `Router "${rName}": TGW con ${vpcsOnThisRouter.size} VPC puede ser sobredimensionado para este laboratorio.`,
+        `Connectivity "${rName}": hub routing con ${vpcsOnThisRouter.size} segmentos puede ser sobredimensionado para este laboratorio.`,
       );
     }
   });

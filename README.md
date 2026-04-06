@@ -9,7 +9,7 @@ Sirve como guía de referencia para el equipo y como documentación en el reposi
 
 Se creó un **monorepo** llamado `tesis-monorepo` con la siguiente estructura:
 
-- `apps/frontend/`: aplicación React (Vite + Zustand + Firebase).
+- `apps/frontend/`: aplicación React (Vite + Zustand) que consume el backend como fuente de verdad para auth, laboratorios y ejecuciones.
 - `apps/backend/`: backend en Django + Celery.
 - `tools/docker/`: Dockerfiles y configuraciones.
 - `infra/`: infraestructura como código con Terraform.
@@ -219,6 +219,20 @@ Terraform define:
     ```bash
     make aws-down
     ```
+
+---
+
+## 12) Matriz de Redeploy
+
+Se documentó una matriz de pruebas manuales de redeploy sobre AWS, incluyendo:
+
+- rename de segmento sin reemplazo destructivo
+- eliminación de peering con destrucción acotada a conectividad
+- hallazgos sobre preview, lifecycle del plan y reconciliación de Security Groups
+
+Documento:
+
+- [docs/redeploy-matrix.md](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/redeploy-matrix.md)
 - **S3 + DynamoDB** del state cuestan muy poco; conviene **mantenerlos**.
 
 ---

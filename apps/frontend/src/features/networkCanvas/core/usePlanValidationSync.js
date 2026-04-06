@@ -1,42 +1,45 @@
-// features/networkCanvas/core/usePlanValidationSync.js
+import { useEffect, useRef } from "react";
 
-import { useEffect } from "react";
-import { doc, setDoc } from "firebase/firestore";
 import { computeInfraHash } from "../utils/infraHash";
-import { db } from "../../../infrastructure/firebase/firebaseConfig";
-import { DB_FIRESTORE_VPCS } from "@/shared/constants";
+import { api } from "@/infrastructure/http/api";
 
 export const usePlanValidationSync = ({
   validationState,
   validationResult,
   nodes,
   edges,
+  labId,
   vpcid,
   setCanvasPlanId,
   setValidatedPlanHash,
   setIsCanvasDirty,
   setHasValidatedInSession,
 }) => {
+  const lastSyncedValidationRef = useRef(null);
+
   useEffect(() => {
     if (validationState !== "SUCCESS" || !validationResult?.plan_id) return;
 
     const pid = validationResult.plan_id;
+    const syncKey = validationResult;
+
+    if (lastSyncedValidationRef.current === syncKey) return;
+    lastSyncedValidationRef.current = syncKey;
+
     setCanvasPlanId(pid);
+    const resolvedLabId = labId || vpcid;
 
     const okHash = computeInfraHash(nodes, edges);
     setValidatedPlanHash(okHash);
 
     const persist = async () => {
       try {
-        const ref = doc(db, DB_FIRESTORE_VPCS, vpcid);
-        await setDoc(
-          ref,
-          {
-            planId: pid,
-            planCanvasHash: okHash,
-          },
-          { merge: true },
-        );
+        const existing = await api.getLab(resolvedLabId);
+        const metadata = { ...(existing?.metadata || {}), planId: pid };
+        await api.updateLab(resolvedLabId, {
+          metadata,
+          plan_canvas_hash: okHash,
+        });
       } catch (e) {
         console.warn("No se pudo persistir planCanvasHash:", e);
       }
@@ -46,5 +49,5 @@ export const usePlanValidationSync = ({
 
     setIsCanvasDirty(false);
     setHasValidatedInSession(true);
-  }, [validationState, validationResult?.plan_id]);
+  }, [validationState, validationResult, nodes, edges, labId, vpcid, setCanvasPlanId, setValidatedPlanHash, setIsCanvasDirty, setHasValidatedInSession]);
 };

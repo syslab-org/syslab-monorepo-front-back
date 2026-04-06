@@ -120,12 +120,36 @@ locals {
   inst_map = { for i in local.all_instances : "${i.vpc_id_key}:${i.name}" => i }
 }
 
-{% if not sim %}
 # ---------------------- AMI base ----------------------
 data "aws_ssm_parameter" "al2023_ami" {
+  count = {{ 0 if sim else 1 }}
   name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64"
 }
-locals { default_ami_id = data.aws_ssm_parameter.al2023_ami.value }
+locals {
+  # En preview/simulación no consultamos AWS para resolver la AMI por defecto.
+  # El payload de este proyecto suele traer una AMI explícita; si no viene,
+  # usamos un placeholder estable para evitar que desaparezca la configuración.
+  default_ami_id = {{ '"ami-simulated-preview"' if sim else 'data.aws_ssm_parameter.al2023_ami[0].value' }}
+
+  # Todas las reglas ingress del SG deben vivir en el mismo recurso
+  # aws_security_group.vm_sg. Mezclar ingress inline con
+  # aws_security_group_rule separados hace que Terraform elimine reglas
+  # "externas" durante updates in-place y rompe el ping entre VPCs.
+  peering_icmp_sources_by_vpc = {
+    for v in local.vpcs : v.id => distinct(concat(
+      [
+        for l in [for x in local.links : x if try(lower(x.type), "") == "peering"] :
+        local.vpc_by_id[l.vpc_b_id].cidr_block
+        if local.allow_cross_vpc_ping && l.vpc_a_id == v.id && contains(keys(local.vpc_by_id), l.vpc_b_id)
+      ],
+      [
+        for l in [for x in local.links : x if try(lower(x.type), "") == "peering"] :
+        local.vpc_by_id[l.vpc_a_id].cidr_block
+        if local.allow_cross_vpc_ping && l.vpc_b_id == v.id && contains(keys(local.vpc_by_id), l.vpc_a_id)
+      ]
+    ))
+  }
+}
 
 # ---------------------- SECURITY GROUPS ----------------------
 resource "aws_security_group" "vm_sg" {
@@ -137,8 +161,10 @@ resource "aws_security_group" "vm_sg" {
     ]) > 0
   }
 
-  name        = "${each.value.name}-vm-sg"
-  description = "Security group for VMs in ${each.value.name}"
+  # Mantener name/description estables evita reemplazos del SG cuando el
+  # usuario solo renombra el segmento en el canvas.
+  name        = "vm-sg-${substr(replace(each.key, "-", ""), 0, 12)}"
+  description = "Security group for VMs in segment ${each.key}"
   vpc_id      = aws_vpc.vpc[each.key].id
 
   # ICMP dentro de la misma VPC
@@ -176,6 +202,23 @@ resource "aws_security_group" "vm_sg" {
     cidr_blocks = [each.value.cidr_block]
   }
 
+  # ICMP entre VPCs conectadas (peering o TGW). Se mantiene inline para que
+  # el SG no revoque estas reglas en redeploys posteriores.
+  dynamic "ingress" {
+    for_each = distinct(concat(
+      try(local.peering_icmp_sources_by_vpc[each.key], []),
+      try(local.tgw_icmp_sources_by_vpc[each.key], [])
+    ))
+
+    content {
+      description = "ICMP from connected VPC ${ingress.value}"
+      from_port   = -1
+      to_port     = -1
+      protocol    = "icmp"
+      cidr_blocks = [ingress.value]
+    }
+  }
+
   # Salida libre (necesaria para ping saliente y updates del sistema)
   egress {
     from_port   = 0
@@ -185,39 +228,6 @@ resource "aws_security_group" "vm_sg" {
   }
 
   tags = { Name = "${each.value.name}-vm-sg" }
-}
-
-# --- ICMP entre VPCs conectadas por PEERING (activado con allow_cross_vpc_ping=true) ---
-resource "aws_security_group_rule" "cross_vpc_ping_peering_a" {
-  for_each = {
-    for l in [for x in local.links : x if try(lower(x.type), "") == "peering"] :
-    "${l.vpc_a_id}--${l.vpc_b_id}" => l
-    if local.allow_cross_vpc_ping && contains(keys(aws_security_group.vm_sg), l.vpc_a_id)
-  }
-
-  type              = "ingress"
-  from_port         = -1
-  to_port           = -1
-  protocol          = "icmp"
-  security_group_id = aws_security_group.vm_sg[each.value.vpc_a_id].id
-  cidr_blocks       = [local.vpc_by_id[each.value.vpc_b_id].cidr_block]
-  description       = "Allow ICMP from peer ${each.value.vpc_b_id}"
-}
-
-resource "aws_security_group_rule" "cross_vpc_ping_peering_b" {
-  for_each = {
-    for l in [for x in local.links : x if try(lower(x.type), "") == "peering"] :
-    "${l.vpc_b_id}--${l.vpc_a_id}" => l
-    if local.allow_cross_vpc_ping && contains(keys(aws_security_group.vm_sg), l.vpc_b_id)
-  }
-
-  type              = "ingress"
-  from_port         = -1
-  to_port           = -1
-  protocol          = "icmp"
-  security_group_id = aws_security_group.vm_sg[each.value.vpc_b_id].id
-  cidr_blocks       = [local.vpc_by_id[each.value.vpc_a_id].cidr_block]
-  description       = "Allow ICMP from peer ${each.value.vpc_a_id}"
 }
 
 # --- ICMP entre VPCs conectadas a un mismo TGW (activado con allow_cross_vpc_ping=true) ---
@@ -236,38 +246,20 @@ locals {
       ]
     ]
   ])
-}
-
-resource "aws_security_group_rule" "cross_vpc_ping_tgw_a" {
-  for_each = {
-    for p in local.tgw_pairs :
-    "${p.a}--${p.b}" => p
-    if local.allow_cross_vpc_ping && contains(keys(aws_security_group.vm_sg), p.a)
+  tgw_icmp_sources_by_vpc = {
+    for v in local.vpcs : v.id => distinct(concat(
+      [
+        for p in local.tgw_pairs :
+        local.vpc_by_id[p.b].cidr_block
+        if local.allow_cross_vpc_ping && p.a == v.id && contains(keys(local.vpc_by_id), p.b)
+      ],
+      [
+        for p in local.tgw_pairs :
+        local.vpc_by_id[p.a].cidr_block
+        if local.allow_cross_vpc_ping && p.b == v.id && contains(keys(local.vpc_by_id), p.a)
+      ]
+    ))
   }
-
-  type              = "ingress"
-  from_port         = -1
-  to_port           = -1
-  protocol          = "icmp"
-  security_group_id = aws_security_group.vm_sg[each.value.a].id
-  cidr_blocks       = [local.vpc_by_id[each.value.b].cidr_block]
-  description       = "Allow ICMP from TGW-connected VPC ${each.value.b}"
-}
-
-resource "aws_security_group_rule" "cross_vpc_ping_tgw_b" {
-  for_each = {
-    for p in local.tgw_pairs :
-    "${p.b}--${p.a}" => p
-    if local.allow_cross_vpc_ping && contains(keys(aws_security_group.vm_sg), p.b)
-  }
-
-  type              = "ingress"
-  from_port         = -1
-  to_port           = -1
-  protocol          = "icmp"
-  security_group_id = aws_security_group.vm_sg[each.value.b].id
-  cidr_blocks       = [local.vpc_by_id[each.value.a].cidr_block]
-  description       = "Allow ICMP from TGW-connected VPC ${each.value.a}"
 }
 
 # ---------------------- EC2 instances ----------------------
@@ -297,7 +289,6 @@ resource "aws_instance" "vm" {
     create = "20m"
   }
 }
-{% endif %}
 
 
 # =========================
@@ -799,6 +790,22 @@ output "nat_eip_allocation_ids" {
 # Peering connections por key "<vpc_a_id>--<vpc_b_id>"
 output "peering_ids" {
   value = { for k, p in aws_vpc_peering_connection.peer : k => p.id }
+}
+
+output "tgw_ids" {
+  value = {
+    for router in local.tgw_routers : router.id => aws_ec2_transit_gateway.tgw[0].id
+  }
+}
+
+output "tgw_attachment_ids" {
+  value = { for k, attachment in aws_ec2_transit_gateway_vpc_attachment.tgw_attach : k => attachment.id }
+}
+
+output "tgw_route_table_ids" {
+  value = {
+    for router in local.tgw_routers : router.id => aws_ec2_transit_gateway_route_table.tgw_rt[0].id
+  }
 }
 
 {% if not sim %}

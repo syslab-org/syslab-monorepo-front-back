@@ -43,11 +43,11 @@ export default function LearningGuidePanel({
         <Stack direction="row" spacing={1} alignItems="center">
           <AutoStoriesIcon fontSize="small" color="primary" />
           <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-            Guia de aprendizaje
+            Guia de modelado
           </Typography>
         </Stack>
         <Typography variant="body2" color="text.secondary">
-          Sigue los pasos para construir y entender la topologia antes de aplicar en AWS.
+          Sigue los pasos para construir y entender la topologia antes de validar o desplegar.
         </Typography>
       </Stack>
 
@@ -63,12 +63,12 @@ export default function LearningGuidePanel({
       </Box>
 
       <Stack direction="row" spacing={0.8} flexWrap="wrap">
-        <Chip size="small" label={`VPCs: ${stats.vpcs}`} />
-        <Chip size="small" label={`Subredes: ${stats.subnets}`} />
-        <Chip size="small" label={`Routers: ${stats.routers}`} />
-        <Chip size="small" label={`Peering: ${stats.peeringRouters || 0}`} variant="outlined" />
-        <Chip size="small" label={`TGW: ${stats.tgwRouters || 0}`} variant="outlined" />
-        <Chip size="small" label={`Instancias: ${stats.instances}`} />
+        <Chip size="small" label={`Segmentos: ${stats.vpcs}`} />
+        <Chip size="small" label={`Zonas: ${stats.subnets}`} />
+        <Chip size="small" label={`Nodos de conectividad: ${stats.routers}`} />
+        <Chip size="small" label={`Direct links: ${stats.peeringRouters || 0}`} variant="outlined" />
+        <Chip size="small" label={`Hub routing: ${stats.tgwRouters || 0}`} variant="outlined" />
+        <Chip size="small" label={`Workloads: ${stats.instances}`} />
       </Stack>
 
       {focused && (
@@ -117,7 +117,7 @@ export default function LearningGuidePanel({
               <Stack spacing={1} sx={{ mt: 1.2 }}>
                 <Box>
                   <Typography variant="caption" sx={{ fontWeight: 700 }} display="block">
-                    Lectura laboratorio
+                    Lectura neutral
                   </Typography>
                   {focused.labLines.map((line) => (
                     <Typography key={line} variant="caption" display="block" color="text.secondary">
@@ -128,7 +128,7 @@ export default function LearningGuidePanel({
 
                 <Box>
                   <Typography variant="caption" sx={{ fontWeight: 700 }} display="block">
-                    Lectura AWS
+                    Traduccion AWS
                   </Typography>
                   {focused.awsLines.map((line) => (
                     <Typography key={line} variant="caption" display="block" color="text.secondary">
@@ -152,7 +152,7 @@ export default function LearningGuidePanel({
 
       <Stack spacing={1}>
         <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-          Comparacion pedagogica
+          Comparacion conceptual
         </Typography>
         <Stack direction={{ xs: "column", xl: "row" }} spacing={1}>
           <Box
@@ -168,7 +168,7 @@ export default function LearningGuidePanel({
             <Stack direction="row" spacing={0.8} alignItems="center" sx={{ mb: 0.8 }}>
               <SchoolIcon fontSize="small" color="primary" />
               <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                Vista laboratorio (VLAN)
+                Vista neutral
               </Typography>
             </Stack>
             {guide.contrast.vlanLines.map((line) => (
@@ -218,7 +218,7 @@ export default function LearningGuidePanel({
                 {row.concept}
               </Typography>
               <Typography variant="caption" display="block" color="text.secondary">
-                Lab: {row.vlanView}
+                Neutral: {row.vlanView}
               </Typography>
               <Typography variant="caption" display="block" color="text.secondary">
                 AWS: {row.awsView}

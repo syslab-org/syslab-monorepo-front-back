@@ -22,15 +22,15 @@ const ITEMS = [
             {
                 key: 'vpc',
                 type: TYPE_VPC_NODE,
-                label: 'VPC',
-                description: 'Contenedor lógico que define el espacio de red principal (equivalente a AWS VPC).',
+                label: 'Network Segment',
+                description: 'Contenedor lógico que define un segmento principal de red. En AWS se traduce a una VPC.',
                 icon: <CloudIcon />
             },
             {
                 key: 'subnetwork',
                 type: TYPE_SUBNETWORK_NODE,
-                label: TITLE_SUBNETWORK,
-                description: 'Segmento CIDR dentro de una VPC donde viven las instancias.',
+                label: 'Zone Segment',
+                description: 'Zona CIDR dentro de un segmento de red donde viven los workloads.',
                 icon: <LanIcon />
             },
         ]
@@ -41,8 +41,8 @@ const ITEMS = [
             {
                 key: 'instance',
                 type: TYPE_SERVER_NODE,
-                label: 'Instance',
-                description: 'Máquina virtual dentro de una Subnet.',
+                label: 'Workload',
+                description: 'Carga de trabajo o máquina virtual dentro de una zona.',
                 icon: <DesktopWindowsIcon />
             },
         ]
@@ -53,8 +53,8 @@ const ITEMS = [
             {
                 key: 'router',
                 type: TYPE_ROUTER_NODE,
-                label: TITLE_ROUTER,
-                description: 'Dispositivo lógico que permite comunicación entre redes.',
+                label: 'Connectivity Policy',
+                description: 'Nodo lógico que define cómo se comunican los segmentos entre sí.',
                 icon: <RouterIcon />
             },
         ]

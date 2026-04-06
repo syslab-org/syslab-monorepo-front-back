@@ -31,7 +31,7 @@ export function useNodeActions({
         nat_gateway: data.nat_gateway,
         allowedSshCidr: data.allowedSshCidr || data.allowed_ssh_cidr,
         // Genera el título visible
-        title: data.vpcName || data.name || "VPC",
+        title: data.vpcName || data.name || "Network Segment",
       };
 
       // Si vino CIDR completo (ej: 10.0.0.0/16), sepáralo

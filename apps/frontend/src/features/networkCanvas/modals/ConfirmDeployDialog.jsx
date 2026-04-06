@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -11,6 +12,52 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+
+function normalizePlanSummary(transformedData) {
+  const topology =
+    transformedData?.topology && typeof transformedData.topology === "object"
+      ? transformedData.topology
+      : null;
+
+  if (!topology) {
+    const legacyVpcs = Array.isArray(transformedData?.vpcs) ? transformedData.vpcs : [];
+    const legacyLinks = Array.isArray(transformedData?.links) ? transformedData.links : [];
+    const legacyRouters = Array.isArray(transformedData?.routers) ? transformedData.routers : [];
+    return {
+      provider: transformedData?.target_provider || transformedData?.cloud || "aws",
+      networkName: transformedData?.name || "plan",
+      segments: legacyVpcs,
+      links: legacyLinks,
+      hubs: legacyRouters,
+      totalZones: legacyVpcs.reduce((acc, vpc) => acc + (vpc.subnets?.length || 0), 0),
+      totalWorkloads: legacyVpcs.reduce(
+        (acc, vpc) =>
+          acc + (vpc.subnets || []).reduce((subAcc, subnet) => subAcc + (subnet.instances?.length || 0), 0),
+        0,
+      ),
+    };
+  }
+
+  const segments = Array.isArray(topology?.segments) ? topology.segments : [];
+  const connectivity = topology?.connectivity || {};
+  const links = Array.isArray(connectivity?.links) ? connectivity.links : [];
+  const hubs = Array.isArray(connectivity?.hubs) ? connectivity.hubs : [];
+  const totalZones = segments.reduce((acc, segment) => acc + ((segment?.zones || []).length || 0), 0);
+  const totalWorkloads = segments.reduce(
+    (acc, segment) => acc + ((segment?.workloads || []).length || 0),
+    0,
+  );
+
+  return {
+    provider: transformedData?.target_provider || transformedData?.cloud || "aws",
+    networkName: topology?.network?.name || transformedData?.name || "plan",
+    segments,
+    links,
+    hubs,
+    totalZones,
+    totalWorkloads,
+  };
+}
 
 /**
  * Exporta el plan actual (transformedData) a un archivo JSON descargable.
@@ -41,6 +88,7 @@ const ConfirmDeployDialog = ({
   onClose,
   validationState,
   canvasState,
+  planStatus,
   validationResult,
   transformedData,
   onValidate,
@@ -48,18 +96,53 @@ const ConfirmDeployDialog = ({
   onViewPlan,
   loadingFlow,
 }) => {
-  const isValidated = validationState === "SUCCESS";
+  const hasActiveInfra = planStatus?.applied === true;
+  const hasReusablePlanId = Boolean(validationResult?.plan_id || planStatus?.id);
+  const hasSuccessfulPlanSnapshot =
+    String(planStatus?.status || "").toUpperCase() === "SUCCESS";
+  const isValidated =
+    validationState === "SUCCESS" ||
+    (
+      hasReusablePlanId &&
+      hasSuccessfulPlanSnapshot &&
+      (canvasState === "PLAN_VALIDATED" || canvasState === "PLAN_SYNCED")
+    );
   const hasError = validationState === "ERROR";
   const isSyncing =
     validationState === "SYNCING" ||
     validationState === "PLANNING";
 
-  const vpcs = transformedData?.vpcs || [];
-  const links = transformedData?.links || [];
-  const routers = transformedData?.routers || [];
-  const peeringLinks = links.filter((link) => String(link?.type || "").toLowerCase() === "peering").length;
-  const tgwAttachments = links.filter((link) => String(link?.type || "").toLowerCase() === "tgw-attach").length;
-  const tgwRouters = routers.filter((router) => String(router?.type || "").toLowerCase() === "tgw").length;
+  const summary = normalizePlanSummary(transformedData);
+  const segments = summary.segments;
+  const links = summary.links;
+  const hubs = summary.hubs;
+  const directLinks = links.filter((link) => {
+    const type = String(link?.type || "").toLowerCase();
+    return type === "direct_link" || type === "peering";
+  }).length;
+  const hubAttachments = links.filter((link) => {
+    const type = String(link?.type || "").toLowerCase();
+    return type === "hub_attachment" || type === "tgw-attach";
+  }).length;
+  const hubRouters = hubs.filter((hub) => {
+    const impl = String(hub?.implementation || hub?.type || "").toLowerCase();
+    return impl === "tgw";
+  }).length;
+  const isRedeployPreview = Boolean(
+    validationResult?.is_redeploy_preview ?? hasActiveInfra,
+  );
+  const planRiskSummary = validationResult?.plan_risk_summary || null;
+  const riskSeverity = planRiskSummary?.severity || 'none';
+  const primaryActionLabel = isRedeployPreview ? "Redeploy en AWS" : "Deploy en AWS";
+  const secondaryActionLabel = isRedeployPreview ? "Revalidar redeploy" : "Validar deploy";
+  const isBusy = Boolean(loadingFlow || isSyncing);
+
+  const riskAlertSeverity =
+    riskSeverity === 'destructive'
+      ? 'error'
+      : riskSeverity === 'caution'
+        ? 'warning'
+        : 'info';
 
   const renderBanner = () => {
     if (isSyncing) {
@@ -95,81 +178,230 @@ const ConfirmDeployDialog = ({
     return null;
   };
 
-  const totalSubnets = vpcs.reduce(
-    (acc, v) => acc + (v.subnets?.length || 0),
-    0
-  );
-  const totalInstances = vpcs.reduce(
-    (acc, v) =>
+  const vpcsWithIgw = segments.filter(
+    (segment) => Boolean(segment?.provider_overrides?.aws?.internet_gateway),
+  ).length;
+  const vpcsWithNat = segments.filter(
+    (segment) => Boolean(segment?.provider_overrides?.aws?.nat_gateway?.enabled),
+  ).length;
+  const vpcsWithSsh = segments.filter((segment) => Boolean(segment?.ingress?.ssh_cidr)).length;
+  const segmentZoneStats = segments.map((segment) => {
+    const zones = Array.isArray(segment?.zones) ? segment.zones : [];
+    const publicZoneCount = zones.filter(
+      (zone) => String(zone?.kind || "").toLowerCase() === "public",
+    ).length;
+    const privateZoneCount = zones.filter(
+      (zone) => String(zone?.kind || "").toLowerCase() === "private",
+    ).length;
+    return {
+      id: segment?.id,
+      hasSshCidr: Boolean(segment?.ingress?.ssh_cidr),
+      publicZoneCount,
+      privateZoneCount,
+    };
+  });
+  const vpcsWithEffectivePublicSsh = segmentZoneStats.filter(
+    (segment) => segment.hasSshCidr && segment.publicZoneCount > 0,
+  ).length;
+  const vpcsWithSshButNoPublicZones = segmentZoneStats.filter(
+    (segment) => segment.hasSshCidr && segment.publicZoneCount === 0,
+  ).length;
+  const publicSubnets = segments.reduce(
+    (acc, segment) =>
       acc +
-      (v.subnets || []).reduce(
-        (subAcc, s) => subAcc + (s.instances?.length || 0),
-        0
-      ),
-    0
-  );
-  const vpcsWithIgw = vpcs.filter((vpc) => Boolean(vpc.internet_gateway)).length;
-  const vpcsWithNat = vpcs.filter((vpc) => Boolean(vpc.nat_gateway?.enabled)).length;
-  const vpcsWithSsh = vpcs.filter((vpc) => Boolean(vpc.allowed_ssh_cidr)).length;
-  const publicSubnets = vpcs.reduce(
-    (acc, vpc) =>
-      acc +
-      (vpc.subnets || []).filter(
-        (subnet) => String(subnet.subnet_type || "").toLowerCase() === "public",
+      (segment.zones || []).filter(
+        (zone) => String(zone.kind || "").toLowerCase() === "public",
       ).length,
     0,
   );
-  const privateSubnets = Math.max(totalSubnets - publicSubnets, 0);
+  const privateSubnets = Math.max(summary.totalZones - publicSubnets, 0);
+  const mixedExposure = segments.filter(
+    (segment) => String(segment?.exposure || "").toLowerCase() === "mixed",
+  ).length;
+  const publicExposure = segments.filter(
+    (segment) => String(segment?.exposure || "").toLowerCase() === "public",
+  ).length;
+  const privateExposure = segments.filter(
+    (segment) => String(segment?.exposure || "").toLowerCase() === "private",
+  ).length;
+  const isolatedExposure = segments.filter(
+    (segment) => String(segment?.internet_access || "").toLowerCase() === "isolated",
+  ).length;
+  const neutralInterpretation = [
+    `La red base contiene ${segments.length} segmento(s), ${summary.totalZones} zona(s) y ${summary.totalWorkloads} workload(s).`,
+    `Exposición del diseño: ${publicExposure} segmento(s) públicos, ${privateExposure} privados y ${mixedExposure} mixtos.`,
+    hubRouters > 0
+      ? `Conectividad modelada como ${hubRouters} hub(s) central(es) con ${hubAttachments} attachment(s).`
+      : `Conectividad modelada con ${directLinks} enlace(s) directo(s) entre pares de segmentos.`,
+    vpcsWithSshButNoPublicZones > 0
+      ? `Acceso y salida: SSH externo declarado en ${vpcsWithSsh} segmento(s), pero ${vpcsWithSshButNoPublicZones} no tiene(n) zona pública para exponerlo. Además, ${isolatedExposure} segmento(s) no declara(n) salida a internet.`
+      : `Acceso y salida: SSH externo utilizable en ${vpcsWithEffectivePublicSsh} segmento(s) y ${isolatedExposure} segmento(s) sin salida a internet declarada.`,
+  ];
   const awsInterpretation = [
-    `Se crearán ${vpcs.length} VPC(s), ${totalSubnets} subnet(s) y ${totalInstances} instancia(s) EC2.`,
-    `Exposición pública: IGW en ${vpcsWithIgw} VPC(s), ${publicSubnets} subnet(s) pública(s) y SSH externo definido en ${vpcsWithSsh} VPC(s).`,
+    `AWS creará ${segments.length} VPC(s), ${summary.totalZones} subnet(s) y ${summary.totalWorkloads} instancia(s).`,
+    publicSubnets > 0
+      ? `Exposición pública efectiva: IGW en ${vpcsWithIgw} VPC(s), ${publicSubnets} subnet(s) pública(s) y SSH externo utilizable en ${vpcsWithEffectivePublicSsh} VPC(s).`
+      : `Internet edge declarado en ${vpcsWithIgw} VPC(s), pero no hay subnet(s) pública(s) para exponer workloads ni usar SSH externo directamente.`,
     `Salida privada: NAT Gateway en ${vpcsWithNat} VPC(s) para ${privateSubnets} subnet(s) potencialmente privadas.`,
-    tgwRouters > 0
-      ? `Enrutamiento central: ${tgwRouters} TGW router(s) y ${tgwAttachments} attachment(s).`
-      : `Enrutamiento por pares: ${peeringLinks} enlace(s) peering declarados.`,
+    hubRouters > 0
+      ? `Enrutamiento central: ${hubRouters} hub(s) y ${hubAttachments} attachment(s).`
+      : `Enrutamiento por enlaces directos: ${directLinks} enlace(s) declarados.`,
   ];
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog
+      open={open}
+      onClose={(_event, reason) => {
+        if (isBusy && (reason === "backdropClick" || reason === "escapeKeyDown")) return;
+        if (isBusy) return;
+        onClose?.();
+      }}
+      disableEscapeKeyDown={isBusy}
+      maxWidth="md"
+      fullWidth
+    >
       <DialogTitle>Confirmar infraestructura</DialogTitle>
       <DialogContent dividers>
-        <Box>
+        <Box sx={{ position: "relative" }}>
+          {isBusy && (
+            <Box
+              sx={{
+                position: "absolute",
+                inset: 0,
+                zIndex: 2,
+                bgcolor: "rgba(255,255,255,0.64)",
+                backdropFilter: "blur(1px)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 1,
+              }}
+            >
+              <Stack
+                spacing={1.5}
+                alignItems="center"
+                sx={{
+                  px: 3,
+                  py: 2,
+                  borderRadius: 2,
+                  bgcolor: "background.paper",
+                  boxShadow: 3,
+                }}
+              >
+                <CircularProgress size={28} />
+                <Typography variant="subtitle2">
+                  {isSyncing
+                    ? "Validando infraestructura. Espera un momento..."
+                    : "Procesando la operación. No cierres este modal todavía."}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" textAlign="center">
+                  Mientras corre esta acción, se ha bloqueamos el modal para evitar estados inconsistentes.
+                </Typography>
+              </Stack>
+            </Box>
+          )}
           {renderBanner()}
+
+          {isRedeployPreview && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              Esta validación se hizo sobre infraestructura ya activa. Si despliegas ahora, Terraform actualizará el stack existente en AWS y algunos cambios podrían reemplazar o eliminar recursos.
+            </Alert>
+          )}
+
+          <Box mt={2}>
+            <Stack direction="row" spacing={1} flexWrap="wrap">
+              <Chip
+                label={isRedeployPreview ? "Acción principal: REDEPLOY" : "Acción principal: DEPLOY"}
+                color={isRedeployPreview ? "warning" : "primary"}
+                variant="filled"
+              />
+              <Chip
+                label={isRedeployPreview ? "Destroy disponible si el plan sigue activo" : "Destroy no aplica hasta crear recursos"}
+                color={isRedeployPreview ? "error" : "default"}
+                variant={isRedeployPreview ? "outlined" : "outlined"}
+              />
+            </Stack>
+          </Box>
+
+          {planRiskSummary?.hasChanges && (
+            <Box mt={2}>
+              <Alert severity={riskAlertSeverity}>
+                {riskSeverity === 'destructive'
+                  ? 'Terraform detectó cambios potencialmente destructivos o con reemplazo de recursos.'
+                  : riskSeverity === 'caution'
+                    ? 'Terraform detectó actualizaciones sobre recursos existentes.'
+                    : 'Terraform detectó cambios aditivos sobre la infraestructura.'}
+              </Alert>
+              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1.5 }}>
+                <Chip label={`Add: ${planRiskSummary.add}`} size="small" />
+                <Chip label={`Change: ${planRiskSummary.change}`} size="small" />
+                <Chip label={`Destroy: ${planRiskSummary.destroy}`} size="small" color={planRiskSummary.destroy > 0 ? 'error' : 'default'} />
+                <Chip label={`Replace: ${planRiskSummary.replace}`} size="small" color={planRiskSummary.replace > 0 ? 'error' : 'default'} />
+              </Stack>
+              {Array.isArray(planRiskSummary.examples) && planRiskSummary.examples.length > 0 && (
+                <Box mt={1}>
+                  <Typography variant="body2" color="text.secondary">
+                    Recursos sensibles detectados:
+                  </Typography>
+                  <Stack spacing={0.5} sx={{ mt: 0.75 }}>
+                    {planRiskSummary.examples.map((item) => (
+                      <Typography key={`${item.action}-${item.resource}`} variant="caption" color="text.secondary">
+                        {item.action.toUpperCase()}: {item.resource}
+                      </Typography>
+                    ))}
+                  </Stack>
+                </Box>
+              )}
+            </Box>
+          )}
 
           <Box mt={3}>
             <Typography variant="subtitle1" gutterBottom>
               Resumen
             </Typography>
             <Stack direction="row" spacing={1} flexWrap="wrap">
-              <Chip label={`Cloud: ${transformedData?.cloud || "aws"}`} />
-              <Chip label={`VPCs: ${vpcs.length}`} />
-              <Chip label={`Subnets: ${totalSubnets}`} />
-              <Chip label={`Instancias: ${totalInstances}`} />
+              <Chip label={`Provider: ${String(summary.provider || "aws").toUpperCase()}`} />
+              <Chip label={`Segments: ${segments.length}`} />
+              <Chip label={`Zones: ${summary.totalZones}`} />
+              <Chip label={`Workloads: ${summary.totalWorkloads}`} />
               <Chip
-                label={`Peering links: ${peeringLinks}`}
-                color={peeringLinks > 0 ? "secondary" : "default"}
-                variant={peeringLinks > 0 ? "filled" : "outlined"}
+                label={`Direct links: ${directLinks}`}
+                color={directLinks > 0 ? "secondary" : "default"}
+                variant={directLinks > 0 ? "filled" : "outlined"}
               />
               <Chip
-                label={`TGW routers: ${tgwRouters}`}
-                color={tgwRouters > 0 ? "primary" : "default"}
-                variant={tgwRouters > 0 ? "filled" : "outlined"}
+                label={`Hubs: ${hubRouters}`}
+                color={hubRouters > 0 ? "primary" : "default"}
+                variant={hubRouters > 0 ? "filled" : "outlined"}
               />
               <Chip
-                label={`TGW attachments: ${tgwAttachments}`}
-                color={tgwAttachments > 0 ? "primary" : "default"}
-                variant={tgwAttachments > 0 ? "filled" : "outlined"}
+                label={`Hub attachments: ${hubAttachments}`}
+                color={hubAttachments > 0 ? "primary" : "default"}
+                variant={hubAttachments > 0 ? "filled" : "outlined"}
               />
             </Stack>
           </Box>
 
           <Alert severity="info" sx={{ mt: 2 }}>
-            Después del deploy, valida conectividad en <b>Plan Detail → Pruebas</b> con comandos de ping guiados entre VPCs.
+            Después del deploy, valida conectividad en <b>Plan Detail → Pruebas</b> con comandos de ping guiados entre segmentos.
           </Alert>
 
           <Box mt={3}>
             <Typography variant="subtitle1" gutterBottom>
-              Cómo AWS leerá este canvas
+              Intención neutral del laboratorio
+            </Typography>
+            <Stack spacing={1}>
+              {neutralInterpretation.map((line) => (
+                <Alert key={line} severity="info" variant="outlined">
+                  {line}
+                </Alert>
+              ))}
+            </Stack>
+          </Box>
+
+          <Box mt={3}>
+            <Typography variant="subtitle1" gutterBottom>
+              Traducción AWS
             </Typography>
             <Stack spacing={1}>
               {awsInterpretation.map((line) => (
@@ -181,72 +413,85 @@ const ConfirmDeployDialog = ({
           </Box>
 
           <Box mt={4}>
-            {vpcs.map((vpc) => (
-              <Box
-                key={vpc.id}
-                mb={2}
-                p={2}
-                border="1px solid #eee"
-                borderRadius={2}
-              >
-                <Typography variant="subtitle2">{vpc.name}</Typography>
-                <Stack direction="row" spacing={1} mt={1} flexWrap="wrap">
-                  <Chip label={`CIDR: ${vpc.cidr_block}`} size="small" />
-                  <Chip label={`Región: ${vpc.region}`} size="small" />
-                  {vpc.internet_gateway && (
-                    <Chip label="IGW" size="small" color="primary" />
-                  )}
-                  {vpc.nat_gateway?.enabled && (
-                    <Chip label="NAT" size="small" color="secondary" />
-                  )}
-                  {vpc.nat_gateway?.enabled && vpc.nat_gateway?.elastic_ip && (
+            {segments.map((segment) => {
+              const aws = segment?.provider_overrides?.aws || {};
+              return (
+                <Box
+                  key={segment.id}
+                  mb={2}
+                  p={2}
+                  border="1px solid #eee"
+                  borderRadius={2}
+                >
+                  <Typography variant="subtitle2">{segment.name}</Typography>
+                  <Stack direction="row" spacing={1} mt={1} flexWrap="wrap">
+                    <Chip label={`CIDR: ${segment.cidr || segment.cidr_block}`} size="small" />
+                    <Chip label={`Región: ${segment.region}`} size="small" />
                     <Chip
-                      label={`NAT EIP: ${vpc.nat_gateway.elastic_ip}`}
+                      label={`Modelo: ${String(segment.exposure || "internal").replace(/_/g, " ")}`}
                       size="small"
-                      color="warning"
+                      variant="outlined"
                     />
+                    <Chip
+                      label={`AWS: VPC`}
+                      size="small"
+                      variant="outlined"
+                    />
+                    {aws.internet_gateway && (
+                      <Chip label="IGW" size="small" color="primary" />
+                    )}
+                    {aws.nat_gateway?.enabled && (
+                      <Chip label="NAT" size="small" color="secondary" />
+                    )}
+                    {aws.nat_gateway?.enabled && aws.nat_gateway?.elastic_ip && (
+                      <Chip
+                        label={`NAT EIP: ${aws.nat_gateway.elastic_ip}`}
+                        size="small"
+                        color="warning"
+                      />
+                    )}
+                  </Stack>
+                  {aws.nat_gateway?.enabled && (
+                    <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+                      Si defines una EIP para el NAT, debe ser un Allocation ID real de AWS (`eipalloc-...`), no una IP pública.
+                    </Typography>
                   )}
-                </Stack>
-                {vpc.nat_gateway?.enabled && (
-                  <Typography variant="caption" color="text.secondary" display="block" mt={1}>
-                    Si defines una EIP para el NAT, debe ser un Allocation ID real de AWS (`eipalloc-...`), no una IP pública.
-                  </Typography>
-                )}
-              </Box>
-            ))}
+                </Box>
+              )
+            })}
           </Box>
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancelar</Button>
+        <Button onClick={onClose} disabled={isBusy}>Cancelar</Button>
         <Button
           variant="contained"
           onClick={onValidate}
-          disabled={loadingFlow}
+          disabled={isBusy}
         >
-          Validar
+          {secondaryActionLabel}
         </Button>
         <Button
           variant="outlined"
           onClick={() => exportPlanToJson(transformedData, transformedData?.name || "plan")}
-          disabled={!transformedData}
+          disabled={!transformedData || isBusy}
         >
           Exportar JSON
         </Button>
         <Button
           variant="outlined"
           onClick={onViewPlan}
-          disabled={!validationResult?.plan_id}
+          disabled={!hasReusablePlanId || isBusy}
         >
           Ver plan
         </Button>
         <Button
           variant="contained"
-          color="success"
+          color={isRedeployPreview ? "warning" : "success"}
           onClick={onDeploy}
-          disabled={!isValidated || loadingFlow}
+          disabled={!isValidated || !hasReusablePlanId || isBusy}
         >
-          Desplegar
+          {isRedeployPreview ? 'Aplicar redeploy' : 'Desplegar'}
         </Button>
       </DialogActions>
     </Dialog>

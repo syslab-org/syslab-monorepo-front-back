@@ -104,13 +104,13 @@ const styleModal = (theme) => ({
 });
 
 const NODE_FORM_META = {
-    [TYPE_VPC_NODE]: { label: "Network Node", title: "VPC Configuration" },
-    [TYPE_SUBNETWORK_NODE]: { label: "Network Node", title: "Subnet Configuration" },
-    [TYPE_ROUTER_NODE]: { label: "Routing Node", title: "Router Configuration" },
-    [TYPE_DEFAULT_NODE]: { label: "Compute Node", title: "Instance Configuration" },
-    [TYPE_COMPUTER_NODE]: { label: "Compute Node", title: "Instance Configuration" },
-    [TYPE_PRINTER_NODE]: { label: "Compute Node", title: "Instance Configuration" },
-    [TYPE_SERVER_NODE]: { label: "Compute Node", title: "Instance Configuration" },
+    [TYPE_VPC_NODE]: { label: "Network Node", title: "Network Segment Configuration" },
+    [TYPE_SUBNETWORK_NODE]: { label: "Network Node", title: "Zone Configuration" },
+    [TYPE_ROUTER_NODE]: { label: "Connectivity Node", title: "Connectivity Policy" },
+    [TYPE_DEFAULT_NODE]: { label: "Workload Node", title: "Instance Configuration" },
+    [TYPE_COMPUTER_NODE]: { label: "Workload Node", title: "Instance Configuration" },
+    [TYPE_PRINTER_NODE]: { label: "Workload Node", title: "Instance Configuration" },
+    [TYPE_SERVER_NODE]: { label: "Workload Node", title: "Instance Configuration" },
 };
 
 function getInstanceNodeProps(selectedNode, nodes, restrictedNodes) {
@@ -222,7 +222,16 @@ function getVpcNodeProps(selectedNode, nodes, cidrBlockVPC, prefixLength) {
         .map(n => n.data?.subnetName)
         .filter(Boolean);
 
-    return { vlanCidr, siblingVpcCidrs, publicSubnetNames };
+    const privateSubnetNames = nodes
+        .filter(n =>
+            n.type === TYPE_SUBNETWORK_NODE &&
+            n.parentId === selectedNode.id &&
+            String(n.data?.subnetType || "").toLowerCase() === "private"
+        )
+        .map(n => n.data?.subnetName)
+        .filter(Boolean);
+
+    return { vlanCidr, siblingVpcCidrs, publicSubnetNames, privateSubnetNames };
 }
 
 
@@ -331,7 +340,7 @@ function NodeConfigModal({
 
                 {/* If node type is VPC, show VPCNodeForm */}
                 {selectedNode && selectedNode.type === TYPE_VPC_NODE && (() => {
-                    const { vlanCidr, siblingVpcCidrs, publicSubnetNames } =
+                    const { vlanCidr, siblingVpcCidrs, publicSubnetNames, privateSubnetNames } =
                         getVpcNodeProps(selectedNode, nodes, cidrBlockVPC, prefixLength);
                     return (
                         <VPCNodeForm
@@ -341,6 +350,7 @@ function NodeConfigModal({
                             vlanCidr={vlanCidr}
                             siblingVpcCidrs={siblingVpcCidrs}
                             publicSubnetNames={publicSubnetNames}
+                            privateSubnetNames={privateSubnetNames}
                         />
                     );
                 })()}

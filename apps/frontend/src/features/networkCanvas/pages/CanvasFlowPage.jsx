@@ -1,4 +1,4 @@
-// apps/frontend/src/components/flow/MainFlow.jsx
+// apps/frontend/src/components/flow/CanvasFlowPage.jsx
 import { useCanvasInitialization } from "@/features/networkCanvas/core/useCanvasInitialization";
 import { useCanvasRuntimeController } from "@/features/networkCanvas/core/useCanvasRuntimeController";
 import { useRoutingPreview } from "@/features/networkCanvas/core/useRoutingPreview";
@@ -26,7 +26,7 @@ import useRestoreFlow from '@/features/networkCanvas/core/useRestoreFlow';
 import useSaveFlow from '@/features/networkCanvas/core/useSaveFlow';
 import useNodeClick from '@/features/networkCanvas/hooks/useNodeClick';
 import FlowWorkspace from "@/features/networkCanvas/layout/FlowWorkspace";
-import useCidrBlockVPCStore from '@/features/networkCanvas/store/cidrBlocksIp';
+import { useCanvasLabStore } from '@/features/networkCanvas/store/canvasLabStore';
 import useClickedNodeIdStore from '@/features/networkCanvas/store/clickedNodeIdStore';
 
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -45,9 +45,7 @@ import { usePlanPolling } from "@/features/networkCanvas/core/usePlanPolling";
 import { useLearningGuide } from "@/features/networkCanvas/core/useLearningGuide";
 import RoutePreviewPanel from "@/features/networkCanvas/panels/RoutePreviewPanel";
 // import { buildRoutingPreview } from "@/features/networkCanvas/utils/buildRoutingPreview";
-// import { db } from "@/infrastructure/firebase/firebaseConfig";
 import { useTheme } from "@mui/material/styles";
-// import { collection, getDocs } from "firebase/firestore";
 import { useAmiList } from "@/features/networkCanvas/core/useAmiList";
 import { useContext } from "react";
 
@@ -77,9 +75,10 @@ const useBodyClass = (className, enabled = true) => {
 };
 
 // eslint-disable-next-line react-refresh/only-export-components
-function MainFlow() {
+function CanvasFlowPage() {
   const params = useParams();
-  const { vpcid } = params;
+  const { labId: routeLabId, vpcid: legacyLabId } = params;
+  const labId = routeLabId || legacyLabId;
 
   useEffect(() => {
     console.log("ROUTE PARAMS", params);
@@ -153,6 +152,7 @@ function MainFlow() {
     edges,
     canvasPlanId,
     validatedPlanHash,
+    setValidatedPlanHash,
     restorationDone,
     hasValidatedInSession,
     isCanvasLocked,
@@ -162,10 +162,10 @@ function MainFlow() {
   // eslint-disable-next-line no-unused-vars
   const [clickedNodeId, setClickedNodeId] = useClickedNodeIdStore(state => [state.clickedNodeId, state.setClickedNodeId])
 
-  const [cidrBlockVPC, prefixLength, setCidrBlockVPC, setPrefixLength] = useCidrBlockVPCStore(state => [
-    state.cidrBlockVPC,
+  const [masterCidrBlock, prefixLength, setMasterCidrBlock, setPrefixLength] = useCanvasLabStore(state => [
+    state.masterCidrBlock || state.cidrBlockVPC,
     state.prefixLength,
-    state.setCidrBlockVPC,
+    state.setMasterCidrBlock,
     state.setPrefixLength
   ]);
 
@@ -194,11 +194,11 @@ function MainFlow() {
     return s === 'RUNNING' || s === 'PENDING' || s === 'STARTED';
   }, []);
 
-  // Load plan metadata (planId + planCanvasHash) from Firestore and keep it actualizado en 
+  // Load plan metadata (planId + planCanvasHash) from backend and keep it actualizado en
   // el estado del canvas. Esto es clave para la lógica de "dirty" y validación.
 
   usePlanMeta({
-    vpcid,
+    labId,
     setCanvasPlanId,
     setValidatedPlanHash
   });
@@ -218,8 +218,8 @@ function MainFlow() {
 
   const closeModal = closeNodeModal;
 
-  const onSaveFlow = useSaveFlow({ reactFlowInstance, flowKey, vpcid });
-  const onRestoreFlow = useRestoreFlow({ setNodes, setEdges, setViewport, flowKey, getId, setCanvasPlanId });
+  const onSaveFlow = useSaveFlow({ reactFlowInstance, flowKey, labId });
+  const onRestoreFlow = useRestoreFlow({ setNodes, setEdges, setViewport, flowKey, getId, setCanvasPlanId, labId });
   const { saveNodeData, deleteNodeInstance } = useNodeActions({
     nodes,
     setNodes,
@@ -254,7 +254,9 @@ function MainFlow() {
     nodes,
     edges,
     allowCrossVpcPingUI,
-    firestoreVpcId: vpcid
+    labId,
+    canvasPlanId,
+    validatedPlanHash,
   });
 
   const {
@@ -272,7 +274,7 @@ function MainFlow() {
     validationResult,
     nodes,
     edges,
-    vpcid,
+    labId,
     setCanvasPlanId,
     setValidatedPlanHash,
     setIsCanvasDirty,
@@ -306,7 +308,7 @@ function MainFlow() {
 
     return () => {
       // console.log("nodes useffect", nodes);
-      // console.log("cidrBlockVPC: ", cidrBlockVPC);
+      // console.log("masterCidrBlock: ", masterCidrBlock);
 
 
     }
@@ -314,9 +316,9 @@ function MainFlow() {
 
   useEffect(() => {
     if (restorationDone) {
-      // console.log("✅ CIDR restaurado:", cidrBlockVPC, prefixLength);
+      // console.log("✅ CIDR restaurado:", masterCidrBlock, prefixLength);
     }
-  }, [restorationDone, cidrBlockVPC, prefixLength]);
+  }, [restorationDone, masterCidrBlock, prefixLength]);
 
 
   // Hook para inicializar el canvas restaurando el flow guardado en backend (si existe)
@@ -379,7 +381,7 @@ function MainFlow() {
               onZoomIn: handleZoomIn,
               onZoomOut: handleZoomOut,
               onFitView: handleFitView,
-              title: "Architecture Studio",
+              title: "Canvas de arquitectura",
               onPreviewRoutes: openRoutesPreview,
               planStatus: canvasPlanInfo,
               canvasState,
@@ -398,8 +400,9 @@ function MainFlow() {
               showConfirmation,
               restorationDone,
               handleCancelDeploy,
-              validationState,
+              validationState: validationStateForToolbar,
               canvasState,
+              planStatus: canvasPlanInfo,
               validationResult,
               transformedData,
               handleValidatePlan,
@@ -434,7 +437,7 @@ function MainFlow() {
           amiList={amiList}
           saveNodeData={saveNodeData}
           deleteNodeInstance={deleteNodeInstance}
-          cidrBlockVPC={cidrBlockVPC}
+          cidrBlockVPC={masterCidrBlock}
           prefixLength={prefixLength}
         />
 
@@ -449,4 +452,4 @@ function MainFlow() {
   )
 }
 
-export default MainFlow
+export default CanvasFlowPage

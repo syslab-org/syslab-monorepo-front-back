@@ -13,7 +13,7 @@
       "name": "VPC-A",
       "region": "us-east-1",
       "cidr_block": "10.60.0.0/16",
-      "allowed_ssh_cidr": "190.20.221.154/32",
+      "allowed_ssh_cidr": "190.20.220.188/32",
       "internet_gateway": true,
       "nat_gateway": {
         "enabled": false,
@@ -47,7 +47,7 @@
               "ami": "ami-0ebfd941bbafe70c6",
               "instance_type": "t2.micro",
               "ip_address": "10.60.1.10",
-              "ssh_access": "tesis-key",
+              "ssh_access": "tesis-key-new",
               "associate_public_ip": true
             }
           ]
@@ -59,7 +59,7 @@
       "name": "VPC-B",
       "region": "us-east-1",
       "cidr_block": "10.61.0.0/16",
-      "allowed_ssh_cidr": "190.20.221.154/32",
+      "allowed_ssh_cidr": "190.20.220.188/32",
       "internet_gateway": true,
       "nat_gateway": {
         "enabled": false,
@@ -93,7 +93,7 @@
               "ami": "ami-0ebfd941bbafe70c6",
               "instance_type": "t2.micro",
               "ip_address": "10.61.1.10",
-              "ssh_access": "tesis-key",
+              "ssh_access": "tesis-key-new",
               "associate_public_ip": true
             }
           ]
@@ -105,7 +105,7 @@
       "name": "VPC-C",
       "region": "us-east-1",
       "cidr_block": "10.62.0.0/16",
-      "allowed_ssh_cidr": "190.20.221.154/32",
+      "allowed_ssh_cidr": "190.20.220.188/32",
       "internet_gateway": true,
       "nat_gateway": {
         "enabled": false,
@@ -139,7 +139,7 @@
               "ami": "ami-0ebfd941bbafe70c6",
               "instance_type": "t2.micro",
               "ip_address": "10.62.1.10",
-              "ssh_access": "tesis-key",
+              "ssh_access": "tesis-key-new",
               "associate_public_ip": true
             }
           ]

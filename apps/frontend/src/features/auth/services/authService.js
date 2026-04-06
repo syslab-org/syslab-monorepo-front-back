@@ -1,37 +1,28 @@
-import { auth, db } from "@/infrastructure/firebase/firebaseConfig";
-import {
-  createUserWithEmailAndPassword,
-  GoogleAuthProvider,
-  signInWithEmailAndPassword,
-  signInWithPopup,
-} from "firebase/auth";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  updateDoc,
-  where,
-} from "firebase/firestore";
 import { useEffect, useState } from "react";
-import {
-  DB_FIRESTORE_USERS,
-  STATUS_USER_ACTIVE,
-  STATUS_USER_PENDING,
-} from "@/shared/constants";
 
-const googleProvider = new GoogleAuthProvider();
+import { api, clearAuthToken, setAuthToken } from "@/infrastructure/http/api";
 
-export const loginWithEmail = (email, password) => {
-  return signInWithEmailAndPassword(auth, email, password);
+export const loginWithEmail = async (email, password) => {
+  const res = await api.loginWithEmail({ email, password });
+  setAuthToken(res?.token || "");
+  return res;
 };
 
-export const loginWithGoogle = () => {
-  return signInWithPopup(auth, googleProvider);
+export const loginWithGoogle = async (credential, clientId) => {
+  const res = await api.loginWithGoogle({ credential, clientId });
+  setAuthToken(res?.token || "");
+  return res;
 };
 
-export const useUserRegistration = (userId) => {
+export const logoutSession = async () => {
+  try {
+    await api.logout();
+  } finally {
+    clearAuthToken();
+  }
+};
+
+export const useUserRegistration = (inviteToken) => {
   const [user, setUser] = useState(null);
   const [isLinkValid, setIsLinkValid] = useState(false);
   const [error, setError] = useState("");
@@ -39,101 +30,47 @@ export const useUserRegistration = (userId) => {
   const [isCheckingLink, setIsCheckingLink] = useState(true);
 
   useEffect(() => {
-    const fetchUser = async () => {
+    let alive = true;
+
+    const fetchInvitation = async () => {
       setIsCheckingLink(true);
       try {
-        const userRef = doc(db, DB_FIRESTORE_USERS, userId);
-        const userSnap = await getDoc(userRef);
-        // console.log("isLinkValid2: ",isLinkValid);
-
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
-          const now = Date.now();
-          const expirationTimestamp =
-            userData.createdAt.toMillis() + userData.expirationTime;
-
-          if (
-            userData.status === STATUS_USER_PENDING &&
-            now < expirationTimestamp
-          ) {
-            setUser(userData);
-            setIsLinkValid(true);
-          } else {
-            setError("El enlace ha caducado o no es valido");
-          }
-        } else {
-          setError("No se encontró el usuario");
-        }
-      } catch (error) {
-        setError("Error al conectar con firestore");
+        const res = await api.getRegistration(inviteToken);
+        if (!alive) return;
+        setUser(res);
+        setIsLinkValid(true);
+        setError("");
+      } catch (err) {
+        if (!alive) return;
+        setError(err?.message || "No se pudo validar la invitacion.");
+        setIsLinkValid(false);
       } finally {
-        setIsCheckingLink(false);
+        if (alive) setIsCheckingLink(false);
       }
     };
 
-    fetchUser();
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
-
-  const registerWithGoogle = async () => {
-    try {
-      const result = await signInWithPopup(auth, new GoogleAuthProvider());
-      await updateDoc(doc(db, DB_FIRESTORE_USERS, userId), {
-        status: STATUS_USER_ACTIVE,
-        authUid: result.user.uid,
-      });
-
-      alert("Registro completo con Google.");
-      setSuccessMessage("Sign up Google successfully");
-    } catch (error) {
-      setError("Error al iniciar sesión con Google");
+    if (inviteToken) {
+      fetchInvitation();
+    } else {
+      setIsCheckingLink(false);
+      setIsLinkValid(false);
+      setError("Invitacion invalida.");
     }
-  };
 
-  const fetchUserByEmail = async (email) => {
-    try {
-      const userCollectionRef = collection(db, DB_FIRESTORE_USERS);
-      const q = query(userCollectionRef, where("email", "==", email));
-
-      const querySnapshot = await getDocs(q);
-
-      return querySnapshot;
-    } catch (error) {
-      setError("Error al validar el email del usuario.");
-      // console.log(error);
-    }
-  };
+    return () => {
+      alive = false;
+    };
+  }, [inviteToken]);
 
   const registerWithEmailPassword = async (email, password) => {
     try {
-      const userByEmail = await fetchUserByEmail(email);
-
-      if (!userByEmail.empty) {
-        const userData = userByEmail.docs[0];
-
-        if (userData.id === userId) {
-          const userCredential = await createUserWithEmailAndPassword(
-            auth,
-            email,
-            password,
-          );
-          await updateDoc(doc(db, DB_FIRESTORE_USERS, userId), {
-            status: STATUS_USER_ACTIVE,
-            authUid: userCredential.user.uid,
-          });
-          setSuccessMessage("Sign up successfully");
-          return true;
-        } else {
-          setError("Ha ocurrido un error, contacte con el administrador");
-          return false;
-        }
-      } else {
-        setError("El email no es válido o no coincide con el usuario.");
-        return false;
-      }
-    } catch (error) {
-      setError("Error to register: ", error);
+      const res = await api.registerWithPassword(inviteToken, { email, password });
+      setAuthToken(res?.token || "");
+      setSuccessMessage("Cuenta activada correctamente.");
+      return true;
+    } catch (err) {
+      setError(err?.message || "No se pudo completar el registro.");
+      return false;
     }
   };
 
@@ -143,7 +80,6 @@ export const useUserRegistration = (userId) => {
     error,
     successMessage,
     setError,
-    registerWithGoogle,
     registerWithEmailPassword,
     isCheckingLink,
   };

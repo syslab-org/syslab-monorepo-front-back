@@ -10,7 +10,8 @@ import SchoolIcon from '@mui/icons-material/School';
 import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
-import { Alert, Box, Button, Chip, IconButton, Tooltip } from '@mui/material';
+import { Button, Chip, IconButton, Tooltip } from '@mui/material';
+import { computePlanActionState } from '@/features/networkCanvas/utils/planActionUi';
 import { useThemeMode } from '@/shared/ui/theme/AppThemeProvider';
 
 
@@ -45,6 +46,9 @@ export default function PacketToolbar({
   };
 
   const normalizedValidation = String(validationState || "").toUpperCase();
+  const actionState = computePlanActionState(planStatus, canvasState, validationState);
+  const planSnapshotStatus = String(planStatus?.status || '').toUpperCase();
+  const hasActiveInfra = planStatus?.applied === true;
 
   const renderPlanChip = () => {
     if (!normalizedValidation || normalizedValidation === PLAN_STATES.IDLE) {
@@ -107,6 +111,22 @@ export default function PacketToolbar({
           <span>{title}</span>
           <>
             {renderPlanChip()}
+            {planSnapshotStatus && (
+              <Chip
+                size="small"
+                variant="outlined"
+                label={`PLAN ${planSnapshotStatus}`}
+                color={planSnapshotStatus === 'SUCCESS' ? 'success' : planSnapshotStatus === 'FAILURE' ? 'error' : 'info'}
+              />
+            )}
+            {hasActiveInfra && (
+              <Chip
+                size="small"
+                variant="outlined"
+                label="ACTIVE INFRA"
+                color="warning"
+              />
+            )}
             {canvasState === "PLAN_OUTDATED" && (
               <Chip
                 size="small"
@@ -121,7 +141,7 @@ export default function PacketToolbar({
         {/* Controles de vista */}
         <div className="pt-toolbar__group">
           {canTogglePalette && (
-            <Tooltip title={paletteOpen ? "Ocultar Tool Palette" : "Mostrar Tool Palette"}>
+            <Tooltip title={paletteOpen ? "Ocultar paleta de herramientas" : "Mostrar paleta de herramientas"}>
               <IconButton size="small" className="pt-ibtn" onClick={onTogglePalette}>
                 <ViewSidebarIcon
                   fontSize="small"
@@ -155,7 +175,7 @@ export default function PacketToolbar({
 
         {/* Botones de acción */}
         <div className="pt-toolbar__group">
-          <Tooltip title="Guardar estado actual del canvas en Firestore">
+          <Tooltip title="Guardar estado actual del canvas en la API">
             <span>
               <Button
                 variant="outlined"
@@ -169,7 +189,7 @@ export default function PacketToolbar({
               </Button>
             </span>
           </Tooltip>
-          <Tooltip title="Restaurar última versión guardada desde Firestore">
+          <Tooltip title="Restaurar última versión guardada desde la API">
             <span>
               <Button
                 variant="outlined"
@@ -197,7 +217,7 @@ export default function PacketToolbar({
               </Button>
             </span>
           </Tooltip>
-          <Tooltip title="Aplicar plan validado (ejecución real de Terraform)">
+          <Tooltip title={actionState.actionTooltip}>
             <span>
               <Button
                 variant="outlined"
@@ -207,11 +227,11 @@ export default function PacketToolbar({
                 size="small"
                 disabled={canvasState === "PLAN_RUNNING"}
               >
-                Desplegar
+                {actionState.actionLabel}
               </Button>
             </span>
           </Tooltip>
-          <Tooltip title="Generar y previsualizar plan de ruteo sin aplicar cambios">
+          <Tooltip title="Generar y revisar el plan de ruteo sin aplicar cambios">
             <span>
               <Button
                 variant="outlined"
@@ -221,31 +241,13 @@ export default function PacketToolbar({
                 size="small"
                 disabled={canvasState === "PLAN_RUNNING"}
               >
-                Previsualizar
+                Ver ruteo
               </Button>
             </span>
           </Tooltip>
         </div>
 
       </div>
-
-      {/* Mensajes visibles de estado (canvas) */}
-      {canvasState === "PLAN_RUNNING" && (
-        <Box sx={{ mt: 1 }}>
-          <Alert severity="warning" variant="outlined">
-            Hay un plan ejecutándose. El canvas está bloqueado.
-          </Alert>
-        </Box>
-      )}
-
-      {canvasState === "PLAN_OUTDATED" && (
-        <Box sx={{ mt: 1 }}>
-          <Alert severity="info" variant="outlined">
-            El canvas cambió desde la última validación. Revalida antes de aplicar (deploy real).
-          </Alert>
-        </Box>
-      )}
-
     </div>
   );
 }

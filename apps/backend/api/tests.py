@@ -1,6 +1,15 @@
-from django.test import SimpleTestCase
+from types import SimpleNamespace
+from unittest.mock import patch
 
-from .tasks import build_nat_cleanup_targets
+from django.contrib.auth.models import User
+from django.test import SimpleTestCase
+from rest_framework.test import APITestCase
+
+from .domain.network_intent import normalize_network_intent
+from .models import Course, Lab, Plan, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, STATUS_ACTIVE, VISIBILITY_COURSE, VISIBILITY_OWNER
+from .providers import get_provider_adapter, get_provider_executor
+from .providers.aws.runtime import build_nat_cleanup_targets
+from .providers.aws.terraform import render_workspace
 from .validators import validate_network_plan
 
 
@@ -142,3 +151,568 @@ class NatCleanupTargetTests(SimpleTestCase):
             "eipalloc-0abc123def4567890",
         )
         self.assertFalse(targets["vpc-123"]["release_generated_eip"])
+
+
+class NetworkIntentTests(SimpleTestCase):
+    def test_normalize_network_intent_converts_legacy_payload_to_neutral_topology(self):
+        payload = {
+            "name": "Lab neutral",
+            "cloud": "aws",
+            "vlan": {
+                "id": "canvas-1",
+                "name": "Lab neutral",
+                "region": "us-east-1",
+                "master_cidr": "10.50.0.0/16",
+            },
+            "vpcs": [
+                {
+                    "id": "vpc-a",
+                    "name": "VPC-A",
+                    "region": "us-east-1",
+                    "cidr_block": "10.50.0.0/16",
+                    "internet_gateway": True,
+                    "allowed_ssh_cidr": "203.0.113.5/32",
+                    "nat_gateway": {"enabled": False, "public_subnet": "", "elastic_ip": ""},
+                    "route_tables": [{"name": "public", "routes": [{"dest_cidr": "0.0.0.0/0", "target": "igw"}]}],
+                    "subnets": [
+                        {
+                            "name": "public-a1",
+                            "cidr_block": "10.50.1.0/24",
+                            "availability_zone": "us-east-1a",
+                            "subnet_type": "public",
+                            "map_public_ip_on_launch": True,
+                            "route_table": "public",
+                            "instances": [
+                                {
+                                    "id": "vm-a1",
+                                    "name": "bastion-a1",
+                                    "ami": "ami-123",
+                                    "instance_type": "t2.micro",
+                                    "ip_address": "10.50.1.10",
+                                    "ssh_access": "tesis-key",
+                                    "associate_public_ip": True,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "links": [{"type": "peering", "vpc_a_id": "vpc-a", "vpc_b_id": "vpc-b", "via_router_id": "router-1"}],
+            "routers": [],
+        }
+
+        intent = normalize_network_intent(payload)
+
+        self.assertEqual(intent["metadata"]["source_format"], "legacy_aws_payload")
+        self.assertEqual(intent["topology"]["network"]["id"], "canvas-1")
+        self.assertEqual(intent["topology"]["segments"][0]["exposure"], "public")
+        self.assertEqual(intent["topology"]["segments"][0]["workloads"][0]["access"]["ssh_key"], "tesis-key")
+        self.assertEqual(intent["topology"]["connectivity"]["mode"], "direct")
+
+    def test_aws_adapter_compiles_neutral_topology(self):
+        adapter = get_provider_adapter("aws")
+        neutral_payload = {
+            "target_provider": "aws",
+            "metadata": {
+                "name": "Lab neutral compile",
+                "canvas_id": "canvas-neutral-1",
+            },
+            "topology": {
+                "network": {
+                    "id": "canvas-neutral-1",
+                    "name": "Lab neutral compile",
+                    "region": "us-east-1",
+                    "cidr": "10.70.0.0/16",
+                },
+                "segments": [
+                    {
+                        "id": "segment-a",
+                        "name": "Segment A",
+                        "region": "us-east-1",
+                        "cidr": "10.70.0.0/16",
+                        "ingress": {"ssh_cidr": "203.0.113.5/32"},
+                        "zones": [
+                            {
+                                "id": "zone-a1",
+                                "name": "public-a1",
+                                "cidr": "10.70.1.0/24",
+                                "kind": "public",
+                                "availability_zone": "us-east-1a",
+                                "map_public_ip_on_launch": True,
+                                "workloads": [
+                                    {
+                                        "id": "workload-a1",
+                                        "name": "bastion-a1",
+                                        "image": "ami-123",
+                                        "size": "t2.micro",
+                                        "private_ip": "10.70.1.10",
+                                        "access": {"ssh_key": "tesis-key", "public_ip": True},
+                                    }
+                                ],
+                            }
+                        ],
+                        "provider_overrides": {
+                            "aws": {
+                                "internet_gateway": True,
+                                "nat_gateway": {"enabled": False, "public_subnet": "", "elastic_ip": ""},
+                                "route_tables": [{"name": "public", "routes": [{"dest_cidr": "0.0.0.0/0", "target": "igw"}]}],
+                            }
+                        },
+                    }
+                ],
+                "connectivity": {
+                    "mode": "isolated",
+                    "hubs": [],
+                    "links": [],
+                },
+            },
+        }
+
+        compiled = adapter.compile(neutral_payload)["payload"]
+
+        self.assertEqual(compiled["cloud"], "aws")
+        self.assertEqual(compiled["vlan"]["id"], "canvas-neutral-1")
+        self.assertEqual(compiled["vpcs"][0]["name"], "Segment A")
+        self.assertEqual(compiled["vpcs"][0]["subnets"][0]["instances"][0]["ssh_access"], "tesis-key")
+
+    def test_planned_provider_executors_resolve_and_fail_explicitly(self):
+        for provider in ("gcp", "azure"):
+            executor = get_provider_executor(provider)
+            bundle = executor.build_bundle("plan-123", {"cloud": provider})
+
+            self.assertEqual(bundle.provider, provider)
+            self.assertFalse(bundle.creds_ok_for_apply)
+            self.assertIn("not implemented yet", bundle.full_log.lower())
+
+            with self.assertRaisesMessage(NotImplementedError, "not implemented yet"):
+                executor.terraform_init(bundle)
+
+
+class TerraformTemplateRenderTests(SimpleTestCase):
+    def test_preview_render_keeps_vm_resources_in_configuration(self):
+        payload = {
+            "name": "Lab render",
+            "cloud": "aws",
+            "simulate_only": True,
+            "vpcs": [
+                {
+                    "id": "vpc-a",
+                    "name": "VPC-A",
+                    "region": "us-east-1",
+                    "cidr_block": "10.30.0.0/16",
+                    "internet_gateway": True,
+                    "allowed_ssh_cidr": "203.0.113.10/32",
+                    "nat_gateway": {"enabled": False, "public_subnet": "", "elastic_ip": ""},
+                    "route_tables": [{"name": "public", "routes": [{"dest_cidr": "0.0.0.0/0", "target": "igw"}]}],
+                    "subnets": [
+                        {
+                            "name": "public-a1",
+                            "cidr_block": "10.30.1.0/24",
+                            "availability_zone": "us-east-1a",
+                            "subnet_type": "public",
+                            "map_public_ip_on_launch": True,
+                            "route_table": "public",
+                            "instances": [
+                                {
+                                    "id": "vm-a1",
+                                    "name": "bastion-a1",
+                                    "ami": "ami-0123456789abcdef0",
+                                    "instance_type": "t2.micro",
+                                    "ip_address": "10.30.1.10",
+                                    "ssh_access": "tesis-key",
+                                    "associate_public_ip": True,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "links": [],
+            "routers": [],
+        }
+
+        workdir, _state_path, tf_text = render_workspace(
+            plan_id="plan-render-preview",
+            payload=payload,
+            simulate_only=True,
+            prefix="tf-test-",
+        )
+
+        self.assertTrue(workdir)
+        self.assertIn('resource "aws_security_group" "vm_sg"', tf_text)
+        self.assertIn('resource "aws_instance" "vm"', tf_text)
+        self.assertIn('count = 0', tf_text)
+
+
+class VisibilityApiTests(APITestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="admin@example.com",
+            email="admin@example.com",
+            password="secret123",
+        )
+        self.admin.profile.role = ROLE_PLATFORM_ADMIN
+        self.admin.profile.status = STATUS_ACTIVE
+        self.admin.profile.save()
+
+        self.teacher = User.objects.create_user(
+            username="teacher@example.com",
+            email="teacher@example.com",
+            password="secret123",
+        )
+        self.teacher.profile.role = ROLE_TEACHER
+        self.teacher.profile.status = STATUS_ACTIVE
+        self.teacher.profile.save()
+
+        self.other_teacher = User.objects.create_user(
+            username="other@example.com",
+            email="other@example.com",
+            password="secret123",
+        )
+        self.other_teacher.profile.role = ROLE_TEACHER
+        self.other_teacher.profile.status = STATUS_ACTIVE
+        self.other_teacher.profile.save()
+
+        self.student = User.objects.create_user(
+            username="student@example.com",
+            email="student@example.com",
+            password="secret123",
+        )
+        self.student.profile.role = ROLE_STUDENT
+        self.student.profile.status = STATUS_ACTIVE
+        self.student.profile.save()
+
+        self.other_student = User.objects.create_user(
+            username="other-student@example.com",
+            email="other-student@example.com",
+            password="secret123",
+        )
+        self.other_student.profile.role = ROLE_STUDENT
+        self.other_student.profile.status = STATUS_ACTIVE
+        self.other_student.profile.save()
+
+        self.unassigned_student = User.objects.create_user(
+            username="unassigned@example.com",
+            email="unassigned@example.com",
+            password="secret123",
+        )
+        self.unassigned_student.profile.role = ROLE_STUDENT
+        self.unassigned_student.profile.status = STATUS_ACTIVE
+        self.unassigned_student.profile.save()
+
+        self.course = Course.objects.create(name="Redes 1", teacher=self.teacher)
+        self.other_course = Course.objects.create(name="Redes 2", teacher=self.other_teacher)
+        self.student.profile.course = self.course
+        self.student.profile.save(update_fields=["course", "updated_at"])
+        self.other_student.profile.course = self.other_course
+        self.other_student.profile.save(update_fields=["course", "updated_at"])
+
+        self.student_lab = Lab.objects.create(
+            name="Lab alumno",
+            owner_user=self.student,
+            course=self.course,
+            visibility_scope=VISIBILITY_OWNER,
+            created_by_role=ROLE_STUDENT,
+            legacy_canvas_id="lab-student",
+        )
+        self.shared_teacher_lab = Lab.objects.create(
+            name="Lab compartido",
+            owner_user=self.teacher,
+            course=self.course,
+            visibility_scope=VISIBILITY_COURSE,
+            created_by_role=ROLE_TEACHER,
+            legacy_canvas_id="lab-course",
+        )
+        self.other_course_lab = Lab.objects.create(
+            name="Lab ajeno",
+            owner_user=self.other_student,
+            course=self.other_course,
+            visibility_scope=VISIBILITY_OWNER,
+            created_by_role=ROLE_STUDENT,
+            legacy_canvas_id="lab-other",
+        )
+
+        Plan.objects.create(
+            name="Plan alumno",
+            payload={"name": "Plan alumno", "cloud": "aws", "vpcs": []},
+            canvas_id=self.student_lab.canvas_id,
+            lab=self.student_lab,
+        )
+        Plan.objects.create(
+            name="Plan compartido",
+            payload={"name": "Plan compartido", "cloud": "aws", "vpcs": []},
+            canvas_id=self.shared_teacher_lab.canvas_id,
+            lab=self.shared_teacher_lab,
+        )
+        Plan.objects.create(
+            name="Plan ajeno",
+            payload={"name": "Plan ajeno", "cloud": "aws", "vpcs": []},
+            canvas_id=self.other_course_lab.canvas_id,
+            lab=self.other_course_lab,
+        )
+
+    def test_teacher_sees_labs_for_their_course(self):
+        self.client.force_authenticate(self.teacher)
+        res = self.client.get("/api/labs/")
+        self.assertEqual(res.status_code, 200)
+        names = {item["name"] for item in res.json()}
+        self.assertIn("Lab alumno", names)
+        self.assertIn("Lab compartido", names)
+        self.assertNotIn("Lab ajeno", names)
+
+    def test_student_only_sees_own_and_course_shared_labs(self):
+        self.client.force_authenticate(self.student)
+        res = self.client.get("/api/labs/")
+        self.assertEqual(res.status_code, 200)
+        names = {item["name"] for item in res.json()}
+        self.assertIn("Lab alumno", names)
+        self.assertIn("Lab compartido", names)
+        self.assertNotIn("Lab ajeno", names)
+
+    def test_plan_listing_is_filtered_by_visible_labs(self):
+        self.client.force_authenticate(self.teacher)
+        res = self.client.get("/api/network/plans/")
+        self.assertEqual(res.status_code, 200)
+        first = res.json()[0]
+        self.assertIn("canvas_id", first)
+        self.assertEqual(first["canvas_id"], first["firestore_vpc_id"])
+        names = {item["name"] for item in res.json()}
+        self.assertIn("Plan alumno", names)
+        self.assertIn("Plan compartido", names)
+        self.assertNotIn("Plan ajeno", names)
+
+    def test_teacher_sees_unassigned_students_but_not_other_teacher_students(self):
+        self.client.force_authenticate(self.teacher)
+        res = self.client.get("/api/users/")
+        self.assertEqual(res.status_code, 200)
+        emails = {item["email"] for item in res.json()}
+        self.assertIn("student@example.com", emails)
+        self.assertIn("unassigned@example.com", emails)
+        self.assertNotIn("other-student@example.com", emails)
+
+    def test_lab_create_accepts_legacy_provider_payload_shapes(self):
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(
+            "/api/labs/",
+            {
+                "name": "Lab legacy provider",
+                "target_provider": '["AWS"]',
+                "cidr_block": "10.40.0.0",
+                "prefix_length": 16,
+                "course_id": str(self.course.id),
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.json()["target_provider"], "aws")
+
+    def test_sync_from_canvas_accepts_legacy_string_canvas_id_with_neutral_payload(self):
+        self.client.force_authenticate(self.admin)
+        payload = {
+            "name": "Plan neutral legacy id",
+            "target_provider": "aws",
+            "canvas_id": "canvas-legacy-123",
+            "metadata": {
+                "name": "Plan neutral legacy id",
+                "canvas_id": "canvas-legacy-123",
+                "source_format": "neutral_topology",
+            },
+            "topology": {
+                "network": {
+                    "id": "canvas-legacy-123",
+                    "name": "Plan neutral legacy id",
+                    "region": "us-east-1",
+                    "cidr": "10.70.0.0/16",
+                },
+                "segments": [
+                    {
+                        "id": "segment-a",
+                        "name": "Segment A",
+                        "region": "us-east-1",
+                        "cidr": "10.70.0.0/16",
+                        "ingress": {"ssh_cidr": "203.0.113.5/32"},
+                        "zones": [
+                            {
+                                "id": "public-a",
+                                "name": "public-a",
+                                "cidr": "10.70.1.0/24",
+                                "kind": "public",
+                                "availability_zone": "us-east-1a",
+                                "map_public_ip_on_launch": True,
+                                "route_table": "public",
+                                "workloads": [],
+                                "provider_overrides": {
+                                    "aws": {
+                                        "subnet_type": "public",
+                                        "route_table": "public",
+                                    }
+                                },
+                            }
+                        ],
+                        "provider_overrides": {
+                            "aws": {
+                                "internet_gateway": True,
+                                "nat_gateway": {
+                                    "enabled": False,
+                                    "public_subnet": "",
+                                    "elastic_ip": "",
+                                },
+                                "route_tables": [
+                                    {
+                                        "name": "public",
+                                        "routes": [
+                                            {
+                                                "name": "igw-default",
+                                                "dest_cidr": "0.0.0.0/0",
+                                                "target": "igw",
+                                            }
+                                        ],
+                                    }
+                                ],
+                            }
+                        },
+                    }
+                ],
+                "connectivity": {"mode": "isolated", "hubs": [], "links": []},
+            },
+        }
+
+        res = self.client.post(
+            "/api/network/plans/sync-from-canvas/",
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 200)
+        plan = Plan.objects.get(id=res.json()["plan_id"])
+        self.assertEqual(plan.canvas_id, "canvas-legacy-123")
+        self.assertEqual(plan.firestore_vpc_id, "canvas-legacy-123")
+        self.assertEqual(plan.payload["canvas_id"], "canvas-legacy-123")
+        self.assertNotIn("firestore_vpc_id", plan.payload)
+        self.assertEqual(plan.payload["vpcs"][0]["name"], "Segment A")
+        self.assertEqual(plan.payload["cloud"], "aws")
+
+    @patch("api.views.process_network_plan.delay")
+    @patch("api.views._can_run_real_terraform", return_value=True)
+    def test_redeploy_apply_is_allowed_for_applied_plan(self, _can_run_real_terraform, mocked_delay):
+        mocked_delay.return_value = SimpleNamespace(id="task-redeploy-1")
+        plan = Plan.objects.create(
+            name="Plan redeploy",
+            payload={"name": "Plan redeploy", "cloud": "aws", "vpcs": [], "simulate_only": False},
+            canvas_id="lab-redeploy",
+            lab=self.shared_teacher_lab,
+            applied=True,
+            status=Plan.Status.SUCCESS,
+            last_action=Plan.LastAction.APPLY,
+        )
+
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(
+            f"/api/network/plans/{plan.id}/deploy/",
+            {"simulate_only": False},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 202)
+        plan.refresh_from_db()
+        self.assertEqual(plan.status, Plan.Status.RUNNING)
+        self.assertEqual(plan.last_action, Plan.LastAction.APPLY)
+        self.assertEqual(plan.task_id, "task-redeploy-1")
+
+    @patch("api.views.process_network_plan.delay")
+    def test_teacher_can_preview_student_plan_but_cannot_apply_real(self, mocked_delay):
+        mocked_delay.return_value = SimpleNamespace(id="task-preview-1")
+        plan = Plan.objects.get(name="Plan alumno")
+
+        self.client.force_authenticate(self.teacher)
+
+        preview_res = self.client.post(
+            f"/api/network/plans/{plan.id}/deploy/",
+            {"simulate_only": True},
+            format="json",
+        )
+
+        self.assertEqual(preview_res.status_code, 202)
+        plan.refresh_from_db()
+        self.assertEqual(plan.last_action, Plan.LastAction.PLAN)
+
+        plan.status = Plan.Status.SUCCESS
+        plan.save(update_fields=["status", "updated_at"])
+
+        apply_res = self.client.post(
+            f"/api/network/plans/{plan.id}/deploy/",
+            {"simulate_only": False},
+            format="json",
+        )
+
+        self.assertEqual(apply_res.status_code, 403)
+        self.assertEqual(apply_res.json()["code"], "PLAN_EXECUTION_FORBIDDEN")
+
+    def test_teacher_cannot_destroy_student_plan(self):
+        plan = Plan.objects.get(name="Plan alumno")
+        plan.applied = True
+        plan.status = Plan.Status.SUCCESS
+        plan.last_action = Plan.LastAction.APPLY
+        plan.save(update_fields=["applied", "status", "last_action", "updated_at"])
+
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(f"/api/network/plans/{plan.id}/destroy/", format="json")
+
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.json()["code"], "PLAN_EXECUTION_FORBIDDEN")
+
+    def test_plan_list_exposes_apply_capability_by_owner(self):
+        self.client.force_authenticate(self.teacher)
+        res = self.client.get("/api/network/plans/")
+        self.assertEqual(res.status_code, 200)
+
+        plans_by_name = {item["name"]: item for item in res.json()}
+        self.assertFalse(plans_by_name["Plan alumno"]["can_apply"])
+        self.assertTrue(plans_by_name["Plan compartido"]["can_apply"])
+
+    def test_network_plan_create_preserves_applied_state_for_existing_active_plan(self):
+        redeploy_lab = Lab.objects.create(
+            name="Lab redeploy",
+            owner_user=self.teacher,
+            course=self.course,
+            visibility_scope=VISIBILITY_COURSE,
+            created_by_role=ROLE_TEACHER,
+            legacy_canvas_id="lab-redeploy-active",
+        )
+        plan = Plan.objects.create(
+            name="Plan activo",
+            payload={"name": "Plan activo", "cloud": "aws", "vpcs": [], "simulate_only": False},
+            canvas_id=redeploy_lab.canvas_id,
+            lab=redeploy_lab,
+            applied=True,
+            status=Plan.Status.SUCCESS,
+            last_action=Plan.LastAction.APPLY,
+        )
+
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(
+            "/api/network/plan/",
+            {
+                "name": "Plan activo",
+                "canvas_id": redeploy_lab.canvas_id,
+                "target_provider": "aws",
+                "metadata": {"name": "Plan activo"},
+                "topology": {
+                    "network": {
+                        "id": redeploy_lab.canvas_id,
+                        "name": "Plan activo",
+                        "region": "us-east-1",
+                        "cidr": "10.0.0.0/16",
+                    },
+                    "segments": [],
+                    "connectivity": {"mode": "isolated", "hubs": [], "links": []},
+                },
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 200)
+        plan.refresh_from_db()
+        self.assertTrue(plan.applied)
+        self.assertEqual(plan.status, Plan.Status.PENDING)
+        self.assertEqual(plan.last_action, Plan.LastAction.CANVAS_UPDATE)
