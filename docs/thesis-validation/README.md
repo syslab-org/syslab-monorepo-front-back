@@ -52,7 +52,17 @@ Documento estratégico:
 - prioridades de cierre
 - límites conocidos
 
-### 4. Guion de presentación
+### 4. Modelo de ejecución cloud
+
+Documento de decisión:
+- [Modelo de Ejecución Cloud por Usuario](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/cloud-execution-model.md)
+
+Útil para redactar:
+- quién puede hacer `deploy` real
+- cómo separar revisión docente de ejecución cloud
+- cómo pasar de `AWS-first` a multi-cloud sin rehacer permisos
+
+### 5. Guion de presentación
 
 Documento operativo:
 - [Guion Oficial de Demo para Tesis](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/demo-thesis-script.md)
@@ -79,8 +89,10 @@ Documento operativo:
 ### Si quieres escribir la sección de alcance del MVP
 
 1. leer el [Plan de Cierre del MVP para Tesis](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/mvp-thesis-plan.md)
-2. usar como idea central:
+2. leer el [Modelo de Ejecución Cloud por Usuario](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/cloud-execution-model.md)
+3. usar como idea central:
    - `AWS-first`
+   - conexión cloud por owner de ejecución
    - multi-cloud como extensibilidad arquitectónica, no como capacidad cerrada del MVP
 
 ### Si quieres preparar la defensa/demo

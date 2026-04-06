@@ -13,6 +13,7 @@ from rest_framework.response import Response
 
 from .helpers import ensure_lab_for_canvas, visible_plans_queryset
 from .models import Plan
+from .permissions import can_execute_plan
 from .providers.aws.payload import get_network_id, get_region
 from .tasks import destroy_last_deploy, process_network_plan, prueba_larga
 from .validators import validate_network_plan
@@ -81,6 +82,22 @@ def _plan_state_conflict(plan: Plan, action: str) -> Optional[Response]:
         )
     return None
 
+
+
+def _plan_execution_forbidden(plan: Plan) -> Response:
+    return Response(
+        {
+            "ok": False,
+            "error": (
+                "Solo el dueño del laboratorio puede aplicar o destruir infraestructura real. "
+                "Los docentes pueden revisar y validar el canvas del estudiante, pero no ejecutar "
+                "deploy real en su cuenta cloud salvo delegacion explicita."
+            ),
+            "code": "PLAN_EXECUTION_FORBIDDEN",
+            "plan_id": str(plan.id),
+        },
+        status=status.HTTP_403_FORBIDDEN,
+    )
 
 
 def _can_run_real_terraform() -> bool:
@@ -293,6 +310,9 @@ def deploy_plan(request, plan_id: UUID):
     body = request.data or {}
     simulate_only = bool(body.get("simulate_only", True))
 
+    if not simulate_only and not can_execute_plan(request.user, plan):
+        return _plan_execution_forbidden(plan)
+
     if bool(plan.applied):
         drift_reconciled = _reconcile_applied_flag_if_drifted(plan)
         if drift_reconciled:
@@ -369,11 +389,13 @@ def destroy_plan(request, plan_id: UUID):
     plan = _get_visible_plan_or_404(request, plan_id)
     if not plan:
         return Response({"ok": False, "error": "Plan not found"}, status=status.HTTP_404_NOT_FOUND)
-    return _start_destroy_for_plan(plan)
+    return _start_destroy_for_plan(request.user, plan)
 
 
 
-def _start_destroy_for_plan(plan: Plan):
+def _start_destroy_for_plan(user, plan: Plan):
+    if not can_execute_plan(user, plan):
+        return _plan_execution_forbidden(plan)
     if _is_running(plan):
         return _plan_running_conflict(plan)
 
@@ -425,4 +447,4 @@ def destroy_last_plan(request):
     plan = visible_plans_queryset(request.user).order_by("-updated_at").first()
     if not plan:
         return Response({"ok": False, "error": "No hay planes disponibles."}, status=status.HTTP_404_NOT_FOUND)
-    return _start_destroy_for_plan(plan)
+    return _start_destroy_for_plan(request.user, plan)

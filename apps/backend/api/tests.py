@@ -619,6 +619,57 @@ class VisibilityApiTests(APITestCase):
         self.assertEqual(plan.last_action, Plan.LastAction.APPLY)
         self.assertEqual(plan.task_id, "task-redeploy-1")
 
+    @patch("api.views.process_network_plan.delay")
+    def test_teacher_can_preview_student_plan_but_cannot_apply_real(self, mocked_delay):
+        mocked_delay.return_value = SimpleNamespace(id="task-preview-1")
+        plan = Plan.objects.get(name="Plan alumno")
+
+        self.client.force_authenticate(self.teacher)
+
+        preview_res = self.client.post(
+            f"/api/network/plans/{plan.id}/deploy/",
+            {"simulate_only": True},
+            format="json",
+        )
+
+        self.assertEqual(preview_res.status_code, 202)
+        plan.refresh_from_db()
+        self.assertEqual(plan.last_action, Plan.LastAction.PLAN)
+
+        plan.status = Plan.Status.SUCCESS
+        plan.save(update_fields=["status", "updated_at"])
+
+        apply_res = self.client.post(
+            f"/api/network/plans/{plan.id}/deploy/",
+            {"simulate_only": False},
+            format="json",
+        )
+
+        self.assertEqual(apply_res.status_code, 403)
+        self.assertEqual(apply_res.json()["code"], "PLAN_EXECUTION_FORBIDDEN")
+
+    def test_teacher_cannot_destroy_student_plan(self):
+        plan = Plan.objects.get(name="Plan alumno")
+        plan.applied = True
+        plan.status = Plan.Status.SUCCESS
+        plan.last_action = Plan.LastAction.APPLY
+        plan.save(update_fields=["applied", "status", "last_action", "updated_at"])
+
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(f"/api/network/plans/{plan.id}/destroy/", format="json")
+
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.json()["code"], "PLAN_EXECUTION_FORBIDDEN")
+
+    def test_plan_list_exposes_apply_capability_by_owner(self):
+        self.client.force_authenticate(self.teacher)
+        res = self.client.get("/api/network/plans/")
+        self.assertEqual(res.status_code, 200)
+
+        plans_by_name = {item["name"]: item for item in res.json()}
+        self.assertFalse(plans_by_name["Plan alumno"]["can_apply"])
+        self.assertTrue(plans_by_name["Plan compartido"]["can_apply"])
+
     def test_network_plan_create_preserves_applied_state_for_existing_active_plan(self):
         redeploy_lab = Lab.objects.create(
             name="Lab redeploy",

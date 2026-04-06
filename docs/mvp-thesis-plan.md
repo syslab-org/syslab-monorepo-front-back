@@ -71,33 +71,35 @@ Hallazgo actual:
 - `GCP` y `Azure` aparecen como providers previstos, pero no tienen executor runtime real
 - la ejecución actual depende de credenciales gestionadas por la plataforma (`AWS_PROFILE`, variables de entorno, ECS task role), no de una cuenta cloud vinculada por usuario
 
-Decisión recomendada para tesis/MVP:
+Resolución recomendada:
 
 - presentar el MVP como `AWS-first`
 - tratar multi-cloud como extensión de arquitectura, no como capacidad cerrada del MVP
-- definir un único modelo operativo claro:
+- separar permisos académicos de permisos cloud reales:
   - usuarios autenticados en la plataforma crean y editan laboratorios
-  - la plataforma ejecuta deploy/redeploy/destroy contra una cuenta AWS institucional o de laboratorio
-  - permisos de uso se controlan por rol/curso/laboratorio, no por credenciales cloud individuales
+  - el deploy real queda asociado al owner del laboratorio y a su conexión cloud
+  - revisión y validación en modo `PLAN` pueden abrirse a profesor/curso sin tocar infraestructura real
+  - `APPLY`/`DESTROY` sobre cuentas ajenas requieren delegación explícita o una cuenta compartida del curso
 
 Opciones de producto:
 
-1. MVP seguro
-   - una sola cuenta cloud gestionada por la plataforma
+1. siguiente corte recomendado
    - `AWS` como único provider desplegable real
-   - `GCP/Azure` visibles solo como roadmap o deshabilitados para deploy
+   - owner de laboratorio = owner de ejecución
+   - bloqueo explícito para que un profesor no despliegue infraestructura real del alumno por accidente
 2. siguiente iteración
-   - perfiles de ejecución por curso o tenant
-   - cada curso selecciona una cuenta/proyecto/subscripción autorizada
+   - conexiones cloud por usuario/equipo/curso
+   - cada owner selecciona una cuenta/proyecto/subscripción autorizada
 3. largo plazo
-   - bring-your-own-cloud por usuario/equipo
+   - bring-your-own-cloud multi-provider
    - roles asumibles en AWS, service accounts en GCP, service principals en Azure
    - almacenamiento seguro de secretos + políticas finas de autorización
 
 Entregable:
 
-- decisión de alcance explícita: `deploy real soportado en AWS con credenciales gestionadas por la plataforma`
+- decisión de alcance explícita: `deploy real AWS-first con owner de ejecución y separación entre revisión y apply real`
 - nota de tesis sobre extensibilidad multi-cloud vía adapters/executors
+- referencia detallada: `docs/thesis-validation/cloud-execution-model.md`
 
 ### 1.2. Hacer útil la opción “Plantilla de laboratorio”
 
