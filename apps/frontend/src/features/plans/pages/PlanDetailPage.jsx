@@ -742,6 +742,118 @@ function buildConsoleTestGuide(plan, outputsResponse, connectivityScenarios) {
   };
 }
 
+function buildManagedEgressScenarios(plan, outputsResponse) {
+  const payload = safeObject(plan?.payload);
+  const outputs = safeObject(outputsResponse?.outputs);
+  const vpcs = Array.isArray(payload?.vpcs) ? payload.vpcs : [];
+  const instanceCatalog = buildInstanceCatalog(outputs);
+  const natGatewayIds = safeObject(outputs?.nat_gateway_ids);
+  const natEipAllocationIds = safeObject(outputs?.nat_eip_allocation_ids);
+
+  return vpcs
+    .map((vpc) => {
+      const subnets = Array.isArray(vpc?.subnets) ? vpc.subnets : [];
+      const publicSubnets = subnets.filter(
+        (subnet) => String(subnet?.subnet_type || '').toLowerCase() === 'public',
+      );
+      const privateSubnets = subnets.filter(
+        (subnet) => String(subnet?.subnet_type || '').toLowerCase() === 'private',
+      );
+      const natConfig = safeObject(vpc?.nat_gateway);
+      const natEnabled = Boolean(natConfig?.enabled);
+      const egressSubnetName = natConfig?.public_subnet || publicSubnets[0]?.name || null;
+
+      if (!natEnabled || publicSubnets.length === 0 || privateSubnets.length === 0) {
+        return null;
+      }
+
+      const publicDeclared = publicSubnets.flatMap((subnet) =>
+        Array.isArray(subnet?.instances)
+          ? subnet.instances.map((instance) => ({
+            ...instance,
+            subnetName: subnet.name,
+            subnetType: 'public',
+          }))
+          : [],
+      );
+      const privateDeclared = privateSubnets.flatMap((subnet) =>
+        Array.isArray(subnet?.instances)
+          ? subnet.instances.map((instance) => ({
+            ...instance,
+            subnetName: subnet.name,
+            subnetType: 'private',
+          }))
+          : [],
+      );
+
+      const outputInstances = instanceCatalog.get(vpc.id) || [];
+      const enrichDeclared = (declared) => {
+        const match = outputInstances.find((item) => item.instanceName === declared?.name);
+        return {
+          instanceName: declared?.name || match?.instanceName || 'instancia',
+          instanceId: match?.instanceId || null,
+          privateIp: match?.privateIp || declared?.ip_address || null,
+          publicIp: match?.publicIp || null,
+          subnetName: declared?.subnetName || 'subnet',
+          subnetType: declared?.subnetType || 'unknown',
+          keyPair: declared?.ssh_access || 'tu-keypair',
+        };
+      };
+
+      const bastion = publicDeclared[0] ? enrichDeclared(publicDeclared[0]) : null;
+      const privateWorkload = privateDeclared[0] ? enrichDeclared(privateDeclared[0]) : null;
+
+      const checks = [];
+      if (bastion?.privateIp && privateWorkload?.privateIp) {
+        checks.push({
+          title: `Desde ${bastion.instanceName} hacia ${privateWorkload.instanceName}`,
+          command: `ping -c 4 ${privateWorkload.privateIp}`,
+          context: bastion.publicIp
+            ? `Ejecutar dentro de ${bastion.instanceName} (${bastion.publicIp}) para validar alcance privado dentro de la VPC`
+            : `Ejecutar dentro de ${bastion.instanceName} (${bastion.instanceId || 'sin instance_id'})`,
+        });
+      }
+
+      return {
+        type: 'managed-egress',
+        vpcId: vpc.id,
+        vpcName: vpc.name || vpc.id,
+        cidr: vpc.cidr_block || 'CIDR n/a',
+        egressSubnetName,
+        natGatewayId: natGatewayIds[vpc.id] || null,
+        natEipAllocationId: natEipAllocationIds[vpc.id] || null,
+        bastion,
+        privateWorkload,
+        checks,
+        readyForRun: checks.length > 0,
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildPostDeployConsoleGuide(plan, outputsResponse, connectivityScenarios, managedEgressScenarios) {
+  const crossVpcGuide = buildConsoleTestGuide(plan, outputsResponse, connectivityScenarios);
+  const scenarios = [
+    ...crossVpcGuide.scenarios.map((scenario) => ({
+      key: `${scenario.aId}:${scenario.bId}`,
+      kind: 'cross-vpc',
+      title: `${scenario.aVpc.name} ↔ ${scenario.bVpc.name}`,
+      checks: scenario.checks,
+    })),
+    ...managedEgressScenarios.map((scenario) => ({
+      key: `${scenario.vpcId}:managed-egress`,
+      kind: 'managed-egress',
+      title: `${scenario.vpcName} · salida privada con NAT`,
+      checks: scenario.checks,
+    })),
+  ];
+
+  return {
+    ...crossVpcGuide,
+    scenarios,
+  };
+}
+
 export default function PlanDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -787,6 +899,10 @@ export default function PlanDetailPage() {
     () => buildConnectivityScenarios(plan, outputsResponse),
     [plan, outputsResponse],
   );
+  const managedEgressScenarios = useMemo(
+    () => buildManagedEgressScenarios(plan, outputsResponse),
+    [plan, outputsResponse],
+  );
   const vpcInfraCatalog = useMemo(
     () => buildVpcInfraCatalog(plan, outputsResponse),
     [plan, outputsResponse],
@@ -796,8 +912,8 @@ export default function PlanDetailPage() {
     [plan, outputsResponse],
   );
   const consoleGuide = useMemo(
-    () => buildConsoleTestGuide(plan, outputsResponse, connectivityScenarios),
-    [plan, outputsResponse, connectivityScenarios],
+    () => buildPostDeployConsoleGuide(plan, outputsResponse, connectivityScenarios, managedEgressScenarios),
+    [plan, outputsResponse, connectivityScenarios, managedEgressScenarios],
   );
   const connectivityOverview = useMemo(
     () => buildConnectivityOverview(plan, outputsResponse, connectivityScenarios),
@@ -1173,7 +1289,7 @@ export default function PlanDetailPage() {
 
   const canOpenConsoleGuide =
     Boolean(plan?.applied) &&
-    connectivityScenarios.length > 0 &&
+    (connectivityScenarios.length > 0 || managedEgressScenarios.length > 0) &&
     hasOutputsData;
 
   const isRedeployAvailable = lifecycle.key === 'ACTIVE' || lifecycle.key === 'FAILED_REAL_APPLY';
@@ -1849,7 +1965,8 @@ export default function PlanDetailPage() {
                 <Box sx={{ flex: 1 }}>
                   <Typography variant="h6">Guía de pruebas post-deploy</Typography>
                   <Typography component="div" variant="body2" color="text.secondary">
-                    Define pruebas de conectividad entre VPCs según el modo de enrutamiento desplegado.
+                    Define pruebas de conectividad entre VPCs o validaciones guiadas para una VPC con zona pública,
+                    zona privada y NAT.
                   </Typography>
                 </Box>
                 <Button
@@ -1871,7 +1988,7 @@ export default function PlanDetailPage() {
               <Box sx={{ mt: 2 }}>
                 <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
                   Abre el modal de instrucciones para ver el paso a paso por consola: cómo entrar por SSH a una bastion
-                  y luego cómo ejecutar los pings entre VPCs.
+                  y luego cómo ejecutar los pings sugeridos, ya sea entre VPCs o dentro de una VPC con salida privada.
                 </Alert>
 
                 {!hasOutputsData && (
@@ -1880,9 +1997,10 @@ export default function PlanDetailPage() {
                   </Alert>
                 )}
 
-                {connectivityScenarios.length === 0 && (
+                {connectivityScenarios.length === 0 && managedEgressScenarios.length === 0 && (
                   <Alert severity="warning">
-                    Este plan no expone pares de VPC conectados por peering o TGW para pruebas cruzadas.
+                    Este plan no expone pares de VPC conectados por peering/TGW ni un caso single-VPC con NAT que
+                    podamos guiar desde aquí.
                   </Alert>
                 )}
 
@@ -1939,8 +2057,75 @@ export default function PlanDetailPage() {
                   </Paper>
                 ))}
 
+                {managedEgressScenarios.map((scenario) => (
+                  <Paper key={`${scenario.vpcId}:managed-egress`} variant="outlined" sx={{ p: 2, mb: 2 }}>
+                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'center' }}>
+                      <Typography variant="subtitle2" sx={{ flex: 1 }}>
+                        {scenario.vpcName} · salida privada con NAT
+                      </Typography>
+                      <Chip size="small" label="Single VPC" variant="outlined" />
+                      <Chip size="small" label="Managed egress" color="info" variant="outlined" />
+                      <Chip size="small" label={scenario.cidr} variant="outlined" />
+                    </Stack>
+
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                      NAT en zona pública: {scenario.egressSubnetName || 'n/a'} · NAT ID: {scenario.natGatewayId || 'n/a'}
+                    </Typography>
+
+                    {!scenario.readyForRun && (
+                      <Alert severity="warning" sx={{ mt: 1.5 }}>
+                        Faltan outputs de bastion o workload privada para generar el comando sugerido.
+                      </Alert>
+                    )}
+
+                    {scenario.checks.length > 0 && (
+                      <Stack spacing={1.2} sx={{ mt: 1.5 }}>
+                        {scenario.checks.map((check) => (
+                          <Box key={`${scenario.vpcId}:${check.title}`}>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {check.title}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                              {check.context}
+                            </Typography>
+                            <Paper
+                              variant="outlined"
+                              sx={{ p: 1, bgcolor: 'background.default', overflow: 'auto' }}
+                            >
+                              <Box
+                                component="pre"
+                                sx={{
+                                  m: 0,
+                                  whiteSpace: 'pre-wrap',
+                                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                  fontSize: 12,
+                                }}
+                              >
+                                {check.command}
+                              </Box>
+                            </Paper>
+                          </Box>
+                        ))}
+                      </Stack>
+                    )}
+
+                    <Stack spacing={1} sx={{ mt: 1.5 }}>
+                      <Alert severity="info" variant="outlined">
+                        Qué observar: la bastion pública debería tener IP pública y la workload privada no.
+                      </Alert>
+                      <Alert severity="info" variant="outlined">
+                        Qué observar: la bastion debe alcanzar la IP privada de la workload dentro de la misma VPC.
+                      </Alert>
+                      <Alert severity="info" variant="outlined">
+                        Qué observar: el NAT da salida a la subnet privada, pero no vuelve pública a la workload.
+                      </Alert>
+                    </Stack>
+                  </Paper>
+                ))}
+
                 <Alert severity="info" variant="outlined">
-                  Resultado esperado: si la topología está correcta, cada par conectado debe responder ping en ida y retorno.
+                  Resultado esperado: cada par conectado debe responder ping en ida y retorno; en un caso single-VPC con
+                  NAT, la bastion debe alcanzar la workload privada y esta última debe permanecer sin IP pública.
                 </Alert>
               </Box>
             </Box>
@@ -2089,8 +2274,8 @@ export default function PlanDetailPage() {
         <DialogContent dividers>
           <Stack spacing={2}>
             <Alert severity="info" variant="outlined">
-              Primero entra por SSH a una bastion pública. Después, desde esa instancia, ejecuta ping a las IPs
-              privadas sugeridas en esta misma pestaña.
+              Primero entra por SSH a una bastion pública. Después, desde esa instancia, ejecuta los comandos sugeridos
+              en esta misma pestaña para validar conectividad cruzada entre VPCs o alcance privado dentro de una VPC con NAT.
             </Alert>
 
             <Box>
@@ -2182,13 +2367,16 @@ ssh -i "$TMPK" ec2-user@${consoleGuide.bastions[0]?.publicIp || 'IP_PUBLICA_BAST
 
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                5. Ejecuta los pings desde la bastion
+                5. Ejecuta las comprobaciones desde la bastion
               </Typography>
               <Stack spacing={1}>
                 {consoleGuide.scenarios.flatMap((scenario) =>
                   scenario.checks.map((check) => (
-                    <Paper key={`${scenario.aId}:${scenario.bId}:${check.title}`} variant="outlined" sx={{ p: 1.5 }}>
+                    <Paper key={`${scenario.key}:${check.title}`} variant="outlined" sx={{ p: 1.5 }}>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {scenario.title}
+                      </Typography>
+                      <Typography variant="caption" display="block" color="text.secondary" sx={{ mb: 0.25 }}>
                         {check.title}
                       </Typography>
                       <Typography variant="caption" display="block" color="text.secondary" sx={{ mb: 0.75 }}>
@@ -2212,8 +2400,9 @@ ssh -i "$TMPK" ec2-user@${consoleGuide.bastions[0]?.publicIp || 'IP_PUBLICA_BAST
             </Box>
 
             <Alert severity="success" variant="outlined">
-              Resultado esperado: cada par conectado debería responder ping en ida y retorno. Si falla, revisa route
-              tables, Security Groups, key pair y `Allowed SSH CIDR`.
+              Resultado esperado: cada par conectado debería responder ping en ida y retorno. En un laboratorio con NAT,
+              la bastion debe alcanzar la workload privada y esta no debería tener IP pública. Si algo falla, revisa
+              route tables, Security Groups, key pair y `Allowed SSH CIDR`.
             </Alert>
           </Stack>
         </DialogContent>
