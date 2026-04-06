@@ -893,6 +893,14 @@ export default function PlanDetailPage() {
           });
         }
 
+        // Si el usuario está viendo Logs, refrescamos el contenido durante el polling
+        // para que el progreso se vea en tiempo real sin requerir clic manual.
+        if (tab === 'logs') {
+          if (nowRunning || nowTerminal) {
+            await fetchPlanLogs();
+          }
+        }
+
         // Actualiza el prevStatus para el próximo poll
         prevStatusRef.current = nowStatus;
 
@@ -910,7 +918,7 @@ export default function PlanDetailPage() {
     },
     // OJO: incluimos `id` y `msg` porque usamos ambos para decidir si limpiar el banner.
     // No incluimos `plan` para evitar estados viejos.
-    [id, msg]
+    [id, msg, tab]
   );
 
   async function fetchOutputs() {

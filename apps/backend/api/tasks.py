@@ -3,9 +3,40 @@ import time
 
 from celery import shared_task
 from django.db import transaction
+from django.utils import timezone
 
 from .models import Plan
 from .providers import get_provider_executor, get_provider_key
+
+
+LOG_FLUSH_MIN_INTERVAL_SECONDS = 1.0
+LOG_FLUSH_MIN_CHARS = 160
+
+
+def _make_incremental_log_flusher(plan_obj, bundle):
+    state = {"ts": 0.0, "size": 0}
+
+    def flush(*, force: bool = False):
+        size = len(bundle.full_log or "")
+        if size == 0:
+            return
+
+        now = time.monotonic()
+        grew_enough = (size - state["size"]) >= LOG_FLUSH_MIN_CHARS
+        waited_enough = (now - state["ts"]) >= LOG_FLUSH_MIN_INTERVAL_SECONDS
+
+        if not force and not grew_enough and not waited_enough:
+            return
+
+        Plan.objects.filter(id=plan_obj.id).update(
+            last_log=bundle.full_log,
+            last_log_updated_at=timezone.now(),
+            updated_at=timezone.now(),
+        )
+        state["ts"] = now
+        state["size"] = size
+
+    return flush
 
 
 # === TAREAS CELERY ===
@@ -58,6 +89,8 @@ def process_network_plan(self, plan_id: str, payload: dict):
                 payload=plan_obj.payload,
                 deploy=True,
             )
+        log_flush = _make_incremental_log_flusher(plan_obj, bundle)
+        bundle.on_log_append = lambda _bundle: log_flush()
 
         # === 2) Renderiza workspace Terraform ===
         executor.prepare_workspace(
@@ -210,6 +243,8 @@ def destroy_last_deploy(self, plan_id: str):
         last_action="destroy",
         destroy=True,
     )
+    log_flush = _make_incremental_log_flusher(plan, bundle)
+    bundle.on_log_append = lambda _bundle: log_flush()
 
     try:
         executor.prepare_workspace(
