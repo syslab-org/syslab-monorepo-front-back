@@ -185,6 +185,27 @@ const ConfirmDeployDialog = ({
     (segment) => Boolean(segment?.provider_overrides?.aws?.nat_gateway?.enabled),
   ).length;
   const vpcsWithSsh = segments.filter((segment) => Boolean(segment?.ingress?.ssh_cidr)).length;
+  const segmentZoneStats = segments.map((segment) => {
+    const zones = Array.isArray(segment?.zones) ? segment.zones : [];
+    const publicZoneCount = zones.filter(
+      (zone) => String(zone?.kind || "").toLowerCase() === "public",
+    ).length;
+    const privateZoneCount = zones.filter(
+      (zone) => String(zone?.kind || "").toLowerCase() === "private",
+    ).length;
+    return {
+      id: segment?.id,
+      hasSshCidr: Boolean(segment?.ingress?.ssh_cidr),
+      publicZoneCount,
+      privateZoneCount,
+    };
+  });
+  const vpcsWithEffectivePublicSsh = segmentZoneStats.filter(
+    (segment) => segment.hasSshCidr && segment.publicZoneCount > 0,
+  ).length;
+  const vpcsWithSshButNoPublicZones = segmentZoneStats.filter(
+    (segment) => segment.hasSshCidr && segment.publicZoneCount === 0,
+  ).length;
   const publicSubnets = segments.reduce(
     (acc, segment) =>
       acc +
@@ -212,11 +233,15 @@ const ConfirmDeployDialog = ({
     hubRouters > 0
       ? `Conectividad modelada como ${hubRouters} hub(s) central(es) con ${hubAttachments} attachment(s).`
       : `Conectividad modelada con ${directLinks} enlace(s) directo(s) entre pares de segmentos.`,
-    `Acceso y salida: SSH externo definido en ${vpcsWithSsh} segmento(s) y ${isolatedExposure} segmento(s) sin salida a internet declarada.`,
+    vpcsWithSshButNoPublicZones > 0
+      ? `Acceso y salida: SSH externo declarado en ${vpcsWithSsh} segmento(s), pero ${vpcsWithSshButNoPublicZones} no tiene(n) zona pública para exponerlo. Además, ${isolatedExposure} segmento(s) no declara(n) salida a internet.`
+      : `Acceso y salida: SSH externo utilizable en ${vpcsWithEffectivePublicSsh} segmento(s) y ${isolatedExposure} segmento(s) sin salida a internet declarada.`,
   ];
   const awsInterpretation = [
     `AWS creará ${segments.length} VPC(s), ${summary.totalZones} subnet(s) y ${summary.totalWorkloads} instancia(s).`,
-    `Exposición pública: IGW en ${vpcsWithIgw} VPC(s), ${publicSubnets} subnet(s) pública(s) y SSH externo definido en ${vpcsWithSsh} VPC(s).`,
+    publicSubnets > 0
+      ? `Exposición pública efectiva: IGW en ${vpcsWithIgw} VPC(s), ${publicSubnets} subnet(s) pública(s) y SSH externo utilizable en ${vpcsWithEffectivePublicSsh} VPC(s).`
+      : `Internet edge declarado en ${vpcsWithIgw} VPC(s), pero no hay subnet(s) pública(s) para exponer workloads ni usar SSH externo directamente.`,
     `Salida privada: NAT Gateway en ${vpcsWithNat} VPC(s) para ${privateSubnets} subnet(s) potencialmente privadas.`,
     hubRouters > 0
       ? `Enrutamiento central: ${hubRouters} hub(s) y ${hubAttachments} attachment(s).`
