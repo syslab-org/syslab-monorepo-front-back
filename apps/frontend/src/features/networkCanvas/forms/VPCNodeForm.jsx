@@ -33,6 +33,7 @@ const VPCNodeForm = ({
   siblingVpcCidrs = [], // ["10.0.1.0/24", ...]
   defaultRegion = "us-east-1",
   publicSubnetNames = [], // nombres de subnets públicas en esta VPC
+  privateSubnetNames = [], // nombres de subnets privadas en esta VPC
 }) => {
   const validationSchema = useFormValidationSchema(
     VPC_CHILD_FORM,
@@ -45,6 +46,10 @@ const VPCNodeForm = ({
   const hasPublicSubnets = useMemo(
     () => Array.isArray(publicSubnetNames) && publicSubnetNames.length > 0,
     [publicSubnetNames]
+  );
+  const hasPrivateSubnets = useMemo(
+    () => Array.isArray(privateSubnetNames) && privateSubnetNames.length > 0,
+    [privateSubnetNames]
   );
 
   // ⚙️ FEATURE FLAG (por si algún día quieres permitir encender el switch aunque no haya subnets públicas)
@@ -128,9 +133,18 @@ const VPCNodeForm = ({
       setSnackSeverity("warning");
       setSnackOpen(true);
     }
+
+    if (enableNat && hasPublicSubnets && !hasPrivateSubnets) {
+      setSnackMsg(
+        "Managed egress está activo, pero todavía no hay zonas privadas que aprovechen ese NAT."
+      );
+      setSnackSeverity("info");
+      setSnackOpen(true);
+    }
   }, [
     enableNat,
     hasPublicSubnets,
+    hasPrivateSubnets,
     natSubnet,
     publicSubnetNames,
     setValue,
@@ -300,6 +314,12 @@ const VPCNodeForm = ({
         />
         <Chip
           size="small"
+          label={`Zonas privadas: ${privateSubnetNames.length}`}
+          color={hasPrivateSubnets ? "success" : "default"}
+          variant={hasPrivateSubnets ? "filled" : "outlined"}
+        />
+        <Chip
+          size="small"
           label={allowedSshCidr ? "Seguridad: SSH expuesto a CIDR" : "Seguridad: sin SSH externo"}
           color={allowedSshCidr ? "info" : "default"}
           variant={allowedSshCidr ? "filled" : "outlined"}
@@ -312,6 +332,27 @@ const VPCNodeForm = ({
           <Alert severity="warning" sx={{ mb: 1 }}>
             No hay subnets públicas en esta VPC. Crea una para poder habilitar
             la salida gestionada.
+          </Alert>
+        )}
+
+        {!enableNat && hasPublicSubnets && hasPrivateSubnets && (
+          <Alert severity="info" sx={{ mb: 1 }}>
+            Ya tienes una topología apta para salida privada: una zona pública y una privada.
+            Si quieres que las zonas privadas salgan a Internet sin volverse públicas, activa
+            <b> Enable managed egress</b>.
+          </Alert>
+        )}
+
+        {enableNat && hasPublicSubnets && !hasPrivateSubnets && (
+          <Alert severity="info" sx={{ mb: 1 }}>
+            Managed egress está activo, pero esta VPC no tiene zonas privadas. El NAT se podrá crear,
+            pero no estarás resolviendo el caso pedagógico principal de salida privada controlada.
+          </Alert>
+        )}
+
+        {enableNat && hasPublicSubnets && hasPrivateSubnets && (
+          <Alert severity="success" sx={{ mb: 1 }}>
+            Buen caso para demo: el NAT vivirá en una zona pública y podrá dar salida a las zonas privadas de esta VPC.
           </Alert>
         )}
 
