@@ -69,6 +69,24 @@ def can_edit_lab(user, lab: Lab) -> bool:
     return lab.owner_user_id == user.id
 
 
+def can_execute_lab(user, lab: Lab) -> bool:
+    if not user or not user.is_authenticated or not lab:
+        return False
+    if is_platform_admin(user):
+        return True
+    return lab.owner_user_id == user.id
+
+
+def can_execute_plan(user, plan) -> bool:
+    if not user or not user.is_authenticated or not plan:
+        return False
+    if is_platform_admin(user):
+        return True
+    if not getattr(plan, "lab_id", None):
+        return False
+    return can_execute_lab(user, getattr(plan, "lab", None))
+
+
 class IsPlatformAdmin(BasePermission):
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated and is_platform_admin(request.user))

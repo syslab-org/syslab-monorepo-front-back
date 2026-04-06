@@ -903,6 +903,13 @@ const useDeployNetwork = ({
     } catch (error) {
       setLoadingFlow(false);
       const code = error?.data?.code;
+      if (error?.status === 403 && code === "PLAN_EXECUTION_FORBIDDEN") {
+        setErrorMessage(
+          error?.data?.error ||
+            "Solo el dueño del laboratorio puede ejecutar deploy real o destroy sobre esta infraestructura.",
+        );
+        return;
+      }
       if (code === "PLAN_ALREADY_APPLIED") {
         setErrorMessage(
           "El backend rechazó el redeploy de este plan. Revisa el estado y vuelve a intentar.",

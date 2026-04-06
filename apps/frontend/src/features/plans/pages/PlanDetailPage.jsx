@@ -975,6 +975,7 @@ export default function PlanDetailPage() {
 
   // Deploy permitido cuando el plan NO está corriendo
   const canDeploy = !isRunning;
+  const canApply = Boolean(plan?.can_apply ?? true);
 
   // Destroy permitido según regla backend (incluye apply real fallido), y no está corriendo
   const canDestroy =
@@ -1185,6 +1186,13 @@ export default function PlanDetailPage() {
       actionLockRef.current = false;
       return;
     }
+    if (applyMode && !canApply) {
+      setErr(
+        'Solo el dueño del laboratorio puede ejecutar APPLY real o Destroy. Puedes seguir usando PLAN para revisión.',
+      );
+      actionLockRef.current = false;
+      return;
+    }
     setDeploying(true);
     setMsg(null);
     setErr(null);
@@ -1218,6 +1226,10 @@ export default function PlanDetailPage() {
           ),
         });
         await fetchPlan();
+        return;
+      }
+      if (status === 403 && payload?.code === 'PLAN_EXECUTION_FORBIDDEN') {
+        setErr(payload?.error || 'No tienes permiso para ejecutar infraestructura real en este laboratorio.');
         return;
       }
       const backendMsg =
@@ -1287,6 +1299,10 @@ export default function PlanDetailPage() {
         await fetchPlan();
         return;
       }
+      if (status === 403 && payload?.code === 'PLAN_EXECUTION_FORBIDDEN') {
+        setErr(payload?.error || 'No tienes permiso para destruir infraestructura real en este laboratorio.');
+        return;
+      }
       const backendMsg =
         payload?.error ||
         payload?.detail ||
@@ -1316,6 +1332,11 @@ export default function PlanDetailPage() {
         severity: 'info',
         text: 'Hay una ejecución en curso. Espera a que termine para lanzar otra acción.',
       }
+    : applyMode && !canApply
+      ? {
+          severity: 'warning',
+          text: 'Este plan es visible para revisión, pero el APPLY real y el Destroy quedan reservados al dueño del laboratorio.',
+        }
     : canDestroy && isRedeployAvailable
       ? {
           severity: 'warning',
@@ -1489,7 +1510,7 @@ export default function PlanDetailPage() {
                 <Button
                   variant="contained"
                   onClick={handleDeploy}
-                  disabled={!canDeploy || busy}
+                  disabled={!canDeploy || busy || (applyMode && !canApply)}
                   color={isRedeployAvailable ? 'warning' : 'primary'}
                 >
                   {deploying ? 'Lanzando…' : deployActionLabel}

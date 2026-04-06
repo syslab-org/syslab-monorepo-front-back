@@ -18,7 +18,7 @@ from .models import (
     UserProfile,
     VisibilityScopeChoices,
 )
-from .permissions import canonical_role
+from .permissions import can_execute_plan, canonical_role
 
 
 ROLE_CHOICES = [ROLE_PLATFORM_ADMIN, ROLE_TEACHER, ROLE_STUDENT]
@@ -54,6 +54,7 @@ class CanonicalProviderChoiceField(serializers.ChoiceField):
 
 
 class PlanListSerializer(serializers.ModelSerializer):
+    can_apply = serializers.SerializerMethodField()
     simulate_only = serializers.SerializerMethodField()
     can_destroy = serializers.SerializerMethodField()
     canvas_id = serializers.SerializerMethodField()
@@ -69,6 +70,7 @@ class PlanListSerializer(serializers.ModelSerializer):
             "applied",
             "last_action",
             "created_at",
+            "can_apply",
             "simulate_only",
             "can_destroy",
             "canvas_id",
@@ -82,8 +84,14 @@ class PlanListSerializer(serializers.ModelSerializer):
             return False
         return bool(getattr(obj, "payload_simulate_only", True))
 
+    def get_can_apply(self, obj):
+        request = self.context.get("request")
+        if not request:
+            return False
+        return can_execute_plan(request.user, obj)
+
     def get_can_destroy(self, obj):
-        return bool(getattr(obj, "can_destroy_now", False))
+        return bool(self.get_can_apply(obj) and getattr(obj, "can_destroy_now", False))
 
     def get_canvas_id(self, obj):
         return obj.canvas_id
@@ -99,6 +107,7 @@ class PlanListSerializer(serializers.ModelSerializer):
 
 
 class PlanDetailSerializer(serializers.ModelSerializer):
+    can_apply = serializers.SerializerMethodField()
     simulate_only = serializers.SerializerMethodField()
     can_destroy = serializers.SerializerMethodField()
     canvas_id = serializers.SerializerMethodField()
@@ -119,6 +128,7 @@ class PlanDetailSerializer(serializers.ModelSerializer):
             "applied",
             "last_action",
             "error",
+            "can_apply",
             "simulate_only",
             "can_destroy",
             "last_deploy_task_id",
@@ -136,8 +146,14 @@ class PlanDetailSerializer(serializers.ModelSerializer):
             return False
         return bool(getattr(obj, "payload_simulate_only", True))
 
+    def get_can_apply(self, obj):
+        request = self.context.get("request")
+        if not request:
+            return False
+        return can_execute_plan(request.user, obj)
+
     def get_can_destroy(self, obj):
-        return bool(getattr(obj, "can_destroy_now", False))
+        return bool(self.get_can_apply(obj) and getattr(obj, "can_destroy_now", False))
 
     def get_canvas_id(self, obj):
         return obj.canvas_id
