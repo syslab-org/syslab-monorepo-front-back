@@ -222,7 +222,16 @@ function getVpcNodeProps(selectedNode, nodes, cidrBlockVPC, prefixLength) {
         .map(n => n.data?.subnetName)
         .filter(Boolean);
 
-    return { vlanCidr, siblingVpcCidrs, publicSubnetNames };
+    const privateSubnetNames = nodes
+        .filter(n =>
+            n.type === TYPE_SUBNETWORK_NODE &&
+            n.parentId === selectedNode.id &&
+            String(n.data?.subnetType || "").toLowerCase() === "private"
+        )
+        .map(n => n.data?.subnetName)
+        .filter(Boolean);
+
+    return { vlanCidr, siblingVpcCidrs, publicSubnetNames, privateSubnetNames };
 }
 
 
@@ -331,7 +340,7 @@ function NodeConfigModal({
 
                 {/* If node type is VPC, show VPCNodeForm */}
                 {selectedNode && selectedNode.type === TYPE_VPC_NODE && (() => {
-                    const { vlanCidr, siblingVpcCidrs, publicSubnetNames } =
+                    const { vlanCidr, siblingVpcCidrs, publicSubnetNames, privateSubnetNames } =
                         getVpcNodeProps(selectedNode, nodes, cidrBlockVPC, prefixLength);
                     return (
                         <VPCNodeForm
@@ -341,6 +350,7 @@ function NodeConfigModal({
                             vlanCidr={vlanCidr}
                             siblingVpcCidrs={siblingVpcCidrs}
                             publicSubnetNames={publicSubnetNames}
+                            privateSubnetNames={privateSubnetNames}
                         />
                     );
                 })()}

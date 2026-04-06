@@ -158,6 +158,13 @@ const SubNetworkNodeForm = ({
         </Box>
       </Alert>
 
+      {watch("subnetType") === "private" && (
+        <Alert severity="info" sx={{ mb: 1.5 }}>
+          Esta zona es privada. Si después necesitas salida a Internet sin exponerla públicamente,
+          habilita <b>managed egress</b> desde el <b>Network Segment</b> padre.
+        </Alert>
+      )}
+
       <TextField
         label="Zone Name"
         {...register("subnetName")}
