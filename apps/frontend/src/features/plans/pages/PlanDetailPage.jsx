@@ -763,7 +763,7 @@ function buildManagedEgressScenarios(plan, outputsResponse) {
       const natEnabled = Boolean(natConfig?.enabled);
       const egressSubnetName = natConfig?.public_subnet || publicSubnets[0]?.name || null;
 
-      if (!natEnabled || publicSubnets.length === 0 || privateSubnets.length === 0) {
+      if (!natEnabled || publicSubnets.length === 0) {
         return null;
       }
 
@@ -802,6 +802,8 @@ function buildManagedEgressScenarios(plan, outputsResponse) {
 
       const bastion = publicDeclared[0] ? enrichDeclared(publicDeclared[0]) : null;
       const privateWorkload = privateDeclared[0] ? enrichDeclared(privateDeclared[0]) : null;
+      const hasPrivateWorkload = Boolean(privateWorkload?.privateIp);
+      const hasPrivateSubnets = privateSubnets.length > 0;
 
       const checks = [];
       if (bastion?.privateIp && privateWorkload?.privateIp) {
@@ -811,6 +813,13 @@ function buildManagedEgressScenarios(plan, outputsResponse) {
           context: bastion.publicIp
             ? `Ejecutar dentro de ${bastion.instanceName} (${bastion.publicIp}) para validar alcance privado dentro de la VPC`
             : `Ejecutar dentro de ${bastion.instanceName} (${bastion.instanceId || 'sin instance_id'})`,
+        });
+      } else if (bastion?.publicIp) {
+        checks.push({
+          title: `Confirmar acceso SSH a ${bastion.instanceName}`,
+          command: `ssh -i ~/.ssh/tesis-key-new.pem ec2-user@${bastion.publicIp}`,
+          context:
+            'Úsalo para verificar que la instancia pública quedó accesible y contrastar que el NAT existe aunque no haya subnets privadas que lo aprovechen.',
         });
       }
 
@@ -824,6 +833,8 @@ function buildManagedEgressScenarios(plan, outputsResponse) {
         natEipAllocationId: natEipAllocationIds[vpc.id] || null,
         bastion,
         privateWorkload,
+        hasPrivateSubnets,
+        hasPrivateWorkload,
         checks,
         readyForRun: checks.length > 0,
       };
@@ -1965,8 +1976,8 @@ export default function PlanDetailPage() {
                 <Box sx={{ flex: 1 }}>
                   <Typography variant="h6">Guía de pruebas post-deploy</Typography>
                   <Typography component="div" variant="body2" color="text.secondary">
-                    Define pruebas de conectividad entre VPCs o validaciones guiadas para una VPC con zona pública,
-                    zona privada y NAT.
+                    Define pruebas de conectividad entre VPCs o validaciones guiadas para una VPC con NAT, tenga o no
+                    una zona privada asociada.
                   </Typography>
                 </Box>
                 <Button
@@ -1988,7 +1999,7 @@ export default function PlanDetailPage() {
               <Box sx={{ mt: 2 }}>
                 <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
                   Abre el modal de instrucciones para ver el paso a paso por consola: cómo entrar por SSH a una bastion
-                  y luego cómo ejecutar los pings sugeridos, ya sea entre VPCs o dentro de una VPC con salida privada.
+                  y luego cómo ejecutar los comandos sugeridos, ya sea entre VPCs o dentro de una VPC con NAT.
                 </Alert>
 
                 {!hasOutputsData && (
@@ -2061,7 +2072,7 @@ export default function PlanDetailPage() {
                   <Paper key={`${scenario.vpcId}:managed-egress`} variant="outlined" sx={{ p: 2, mb: 2 }}>
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'center' }}>
                       <Typography variant="subtitle2" sx={{ flex: 1 }}>
-                        {scenario.vpcName} · salida privada con NAT
+                        {scenario.vpcName} · {scenario.hasPrivateSubnets ? 'salida privada con NAT' : 'NAT sin zonas privadas'}
                       </Typography>
                       <Chip size="small" label="Single VPC" variant="outlined" />
                       <Chip size="small" label="Managed egress" color="info" variant="outlined" />
@@ -2111,21 +2122,35 @@ export default function PlanDetailPage() {
 
                     <Stack spacing={1} sx={{ mt: 1.5 }}>
                       <Alert severity="info" variant="outlined">
-                        Qué observar: la bastion pública debería tener IP pública y la workload privada no.
+                        Qué observar: la bastion pública debería tener IP pública{scenario.hasPrivateWorkload ? ' y la workload privada no.' : '.'}
                       </Alert>
-                      <Alert severity="info" variant="outlined">
-                        Qué observar: la bastion debe alcanzar la IP privada de la workload dentro de la misma VPC.
-                      </Alert>
-                      <Alert severity="info" variant="outlined">
-                        Qué observar: el NAT da salida a la subnet privada, pero no vuelve pública a la workload.
-                      </Alert>
+                      {scenario.hasPrivateWorkload ? (
+                        <>
+                          <Alert severity="info" variant="outlined">
+                            Qué observar: la bastion debe alcanzar la IP privada de la workload dentro de la misma VPC.
+                          </Alert>
+                          <Alert severity="info" variant="outlined">
+                            Qué observar: el NAT da salida a la subnet privada, pero no vuelve pública a la workload.
+                          </Alert>
+                        </>
+                      ) : (
+                        <>
+                          <Alert severity="warning" variant="outlined">
+                            Qué observar: el NAT fue creado correctamente, pero en este diseño no hay subnets privadas que lo aprovechen.
+                          </Alert>
+                          <Alert severity="info" variant="outlined">
+                            Qué observar: este caso sirve para enseñar costo/beneficio. El segmento sigue funcionando, pero el NAT aquí agrega complejidad sin aportar aislamiento privado.
+                          </Alert>
+                        </>
+                      )}
                     </Stack>
                   </Paper>
                 ))}
 
                 <Alert severity="info" variant="outlined">
                   Resultado esperado: cada par conectado debe responder ping en ida y retorno; en un caso single-VPC con
-                  NAT, la bastion debe alcanzar la workload privada y esta última debe permanecer sin IP pública.
+                  NAT, la bastion debe alcanzar la workload privada y esta última debe permanecer sin IP pública. Si no
+                  hay zonas privadas, la validación se centra en confirmar que el NAT existe y en explicar por qué ese diseño es más débil.
                 </Alert>
               </Box>
             </Box>
@@ -2401,8 +2426,10 @@ ssh -i "$TMPK" ec2-user@${consoleGuide.bastions[0]?.publicIp || 'IP_PUBLICA_BAST
 
             <Alert severity="success" variant="outlined">
               Resultado esperado: cada par conectado debería responder ping en ida y retorno. En un laboratorio con NAT,
-              la bastion debe alcanzar la workload privada y esta no debería tener IP pública. Si algo falla, revisa
-              route tables, Security Groups, key pair y `Allowed SSH CIDR`.
+              la bastion debe alcanzar la workload privada y esta no debería tener IP pública. Si el laboratorio solo
+              tiene zona pública, la comprobación útil es confirmar acceso a la bastion y entender que el NAT quedó
+              desplegado pero no está aportando salida a una subnet privada. Si algo falla, revisa route tables,
+              Security Groups, key pair y `Allowed SSH CIDR`.
             </Alert>
           </Stack>
         </DialogContent>
