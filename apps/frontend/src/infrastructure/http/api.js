@@ -123,6 +123,29 @@ export const api = {
       body: JSON.stringify({ user_id: userId }),
     }),
 
+  listCloudConnections: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return jsonFetch(`/api/cloud-connections/${query ? `?${query}` : ""}`);
+  },
+  createCloudConnection: (payload) =>
+    jsonFetch("/api/cloud-connections/", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateCloudConnection: (id, payload) =>
+    jsonFetch(`/api/cloud-connections/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteCloudConnection: (id) =>
+    jsonFetch(`/api/cloud-connections/${id}/`, {
+      method: "DELETE",
+    }),
+  testCloudConnection: (id) =>
+    jsonFetch(`/api/cloud-connections/${id}/test/`, {
+      method: "POST",
+    }),
+
   listLabs: () => jsonFetch("/api/labs/"),
   createLab: (payload) =>
     jsonFetch("/api/labs/", {

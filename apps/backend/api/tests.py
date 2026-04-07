@@ -6,10 +6,11 @@ from django.test import SimpleTestCase
 from rest_framework.test import APITestCase
 
 from .domain.network_intent import normalize_network_intent
-from .models import Course, Lab, Plan, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, STATUS_ACTIVE, VISIBILITY_COURSE, VISIBILITY_OWNER
+from .models import CLOUD_SCOPE_COURSE_SHARED, CLOUD_SCOPE_PERSONAL, CloudConnection, Course, Lab, Plan, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, STATUS_ACTIVE, VISIBILITY_COURSE, VISIBILITY_OWNER
 from .providers import get_provider_adapter, get_provider_executor
 from .providers.aws.runtime import build_nat_cleanup_targets
 from .providers.aws.terraform import render_workspace
+from .secret_store import encrypt_secret
 from .validators import validate_network_plan
 
 
@@ -431,6 +432,25 @@ class VisibilityApiTests(APITestCase):
             created_by_role=ROLE_STUDENT,
             legacy_canvas_id="lab-other",
         )
+        self.student_connection = CloudConnection.objects.create(
+            name="AWS alumno",
+            provider="aws",
+            scope=CLOUD_SCOPE_PERSONAL,
+            owner_user=self.student,
+            aws_access_key_id="AKIASTUDENT1234",
+            aws_secret_access_key_encrypted=encrypt_secret("student-secret"),
+            default_region="us-east-1",
+        )
+        self.course_connection = CloudConnection.objects.create(
+            name="AWS curso",
+            provider="aws",
+            scope=CLOUD_SCOPE_COURSE_SHARED,
+            course=self.course,
+            created_by=self.teacher,
+            aws_access_key_id="AKIACOURSE1234",
+            aws_secret_access_key_encrypted=encrypt_secret("course-secret"),
+            default_region="us-east-1",
+        )
 
         Plan.objects.create(
             name="Plan alumno",
@@ -669,6 +689,67 @@ class VisibilityApiTests(APITestCase):
         plans_by_name = {item["name"]: item for item in res.json()}
         self.assertFalse(plans_by_name["Plan alumno"]["can_apply"])
         self.assertTrue(plans_by_name["Plan compartido"]["can_apply"])
+
+    def test_student_sees_personal_and_course_shared_cloud_connections(self):
+        self.client.force_authenticate(self.student)
+        res = self.client.get("/api/cloud-connections/?provider=aws")
+        self.assertEqual(res.status_code, 200)
+        names = {item["name"] for item in res.json()}
+        self.assertIn("AWS alumno", names)
+        self.assertIn("AWS curso", names)
+
+    def test_student_can_create_personal_cloud_connection(self):
+        self.client.force_authenticate(self.student)
+        res = self.client.post(
+            "/api/cloud-connections/",
+            {
+                "name": "AWS personal 2",
+                "provider": "aws",
+                "scope": "personal",
+                "auth_type": "aws_static_keys",
+                "default_region": "us-east-1",
+                "aws_access_key_id": "AKIATEST1234",
+                "aws_secret_access_key": "secret-123",
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.json()["scope"], "personal")
+
+    def test_student_cannot_create_course_shared_cloud_connection(self):
+        self.client.force_authenticate(self.student)
+        res = self.client.post(
+            "/api/cloud-connections/",
+            {
+                "name": "AWS curso intento alumno",
+                "provider": "aws",
+                "scope": "course_shared",
+                "auth_type": "aws_static_keys",
+                "course_id": str(self.course.id),
+                "default_region": "us-east-1",
+                "aws_access_key_id": "AKIATEST1234",
+                "aws_secret_access_key": "secret-123",
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 403)
+
+    def test_lab_can_be_created_with_visible_cloud_connection(self):
+        self.client.force_authenticate(self.student)
+        res = self.client.post(
+            "/api/labs/",
+            {
+                "name": "Lab con cuenta personal",
+                "target_provider": "aws",
+                "cidr_block": "10.80.0.0",
+                "prefix_length": 16,
+                "region": "us-east-1",
+                "cloud_connection_id": str(self.student_connection.id),
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.json()["cloud_connection"]["id"], str(self.student_connection.id))
 
     def test_network_plan_create_preserves_applied_state_for_existing_active_plan(self):
         redeploy_lab = Lab.objects.create(

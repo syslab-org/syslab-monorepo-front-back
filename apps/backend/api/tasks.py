@@ -5,6 +5,7 @@ from celery import shared_task
 from django.db import transaction
 from django.utils import timezone
 
+from .cloud_connections import build_aws_runtime_env, resolve_lab_cloud_connection
 from .models import Plan
 from .providers import get_provider_executor, get_provider_key
 
@@ -62,10 +63,10 @@ def process_network_plan(self, plan_id: str, payload: dict):
         except Exception:
             raw_payload = {}
     provider = get_provider_key((raw_payload or {}).get("cloud") if isinstance(raw_payload, dict) else None)
-    executor = get_provider_executor(provider)
-    bundle = executor.build_bundle(plan_id, raw_payload)
     plan_obj = None
     previous_applied = False
+    executor = get_provider_executor(provider)
+    bundle = None
 
     try:
         # === 1) Actualiza estado del Plan ===
@@ -73,15 +74,28 @@ def process_network_plan(self, plan_id: str, payload: dict):
             try:
                 plan_obj = Plan.objects.select_for_update().get(id=plan_id)
                 previous_applied = bool(plan_obj.applied)
-                if bundle.payload and not plan_obj.payload:
-                    plan_obj.payload = bundle.payload
+                if raw_payload and not plan_obj.payload:
+                    plan_obj.payload = raw_payload
             except Plan.DoesNotExist:
                 plan_obj = Plan.objects.create(
-                    name=bundle.payload.get("name", ""),
-                    payload=bundle.payload,
+                    name=(raw_payload or {}).get("name", ""),
+                    payload=raw_payload or {},
                     status=Plan.Status.PENDING,
                 )
                 previous_applied = False
+
+            runtime_env = {}
+            if plan_obj.lab_id:
+                plan_obj = Plan.objects.select_related(
+                    "lab",
+                    "lab__cloud_connection",
+                    "lab__course",
+                    "lab__owner_user",
+                ).get(id=plan_obj.id)
+                connection = resolve_lab_cloud_connection(plan_obj.lab, provider)
+                runtime_env = build_aws_runtime_env(connection) if connection else {}
+
+            bundle = executor.build_bundle(plan_id, raw_payload, runtime_env=runtime_env)
 
             plan_obj.mark_running(
                 task_id=self.request.id,
@@ -186,7 +200,10 @@ def process_network_plan(self, plan_id: str, payload: dict):
     except Exception as e:
         # === Error general ===
         if plan_obj:
-            plan_obj.mark_failure(error=str(e), full_log=bundle.full_log + f"\n\nERROR: {e}\n")
+            plan_obj.mark_failure(
+                error=str(e),
+                full_log=((bundle.full_log if bundle else "") + f"\n\nERROR: {e}\n"),
+            )
 
         return {
             "ok": False,
@@ -197,15 +214,18 @@ def process_network_plan(self, plan_id: str, payload: dict):
 
     finally:
         # === Limpieza del directorio temporal ===
-        executor.cleanup_workspace(bundle)
+        if bundle:
+            executor.cleanup_workspace(bundle)
 
 
 @shared_task(bind=True)
 def destroy_last_deploy(self, plan_id: str):
-    plan = Plan.objects.get(id=plan_id)
+    plan = Plan.objects.select_related("lab", "lab__cloud_connection", "lab__course", "lab__owner_user").get(id=plan_id)
     provider = get_provider_key((plan.payload or {}).get("cloud"))
     executor = get_provider_executor(provider)
-    bundle = executor.build_bundle(plan_id, plan.payload or {}, force_simulate_only=False)
+    connection = resolve_lab_cloud_connection(getattr(plan, "lab", None), provider)
+    runtime_env = build_aws_runtime_env(connection) if connection else {}
+    bundle = executor.build_bundle(plan_id, plan.payload or {}, force_simulate_only=False, runtime_env=runtime_env)
 
     # La validación de "si se puede destruir" se hace en la vista antes de encolar.
     # Aquí evitamos revalidar con `can_destroy_now` porque el plan ya viene en RUNNING.

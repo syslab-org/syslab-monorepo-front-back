@@ -61,6 +61,7 @@ Documento de decisión:
 - quién puede hacer `deploy` real
 - cómo separar revisión docente de ejecución cloud
 - cómo pasar de `AWS-first` a multi-cloud sin rehacer permisos
+- cómo registrar conexiones personales y compartidas de curso en el MVP
 
 ### 5. Guion de presentación
 

@@ -1,13 +1,14 @@
 import os
 import time
 
-import boto3
 from botocore.exceptions import (
     ClientError,
     NoCredentialsError,
     NoRegionError,
     ProfileNotFound,
 )
+
+from api.cloud_connections import build_boto3_session_from_runtime_env
 
 from .payload import get_network_config, get_region, get_segment_payloads, uses_tgw
 
@@ -61,7 +62,7 @@ def build_nat_cleanup_targets(payload: dict, outputs: dict) -> dict[str, dict]:
     return targets
 
 
-def cleanup_residual_nat_gateways(payload: dict, outputs: dict) -> dict:
+def cleanup_residual_nat_gateways(payload: dict, outputs: dict, runtime_env: dict | None = None) -> dict:
     """Borra NAT Gateways residuales por VPC real y libera EIPs autogeneradas."""
     targets = build_nat_cleanup_targets(payload, outputs)
     region = get_region(payload if isinstance(payload, dict) else {})
@@ -77,8 +78,7 @@ def cleanup_residual_nat_gateways(payload: dict, outputs: dict) -> dict:
     if not targets:
         return summary
 
-    profile = os.getenv("AWS_PROFILE")
-    session = boto3.Session(profile_name=profile) if profile else boto3.Session()
+    session = build_boto3_session_from_runtime_env(runtime_env)
     ec2 = session.client("ec2", region_name=region)
 
     nat_ids = []
@@ -140,10 +140,16 @@ def cleanup_residual_nat_gateways(payload: dict, outputs: dict) -> dict:
     return summary
 
 
-def aws_creds_diagnostics() -> dict:
+def aws_creds_diagnostics(runtime_env: dict | None = None) -> dict:
     """Devuelve un diagnóstico simple sobre credenciales AWS dentro del container."""
-    profile = os.getenv("AWS_PROFILE")
-    region = os.getenv("AWS_DEFAULT_REGION") or os.getenv("AWS_REGION")
+    runtime_env = runtime_env or {}
+    profile = runtime_env.get("AWS_PROFILE") or os.getenv("AWS_PROFILE")
+    region = (
+        runtime_env.get("AWS_DEFAULT_REGION")
+        or runtime_env.get("AWS_REGION")
+        or os.getenv("AWS_DEFAULT_REGION")
+        or os.getenv("AWS_REGION")
+    )
     allow_local = os.getenv("ALLOW_LOCAL_APPLY") == "1"
 
     running_in_ecs = bool(
@@ -154,24 +160,24 @@ def aws_creds_diagnostics() -> dict:
     )
 
     has_static_creds = bool(
-        os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY")
+        (runtime_env.get("AWS_ACCESS_KEY_ID") or os.getenv("AWS_ACCESS_KEY_ID"))
+        and (runtime_env.get("AWS_SECRET_ACCESS_KEY") or os.getenv("AWS_SECRET_ACCESS_KEY"))
     )
 
     return {
         "running_in_ecs": running_in_ecs,
         "allow_local_apply": allow_local,
         "has_static_creds": has_static_creds,
+        "credential_source": "cloud_connection" if runtime_env else "environment",
         "aws_profile": profile or "",
         "aws_region": region or "",
     }
 
 
-def can_call_aws_sts() -> tuple[bool, str]:
+def can_call_aws_sts(runtime_env: dict | None = None) -> tuple[bool, str]:
     """Chequea si el contenedor puede resolver credenciales AWS reales."""
-    profile = os.getenv("AWS_PROFILE")
-
     try:
-        session = boto3.Session(profile_name=profile) if profile else boto3.Session()
+        session = build_boto3_session_from_runtime_env(runtime_env)
         sts = session.client("sts")
         _ = sts.get_caller_identity()
         return True, "sts_ok"
@@ -187,14 +193,13 @@ def can_call_aws_sts() -> tuple[bool, str]:
         return False, f"unknown_error: {e}"
 
 
-def check_tgw_quota_preflight(payload: dict) -> tuple[bool, str, dict]:
+def check_tgw_quota_preflight(payload: dict, runtime_env: dict | None = None) -> tuple[bool, str, dict]:
     """Valida cuota de Transit Gateways antes de un apply real."""
     if not uses_tgw(payload):
         return True, "tgw_not_used", {"used": False}
 
     region = get_region(payload)
-    profile = os.getenv("AWS_PROFILE")
-    session = boto3.Session(profile_name=profile) if profile else boto3.Session()
+    session = build_boto3_session_from_runtime_env(runtime_env)
     ec2 = session.client("ec2", region_name=region)
 
     tgws_resp = ec2.describe_transit_gateways()

@@ -74,6 +74,7 @@ const NewVLANForm = ({
   onSave,
   wizardMode = false,
   availableCourses = [],
+  availableCloudConnections = [],
   requireCourseSelection = false,
   providerCapabilities = [],
   defaultProvider = CLOUD_AWS_VALUE,
@@ -101,6 +102,7 @@ const NewVLANForm = ({
       region: 'us-east-1',
       labTemplate: 'mvp1-single-vpc-bastion-private', // solo se usa si wizardMode=true
       courseId: '',
+      cloudConnectionId: '',
     },
   });
 
@@ -188,6 +190,7 @@ const NewVLANForm = ({
         }
         : {}),
       course_id: data.courseId || null,
+      cloud_connection_id: data.cloudConnectionId || null,
     });
   };
 
@@ -339,6 +342,29 @@ const NewVLANForm = ({
               {requireCourseSelection
                 ? 'Selecciona el curso al que se compartirá el laboratorio.'
                 : 'Opcional para administradores.'}
+            </FormHelperText>
+          </FormControl>
+        )}
+
+        {availableCloudConnections.length > 0 && (
+          <FormControl fullWidth>
+            <InputLabel id="cloud-connection-label">Conexión cloud</InputLabel>
+            <Select
+              labelId="cloud-connection-label"
+              id="cloud-connection"
+              {...register('cloudConnectionId')}
+              label="Conexión cloud"
+              defaultValue=""
+            >
+              <MenuItem value="">Auto-seleccionar por owner/curso</MenuItem>
+              {availableCloudConnections.map((connection) => (
+                <MenuItem key={connection.id} value={connection.id}>
+                  {connection.name} · {connection.scope === 'course_shared' ? 'curso' : 'personal'}
+                </MenuItem>
+              ))}
+            </Select>
+            <FormHelperText>
+              Puedes fijar una conexión AWS específica o dejar que el backend resuelva la personal del owner y luego la compartida del curso.
             </FormHelperText>
           </FormControl>
         )}

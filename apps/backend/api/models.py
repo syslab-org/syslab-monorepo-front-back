@@ -22,6 +22,11 @@ PROVIDER_AWS = "aws"
 PROVIDER_GCP = "gcp"
 PROVIDER_AZURE = "azure"
 
+CLOUD_SCOPE_PERSONAL = "personal"
+CLOUD_SCOPE_COURSE_SHARED = "course_shared"
+
+CLOUD_AUTH_AWS_STATIC = "aws_static_keys"
+
 
 class RoleChoices(models.TextChoices):
     PLATFORM_ADMIN = ROLE_PLATFORM_ADMIN, "Platform Admin"
@@ -44,6 +49,15 @@ class ProviderChoices(models.TextChoices):
 class VisibilityScopeChoices(models.TextChoices):
     OWNER = VISIBILITY_OWNER, "Owner"
     COURSE = VISIBILITY_COURSE, "Course"
+
+
+class CloudConnectionScopeChoices(models.TextChoices):
+    PERSONAL = CLOUD_SCOPE_PERSONAL, "Personal"
+    COURSE_SHARED = CLOUD_SCOPE_COURSE_SHARED, "Course Shared"
+
+
+class CloudAuthTypeChoices(models.TextChoices):
+    AWS_STATIC_KEYS = CLOUD_AUTH_AWS_STATIC, "AWS Static Keys"
 
 
 class Course(models.Model):
@@ -70,6 +84,72 @@ class Course(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class CloudConnection(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=120)
+    provider = models.CharField(
+        max_length=16,
+        choices=ProviderChoices.choices,
+        default=ProviderChoices.AWS,
+        db_index=True,
+    )
+    scope = models.CharField(
+        max_length=24,
+        choices=CloudConnectionScopeChoices.choices,
+        default=CloudConnectionScopeChoices.PERSONAL,
+        db_index=True,
+    )
+    auth_type = models.CharField(
+        max_length=32,
+        choices=CloudAuthTypeChoices.choices,
+        default=CloudAuthTypeChoices.AWS_STATIC_KEYS,
+    )
+    owner_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="cloud_connections",
+    )
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="cloud_connections",
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_cloud_connections",
+    )
+    default_region = models.CharField(max_length=32, blank=True, default="")
+    aws_access_key_id = models.CharField(max_length=128, blank=True, default="")
+    aws_secret_access_key_encrypted = models.TextField(blank=True, default="")
+    is_active = models.BooleanField(default=True, db_index=True)
+    last_test_status = models.CharField(max_length=24, blank=True, default="")
+    last_test_message = models.TextField(blank=True, default="")
+    last_test_identity = models.JSONField(default=dict, blank=True)
+    last_tested_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name", "-updated_at"]
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def masked_access_key_id(self) -> str:
+        value = str(self.aws_access_key_id or "").strip()
+        if len(value) <= 4:
+            return value
+        return f"{value[:4]}...{value[-4:]}"
 
 
 class UserProfile(models.Model):
@@ -138,6 +218,13 @@ class Lab(models.Model):
     owner_user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
+        related_name="labs",
+    )
+    cloud_connection = models.ForeignKey(
+        CloudConnection,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="labs",
     )
     course = models.ForeignKey(

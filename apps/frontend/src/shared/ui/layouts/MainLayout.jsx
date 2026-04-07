@@ -88,6 +88,7 @@ export const PageHeader = ({ title, subtitle, actions }) => {
 
 const settings = [
   { label: "Profile", url: "/admin/settings/profile" },
+  { label: "Cloud Connections", url: "/admin/settings/cloud-connections" },
   { label: "Dashboard", url: "/admin/dashboard" },
 ];
 

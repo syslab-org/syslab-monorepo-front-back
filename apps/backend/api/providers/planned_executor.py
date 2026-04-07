@@ -9,7 +9,14 @@ class PlannedProviderExecutor(ProviderExecutor):
     def _message(self) -> str:
         return f"{self.label} runtime executor is not implemented yet."
 
-    def build_bundle(self, plan_id: str, payload, *, force_simulate_only: bool | None = None) -> ProviderExecutionBundle:
+    def build_bundle(
+        self,
+        plan_id: str,
+        payload,
+        *,
+        force_simulate_only: bool | None = None,
+        runtime_env: dict | None = None,
+    ) -> ProviderExecutionBundle:
         normalized_payload = payload if isinstance(payload, dict) else {}
         simulate_only = bool(normalized_payload.get("simulate_only", True))
         if force_simulate_only is not None:
@@ -25,6 +32,7 @@ class PlannedProviderExecutor(ProviderExecutor):
             sts_reason="planned_executor",
             allow_local_apply=False,
             creds_ok_for_apply=False,
+            runtime_env=runtime_env or {},
         )
         bundle.append_log(f"[provider] {self._message()}\n")
         return bundle

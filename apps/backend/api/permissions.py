@@ -2,10 +2,12 @@ from django.db.models import Q
 from rest_framework.permissions import BasePermission
 
 from .models import (
+    CLOUD_SCOPE_COURSE_SHARED,
     ROLE_PLATFORM_ADMIN,
     ROLE_STUDENT,
     ROLE_TEACHER,
     VISIBILITY_COURSE,
+    CloudConnection,
     Lab,
 )
 
@@ -85,6 +87,40 @@ def can_execute_plan(user, plan) -> bool:
     if not getattr(plan, "lab_id", None):
         return False
     return can_execute_lab(user, getattr(plan, "lab", None))
+
+
+def visible_cloud_connections_queryset(user, base_qs=None):
+    qs = base_qs if base_qs is not None else CloudConnection.objects.all()
+    if not user or not user.is_authenticated:
+        return qs.none()
+    if is_platform_admin(user):
+        return qs
+    if is_teacher(user):
+        return qs.filter(
+            Q(owner_user=user)
+            | Q(scope=CLOUD_SCOPE_COURSE_SHARED, course__teacher=user)
+        ).distinct()
+
+    course_id = getattr(getattr(user, "profile", None), "course_id", None)
+    return qs.filter(
+        Q(owner_user=user)
+        | Q(scope=CLOUD_SCOPE_COURSE_SHARED, course_id=course_id)
+    ).distinct()
+
+
+def can_edit_cloud_connection(user, connection: CloudConnection) -> bool:
+    if not user or not user.is_authenticated or not connection:
+        return False
+    if is_platform_admin(user):
+        return True
+    if connection.owner_user_id == user.id:
+        return True
+    return bool(
+        connection.scope == CLOUD_SCOPE_COURSE_SHARED
+        and is_teacher(user)
+        and connection.course
+        and connection.course.teacher_id == user.id
+    )
 
 
 class IsPlatformAdmin(BasePermission):
