@@ -209,6 +209,13 @@ const splitInstanceKey = (key) => {
   };
 };
 
+const executionSourceLabels = {
+  lab_explicit: 'Conexión fijada explícitamente en el laboratorio.',
+  owner_personal_auto: 'Auto resolverá la cuenta personal del owner del laboratorio.',
+  course_shared_auto: 'Auto resolverá la cuenta compartida del curso.',
+  unresolved: 'No hay una conexión cloud ejecutable resuelta para este laboratorio.',
+};
+
 function buildInstanceCatalog(outputs) {
   const instanceIds = safeObject(outputs?.instance_ids);
   const privateIps = safeObject(outputs?.instance_private_ips);
@@ -1032,6 +1039,8 @@ export default function PlanDetailPage() {
     plan?.payload?.canvasId ||
     plan?.lab?.id ||
     null;
+  const resolvedExecutionTarget = safeObject(plan?.resolved_execution_target);
+  const hasResolvedExecutionTarget = Object.keys(resolvedExecutionTarget).length > 0;
   const lastApplyContext = safeObject(plan?.last_apply_context);
   const hasLastApplyContext = Object.keys(lastApplyContext).length > 0;
   const hasOutputsData = Boolean(
@@ -1281,7 +1290,7 @@ export default function PlanDetailPage() {
     }
     if (applyMode && !canApply) {
       setErr(
-        'Solo el dueño del laboratorio puede ejecutar APPLY real o Destroy. Puedes seguir usando PLAN para revisión.',
+        'El APPLY real y el Destroy solo están permitidos al owner, al platform admin o al docente cuando la conexión efectiva del laboratorio es course_shared. Puedes seguir usando PLAN para revisión.',
       );
       actionLockRef.current = false;
       return;
@@ -1428,7 +1437,7 @@ export default function PlanDetailPage() {
     : applyMode && !canApply
       ? {
           severity: 'warning',
-          text: 'Este plan es visible para revisión, pero el APPLY real y el Destroy quedan reservados al dueño del laboratorio.',
+          text: 'Este plan es visible para revisión. El APPLY real y el Destroy solo están permitidos al owner, al platform admin o al docente cuando la conexión efectiva es course_shared.',
         }
     : canDestroy && isRedeployAvailable
       ? {
@@ -1758,6 +1767,59 @@ export default function PlanDetailPage() {
                     </Typography>
                   </Stack>
                 </Stack>
+              </Paper>
+
+              <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Próxima ejecución real
+                </Typography>
+                {!hasResolvedExecutionTarget || resolvedExecutionTarget.status === 'missing' ? (
+                  <Alert severity="warning" variant="outlined">
+                    {executionSourceLabels[resolvedExecutionTarget.source] || executionSourceLabels.unresolved}
+                  </Alert>
+                ) : (
+                  <Stack spacing={1.5}>
+                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                      <Chip size="small" label={`Provider: ${resolvedExecutionTarget.provider || '—'}`} variant="outlined" />
+                      <Chip size="small" label={`Source: ${resolvedExecutionTarget.source || '—'}`} color="info" variant="outlined" />
+                      {resolvedExecutionTarget.scope && (
+                        <Chip size="small" label={`Scope: ${resolvedExecutionTarget.scope}`} variant="outlined" />
+                      )}
+                      {resolvedExecutionTarget.default_region && (
+                        <Chip size="small" label={`Region: ${resolvedExecutionTarget.default_region}`} variant="outlined" />
+                      )}
+                    </Stack>
+                    <Typography component="div" variant="body2" color="text.secondary">
+                      Conexión efectiva:{' '}
+                      <b>{resolvedExecutionTarget.name || '—'}</b>
+                      {resolvedExecutionTarget.id ? ` (${resolvedExecutionTarget.id})` : ''}
+                    </Typography>
+                    <Typography component="div" variant="body2" color="text.secondary">
+                      {executionSourceLabels[resolvedExecutionTarget.source] || executionSourceLabels.unresolved}
+                    </Typography>
+                    {resolvedExecutionTarget.account_id && (
+                      <Typography component="div" variant="body2" color="text.secondary">
+                        Cuenta AWS prevista:{' '}
+                        <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                          {resolvedExecutionTarget.account_id}
+                        </Box>
+                      </Typography>
+                    )}
+                    {resolvedExecutionTarget.arn && (
+                      <Typography component="div" variant="body2" color="text.secondary">
+                        ARN conocido:{' '}
+                        <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                          {resolvedExecutionTarget.arn}
+                        </Box>
+                      </Typography>
+                    )}
+                    {!resolvedExecutionTarget.account_id && (
+                      <Alert severity="info" variant="outlined">
+                        La conexión está resuelta, pero aún no tenemos identidad STS visible. Usa “Probar” en Cloud Connections para registrar cuenta y ARN.
+                      </Alert>
+                    )}
+                  </Stack>
+                )}
               </Paper>
 
               <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>

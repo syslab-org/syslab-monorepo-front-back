@@ -106,7 +106,15 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         return visible_plans_queryset(
             self.request.user,
-            Plan.objects.select_related("lab", "lab__course", "lab__course__teacher"),
+            Plan.objects.select_related(
+                "lab",
+                "lab__owner_user",
+                "lab__course",
+                "lab__course__teacher",
+                "lab__cloud_connection",
+                "lab__cloud_connection__course",
+                "lab__cloud_connection__course__teacher",
+            ),
         ).order_by("-created_at")
 
     def get_serializer_class(self):

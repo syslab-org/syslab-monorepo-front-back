@@ -704,6 +704,31 @@ class VisibilityApiTests(APITestCase):
         self.assertEqual(apply_res.status_code, 403)
         self.assertEqual(apply_res.json()["code"], "PLAN_EXECUTION_FORBIDDEN")
 
+    @patch("api.views.process_network_plan.delay")
+    @patch("api.views._can_run_real_terraform", return_value=True)
+    def test_teacher_can_apply_student_plan_when_effective_connection_is_course_shared(
+        self,
+        _can_run_real_terraform,
+        mocked_delay,
+    ):
+        mocked_delay.return_value = SimpleNamespace(id="task-course-apply-1")
+        self.student_lab.cloud_connection = self.course_connection
+        self.student_lab.save(update_fields=["cloud_connection", "updated_at"])
+        plan = Plan.objects.get(name="Plan alumno")
+
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(
+            f"/api/network/plans/{plan.id}/deploy/",
+            {"simulate_only": False},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 202)
+        plan.refresh_from_db()
+        self.assertEqual(plan.status, Plan.Status.RUNNING)
+        self.assertEqual(plan.last_action, Plan.LastAction.APPLY)
+        self.assertEqual(plan.task_id, "task-course-apply-1")
+
     def test_teacher_cannot_destroy_student_plan(self):
         plan = Plan.objects.get(name="Plan alumno")
         plan.applied = True
@@ -716,6 +741,36 @@ class VisibilityApiTests(APITestCase):
 
         self.assertEqual(res.status_code, 403)
         self.assertEqual(res.json()["code"], "PLAN_EXECUTION_FORBIDDEN")
+
+    @patch("api.views.destroy_last_deploy.delay")
+    def test_teacher_can_destroy_student_plan_when_effective_connection_is_course_shared(self, mocked_delay):
+        mocked_delay.return_value = SimpleNamespace(id="task-course-destroy-1")
+        self.student_lab.cloud_connection = self.course_connection
+        self.student_lab.save(update_fields=["cloud_connection", "updated_at"])
+        plan = Plan.objects.get(name="Plan alumno")
+        plan.applied = True
+        plan.status = Plan.Status.SUCCESS
+        plan.last_action = Plan.LastAction.APPLY
+        plan.save(update_fields=["applied", "status", "last_action", "updated_at"])
+
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(f"/api/network/plans/{plan.id}/destroy/", format="json")
+
+        self.assertEqual(res.status_code, 202)
+        plan.refresh_from_db()
+        self.assertEqual(plan.status, Plan.Status.RUNNING)
+        self.assertEqual(plan.last_action, Plan.LastAction.DESTROY)
+
+    def test_plan_list_exposes_apply_capability_to_teacher_when_student_lab_uses_course_shared(self):
+        self.student_lab.cloud_connection = self.course_connection
+        self.student_lab.save(update_fields=["cloud_connection", "updated_at"])
+
+        self.client.force_authenticate(self.teacher)
+        res = self.client.get("/api/network/plans/")
+
+        self.assertEqual(res.status_code, 200)
+        plans_by_name = {item["name"]: item for item in res.json()}
+        self.assertTrue(plans_by_name["Plan alumno"]["can_apply"])
 
     def test_plan_list_exposes_apply_capability_by_owner(self):
         self.client.force_authenticate(self.teacher)
@@ -754,6 +809,18 @@ class VisibilityApiTests(APITestCase):
         self.assertEqual(res.json()["last_apply_context"]["credential_source"], "cloud_connection")
         self.assertEqual(res.json()["last_apply_context"]["cloud_connection_id"], str(self.student_connection.id))
         self.assertEqual(res.json()["last_apply_context"]["account_id"], "123456789012")
+
+    def test_plan_detail_exposes_resolved_execution_target(self):
+        plan = Plan.objects.get(name="Plan alumno")
+
+        self.client.force_authenticate(self.student)
+        res = self.client.get(f"/api/network/plans/{plan.id}/")
+
+        self.assertEqual(res.status_code, 200)
+        target = res.json()["resolved_execution_target"]
+        self.assertEqual(target["source"], "owner_personal_auto")
+        self.assertEqual(target["id"], str(self.student_connection.id))
+        self.assertEqual(target["name"], self.student_connection.name)
 
     def test_student_sees_personal_and_course_shared_cloud_connections(self):
         self.client.force_authenticate(self.student)
@@ -815,6 +882,47 @@ class VisibilityApiTests(APITestCase):
         )
         self.assertEqual(res.status_code, 201)
         self.assertEqual(res.json()["cloud_connection"]["id"], str(self.student_connection.id))
+
+    def test_lab_can_be_created_with_visible_course_shared_connection(self):
+        self.client.force_authenticate(self.student)
+        res = self.client.post(
+            "/api/labs/",
+            {
+                "name": "Lab con cuenta curso",
+                "target_provider": "aws",
+                "cidr_block": "10.81.0.0",
+                "prefix_length": 16,
+                "region": "us-east-1",
+                "cloud_connection_id": str(self.course_connection.id),
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.json()["cloud_connection"]["id"], str(self.course_connection.id))
+        self.assertEqual(res.json()["resolved_execution_target"]["source"], "lab_explicit")
+
+    def test_lab_list_exposes_resolved_execution_target_sources(self):
+        self.client.force_authenticate(self.student)
+        res = self.client.get("/api/labs/")
+
+        self.assertEqual(res.status_code, 200)
+        labs_by_name = {item["name"]: item for item in res.json()}
+        self.assertEqual(
+            labs_by_name["Lab alumno"]["resolved_execution_target"]["source"],
+            "owner_personal_auto",
+        )
+        self.assertEqual(
+            labs_by_name["Lab alumno"]["resolved_execution_target"]["id"],
+            str(self.student_connection.id),
+        )
+        self.assertEqual(
+            labs_by_name["Lab compartido"]["resolved_execution_target"]["source"],
+            "course_shared_auto",
+        )
+        self.assertEqual(
+            labs_by_name["Lab compartido"]["resolved_execution_target"]["id"],
+            str(self.course_connection.id),
+        )
 
     def test_network_plan_create_preserves_applied_state_for_existing_active_plan(self):
         redeploy_lab = Lab.objects.create(

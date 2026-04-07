@@ -39,12 +39,12 @@ class LabViewSet(viewsets.ViewSet):
         return connection, None
 
     def list(self, request):
-        serializer = LabSerializer(self._queryset(request), many=True)
+        serializer = LabSerializer(self._queryset(request), many=True, context={"request": request})
         return Response(serializer.data)
 
     def retrieve(self, request, pk=None):
         lab = get_object_or_404(self._queryset(request), id=pk)
-        return Response(LabSerializer(lab).data)
+        return Response(LabSerializer(lab, context={"request": request}).data)
 
     def create(self, request):
         serializer = LabCreateSerializer(data=request.data or {})
@@ -112,7 +112,7 @@ class LabViewSet(viewsets.ViewSet):
         )
         lab.legacy_canvas_id = str(lab.id)
         lab.save(update_fields=["legacy_canvas_id", "updated_at"])
-        return Response(LabSerializer(lab).data, status=status.HTTP_201_CREATED)
+        return Response(LabSerializer(lab, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
     def partial_update(self, request, pk=None):
         lab = get_object_or_404(self._queryset(request), id=pk)
@@ -167,7 +167,7 @@ class LabViewSet(viewsets.ViewSet):
             if not lab.course_id or lab.cloud_connection.course_id != lab.course_id:
                 return Response({"detail": "La conexion compartida no pertenece al curso del laboratorio."}, status=status.HTTP_400_BAD_REQUEST)
         lab.save()
-        return Response(LabSerializer(lab).data)
+        return Response(LabSerializer(lab, context={"request": request}).data)
 
     def destroy(self, request, pk=None):
         lab = get_object_or_404(self._queryset(request), id=pk)

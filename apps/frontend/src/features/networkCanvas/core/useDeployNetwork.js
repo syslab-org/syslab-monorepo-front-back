@@ -906,7 +906,7 @@ const useDeployNetwork = ({
       if (error?.status === 403 && code === "PLAN_EXECUTION_FORBIDDEN") {
         setErrorMessage(
           error?.data?.error ||
-            "Solo el dueño del laboratorio puede ejecutar deploy real o destroy sobre esta infraestructura.",
+            "El deploy real o destroy solo está permitido al owner, al platform admin o al docente cuando la conexión efectiva del laboratorio es course_shared.",
         );
         return;
       }

@@ -53,15 +53,18 @@ def get_aws_identity_from_runtime_env(runtime_env: dict | None = None) -> dict:
     return sts.get_caller_identity() or {}
 
 
-def resolve_lab_cloud_connection(lab: Lab | None, provider: str | None = None) -> Optional[CloudConnection]:
+def resolve_lab_cloud_connection_with_source(
+    lab: Lab | None,
+    provider: str | None = None,
+) -> tuple[Optional[CloudConnection], str]:
     if not lab:
-        return None
+        return None, "unresolved"
 
     provider_key = str(provider or getattr(lab, "target_provider", PROVIDER_AWS) or PROVIDER_AWS).strip().lower()
 
     explicit = getattr(lab, "cloud_connection", None)
     if explicit and explicit.is_active and explicit.provider == provider_key:
-        return explicit
+        return explicit, "lab_explicit"
 
     owner_user_id = getattr(lab, "owner_user_id", None)
     if owner_user_id:
@@ -75,7 +78,7 @@ def resolve_lab_cloud_connection(lab: Lab | None, provider: str | None = None) -
             .first()
         )
         if personal:
-            return personal
+            return personal, "owner_personal_auto"
 
     course_id = getattr(lab, "course_id", None)
     if course_id:
@@ -90,9 +93,14 @@ def resolve_lab_cloud_connection(lab: Lab | None, provider: str | None = None) -
             .first()
         )
         if shared:
-            return shared
+            return shared, "course_shared_auto"
 
-    return None
+    return None, "unresolved"
+
+
+def resolve_lab_cloud_connection(lab: Lab | None, provider: str | None = None) -> Optional[CloudConnection]:
+    connection, _source = resolve_lab_cloud_connection_with_source(lab, provider)
+    return connection
 
 
 def test_aws_connection(connection: CloudConnection) -> tuple[bool, str, dict]:

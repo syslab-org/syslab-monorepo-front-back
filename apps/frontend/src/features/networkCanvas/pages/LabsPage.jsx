@@ -50,6 +50,13 @@ const parseAndValidateCidr = (raw) => {
   return { ok: true, base: base.trim(), prefix };
 };
 
+const executionSourceLabels = {
+  lab_explicit: 'Fijada en el lab',
+  owner_personal_auto: 'Auto -> cuenta personal',
+  course_shared_auto: 'Auto -> cuenta del curso',
+  unresolved: 'Sin resolver',
+};
+
 const useFetchLabs = (setLoadingFlow) => {
   const [vpcs, setVpcs] = useState([])
 
@@ -346,7 +353,21 @@ const LabsPage = () => {
                   </Stack>
                 </TableCell>
                 <TableCell>{String(vpc.target_provider || 'aws').toUpperCase()}</TableCell>
-                <TableCell>{vpc.cloud_connection?.name || 'Auto'}</TableCell>
+                <TableCell>
+                  <Stack spacing={0.5}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {vpc.resolved_execution_target?.name || vpc.cloud_connection?.name || 'Sin conexión resuelta'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {executionSourceLabels[vpc.resolved_execution_target?.source] || 'Auto'}
+                    </Typography>
+                    {vpc.resolved_execution_target?.account_id && (
+                      <Typography variant="caption" color="text.secondary">
+                        Cuenta AWS: {vpc.resolved_execution_target.account_id}
+                      </Typography>
+                    )}
+                  </Stack>
+                </TableCell>
                 <TableCell>{vpc.course?.name || '-'}</TableCell>
                 <TableCell>{vpc.visibility_scope || '-'}</TableCell>
                 <TableCell>{new Date(vpc.updated_at || vpc.created_at || Date.now()).toLocaleString()}</TableCell>

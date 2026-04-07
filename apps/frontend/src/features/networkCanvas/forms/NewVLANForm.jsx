@@ -69,6 +69,13 @@ const providerStatusLabels = {
   unknown: 'Disponibilidad no confirmada',
 }
 
+const executionSourceLabels = {
+  explicit: 'Se usará la conexión seleccionada explícitamente.',
+  owner_personal_auto: 'Auto resolverá primero la cuenta personal del owner.',
+  course_shared_auto: 'Auto resolverá la cuenta compartida del curso.',
+  unresolved: 'No hay una conexión ejecutable resuelta todavía.',
+};
+
 // eslint-disable-next-line react/prop-types
 const NewVLANForm = ({
   onSave,
@@ -76,6 +83,8 @@ const NewVLANForm = ({
   availableCourses = [],
   availableCloudConnections = [],
   requireCourseSelection = false,
+  currentUserRole = '',
+  currentUserCourseId = '',
   providerCapabilities = [],
   defaultProvider = CLOUD_AWS_VALUE,
 }) => {
@@ -140,6 +149,8 @@ const NewVLANForm = ({
   const region = watch('region');
   const labTemplate = watch('labTemplate');
   const cidrBlockValue = watch('cidrBlock');
+  const selectedCourseId = watch('courseId') || currentUserCourseId || '';
+  const selectedConnectionId = watch('cloudConnectionId') || '';
   const selectedTemplate = LAB_TEMPLATES.find(t => t.value === labTemplate);
   const hasCustomTemplateCidr = Boolean(
     wizardMode
@@ -152,6 +163,85 @@ const NewVLANForm = ({
     if (!wizardMode || !selectedTemplate?.recommendedCidr) return;
     setValue('cidrBlock', selectedTemplate.recommendedCidr, { shouldValidate: true });
   }, [selectedTemplate?.recommendedCidr, setValue, wizardMode]);
+
+  const filteredCloudConnections = useMemo(() => {
+    return availableCloudConnections.filter((connection) => {
+      if (String(connection?.provider || 'aws').toLowerCase() !== selectedProvider) {
+        return false;
+      }
+      if (connection.scope !== 'course_shared') {
+        return true;
+      }
+      if (!selectedCourseId) {
+        return currentUserRole !== 'teacher';
+      }
+      return connection.course?.id === selectedCourseId;
+    });
+  }, [availableCloudConnections, currentUserRole, selectedCourseId, selectedProvider]);
+
+  useEffect(() => {
+    if (!selectedConnectionId) return;
+    const stillVisible = filteredCloudConnections.some((connection) => connection.id === selectedConnectionId);
+    if (!stillVisible) {
+      setValue('cloudConnectionId', '', { shouldValidate: true, shouldDirty: true });
+    }
+  }, [filteredCloudConnections, selectedConnectionId, setValue]);
+
+  const executionPreview = useMemo(() => {
+    if (selectedProvider !== CLOUD_AWS_VALUE) {
+      return {
+        source: 'unresolved',
+        status: 'missing',
+        name: '',
+        accountId: '',
+        helper: 'En este MVP solo AWS puede resolver una conexión ejecutable real.',
+      };
+    }
+
+    const explicit = filteredCloudConnections.find((connection) => connection.id === selectedConnectionId);
+    if (explicit) {
+      return {
+        source: 'explicit',
+        status: 'resolved',
+        name: explicit.name,
+        scope: explicit.scope,
+        accountId: explicit.last_test_identity?.Account || '',
+        helper: executionSourceLabels.explicit,
+      };
+    }
+
+    const personal = filteredCloudConnections.find((connection) => connection.scope === 'personal');
+    if (personal) {
+      return {
+        source: 'owner_personal_auto',
+        status: 'resolved',
+        name: personal.name,
+        scope: personal.scope,
+        accountId: personal.last_test_identity?.Account || '',
+        helper: executionSourceLabels.owner_personal_auto,
+      };
+    }
+
+    const courseShared = filteredCloudConnections.find((connection) => connection.scope === 'course_shared');
+    if (courseShared) {
+      return {
+        source: 'course_shared_auto',
+        status: 'resolved',
+        name: courseShared.name,
+        scope: courseShared.scope,
+        accountId: courseShared.last_test_identity?.Account || '',
+        helper: executionSourceLabels.course_shared_auto,
+      };
+    }
+
+    return {
+      source: 'unresolved',
+      status: 'missing',
+      name: '',
+      accountId: '',
+      helper: executionSourceLabels.unresolved,
+    };
+  }, [filteredCloudConnections, selectedConnectionId, selectedProvider]);
 
   const onSubmit = (data) => {
     if (requireCourseSelection && !data.courseId) {
@@ -357,7 +447,7 @@ const NewVLANForm = ({
               defaultValue=""
             >
               <MenuItem value="">Auto-seleccionar por owner/curso</MenuItem>
-              {availableCloudConnections.map((connection) => (
+              {filteredCloudConnections.map((connection) => (
                 <MenuItem key={connection.id} value={connection.id}>
                   {connection.name} · {connection.scope === 'course_shared' ? 'curso' : 'personal'}
                 </MenuItem>
@@ -368,6 +458,15 @@ const NewVLANForm = ({
             </FormHelperText>
           </FormControl>
         )}
+
+        <Alert
+          severity={executionPreview.status === 'resolved' ? 'success' : 'warning'}
+          variant="outlined"
+        >
+          {executionPreview.status === 'resolved'
+            ? `Ejecución prevista: ${executionPreview.name}${executionPreview.accountId ? ` · cuenta ${executionPreview.accountId}` : ''}. ${executionPreview.helper}`
+            : executionPreview.helper}
+        </Alert>
 
         <TextField
           label="Rango maestro (CIDR)"
