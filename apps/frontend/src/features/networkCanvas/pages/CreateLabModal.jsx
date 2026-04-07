@@ -49,20 +49,27 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
   const { user } = useAuth()
   const { active, currentStep, steps } = useWizard()
   const [courses, setCourses] = useState([])
+  const [cloudConnections, setCloudConnections] = useState([])
   const { capabilities, getCapability, readyProviders } = useProviderCapabilities()
 
   useEffect(() => {
     let alive = true
-    const loadCourses = async () => {
+    const loadData = async () => {
       if (!open) return
       try {
-        const response = await api.listCourses()
-        if (alive) setCourses(Array.isArray(response) ? response : [])
+        const [coursesResponse, connectionsResponse] = await Promise.all([
+          api.listCourses(),
+          api.listCloudConnections({ provider: 'aws' }),
+        ])
+        if (alive) {
+          setCourses(Array.isArray(coursesResponse) ? coursesResponse : [])
+          setCloudConnections(Array.isArray(connectionsResponse) ? connectionsResponse : [])
+        }
       } catch (error) {
-        console.error('Error loading courses:', error)
+        console.error('Error loading create-lab dependencies:', error)
       }
     }
-    loadCourses()
+    loadData()
     return () => {
       alive = false
     }
@@ -70,7 +77,7 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
 
   const handleCreateVPC = async (vpcData) => {
     setLoadingFlow(true)
-    const { vlanName, cloudProvider, cidrBlock, prefixLength, region, type, course_id, labTemplate } = vpcData
+    const { vlanName, cloudProvider, cidrBlock, prefixLength, region, type, course_id, labTemplate, cloud_connection_id } = vpcData
     const targetProvider = normalizeProviderValue(cloudProvider) || 'aws'
     const providerCapability = getCapability(targetProvider)
     const enabledFeatures = Object.entries(providerCapability.features || {})
@@ -92,6 +99,7 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
           flow: templateFlow || {},
           visibility_scope: user?.role === USER_ROL_STUDENT ? 'owner' : 'course',
           course_id: course_id || null,
+          cloud_connection_id: cloud_connection_id || null,
           capabilities: enabledFeatures,
           metadata: {
             type,
@@ -157,6 +165,7 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
             onSave={handleCreateVPC}
             wizardMode={wizardMode}
             availableCourses={canChooseCourse ? courses : []}
+            availableCloudConnections={cloudConnections}
             requireCourseSelection={user?.role === USER_ROL_TEACHER}
             providerCapabilities={capabilities}
             defaultProvider={readyProviders[0] || 'aws'}

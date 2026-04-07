@@ -103,4 +103,16 @@ En este repo se dejó resuelta la política inmediata:
 - usuarios visibles del curso pueden seguir revisando y validando en `PLAN`
 - solo el dueño del laboratorio o un `platform_admin` pueden lanzar `APPLY` real o `DESTROY`
 
-Esto no implementa todavía `bring-your-own-cloud`, pero sí deja el comportamiento alineado con ese objetivo y evita que un profesor despliegue por accidente sobre infraestructura ajena.
+Además, este corte agrega una primera versión operativa de `bring-your-own-cloud` para `AWS`:
+
+- modelo `CloudConnection`
+- conexiones personales del usuario
+- conexiones compartidas por curso
+- selección opcional de conexión al crear o editar un laboratorio
+- resolución backend de credenciales para que el deploy no dependa del computador ni de la IP del usuario
+
+Límite actual:
+
+- solo `AWS`
+- autenticación real implementada con `access key + secret key`
+- multi-cloud y mecanismos como `assume role` quedan como siguiente iteración

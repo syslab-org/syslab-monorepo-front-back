@@ -2,7 +2,6 @@ import os
 from typing import Optional
 from uuid import UUID
 
-import boto3
 from botocore.exceptions import ClientError
 from celery.result import AsyncResult
 from django.utils import timezone
@@ -11,6 +10,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from .cloud_connections import build_aws_runtime_env, build_boto3_session_from_runtime_env, resolve_lab_cloud_connection
 from .helpers import ensure_lab_for_canvas, visible_plans_queryset
 from .models import Plan
 from .permissions import can_execute_plan
@@ -100,7 +100,8 @@ def _plan_execution_forbidden(plan: Plan) -> Response:
     )
 
 
-def _can_run_real_terraform() -> bool:
+def _can_run_real_terraform(runtime_env: dict | None = None) -> bool:
+    runtime_env = runtime_env or {}
     running_in_ecs = bool(
         os.getenv("ECS_TASK_DEFINITION")
         or os.getenv("ECS_CONTAINER_METADATA_URI")
@@ -109,16 +110,25 @@ def _can_run_real_terraform() -> bool:
     )
     allow_local = os.getenv("ALLOW_LOCAL_APPLY") == "1"
     has_static_creds = bool(
-        os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY")
+        (runtime_env.get("AWS_ACCESS_KEY_ID") or os.getenv("AWS_ACCESS_KEY_ID"))
+        and (runtime_env.get("AWS_SECRET_ACCESS_KEY") or os.getenv("AWS_SECRET_ACCESS_KEY"))
     )
     has_profile = (
-        bool(os.getenv("AWS_PROFILE")) and os.getenv("AWS_SDK_LOAD_CONFIG") == "1"
+        bool(runtime_env.get("AWS_PROFILE") or os.getenv("AWS_PROFILE"))
+        and os.getenv("AWS_SDK_LOAD_CONFIG") == "1"
     )
+    if runtime_env and has_static_creds:
+        return True
     return running_in_ecs or (allow_local and (has_static_creds or has_profile))
 
 
 
-def _probe_plan_live_vpcs(plan: Plan):
+def _runtime_env_for_plan(plan: Plan) -> dict:
+    connection = resolve_lab_cloud_connection(getattr(plan, "lab", None), (plan.payload or {}).get("cloud"))
+    return build_aws_runtime_env(connection) if connection else {}
+
+
+def _probe_plan_live_vpcs(plan: Plan, runtime_env: dict | None = None):
     """Detecta si el despliegue AWS aún existe usando los VPC ids del último apply."""
     outputs = plan.outputs or {}
     if not isinstance(outputs, dict):
@@ -134,8 +144,7 @@ def _probe_plan_live_vpcs(plan: Plan):
 
     payload = plan.payload or {}
     region = get_region(payload)
-    profile = os.getenv("AWS_PROFILE")
-    session = boto3.Session(profile_name=profile) if profile else boto3.Session()
+    session = build_boto3_session_from_runtime_env(runtime_env)
     ec2 = session.client("ec2", region_name=region)
 
     found = 0
@@ -156,10 +165,11 @@ def _probe_plan_live_vpcs(plan: Plan):
 
 
 def _reconcile_applied_flag_if_drifted(plan: Plan):
-    if not bool(plan.applied) or not _can_run_real_terraform():
+    runtime_env = _runtime_env_for_plan(plan)
+    if not bool(plan.applied) or not _can_run_real_terraform(runtime_env):
         return False
 
-    has_live, reason = _probe_plan_live_vpcs(plan)
+    has_live, reason = _probe_plan_live_vpcs(plan, runtime_env)
     if has_live is not False:
         return False
 
@@ -309,6 +319,7 @@ def deploy_plan(request, plan_id: UUID):
 
     body = request.data or {}
     simulate_only = bool(body.get("simulate_only", True))
+    runtime_env = _runtime_env_for_plan(plan)
 
     if not simulate_only and not can_execute_plan(request.user, plan):
         return _plan_execution_forbidden(plan)
@@ -323,14 +334,14 @@ def deploy_plan(request, plan_id: UUID):
         if conflict:
             return conflict
 
-    if not simulate_only and not _can_run_real_terraform():
+    if not simulate_only and not _can_run_real_terraform(runtime_env):
         return Response(
             {
                 "ok": False,
                 "error": (
-                    "Terraform apply BLOQUEADO: no hay credenciales IAM detectadas. "
-                    "En local requiere ALLOW_LOCAL_APPLY=1 y AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY. "
-                    "En produccion, ejecutar en ECS con task role."
+                    "Terraform apply BLOQUEADO: no hay una conexion cloud activa para este laboratorio "
+                    "ni credenciales IAM detectadas en el runtime. Configura una conexion AWS personal "
+                    "o compartida del curso, o usa el modo legacy del contenedor."
                 ),
             },
             status=status.HTTP_409_CONFLICT,
@@ -403,14 +414,15 @@ def _start_destroy_for_plan(user, plan: Plan):
     if conflict:
         return conflict
 
-    if not _can_run_real_terraform():
+    runtime_env = _runtime_env_for_plan(plan)
+    if not _can_run_real_terraform(runtime_env):
         return Response(
             {
                 "ok": False,
                 "error": (
-                    "Terraform destroy BLOQUEADO: no hay credenciales IAM detectadas. "
-                    "En local requiere ALLOW_LOCAL_APPLY=1 y AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY. "
-                    "En produccion, ejecutar en ECS con task role."
+                    "Terraform destroy BLOQUEADO: no hay una conexion cloud activa para este laboratorio "
+                    "ni credenciales IAM detectadas en el runtime. Configura una conexion AWS personal "
+                    "o compartida del curso, o usa el modo legacy del contenedor."
                 ),
             },
             status=status.HTTP_409_CONFLICT,

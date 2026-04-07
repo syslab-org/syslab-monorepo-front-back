@@ -11,6 +11,7 @@ import MainLayout from '@/shared/ui/layouts/MainLayout';
 import PanelAdmin from '@/features/admin/pages/PanelAdmin';
 import ProfilePage from '@/features/admin/pages/ProfilePage';
 import { SettingsPage } from "@/features/settings";
+import CloudConnectionsPage from '@/features/settings/pages/CloudConnectionsPage';
 import GeneralSettings from '@/features/settings/pages/GeneralSettings';
 import CoursesManagement from '@/features/settings/pages/CoursesManagement';
 import { UsersManagement } from '@/features/settings/pages/UsersManagement';
@@ -46,6 +47,14 @@ const DashboardRoutes = () => {
           } />
 
           <Route path='settings/profile' element={<ProfilePage />} />
+          <Route
+            path='settings/cloud-connections'
+            element={
+              <ProtectedRoute allowedRoles={[USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER, USER_ROL_STUDENT]}>
+                <CloudConnectionsPage />
+              </ProtectedRoute>
+            }
+          />
 
           <Route path='labs' element={<LabsLayout />}>
             <Route index element={<LabsPage />} />

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AmiCatalogEntry, Course, Lab, Plan, UserProfile
+from .models import AmiCatalogEntry, CloudConnection, Course, Lab, Plan, UserProfile
 
 
 @admin.register(Plan)
@@ -44,3 +44,10 @@ class AmiCatalogEntryAdmin(admin.ModelAdmin):
     list_display = ("code", "provider", "region", "created_by", "updated_at")
     list_filter = ("provider", "region")
     search_fields = ("code", "label")
+
+
+@admin.register(CloudConnection)
+class CloudConnectionAdmin(admin.ModelAdmin):
+    list_display = ("name", "provider", "scope", "owner_user", "course", "is_active", "updated_at")
+    list_filter = ("provider", "scope", "is_active")
+    search_fields = ("name", "aws_access_key_id", "owner_user__email", "course__name")

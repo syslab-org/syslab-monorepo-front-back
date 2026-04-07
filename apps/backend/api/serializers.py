@@ -5,6 +5,11 @@ from rest_framework import serializers
 
 from .models import (
     AmiCatalogEntry,
+    CLOUD_SCOPE_PERSONAL,
+    CLOUD_AUTH_AWS_STATIC,
+    CloudAuthTypeChoices,
+    CloudConnection,
+    CloudConnectionScopeChoices,
     Course,
     Lab,
     Plan,
@@ -18,7 +23,7 @@ from .models import (
     UserProfile,
     VisibilityScopeChoices,
 )
-from .permissions import can_execute_plan, canonical_role
+from .permissions import can_edit_cloud_connection, can_execute_plan, canonical_role
 
 
 ROLE_CHOICES = [ROLE_PLATFORM_ADMIN, ROLE_TEACHER, ROLE_STUDENT]
@@ -284,11 +289,120 @@ class CourseEnrollmentSerializer(serializers.Serializer):
     user_id = serializers.IntegerField()
 
 
+class CloudConnectionSerializer(serializers.ModelSerializer):
+    course = serializers.SerializerMethodField()
+    course_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
+    masked_access_key_id = serializers.CharField(read_only=True)
+    secret_configured = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CloudConnection
+        fields = (
+            "id",
+            "name",
+            "provider",
+            "scope",
+            "auth_type",
+            "course",
+            "course_id",
+            "default_region",
+            "masked_access_key_id",
+            "secret_configured",
+            "is_active",
+            "last_test_status",
+            "last_test_message",
+            "last_test_identity",
+            "last_tested_at",
+            "can_edit",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "course",
+            "masked_access_key_id",
+            "secret_configured",
+            "last_test_status",
+            "last_test_message",
+            "last_test_identity",
+            "last_tested_at",
+            "can_edit",
+            "created_at",
+            "updated_at",
+        )
+
+    def get_secret_configured(self, obj):
+        return bool(obj.aws_secret_access_key_encrypted)
+
+    def get_course(self, obj):
+        if not obj.course_id:
+            return None
+        return {
+            "id": str(obj.course_id),
+            "name": obj.course.name,
+            "code": obj.course.code,
+            "teacher_id": obj.course.teacher_id,
+            "teacher_email": obj.course.teacher.email,
+            "is_active": obj.course.is_active,
+        }
+
+    def get_can_edit(self, obj):
+        request = self.context.get("request")
+        if not request:
+            return False
+        return can_edit_cloud_connection(request.user, obj)
+
+
+class CloudConnectionCreateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=120)
+    provider = CanonicalProviderChoiceField(choices=ProviderChoices.choices, default=ProviderChoices.AWS)
+    scope = serializers.ChoiceField(
+        choices=CloudConnectionScopeChoices.choices,
+        default=CloudConnectionScopeChoices.PERSONAL,
+    )
+    auth_type = serializers.ChoiceField(
+        choices=CloudAuthTypeChoices.choices,
+        default=CloudAuthTypeChoices.AWS_STATIC_KEYS,
+    )
+    course_id = serializers.UUIDField(required=False, allow_null=True)
+    default_region = serializers.CharField(required=False, allow_blank=True, default="")
+    aws_access_key_id = serializers.CharField(max_length=128)
+    aws_secret_access_key = serializers.CharField(write_only=True, trim_whitespace=True)
+    is_active = serializers.BooleanField(required=False, default=True)
+
+    def validate(self, attrs):
+        provider = attrs.get("provider")
+        auth_type = attrs.get("auth_type")
+        scope = attrs.get("scope")
+        course_id = attrs.get("course_id")
+
+        if provider != ProviderChoices.AWS:
+            raise serializers.ValidationError("Por ahora solo AWS soporta conexiones ejecutables reales.")
+        if auth_type != CLOUD_AUTH_AWS_STATIC:
+            raise serializers.ValidationError("Por ahora solo se soporta AWS static keys en este MVP.")
+        if scope == CLOUD_SCOPE_PERSONAL and course_id:
+            raise serializers.ValidationError("Una conexion personal no debe quedar asociada a un curso.")
+        if scope != CLOUD_SCOPE_PERSONAL and not course_id:
+            raise serializers.ValidationError("Debes seleccionar un curso para una conexion compartida.")
+        return attrs
+
+
+class CloudConnectionUpdateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=120, required=False)
+    default_region = serializers.CharField(required=False, allow_blank=True)
+    aws_access_key_id = serializers.CharField(max_length=128, required=False)
+    aws_secret_access_key = serializers.CharField(write_only=True, trim_whitespace=True, required=False, allow_blank=True)
+    is_active = serializers.BooleanField(required=False)
+
+
 class LabSerializer(serializers.ModelSerializer):
     owner_user_id = serializers.IntegerField(source="owner_user.id", read_only=True)
     owner_user = UserSummarySerializer(read_only=True)
     course = CourseSummarySerializer(read_only=True)
     course_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
+    cloud_connection = CloudConnectionSerializer(read_only=True)
+    cloud_connection_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
     canvas_id = serializers.SerializerMethodField()
     legacy_canvas_id = serializers.SerializerMethodField()
     visibility_scope = serializers.ChoiceField(choices=VisibilityScopeChoices.choices, required=False)
@@ -305,6 +419,8 @@ class LabSerializer(serializers.ModelSerializer):
             "owner_user",
             "course",
             "course_id",
+            "cloud_connection",
+            "cloud_connection_id",
             "visibility_scope",
             "created_by_role",
             "target_provider",
@@ -360,6 +476,7 @@ class LabCreateSerializer(serializers.Serializer):
         default=VisibilityScopeChoices.OWNER,
     )
     course_id = serializers.UUIDField(required=False, allow_null=True)
+    cloud_connection_id = serializers.UUIDField(required=False, allow_null=True)
 
 
 class LabUpdateSerializer(serializers.Serializer):
@@ -378,6 +495,7 @@ class LabUpdateSerializer(serializers.Serializer):
     visibility_scope = serializers.ChoiceField(choices=VisibilityScopeChoices.choices, required=False)
     course_id = serializers.UUIDField(required=False, allow_null=True)
     plan_canvas_hash = serializers.CharField(required=False, allow_blank=True, max_length=64)
+    cloud_connection_id = serializers.UUIDField(required=False, allow_null=True)
 
 
 class AmiCatalogEntrySerializer(serializers.ModelSerializer):

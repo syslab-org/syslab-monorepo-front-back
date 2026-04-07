@@ -80,10 +80,12 @@ const LabsPage = () => {
   const [newName, setNewName] = useState("");
   const [editCidr, setEditCidr] = useState("");
   const [editRegion, setEditRegion] = useState("us-east-1");
+  const [editCloudConnectionId, setEditCloudConnectionId] = useState("");
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [isCreateLabModalOpen, setIsCreateLabModalOpen] = useState(false)
   const [wizardMode, setWizardMode] = useState(false)
+  const [cloudConnections, setCloudConnections] = useState([])
 
   const navigate = useNavigate()
   const { setLoadingFlow } = useContext(LoadingFlowContext)
@@ -91,6 +93,22 @@ const LabsPage = () => {
 
   const { vpcs, fetchVPCs } = useFetchLabs(setLoadingFlow)
   const { start, finish, setStep } = useWizard()
+
+  useEffect(() => {
+    let alive = true;
+    const loadConnections = async () => {
+      try {
+        const response = await api.listCloudConnections({ provider: 'aws' });
+        if (alive) setCloudConnections(Array.isArray(response) ? response : []);
+      } catch (error) {
+        console.error('Error loading cloud connections:', error);
+      }
+    };
+    loadConnections();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const handleDuplicateVPC = async (vpc) => {
     if (!vpc?.id) return;
@@ -112,6 +130,7 @@ const LabsPage = () => {
         provider_overrides: vpc.provider_overrides || {},
         course_id: vpc.course?.id || null,
         visibility_scope: vpc.visibility_scope || 'owner',
+        cloud_connection_id: vpc.cloud_connection?.id || null,
       });
       await fetchVPCs();
     } catch (error) {
@@ -219,6 +238,7 @@ const LabsPage = () => {
         : ""
     );
     setEditRegion(vpc?.region || "us-east-1");
+    setEditCloudConnectionId(vpc?.cloud_connection?.id || "");
     setRenameDialogOpen(true);
   };
 
@@ -228,6 +248,7 @@ const LabsPage = () => {
     setNewName("");
     setEditCidr("");
     setEditRegion("us-east-1");
+    setEditCloudConnectionId("");
   };
 
   const handleRename = async () => {
@@ -244,6 +265,7 @@ const LabsPage = () => {
         cidr_block: cidrCheck.base,
         prefix_length: cidrCheck.prefix,
         region: editRegion,
+        cloud_connection_id: editCloudConnectionId || null,
       });
       await fetchVPCs();
       closeRenameDialog();
@@ -307,6 +329,7 @@ const LabsPage = () => {
             <TableRow>
               <TableCell>Laboratorio</TableCell>
               <TableCell>Provider destino</TableCell>
+              <TableCell>Ejecución</TableCell>
               <TableCell>Curso</TableCell>
               <TableCell>Visibilidad</TableCell>
               <TableCell>Actualizado</TableCell>
@@ -323,6 +346,7 @@ const LabsPage = () => {
                   </Stack>
                 </TableCell>
                 <TableCell>{String(vpc.target_provider || 'aws').toUpperCase()}</TableCell>
+                <TableCell>{vpc.cloud_connection?.name || 'Auto'}</TableCell>
                 <TableCell>{vpc.course?.name || '-'}</TableCell>
                 <TableCell>{vpc.visibility_scope || '-'}</TableCell>
                 <TableCell>{new Date(vpc.updated_at || vpc.created_at || Date.now()).toLocaleString()}</TableCell>
@@ -398,6 +422,22 @@ const LabsPage = () => {
               <MenuItem value="us-east-1">US East (N. Virginia)</MenuItem>
               <MenuItem value="us-west-2">US West (Oregon)</MenuItem>
               <MenuItem value="eu-west-1">EU (Ireland)</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl fullWidth margin="dense">
+            <InputLabel id="edit-connection-label">Conexión cloud</InputLabel>
+            <Select
+              labelId="edit-connection-label"
+              value={editCloudConnectionId}
+              label="Conexión cloud"
+              onChange={(e) => setEditCloudConnectionId(e.target.value)}
+            >
+              <MenuItem value="">Auto-seleccionar por owner/curso</MenuItem>
+              {cloudConnections.map((connection) => (
+                <MenuItem key={connection.id} value={connection.id}>
+                  {connection.name} · {connection.scope === 'course_shared' ? 'curso' : 'personal'}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
         </DialogContent>
