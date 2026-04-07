@@ -1032,6 +1032,8 @@ export default function PlanDetailPage() {
     plan?.payload?.canvasId ||
     plan?.lab?.id ||
     null;
+  const lastApplyContext = safeObject(plan?.last_apply_context);
+  const hasLastApplyContext = Object.keys(lastApplyContext).length > 0;
   const hasOutputsData = Boolean(
     outputsResponse?.outputs &&
       typeof outputsResponse.outputs === 'object' &&
@@ -1756,6 +1758,69 @@ export default function PlanDetailPage() {
                     </Typography>
                   </Stack>
                 </Stack>
+              </Paper>
+
+              <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Evidencia del último APPLY real
+                </Typography>
+                {!hasLastApplyContext ? (
+                  <Alert severity="info" variant="outlined">
+                    Aún no hay snapshot de ejecución real guardado para este plan. Aparecerá después del primer APPLY real.
+                  </Alert>
+                ) : (
+                  <Stack spacing={1.5}>
+                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                      <Chip size="small" label={`Provider: ${lastApplyContext.provider || '—'}`} variant="outlined" />
+                      <Chip
+                        size="small"
+                        label={`Source: ${lastApplyContext.credential_source || '—'}`}
+                        color={lastApplyContext.credential_source === 'cloud_connection' ? 'success' : 'default'}
+                        variant={lastApplyContext.credential_source === 'cloud_connection' ? 'filled' : 'outlined'}
+                      />
+                      <Chip size="small" label={`Region: ${lastApplyContext.region || '—'}`} variant="outlined" />
+                      {lastApplyContext.cloud_connection_scope && (
+                        <Chip size="small" label={`Scope: ${lastApplyContext.cloud_connection_scope}`} variant="outlined" />
+                      )}
+                    </Stack>
+
+                    <Stack spacing={0.5}>
+                      <Typography component="div" variant="body2" color="text.secondary">
+                        Conexión usada:{' '}
+                        <b>{lastApplyContext.cloud_connection_name || 'Credenciales del entorno'}</b>
+                        {lastApplyContext.cloud_connection_id ? ` (${lastApplyContext.cloud_connection_id})` : ''}
+                      </Typography>
+                      <Typography component="div" variant="body2" color="text.secondary">
+                        Cuenta AWS:{' '}
+                        <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                          {lastApplyContext.account_id || '—'}
+                        </Box>
+                      </Typography>
+                      <Typography component="div" variant="body2" color="text.secondary">
+                        ARN:{' '}
+                        <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                          {lastApplyContext.arn || '—'}
+                        </Box>
+                      </Typography>
+                      <Typography component="div" variant="body2" color="text.secondary">
+                        UserId STS:{' '}
+                        <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                          {lastApplyContext.user_id || '—'}
+                        </Box>
+                      </Typography>
+                      <Typography component="div" variant="body2" color="text.secondary">
+                        Capturado:{' '}
+                        <b>{formatDateTime(lastApplyContext.captured_at)}</b>
+                      </Typography>
+                    </Stack>
+
+                    {lastApplyContext.identity_error && (
+                      <Alert severity="warning" variant="outlined">
+                        No se pudo resolver STS al capturar la auditoría: {lastApplyContext.identity_error}
+                      </Alert>
+                    )}
+                  </Stack>
+                )}
               </Paper>
 
               <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>

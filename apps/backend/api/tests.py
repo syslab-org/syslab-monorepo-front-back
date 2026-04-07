@@ -11,6 +11,7 @@ from .providers import get_provider_adapter, get_provider_executor
 from .providers.aws.runtime import build_nat_cleanup_targets
 from .providers.aws.terraform import render_workspace
 from .secret_store import encrypt_secret
+from .tasks import _build_last_apply_context
 from .validators import validate_network_plan
 
 
@@ -343,6 +344,41 @@ class TerraformTemplateRenderTests(SimpleTestCase):
         self.assertIn('resource "aws_security_group" "vm_sg"', tf_text)
         self.assertIn('resource "aws_instance" "vm"', tf_text)
         self.assertIn('count = 0', tf_text)
+
+
+class ApplyAuditContextTests(SimpleTestCase):
+    def test_build_last_apply_context_snapshots_identity_and_connection(self):
+        connection = SimpleNamespace(
+            id="conn-123",
+            name="AWS alumno22",
+            scope=CLOUD_SCOPE_PERSONAL,
+        )
+        bundle = SimpleNamespace(
+            diag={"credential_source": "cloud_connection", "aws_region": "us-east-1"},
+            runtime_env={"AWS_DEFAULT_REGION": "us-east-1"},
+        )
+
+        context = _build_last_apply_context(
+            provider="aws",
+            connection=connection,
+            bundle=bundle,
+            identity={
+                "Account": "123456789012",
+                "Arn": "arn:aws:iam::123456789012:user/alumno22-syslab",
+                "UserId": "AIDAEXAMPLE",
+            },
+        )
+
+        self.assertEqual(context["provider"], "aws")
+        self.assertEqual(context["credential_source"], "cloud_connection")
+        self.assertEqual(context["cloud_connection_id"], "conn-123")
+        self.assertEqual(context["cloud_connection_name"], "AWS alumno22")
+        self.assertEqual(context["cloud_connection_scope"], CLOUD_SCOPE_PERSONAL)
+        self.assertEqual(context["region"], "us-east-1")
+        self.assertEqual(context["account_id"], "123456789012")
+        self.assertEqual(context["arn"], "arn:aws:iam::123456789012:user/alumno22-syslab")
+        self.assertEqual(context["user_id"], "AIDAEXAMPLE")
+        self.assertIn("captured_at", context)
 
 
 class VisibilityApiTests(APITestCase):
@@ -689,6 +725,35 @@ class VisibilityApiTests(APITestCase):
         plans_by_name = {item["name"]: item for item in res.json()}
         self.assertFalse(plans_by_name["Plan alumno"]["can_apply"])
         self.assertTrue(plans_by_name["Plan compartido"]["can_apply"])
+
+    def test_plan_detail_exposes_last_apply_context(self):
+        plan = Plan.objects.get(name="Plan alumno")
+        plan.last_apply_context = {
+            "provider": "aws",
+            "credential_source": "cloud_connection",
+            "region": "us-east-1",
+            "cloud_connection_id": str(self.student_connection.id),
+            "cloud_connection_name": self.student_connection.name,
+            "cloud_connection_scope": self.student_connection.scope,
+            "account_id": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/alumno22-syslab",
+            "user_id": "AIDAEXAMPLE",
+            "identity": {
+                "Account": "123456789012",
+                "Arn": "arn:aws:iam::123456789012:user/alumno22-syslab",
+                "UserId": "AIDAEXAMPLE",
+            },
+            "captured_at": "2026-04-07T20:00:00Z",
+        }
+        plan.save(update_fields=["last_apply_context", "updated_at"])
+
+        self.client.force_authenticate(self.student)
+        res = self.client.get(f"/api/network/plans/{plan.id}/")
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["last_apply_context"]["credential_source"], "cloud_connection")
+        self.assertEqual(res.json()["last_apply_context"]["cloud_connection_id"], str(self.student_connection.id))
+        self.assertEqual(res.json()["last_apply_context"]["account_id"], "123456789012")
 
     def test_student_sees_personal_and_course_shared_cloud_connections(self):
         self.client.force_authenticate(self.student)

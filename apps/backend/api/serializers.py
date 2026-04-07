@@ -118,6 +118,7 @@ class PlanDetailSerializer(serializers.ModelSerializer):
     canvas_id = serializers.SerializerMethodField()
     firestore_vpc_id = serializers.SerializerMethodField()
     lab = serializers.SerializerMethodField()
+    last_apply_context = serializers.JSONField(read_only=True)
 
     class Meta:
         model = Plan
@@ -138,6 +139,7 @@ class PlanDetailSerializer(serializers.ModelSerializer):
             "can_destroy",
             "last_deploy_task_id",
             "last_destroy_task_id",
+            "last_apply_context",
             "canvas_id",
             "firestore_vpc_id",
             "canvas_hash",

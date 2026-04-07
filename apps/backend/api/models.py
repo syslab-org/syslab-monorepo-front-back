@@ -412,6 +412,14 @@ class Plan(models.Model):
         null=True,
         help_text="task_id de la ultima ejecucion destroy.",
     )
+    last_apply_context = models.JSONField(
+        blank=True,
+        default=dict,
+        help_text=(
+            "Snapshot auditado del ultimo APPLY real: conexion cloud usada, "
+            "region, fuente de credenciales e identidad STS resuelta."
+        ),
+    )
 
     def __str__(self) -> str:
         return f"{self.id} [{self.status}] {self.name}"
