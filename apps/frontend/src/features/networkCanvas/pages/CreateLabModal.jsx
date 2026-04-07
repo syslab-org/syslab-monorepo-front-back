@@ -167,6 +167,8 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
             availableCourses={canChooseCourse ? courses : []}
             availableCloudConnections={cloudConnections}
             requireCourseSelection={user?.role === USER_ROL_TEACHER}
+            currentUserRole={user?.role || ''}
+            currentUserCourseId={user?.course?.id || ''}
             providerCapabilities={capabilities}
             defaultProvider={readyProviders[0] || 'aws'}
           />

@@ -89,9 +89,10 @@ def _plan_execution_forbidden(plan: Plan) -> Response:
         {
             "ok": False,
             "error": (
-                "Solo el dueño del laboratorio puede aplicar o destruir infraestructura real. "
-                "Los docentes pueden revisar y validar el canvas del estudiante, pero no ejecutar "
-                "deploy real en su cuenta cloud salvo delegacion explicita."
+                "El APPLY o Destroy real solo está permitido al dueño del laboratorio, al platform admin "
+                "o al docente del curso cuando la conexión efectiva del laboratorio es una cuenta "
+                "compartida del curso. Si la cuenta efectiva es personal del estudiante, el docente "
+                "puede revisar y validar, pero no ejecutar infraestructura real."
             ),
             "code": "PLAN_EXECUTION_FORBIDDEN",
             "plan_id": str(plan.id),
@@ -194,7 +195,15 @@ def _reconcile_applied_flag_if_drifted(plan: Plan):
 def _get_visible_plan_or_404(request, plan_id):
     plan = visible_plans_queryset(
         request.user,
-        Plan.objects.select_related("lab", "lab__course", "lab__course__teacher"),
+        Plan.objects.select_related(
+            "lab",
+            "lab__owner_user",
+            "lab__course",
+            "lab__course__teacher",
+            "lab__cloud_connection",
+            "lab__cloud_connection__course",
+            "lab__cloud_connection__course__teacher",
+        ),
     ).filter(id=plan_id).first()
     if not plan:
         return None

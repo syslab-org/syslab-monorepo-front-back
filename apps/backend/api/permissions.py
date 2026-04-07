@@ -1,6 +1,7 @@
 from django.db.models import Q
 from rest_framework.permissions import BasePermission
 
+from .cloud_connections import resolve_lab_cloud_connection_with_source
 from .models import (
     CLOUD_SCOPE_COURSE_SHARED,
     ROLE_PLATFORM_ADMIN,
@@ -76,7 +77,23 @@ def can_execute_lab(user, lab: Lab) -> bool:
         return False
     if is_platform_admin(user):
         return True
-    return lab.owner_user_id == user.id
+    if lab.owner_user_id == user.id:
+        return True
+
+    connection, _source = resolve_lab_cloud_connection_with_source(
+        lab,
+        getattr(lab, "target_provider", None),
+    )
+    if (
+        connection
+        and connection.scope == CLOUD_SCOPE_COURSE_SHARED
+        and is_teacher(user)
+        and lab.course
+        and lab.course.teacher_id == user.id
+    ):
+        return True
+
+    return False
 
 
 def can_execute_plan(user, plan) -> bool:

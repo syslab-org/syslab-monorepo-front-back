@@ -3,6 +3,7 @@ import json
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
+from .cloud_connections import resolve_lab_cloud_connection_with_source
 from .models import (
     AmiCatalogEntry,
     CLOUD_SCOPE_PERSONAL,
@@ -119,6 +120,7 @@ class PlanDetailSerializer(serializers.ModelSerializer):
     firestore_vpc_id = serializers.SerializerMethodField()
     lab = serializers.SerializerMethodField()
     last_apply_context = serializers.JSONField(read_only=True)
+    resolved_execution_target = serializers.SerializerMethodField()
 
     class Meta:
         model = Plan
@@ -140,6 +142,7 @@ class PlanDetailSerializer(serializers.ModelSerializer):
             "last_deploy_task_id",
             "last_destroy_task_id",
             "last_apply_context",
+            "resolved_execution_target",
             "canvas_id",
             "firestore_vpc_id",
             "canvas_hash",
@@ -173,6 +176,9 @@ class PlanDetailSerializer(serializers.ModelSerializer):
         if not obj.lab_id:
             return None
         return {"id": str(obj.lab_id), "name": obj.lab.name}
+
+    def get_resolved_execution_target(self, obj):
+        return serialize_resolved_execution_target(getattr(obj, "lab", None), getattr(obj, "payload", None))
 
 
 class CourseSummarySerializer(serializers.ModelSerializer):
@@ -356,6 +362,48 @@ class CloudConnectionSerializer(serializers.ModelSerializer):
         return can_edit_cloud_connection(request.user, obj)
 
 
+def _serialize_execution_connection(connection, source: str, provider: str):
+    identity = connection.last_test_identity if connection else {}
+    identity = identity if isinstance(identity, dict) else {}
+
+    if not connection:
+        return {
+            "provider": provider,
+            "source": source,
+            "status": "missing",
+            "id": "",
+            "name": "",
+            "scope": "",
+            "default_region": "",
+            "account_id": "",
+            "arn": "",
+            "last_test_status": "",
+        }
+
+    return {
+        "provider": connection.provider or provider,
+        "source": source,
+        "status": "resolved",
+        "id": str(connection.id),
+        "name": connection.name,
+        "scope": connection.scope,
+        "default_region": connection.default_region,
+        "account_id": str(identity.get("Account") or ""),
+        "arn": str(identity.get("Arn") or ""),
+        "last_test_status": connection.last_test_status or "",
+    }
+
+
+def serialize_resolved_execution_target(lab, payload=None):
+    provider = str(
+        (payload or {}).get("cloud")
+        or getattr(lab, "target_provider", ProviderChoices.AWS)
+        or ProviderChoices.AWS
+    ).strip().lower()
+    connection, source = resolve_lab_cloud_connection_with_source(lab, provider)
+    return _serialize_execution_connection(connection, source, provider)
+
+
 class CloudConnectionCreateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=120)
     provider = CanonicalProviderChoiceField(choices=ProviderChoices.choices, default=ProviderChoices.AWS)
@@ -405,6 +453,7 @@ class LabSerializer(serializers.ModelSerializer):
     course_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
     cloud_connection = CloudConnectionSerializer(read_only=True)
     cloud_connection_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
+    resolved_execution_target = serializers.SerializerMethodField()
     canvas_id = serializers.SerializerMethodField()
     legacy_canvas_id = serializers.SerializerMethodField()
     visibility_scope = serializers.ChoiceField(choices=VisibilityScopeChoices.choices, required=False)
@@ -423,6 +472,7 @@ class LabSerializer(serializers.ModelSerializer):
             "course_id",
             "cloud_connection",
             "cloud_connection_id",
+            "resolved_execution_target",
             "visibility_scope",
             "created_by_role",
             "target_provider",
@@ -457,6 +507,9 @@ class LabSerializer(serializers.ModelSerializer):
 
     def get_legacy_canvas_id(self, obj):
         return obj.legacy_canvas_id
+
+    def get_resolved_execution_target(self, obj):
+        return serialize_resolved_execution_target(obj)
 
 
 class LabCreateSerializer(serializers.Serializer):
