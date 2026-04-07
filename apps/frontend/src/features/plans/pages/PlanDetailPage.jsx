@@ -842,7 +842,77 @@ function buildManagedEgressScenarios(plan, outputsResponse) {
     .filter(Boolean);
 }
 
-function buildPostDeployConsoleGuide(plan, outputsResponse, connectivityScenarios, managedEgressScenarios) {
+function buildPublicAccessScenarios(plan, outputsResponse) {
+  const payload = safeObject(plan?.payload);
+  const outputs = safeObject(outputsResponse?.outputs);
+  const vpcs = Array.isArray(payload?.vpcs) ? payload.vpcs : [];
+  const instanceCatalog = buildInstanceCatalog(outputs);
+
+  return vpcs
+    .map((vpc) => {
+      const subnets = Array.isArray(vpc?.subnets) ? vpc.subnets : [];
+      const publicSubnets = subnets.filter(
+        (subnet) => String(subnet?.subnet_type || '').toLowerCase() === 'public',
+      );
+      const outputInstances = instanceCatalog.get(vpc.id) || [];
+
+      const publicDeclared = publicSubnets.flatMap((subnet) =>
+        Array.isArray(subnet?.instances)
+          ? subnet.instances.map((instance) => ({
+            ...instance,
+            subnetName: subnet.name,
+            availabilityZone: subnet.availability_zone || 'n/a',
+          }))
+          : [],
+      );
+
+      const bastionDeclared = publicDeclared[0] || null;
+      const bastionOutput = bastionDeclared
+        ? outputInstances.find((item) => item.instanceName === bastionDeclared?.name)
+        : outputInstances.find((item) => item.publicIp);
+      const bastion = bastionDeclared || bastionOutput
+        ? {
+          instanceName: bastionDeclared?.name || bastionOutput?.instanceName || 'instancia',
+          instanceId: bastionOutput?.instanceId || null,
+          publicIp: bastionOutput?.publicIp || null,
+          privateIp: bastionOutput?.privateIp || bastionDeclared?.ip_address || null,
+          keyPair: bastionDeclared?.ssh_access || 'tu-keypair',
+          subnetName: bastionDeclared?.subnetName || publicSubnets[0]?.name || 'subnet-publica',
+          availabilityZone: bastionDeclared?.availabilityZone || publicSubnets[0]?.availability_zone || 'n/a',
+        }
+        : null;
+
+      if (!bastion?.publicIp) {
+        return null;
+      }
+
+      return {
+        type: 'public-access',
+        vpcId: vpc.id,
+        vpcName: vpc.name || vpc.id,
+        cidr: vpc.cidr_block || 'CIDR n/a',
+        bastion,
+        checks: [
+          {
+            title: `Confirmar acceso SSH a ${bastion.instanceName}`,
+            command: `ssh -i ~/.ssh/${bastion.keyPair}.pem ec2-user@${bastion.publicIp}`,
+            context:
+              'Úsalo para validar que la instancia pública quedó expuesta correctamente y que tu IP está permitida en Allowed SSH CIDR.',
+          },
+        ],
+        readyForRun: true,
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildPostDeployConsoleGuide(
+  plan,
+  outputsResponse,
+  connectivityScenarios,
+  managedEgressScenarios,
+  publicAccessScenarios,
+) {
   const crossVpcGuide = buildConsoleTestGuide(plan, outputsResponse, connectivityScenarios);
   const scenarios = [
     ...crossVpcGuide.scenarios.map((scenario) => ({
@@ -855,6 +925,12 @@ function buildPostDeployConsoleGuide(plan, outputsResponse, connectivityScenario
       key: `${scenario.vpcId}:managed-egress`,
       kind: 'managed-egress',
       title: `${scenario.vpcName} · salida privada con NAT`,
+      checks: scenario.checks,
+    })),
+    ...publicAccessScenarios.map((scenario) => ({
+      key: `${scenario.vpcId}:public-access`,
+      kind: 'public-access',
+      title: `${scenario.vpcName} · acceso público directo`,
       checks: scenario.checks,
     })),
   ];
@@ -914,6 +990,14 @@ export default function PlanDetailPage() {
     () => buildManagedEgressScenarios(plan, outputsResponse),
     [plan, outputsResponse],
   );
+  const publicAccessScenarios = useMemo(
+    () => buildPublicAccessScenarios(plan, outputsResponse),
+    [plan, outputsResponse],
+  );
+  const instanceCatalog = useMemo(
+    () => buildInstanceCatalog(outputsResponse?.outputs),
+    [outputsResponse],
+  );
   const vpcInfraCatalog = useMemo(
     () => buildVpcInfraCatalog(plan, outputsResponse),
     [plan, outputsResponse],
@@ -923,8 +1007,15 @@ export default function PlanDetailPage() {
     [plan, outputsResponse],
   );
   const consoleGuide = useMemo(
-    () => buildPostDeployConsoleGuide(plan, outputsResponse, connectivityScenarios, managedEgressScenarios),
-    [plan, outputsResponse, connectivityScenarios, managedEgressScenarios],
+    () =>
+      buildPostDeployConsoleGuide(
+        plan,
+        outputsResponse,
+        connectivityScenarios,
+        managedEgressScenarios,
+        publicAccessScenarios,
+      ),
+    [plan, outputsResponse, connectivityScenarios, managedEgressScenarios, publicAccessScenarios],
   );
   const connectivityOverview = useMemo(
     () => buildConnectivityOverview(plan, outputsResponse, connectivityScenarios),
@@ -1316,7 +1407,7 @@ export default function PlanDetailPage() {
 
   const canOpenConsoleGuide =
     Boolean(plan?.applied) &&
-    (connectivityScenarios.length > 0 || managedEgressScenarios.length > 0) &&
+    (connectivityScenarios.length > 0 || managedEgressScenarios.length > 0 || publicAccessScenarios.length > 0) &&
     hasOutputsData;
 
   const isRedeployAvailable = lifecycle.key === 'ACTIVE' || lifecycle.key === 'FAILED_REAL_APPLY';
@@ -1884,6 +1975,44 @@ export default function PlanDetailPage() {
                                   variant={item.natEipAllocationId ? 'filled' : 'outlined'}
                                 />
                               </Stack>
+
+                              {(instanceCatalog.get(item.logicalVpcId) || []).length > 0 && (
+                                <Stack spacing={1} sx={{ mt: 1.5 }}>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Instancias detectadas
+                                  </Typography>
+                                  {(instanceCatalog.get(item.logicalVpcId) || []).map((instance) => (
+                                    <Paper
+                                      key={instance.key}
+                                      variant="outlined"
+                                      sx={{ p: 1.5, bgcolor: 'background.default' }}
+                                    >
+                                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                        {instance.instanceName}
+                                      </Typography>
+                                      <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
+                                        <Chip
+                                          size="small"
+                                          label={`ID: ${instance.instanceId || '—'}`}
+                                          variant="outlined"
+                                        />
+                                        <Chip
+                                          size="small"
+                                          label={`Privada: ${instance.privateIp || '—'}`}
+                                          color={instance.privateIp ? 'info' : 'default'}
+                                          variant={instance.privateIp ? 'filled' : 'outlined'}
+                                        />
+                                        <Chip
+                                          size="small"
+                                          label={`Pública: ${instance.publicIp || '—'}`}
+                                          color={instance.publicIp ? 'success' : 'default'}
+                                          variant={instance.publicIp ? 'filled' : 'outlined'}
+                                        />
+                                      </Stack>
+                                    </Paper>
+                                  ))}
+                                </Stack>
+                              )}
                             </Paper>
                           ))}
                         </Stack>
@@ -1997,8 +2126,8 @@ export default function PlanDetailPage() {
                 <Box sx={{ flex: 1 }}>
                   <Typography variant="h6">Guía de pruebas post-deploy</Typography>
                   <Typography component="div" variant="body2" color="text.secondary">
-                    Define pruebas de conectividad entre VPCs o validaciones guiadas para una VPC con NAT, tenga o no
-                    una zona privada asociada.
+                    Define pruebas de conectividad entre VPCs, validaciones guiadas para una VPC con NAT o comprobaciones
+                    básicas de acceso directo a una bastion pública.
                   </Typography>
                 </Box>
                 <Button
@@ -2020,7 +2149,8 @@ export default function PlanDetailPage() {
               <Box sx={{ mt: 2 }}>
                 <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
                   Abre el modal de instrucciones para ver el paso a paso por consola: cómo entrar por SSH a una bastion
-                  y luego cómo ejecutar los comandos sugeridos, ya sea entre VPCs o dentro de una VPC con NAT.
+                  y luego cómo ejecutar los comandos sugeridos, ya sea entre VPCs, dentro de una VPC con NAT o en un
+                  laboratorio single-VPC con exposición pública directa.
                 </Alert>
 
                 {!hasOutputsData && (
@@ -2029,10 +2159,10 @@ export default function PlanDetailPage() {
                   </Alert>
                 )}
 
-                {connectivityScenarios.length === 0 && managedEgressScenarios.length === 0 && (
+                {connectivityScenarios.length === 0 && managedEgressScenarios.length === 0 && publicAccessScenarios.length === 0 && (
                   <Alert severity="warning">
-                    Este plan no expone pares de VPC conectados por peering/TGW ni un caso single-VPC con NAT que
-                    podamos guiar desde aquí.
+                    Este plan no expone pares de VPC conectados por peering/TGW, un caso single-VPC con NAT ni una
+                    bastion pública con salida directa que podamos guiar desde aquí.
                   </Alert>
                 )}
 
@@ -2168,10 +2298,67 @@ export default function PlanDetailPage() {
                   </Paper>
                 ))}
 
+                {publicAccessScenarios.map((scenario) => (
+                  <Paper key={`${scenario.vpcId}:public-access`} variant="outlined" sx={{ p: 2, mb: 2 }}>
+                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'center' }}>
+                      <Typography variant="subtitle2" sx={{ flex: 1 }}>
+                        {scenario.vpcName} · acceso público directo
+                      </Typography>
+                      <Chip size="small" label="Single VPC" variant="outlined" />
+                      <Chip size="small" label="Public bastion" color="success" variant="outlined" />
+                      <Chip size="small" label={scenario.cidr} variant="outlined" />
+                    </Stack>
+
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                      Bastion: {scenario.bastion.instanceName} · IP pública: {scenario.bastion.publicIp || 'n/a'}
+                    </Typography>
+
+                    <Stack spacing={1.2} sx={{ mt: 1.5 }}>
+                      {scenario.checks.map((check) => (
+                        <Box key={`${scenario.vpcId}:${check.title}`}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {check.title}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                            {check.context}
+                          </Typography>
+                          <Paper
+                            variant="outlined"
+                            sx={{ p: 1, bgcolor: 'background.default', overflow: 'auto' }}
+                          >
+                            <Box
+                              component="pre"
+                              sx={{
+                                m: 0,
+                                whiteSpace: 'pre-wrap',
+                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                fontSize: 12,
+                              }}
+                            >
+                              {check.command}
+                            </Box>
+                          </Paper>
+                        </Box>
+                      ))}
+                    </Stack>
+
+                    <Stack spacing={1} sx={{ mt: 1.5 }}>
+                      <Alert severity="info" variant="outlined">
+                        Qué observar: la bastion debería aceptar SSH solo desde el rango definido en `Allowed SSH CIDR`.
+                      </Alert>
+                      <Alert severity="warning" variant="outlined">
+                        Qué observar: este diseño expone una instancia directamente a Internet. Es útil para una prueba
+                        rápida, pero ofrece menos aislamiento que un patrón con workload privada.
+                      </Alert>
+                    </Stack>
+                  </Paper>
+                ))}
+
                 <Alert severity="info" variant="outlined">
                   Resultado esperado: cada par conectado debe responder ping en ida y retorno; en un caso single-VPC con
-                  NAT, la bastion debe alcanzar la workload privada y esta última debe permanecer sin IP pública. Si no
-                  hay zonas privadas, la validación se centra en confirmar que el NAT existe y en explicar por qué ese diseño es más débil.
+                  NAT, la bastion debe alcanzar la workload privada y esta última debe permanecer sin IP pública. En un
+                  caso con bastion pública directa, la validación mínima es confirmar acceso SSH y entender que el
+                  aislamiento es menor que en un patrón con subnet privada.
                 </Alert>
               </Box>
             </Box>
