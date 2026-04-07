@@ -5,7 +5,11 @@ from celery import shared_task
 from django.db import transaction
 from django.utils import timezone
 
-from .cloud_connections import build_aws_runtime_env, resolve_lab_cloud_connection
+from .cloud_connections import (
+    build_aws_runtime_env,
+    get_aws_identity_from_runtime_env,
+    resolve_lab_cloud_connection,
+)
 from .models import Plan
 from .providers import get_provider_executor, get_provider_key
 
@@ -40,6 +44,33 @@ def _make_incremental_log_flusher(plan_obj, bundle):
     return flush
 
 
+def _build_last_apply_context(*, provider, connection, bundle, identity=None, identity_error=""):
+    identity = identity or {}
+    runtime_env = bundle.runtime_env or {}
+    region = (
+        bundle.diag.get("aws_region")
+        or runtime_env.get("AWS_DEFAULT_REGION")
+        or runtime_env.get("AWS_REGION")
+        or ""
+    )
+    context = {
+        "provider": provider,
+        "credential_source": bundle.diag.get("credential_source") or ("cloud_connection" if connection else "environment"),
+        "region": region,
+        "cloud_connection_id": str(connection.id) if connection else "",
+        "cloud_connection_name": getattr(connection, "name", "") if connection else "",
+        "cloud_connection_scope": getattr(connection, "scope", "") if connection else "",
+        "account_id": str(identity.get("Account") or ""),
+        "arn": str(identity.get("Arn") or ""),
+        "user_id": str(identity.get("UserId") or ""),
+        "identity": identity,
+        "captured_at": timezone.now().isoformat(),
+    }
+    if identity_error:
+        context["identity_error"] = identity_error
+    return context
+
+
 # === TAREAS CELERY ===
 @shared_task(name="api.tasks.prueba_larga")
 def prueba_larga(n: int = 3):
@@ -67,6 +98,7 @@ def process_network_plan(self, plan_id: str, payload: dict):
     previous_applied = False
     executor = get_provider_executor(provider)
     bundle = None
+    connection = None
 
     try:
         # === 1) Actualiza estado del Plan ===
@@ -159,6 +191,25 @@ def process_network_plan(self, plan_id: str, payload: dict):
                     "plan_id": str(plan_obj.id),
                     "log": bundle.full_log,
                 }
+
+            identity = {}
+            identity_error = ""
+            try:
+                identity = get_aws_identity_from_runtime_env(bundle.runtime_env)
+            except Exception as exc:
+                identity_error = str(exc)
+
+            apply_context = _build_last_apply_context(
+                provider=provider,
+                connection=connection,
+                bundle=bundle,
+                identity=identity,
+                identity_error=identity_error,
+            )
+            bundle.append_log(f"[audit][apply] {json.dumps(apply_context, sort_keys=True)}\n\n")
+            plan_obj.last_apply_context = apply_context
+            plan_obj.updated_at = timezone.now()
+            plan_obj.save(update_fields=["last_apply_context", "updated_at"])
 
             proc = executor.terraform_apply(bundle)
             bundle.append_log(f"\n{proc.log_block()}")

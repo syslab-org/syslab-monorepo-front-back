@@ -47,6 +47,12 @@ def build_boto3_session_from_runtime_env(runtime_env: dict | None = None):
     return boto3.Session(region_name=region or None)
 
 
+def get_aws_identity_from_runtime_env(runtime_env: dict | None = None) -> dict:
+    session = build_boto3_session_from_runtime_env(runtime_env)
+    sts = session.client("sts")
+    return sts.get_caller_identity() or {}
+
+
 def resolve_lab_cloud_connection(lab: Lab | None, provider: str | None = None) -> Optional[CloudConnection]:
     if not lab:
         return None
@@ -92,9 +98,7 @@ def resolve_lab_cloud_connection(lab: Lab | None, provider: str | None = None) -
 def test_aws_connection(connection: CloudConnection) -> tuple[bool, str, dict]:
     runtime_env = build_aws_runtime_env(connection)
     try:
-        session = build_boto3_session_from_runtime_env(runtime_env)
-        sts = session.client("sts")
-        identity = sts.get_caller_identity()
+        identity = get_aws_identity_from_runtime_env(runtime_env)
         return True, "sts_ok", identity or {}
     except NoRegionError as exc:
         return False, f"no_region: {exc}", {}
