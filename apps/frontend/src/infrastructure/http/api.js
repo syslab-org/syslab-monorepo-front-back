@@ -1,3 +1,5 @@
+import { emitLoadingFlowEnd, emitLoadingFlowStart } from "@/app/providers/loadingFlowEvents";
+
 const BASE_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:8000"
 ).replace(/\/+$/, "");
@@ -20,9 +22,28 @@ export function clearAuthToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
+function inferLoadingMessage(method, path) {
+  const normalizedMethod = String(method || "GET").toUpperCase();
+  const normalizedPath = String(path || "").toLowerCase();
+
+  if (normalizedPath.includes("/login")) return "Iniciando sesión...";
+  if (normalizedPath.includes("/register")) return "Guardando cuenta...";
+  if (normalizedPath.includes("/logout")) return "Cerrando sesión...";
+  if (normalizedPath.includes("/deploy/")) return "Ejecutando despliegue...";
+  if (normalizedPath.includes("/destroy/")) return "Destruyendo infraestructura...";
+  if (normalizedPath.includes("/test/")) return "Probando conexión...";
+  if (normalizedMethod === "DELETE") return "Eliminando datos...";
+  if (normalizedMethod === "POST" || normalizedMethod === "PATCH" || normalizedMethod === "PUT") {
+    return "Guardando cambios...";
+  }
+  return "Procesando...";
+}
+
 async function jsonFetch(path, options = {}) {
   const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
   const token = getAuthToken();
+  const method = String(options.method || "GET").toUpperCase();
+  const shouldTrackLoading = ["POST", "PATCH", "PUT", "DELETE"].includes(method) && options.trackLoading !== false;
   const headers = {
     ...(options.body ? { "Content-Type": "application/json" } : {}),
     ...(options.headers || {}),
@@ -32,31 +53,41 @@ async function jsonFetch(path, options = {}) {
     headers.Authorization = `Token ${token}`;
   }
 
-  const res = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  const ct = res.headers.get("content-type") || "";
-  const isJSON = ct.includes("application/json");
-  const body = isJSON ? await res.json().catch(() => ({})) : await res.text();
-
-  if (!res.ok) {
-    const err = new Error(
-      isJSON
-        ? body?.detail || JSON.stringify(body)
-        : String(body).slice(0, 300),
-    );
-    err.status = res.status;
-    err.statusText = res.statusText;
-    err.data = body;
-    if (res.status === 401) {
-      clearAuthToken();
-    }
-    throw err;
+  if (shouldTrackLoading) {
+    emitLoadingFlowStart(options.loadingMessage || inferLoadingMessage(method, path));
   }
 
-  return body;
+  try {
+    const res = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    const ct = res.headers.get("content-type") || "";
+    const isJSON = ct.includes("application/json");
+    const body = isJSON ? await res.json().catch(() => ({})) : await res.text();
+
+    if (!res.ok) {
+      const err = new Error(
+        isJSON
+          ? body?.detail || JSON.stringify(body)
+          : String(body).slice(0, 300),
+      );
+      err.status = res.status;
+      err.statusText = res.statusText;
+      err.data = body;
+      if (res.status === 401) {
+        clearAuthToken();
+      }
+      throw err;
+    }
+
+    return body;
+  } finally {
+    if (shouldTrackLoading) {
+      emitLoadingFlowEnd();
+    }
+  }
 }
 
 export const api = {

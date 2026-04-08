@@ -23,6 +23,9 @@ import {
   LinearProgress,
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined';
+import AutorenewRoundedIcon from '@mui/icons-material/AutorenewRounded';
+import BoltRoundedIcon from '@mui/icons-material/BoltRounded';
 
 import { TASK_STATE_PENDING, TASK_STATE_RUNNING } from '@/shared/constants';
 import { api } from '@/infrastructure/http/api';
@@ -158,6 +161,39 @@ function statusChipProps(status) {
   }
 }
 
+function executionTone(status, lifecycleKey) {
+  if (status === 'RUNNING' || status === 'PENDING') {
+    return {
+      gradient: 'linear-gradient(135deg, rgba(59,130,246,0.12) 0%, rgba(14,165,233,0.08) 55%, rgba(255,255,255,0.96) 100%)',
+      border: 'rgba(59,130,246,0.26)',
+      glow: '0 18px 40px rgba(59, 130, 246, 0.14)',
+      accent: 'linear-gradient(180deg, #38bdf8 0%, #2563eb 100%)',
+      iconBg: 'rgba(59,130,246,0.10)',
+      iconBorder: 'rgba(59,130,246,0.22)',
+    };
+  }
+
+  if (lifecycleKey === 'ACTIVE') {
+    return {
+      gradient: 'linear-gradient(135deg, rgba(34,197,94,0.10) 0%, rgba(45,212,191,0.08) 50%, rgba(255,255,255,0.96) 100%)',
+      border: 'rgba(34,197,94,0.24)',
+      glow: '0 16px 36px rgba(34, 197, 94, 0.10)',
+      accent: 'linear-gradient(180deg, #22c55e 0%, #0f766e 100%)',
+      iconBg: 'rgba(34,197,94,0.10)',
+      iconBorder: 'rgba(16,185,129,0.22)',
+    };
+  }
+
+  return {
+    gradient: 'linear-gradient(135deg, rgba(148,163,184,0.10) 0%, rgba(241,245,249,0.92) 100%)',
+    border: 'rgba(148,163,184,0.22)',
+    glow: '0 12px 30px rgba(15, 23, 42, 0.06)',
+    accent: 'linear-gradient(180deg, #94a3b8 0%, #64748b 100%)',
+    iconBg: 'rgba(148,163,184,0.12)',
+    iconBorder: 'rgba(148,163,184,0.22)',
+  };
+}
+
 function describeRunningPhase(plan, lifecycle) {
   const lastAction = String(plan?.last_action || plan?.lastAction || '').toLowerCase();
 
@@ -194,6 +230,50 @@ function describeRunningPhase(plan, lifecycle) {
       'Hay una operación en curso sobre este plan y la página está haciendo polling automático para reflejar el resultado en cuanto esté disponible.',
     nextStep: 'Mientras tanto, evita cerrar el flujo o lanzar acciones paralelas sobre el mismo plan.',
   };
+}
+
+function describeExecutionHero(plan, lifecycle, runningPhase) {
+  if (plan?.status === TASK_STATE_RUNNING || plan?.status === TASK_STATE_PENDING) {
+    return runningPhase;
+  }
+
+  switch (lifecycle.key) {
+    case 'ACTIVE':
+      return {
+        title: 'Infraestructura activa en AWS',
+        description:
+          'El stack está desplegado y listo para seguir validando, actualizarse con un redeploy o destruirse cuando quieras limpiar el laboratorio.',
+      };
+    case 'DESTROYED':
+      return {
+        title: 'Infraestructura eliminada',
+        description:
+          'El último destroy terminó correctamente. Este plan queda como historial operativo y puedes volver a lanzar un deploy real cuando lo necesites.',
+      };
+    case 'PREVIEW':
+      return {
+        title: 'Plan listo para validación',
+        description:
+          'Todavía no hay infraestructura real en AWS. Puedes seguir revisando el preview o convertirlo en un APPLY real cuando estés conforme.',
+      };
+    case 'FAILED_REAL_APPLY':
+      return {
+        title: 'Recuperación recomendada',
+        description:
+          'El apply real falló y podría haber recursos parciales. La siguiente acción recomendada es limpiar el stack antes de reintentar.',
+      };
+    case 'NOT_APPLIED':
+      return {
+        title: 'Listo para primer deploy',
+        description:
+          'El plan está preparado pero aún no ha sido aplicado en AWS. Puedes lanzar un preview o el primer APPLY real según el caso.',
+      };
+    default:
+      return {
+        title: 'Estado operativo del plan',
+        description: lifecycle.helper,
+      };
+  }
 }
 
 const safeObject = (value) =>
@@ -989,6 +1069,10 @@ export default function PlanDetailPage() {
 
   const lifecycle = useMemo(() => computeLifecycle(plan), [plan]);
   const runningPhase = useMemo(() => describeRunningPhase(plan, lifecycle), [plan, lifecycle]);
+  const executionHero = useMemo(
+    () => describeExecutionHero(plan, lifecycle, runningPhase),
+    [plan, lifecycle, runningPhase],
+  );
   const connectivityScenarios = useMemo(
     () => buildConnectivityScenarios(plan, outputsResponse),
     [plan, outputsResponse],
@@ -1549,6 +1633,8 @@ export default function PlanDetailPage() {
     </Stack>
   );
 
+  const tone = executionTone(plan?.status, lifecycle.key);
+
   if (loading) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -1580,7 +1666,35 @@ export default function PlanDetailPage() {
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Stack spacing={2}>
-        <Paper sx={{ p: 3 }}>
+        <Paper
+          sx={{
+            p: 3,
+            position: 'relative',
+            overflow: 'hidden',
+            border: `1px solid ${tone.border}`,
+            background: tone.gradient,
+            boxShadow: tone.glow,
+          }}
+        >
+          <Box
+            sx={{
+              position: 'absolute',
+              inset: 0,
+              pointerEvents: 'none',
+              background:
+                'radial-gradient(circle at top right, rgba(255,255,255,0.85) 0%, transparent 34%)',
+            }}
+          />
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              left: 0,
+              width: 6,
+              background: tone.accent,
+            }}
+          />
           {header}
 
           <Divider sx={{ my: 2 }} />
@@ -1612,21 +1726,65 @@ export default function PlanDetailPage() {
           )}
 
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
-            <Stack spacing={0.5} sx={{ flex: 1 }}>
-              <Typography component="div" variant="body2" color="text.secondary">
-                Actualizado: <b>{formatDateTime(plan?.updated_at)}</b>
-              </Typography>
-              <Typography component="div" variant="body2" color="text.secondary">
-                Última acción: <b>{plan?.last_action || plan?.lastAction || '—'}</b>
-              </Typography>
+            <Stack spacing={1.5} sx={{ flex: 1 }}>
+              <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                <Box
+                  sx={{
+                    width: 54,
+                    height: 54,
+                    borderRadius: '18px',
+                    display: 'grid',
+                    placeItems: 'center',
+                    background: tone.iconBg,
+                    border: `1px solid ${tone.iconBorder}`,
+                    color: plan?.status === 'RUNNING' || plan?.status === 'PENDING' ? 'info.main' : lifecycle.key === 'ACTIVE' ? 'success.main' : 'text.secondary',
+                    flexShrink: 0,
+                  }}
+                >
+                  {plan?.status === 'RUNNING' || plan?.status === 'PENDING' ? (
+                    <AutorenewRoundedIcon />
+                  ) : lifecycle.key === 'ACTIVE' ? (
+                    <BoltRoundedIcon />
+                  ) : (
+                    <CloudSyncOutlinedIcon />
+                  )}
+                </Box>
+
+                <Stack spacing={0.5}>
+                  <Typography variant="overline" sx={{ letterSpacing: '0.14em', opacity: 0.72 }}>
+                    Control de ejecución
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.12 }}>
+                    {executionHero.title}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 760 }}>
+                    {executionHero.description}
+                  </Typography>
+                </Stack>
+              </Stack>
+
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} useFlexGap flexWrap="wrap">
+                <Paper variant="outlined" sx={{ px: 1.5, py: 1.1, borderRadius: 3, minWidth: 180, bgcolor: 'rgba(255,255,255,0.66)' }}>
+                  <Typography variant="caption" color="text.secondary">Actualizado</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{formatDateTime(plan?.updated_at)}</Typography>
+                </Paper>
+                <Paper variant="outlined" sx={{ px: 1.5, py: 1.1, borderRadius: 3, minWidth: 160, bgcolor: 'rgba(255,255,255,0.66)' }}>
+                  <Typography variant="caption" color="text.secondary">Última acción</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{plan?.last_action || plan?.lastAction || '—'}</Typography>
+                </Paper>
+                <Paper variant="outlined" sx={{ px: 1.5, py: 1.1, borderRadius: 3, minWidth: 260, bgcolor: 'rgba(255,255,255,0.66)' }}>
+                  <Typography variant="caption" color="text.secondary">Task actual</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                    {plan?.task_id || '—'}
+                  </Typography>
+                </Paper>
+              </Stack>
+
               {String(plan?.last_action || plan?.lastAction || '').toLowerCase() === 'canvas_update' && (
                 <Typography variant="caption" color="warning.main" sx={{ display: 'block' }}>
                   El canvas cambió: la infraestructura desplegada (si existía) ya no coincide con este plan.
                 </Typography>
               )}
-              <Typography component="div" variant="body2" color="text.secondary">
-                task_id: <b>{plan?.task_id || '—'}</b>
-              </Typography>
               <Typography variant="caption" color="text.secondary">
                 {lifecycle.helper}
               </Typography>
@@ -1679,9 +1837,11 @@ export default function PlanDetailPage() {
               variant="outlined"
               sx={{
                 mt: 2,
-                p: 2,
-                borderColor: 'info.light',
-                bgcolor: 'info.50',
+                p: 2.25,
+                borderColor: tone.border,
+                bgcolor: 'rgba(255,255,255,0.72)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.65)',
+                borderRadius: 4,
               }}
             >
               <Stack spacing={1.5}>
@@ -1692,9 +1852,22 @@ export default function PlanDetailPage() {
                   justifyContent="space-between"
                 >
                   <Stack direction="row" spacing={1.25} alignItems="center">
-                    <CircularProgress size={18} />
-                    <Box>
-                      <Typography variant="subtitle2">
+                    <Box
+                      sx={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: '14px',
+                        display: 'grid',
+                        placeItems: 'center',
+                        background: tone.iconBg,
+                        border: `1px solid ${tone.iconBorder}`,
+                        color: 'info.main',
+                      }}
+                    >
+                      <CircularProgress size={18} color="inherit" />
+                    </Box>
+                    <Box sx={{ maxWidth: 700 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                         {runningPhase.title}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
@@ -1704,13 +1877,24 @@ export default function PlanDetailPage() {
                   </Stack>
                   <Chip
                     size="small"
-                    color="info"
+                    color="primary"
                     variant="filled"
                     label="Actualización automática activa"
+                    sx={{ fontWeight: 700 }}
                   />
                 </Stack>
 
-                <LinearProgress />
+                <LinearProgress
+                  sx={{
+                    height: 8,
+                    borderRadius: 999,
+                    backgroundColor: 'rgba(37,99,235,0.10)',
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 999,
+                      background: tone.accent,
+                    },
+                  }}
+                />
 
                 <Stack
                   direction={{ xs: 'column', md: 'row' }}
@@ -1718,19 +1902,23 @@ export default function PlanDetailPage() {
                   alignItems={{ md: 'center' }}
                   justifyContent="space-between"
                 >
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 640 }}>
                     {runningPhase.nextStep}
                   </Typography>
                   <Stack direction="row" spacing={1} flexWrap="wrap">
                     <Chip
                       size="small"
-                      variant="outlined"
+                      variant="filled"
+                      color="default"
                       label={`Task: ${plan?.task_id || 'pendiente'}`}
+                      sx={{ bgcolor: 'rgba(255,255,255,0.84)' }}
                     />
                     <Chip
                       size="small"
-                      variant="outlined"
+                      variant="filled"
+                      color="default"
                       label={`Última acción: ${plan?.last_action || plan?.lastAction || '—'}`}
+                      sx={{ bgcolor: 'rgba(255,255,255,0.84)' }}
                     />
                   </Stack>
                 </Stack>
@@ -1758,13 +1946,31 @@ export default function PlanDetailPage() {
           {/* SUMMARY */}
           {tab === 'summary' && (
             <Box sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                Estado del plan
-              </Typography>
-              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
-                <Chip size="small" {...statusChipProps(plan?.status)} />
-                <Chip size="small" label={lifecycle.label} {...lifecycle.chip} />
-              </Stack>
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 2,
+                  mb: 2,
+                  borderRadius: 4,
+                  borderColor: tone.border,
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.94) 0%, rgba(248,250,252,0.98) 100%)',
+                }}
+              >
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }} justifyContent="space-between">
+                  <Box>
+                    <Typography variant="h6" sx={{ mb: 0.5 }}>
+                      Estado del plan
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Lectura rápida del resultado reciente y del estado operativo actual.
+                    </Typography>
+                  </Box>
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Chip size="small" {...statusChipProps(plan?.status)} />
+                    <Chip size="small" label={lifecycle.label} {...lifecycle.chip} />
+                  </Stack>
+                </Stack>
+              </Paper>
 
               <Typography component="div" variant="body2" color="text.secondary">
                 Este detalle sirve para entender <b>qué pasó</b> (status), <b>qué existe hoy</b> (lifecycle) y
