@@ -247,32 +247,42 @@ function MainLayout() {
         </List>
 
         {/* Fixed logout button at bottom */}
-        <Button
-          sx={(theme) => ({
-            position: "absolute",
-            bottom: 16,
-            left: 16,
-            right: 16,
-            borderRadius: 2,
-            fontWeight: 600,
-            textTransform: "none",
-            border: `1px solid ${theme.palette.divider}`,
-            backgroundColor:
-              theme.palette.mode === "light"
-                ? theme.palette.grey[50]
-                : "rgba(255,255,255,0.04)",
-            "&:hover": {
+        <Tooltip title={drawerOpen ? "" : "Cerrar sesión"} placement="right">
+          <Button
+            sx={(theme) => ({
+              position: "absolute",
+              bottom: 16,
+              left: drawerOpen ? 16 : 12,
+              right: drawerOpen ? 16 : 12,
+              minWidth: 0,
+              px: drawerOpen ? 1.5 : 0,
+              py: 1,
+              borderRadius: 2,
+              fontWeight: 600,
+              textTransform: "none",
+              justifyContent: "center",
+              border: `1px solid ${theme.palette.divider}`,
               backgroundColor:
                 theme.palette.mode === "light"
-                  ? theme.palette.grey[100]
-                  : "rgba(255,255,255,0.08)",
-            },
-          })}
-          startIcon={<LogoutIcon />}
-          onClick={logout}
-        >
-          Cerrar sesión
-        </Button>
+                  ? theme.palette.grey[50]
+                  : "rgba(255,255,255,0.04)",
+              "&:hover": {
+                backgroundColor:
+                  theme.palette.mode === "light"
+                    ? theme.palette.grey[100]
+                    : "rgba(255,255,255,0.08)",
+              },
+              "& .MuiButton-startIcon": {
+                margin: drawerOpen ? undefined : 0,
+              },
+            })}
+            startIcon={<LogoutIcon />}
+            onClick={logout}
+            aria-label="Cerrar sesión"
+          >
+            {drawerOpen ? "Cerrar sesión" : null}
+          </Button>
+        </Tooltip>
       </DrawerStyle>
 
       {/* ================== MAIN CONTENT ================== */}
