@@ -272,6 +272,17 @@ Sirve para confirmar:
 - si fue `cloud_connection`
 - con qué cuenta y `ARN` se ejecutó
 
+### Historial completo
+
+`Plan Detail -> Resumen -> Historial reciente de ejecuciones`
+
+Sirve para confirmar:
+
+- quién pidió cada `PLAN`, `APPLY` o `DESTROY`
+- si fue `preview` o `real`
+- si hubo delegación explícita
+- qué conexión y qué identidad se usaron
+
 ### Para recursos creados
 
 `Plan Detail -> Outputs`

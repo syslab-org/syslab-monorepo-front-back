@@ -169,3 +169,5 @@ Límite actual:
 Referencia operativa:
 
 - [Playbook de Conexiones Cloud AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/aws-cloud-connections-playbook.md)
+- [Matriz Formal de Permisos y Control de Usuarios](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/user-control-permissions-matrix.md)
+- [Hardening de AssumeRole e IAM Mínimo](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/aws-assumerole-hardening.md)

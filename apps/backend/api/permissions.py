@@ -1,9 +1,12 @@
 from django.db.models import Q
+from django.utils import timezone
 from rest_framework.permissions import BasePermission
 
 from .cloud_connections import resolve_lab_cloud_connection_with_source
 from .models import (
+    CLOUD_SCOPE_PERSONAL,
     CLOUD_SCOPE_COURSE_SHARED,
+    CloudExecutionDelegation,
     ROLE_PLATFORM_ADMIN,
     ROLE_STUDENT,
     ROLE_TEACHER,
@@ -72,6 +75,24 @@ def can_edit_lab(user, lab: Lab) -> bool:
     return lab.owner_user_id == user.id
 
 
+def get_active_execution_delegation(user, lab: Lab, connection=None):
+    if not user or not user.is_authenticated or not lab:
+        return None
+
+    qs = CloudExecutionDelegation.objects.filter(
+        lab=lab,
+        owner_user_id=lab.owner_user_id,
+        delegate_user_id=user.id,
+        is_active=True,
+        revoked_at__isnull=True,
+    )
+    if connection:
+        qs = qs.filter(Q(cloud_connection__isnull=True) | Q(cloud_connection=connection))
+    now = timezone.now()
+    qs = qs.filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+    return qs.order_by("-created_at").first()
+
+
 def can_execute_lab(user, lab: Lab) -> bool:
     if not user or not user.is_authenticated or not lab:
         return False
@@ -90,6 +111,16 @@ def can_execute_lab(user, lab: Lab) -> bool:
         and is_teacher(user)
         and lab.course
         and lab.course.teacher_id == user.id
+    ):
+        return True
+
+    if (
+        connection
+        and connection.scope == CLOUD_SCOPE_PERSONAL
+        and is_teacher(user)
+        and lab.course
+        and lab.course.teacher_id == user.id
+        and get_active_execution_delegation(user, lab, connection)
     ):
         return True
 
@@ -138,6 +169,21 @@ def can_edit_cloud_connection(user, connection: CloudConnection) -> bool:
         and connection.course
         and connection.course.teacher_id == user.id
     )
+
+
+def visible_execution_delegations_queryset(user, base_qs=None):
+    qs = base_qs if base_qs is not None else CloudExecutionDelegation.objects.all()
+    if not user or not user.is_authenticated:
+        return qs.none()
+    if is_platform_admin(user):
+        return qs
+    if is_teacher(user):
+        return qs.filter(
+            Q(delegate_user=user)
+            | Q(course__teacher=user)
+            | Q(owner_user=user)
+        ).distinct()
+    return qs.filter(Q(owner_user=user) | Q(delegate_user=user)).distinct()
 
 
 class IsPlatformAdmin(BasePermission):
