@@ -250,6 +250,7 @@ class PlanDetailSerializer(serializers.ModelSerializer):
     last_apply_context = serializers.JSONField(read_only=True)
     resolved_execution_target = serializers.SerializerMethodField()
     execution_history = serializers.SerializerMethodField()
+    cloud_target_state = serializers.SerializerMethodField()
 
     class Meta:
         model = Plan
@@ -273,6 +274,7 @@ class PlanDetailSerializer(serializers.ModelSerializer):
             "last_apply_context",
             "resolved_execution_target",
             "execution_history",
+            "cloud_target_state",
             "canvas_id",
             "firestore_vpc_id",
             "canvas_hash",
@@ -313,6 +315,9 @@ class PlanDetailSerializer(serializers.ModelSerializer):
     def get_execution_history(self, obj):
         history = list(obj.execution_history.select_related("requested_by", "delegation").all()[:10])
         return PlanExecutionRecordSerializer(history, many=True).data
+
+    def get_cloud_target_state(self, obj):
+        return serialize_cloud_target_state(obj)
 
 
 class CourseSummarySerializer(serializers.ModelSerializer):
@@ -548,6 +553,67 @@ def serialize_resolved_execution_target(lab, payload=None):
     ).strip().lower()
     connection, source = resolve_lab_cloud_connection_with_source(lab, provider)
     return _serialize_execution_connection(connection, source, provider)
+
+
+def serialize_cloud_target_state(plan):
+    if not plan:
+        return {
+            "status": "unknown",
+            "message": "No hay suficiente contexto para reconciliar la cuenta cloud de este plan.",
+            "is_mismatch": False,
+        }
+
+    last_apply = getattr(plan, "last_apply_context", None) or {}
+    if not isinstance(last_apply, dict) or not last_apply:
+        return {
+            "status": "no_real_apply",
+            "message": "Aún no existe un APPLY real previo para comparar contra la conexión cloud actual.",
+            "is_mismatch": False,
+        }
+
+    current = serialize_resolved_execution_target(getattr(plan, "lab", None), getattr(plan, "payload", None))
+    current_id = str(current.get("id") or "").strip()
+    current_account = str(current.get("account_id") or "").strip()
+    last_conn_id = str(last_apply.get("cloud_connection_id") or "").strip()
+    last_account = str(last_apply.get("account_id") or "").strip()
+    current_scope = str(current.get("scope") or "").strip()
+    last_scope = str(last_apply.get("cloud_connection_scope") or "").strip()
+
+    if current.get("status") == "missing":
+        return {
+            "status": "unresolved_current_target",
+            "message": (
+                "El último APPLY real se hizo con otra conexión cloud y hoy el laboratorio ya no "
+                "resuelve una conexión ejecutable compatible."
+            ),
+            "is_mismatch": True,
+            "current_target": current,
+            "last_apply_context": last_apply,
+        }
+
+    same_connection = bool(current_id and last_conn_id and current_id == last_conn_id)
+    same_account = bool(current_account and last_account and current_account == last_account)
+    same_scope = bool(current_scope and last_scope and current_scope == last_scope)
+
+    if same_connection or (same_account and same_scope):
+        return {
+            "status": "aligned",
+            "message": "La conexión cloud actual coincide con la usada en el último APPLY real.",
+            "is_mismatch": False,
+            "current_target": current,
+            "last_apply_context": last_apply,
+        }
+
+    return {
+        "status": "target_changed",
+        "message": (
+            "La conexión cloud actual ya no coincide con la usada en el último APPLY real. "
+            "El estado ACTIVE pasa a ser histórico respecto de otra cuenta cloud."
+        ),
+        "is_mismatch": True,
+        "current_target": current,
+        "last_apply_context": last_apply,
+    }
 
 
 class CloudConnectionCreateSerializer(serializers.Serializer):

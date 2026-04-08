@@ -19,6 +19,7 @@ from .cloud_connections import (
 from .helpers import ensure_lab_for_canvas, visible_plans_queryset
 from .models import Plan, PlanExecutionRecord
 from .permissions import can_execute_plan, get_active_execution_delegation
+from .serializers import serialize_cloud_target_state
 from .providers.aws.payload import get_network_id, get_region
 from .tasks import destroy_last_deploy, process_network_plan, prueba_larga
 from .validators import validate_network_plan
@@ -103,6 +104,23 @@ def _plan_execution_forbidden(plan: Plan) -> Response:
             "plan_id": str(plan.id),
         },
         status=status.HTTP_403_FORBIDDEN,
+    )
+
+
+def _plan_cloud_target_changed(plan: Plan) -> Response:
+    state = serialize_cloud_target_state(plan)
+    return Response(
+        {
+            "ok": False,
+            "error": (
+                state.get("message")
+                or "La cuenta cloud actual no coincide con la usada en el último APPLY real."
+            ),
+            "code": "CLOUD_TARGET_CHANGED",
+            "plan_id": str(plan.id),
+            "cloud_target_state": state,
+        },
+        status=status.HTTP_409_CONFLICT,
     )
 
 
@@ -338,6 +356,10 @@ def deploy_plan(request, plan_id: UUID):
     if not simulate_only and not can_execute_plan(request.user, plan):
         return _plan_execution_forbidden(plan)
 
+    cloud_target_state = serialize_cloud_target_state(plan)
+    if not simulate_only and cloud_target_state.get("is_mismatch"):
+        return _plan_cloud_target_changed(plan)
+
     if bool(plan.applied):
         drift_reconciled = _reconcile_applied_flag_if_drifted(plan)
         if drift_reconciled:
@@ -454,6 +476,9 @@ def destroy_plan(request, plan_id: UUID):
 def _start_destroy_for_plan(user, plan: Plan):
     if not can_execute_plan(user, plan):
         return _plan_execution_forbidden(plan)
+    cloud_target_state = serialize_cloud_target_state(plan)
+    if cloud_target_state.get("is_mismatch"):
+        return _plan_cloud_target_changed(plan)
     if _is_running(plan):
         return _plan_running_conflict(plan)
 

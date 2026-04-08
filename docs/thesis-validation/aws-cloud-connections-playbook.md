@@ -82,6 +82,7 @@ Resultado esperado:
 
 - el profesor puede ejecutar porque la conexión efectiva es del curso
 - el `ARN` auditado sigue siendo de tipo `assumed-role/...`
+- el role compartido ya puede operar sin `AdministratorAccess` si usa la policy mínima validada
 
 ## Paso a paso para `Static Keys`
 
@@ -237,6 +238,18 @@ En `Evidencia del último APPLY real`, revisar:
 
 Si el `ARN` muestra `assumed-role/...`, quedó confirmado que el deploy real usó la sesión temporal del role y no una key estática final.
 
+## Evidencia adicional ya validada
+
+Además del flujo base, ya quedó validado un caso concreto de endurecimiento:
+
+- principal técnico dedicado del backend:
+  - `syslab-backend-assumer`
+- role compartido:
+  - `syslab-course-redes1-role`
+- conexión compartida:
+  - `Redes-1`
+- ejecución real exitosa con policy mínima, sin depender de `AdministratorAccess`
+
 ## Cómo distinguir `personal` vs `course_shared`
 
 ### Si la conexión efectiva es `personal`
@@ -329,3 +342,15 @@ Revisar:
 - `Evidencia del último APPLY real`
 
 Esas dos tarjetas son ahora la evidencia principal sin depender de AWS Console.
+
+### El lab cambió de cuenta después de un APPLY real
+
+Si el laboratorio fue desplegado con una cuenta cloud y luego se cambia la conexión efectiva:
+
+- `Plan Detail` mostrará que la cuenta actual ya no coincide con la del último `APPLY`
+- el backend devolverá `CLOUD_TARGET_CHANGED` para `APPLY` o `DESTROY` reales
+
+La lectura correcta es:
+
+- el estado previo es histórico respecto de otra cuenta
+- no conviene seguir operando ese mismo plan como si la nueva cuenta ya tuviera infraestructura activa

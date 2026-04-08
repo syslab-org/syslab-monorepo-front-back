@@ -75,6 +75,10 @@ Playbook operativo complementario:
 Documentos de cierre de control de usuarios:
 - [Matriz Formal de Permisos y Control de Usuarios](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/user-control-permissions-matrix.md)
 - [Hardening de AssumeRole e IAM Mínimo](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/aws-assumerole-hardening.md)
+- [Caso Validado: Cambio de Cuenta Cloud tras APPLY Real](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/cloud-target-reconciliation-case.md)
+
+Hallazgo operativo ya validado:
+- el role compartido `syslab-course-redes1-role` ya funciona con policy mínima y sin `AdministratorAccess`
 
 ### 5. Guion de presentación
 
@@ -106,7 +110,8 @@ Documento operativo:
 2. leer el [Modelo de Ejecución Cloud por Usuario](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/cloud-execution-model.md)
 3. leer el [Playbook de Conexiones Cloud AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/aws-cloud-connections-playbook.md)
 4. leer la [Matriz Formal de Permisos y Control de Usuarios](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/user-control-permissions-matrix.md)
-5. usar como idea central:
+5. leer el [Caso Validado: Cambio de Cuenta Cloud tras APPLY Real](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/cloud-target-reconciliation-case.md)
+6. usar como idea central:
    - `AWS-first`
    - conexión cloud por owner de ejecución
    - `course_shared` como caso docente controlado
@@ -129,6 +134,7 @@ Documento operativo:
 - El estado `OUTDATED` ya funciona como guardrail real antes de redeploy.
 - `Plan Detail` ya centraliza suficiente observabilidad para no depender tanto de AWS Console.
 - `Próxima ejecución real` y `Evidencia del último APPLY real` ya sirven como trazabilidad concreta de qué cuenta/ARN ejecutó.
+- la reconciliación de cuenta cloud evita interpretar como vigente en la cuenta actual una infraestructura creada con otra conexión.
 - `Managed egress` debe mantenerse como decisión explícita del usuario; no conviene autoactivarlo al crear una zona pública.
 - La pedagogía mejora cuando la UI distingue entre:
   - intención neutral
