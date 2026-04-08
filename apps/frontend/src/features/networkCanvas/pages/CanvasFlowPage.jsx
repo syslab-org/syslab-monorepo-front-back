@@ -218,7 +218,12 @@ function CanvasFlowPage() {
 
   const closeModal = closeNodeModal;
 
-  const onSaveFlow = useSaveFlow({ reactFlowInstance, flowKey, labId });
+  const {
+    saveFlow: onSaveFlow,
+    saveState,
+    saveMessage,
+    lastSavedAt,
+  } = useSaveFlow({ reactFlowInstance, flowKey, labId });
   const onRestoreFlow = useRestoreFlow({ setNodes, setEdges, setViewport, flowKey, getId, setCanvasPlanId, labId });
   const { saveNodeData, deleteNodeInstance } = useNodeActions({
     nodes,
@@ -375,6 +380,9 @@ function CanvasFlowPage() {
             theme={theme}
             toolbarProps={{
               onSave: onSaveFlow,
+              saveState,
+              saveMessage,
+              lastSavedAt,
               onRestore: onRestoreFlow,
               onRestoreInitial: restoreInitialNodes,
               onDeploy: guardBeforeEdit(processJsonToCloud),
