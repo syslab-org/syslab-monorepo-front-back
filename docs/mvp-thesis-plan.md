@@ -69,7 +69,9 @@ Hallazgo actual:
 
 - el runtime real hoy está implementado solo para `AWS`
 - `GCP` y `Azure` aparecen como providers previstos, pero no tienen executor runtime real
-- la ejecución actual depende de credenciales gestionadas por la plataforma (`AWS_PROFILE`, variables de entorno, ECS task role), no de una cuenta cloud vinculada por usuario
+- la plataforma ya soporta `CloudConnection` personal y compartida por curso
+- `AWS` ya soporta autenticación por `Static Keys` y `AssumeRole`
+- el deploy real sigue dependiendo de una identidad base válida del backend para resolver `AssumeRole`
 
 Resolución recomendada:
 
@@ -83,13 +85,17 @@ Resolución recomendada:
 
 Opciones de producto:
 
-1. siguiente corte recomendado
+1. ya implementado en el MVP
    - `AWS` como único provider desplegable real
-   - owner de laboratorio = owner de ejecución
-   - bloqueo explícito para que un profesor no despliegue infraestructura real del alumno por accidente
+   - owner de laboratorio = owner de ejecución por defecto
+   - conexiones cloud por usuario y curso
+   - bloqueo explícito para que un profesor no despliegue infraestructura personal del alumno por accidente
+   - habilitación docente cuando la conexión efectiva es `course_shared`
+   - snapshot auditado del último `APPLY` real
 2. siguiente iteración
-   - conexiones cloud por usuario/equipo/curso
-   - cada owner selecciona una cuenta/proyecto/subscripción autorizada
+   - identidades técnicas dedicadas para backend en vez de depender de credenciales locales/de entorno
+   - scopes mínimos por role y por curso
+   - mejoras de onboarding para registrar la conexión desde la UI
 3. largo plazo
    - bring-your-own-cloud multi-provider
    - roles asumibles en AWS, service accounts en GCP, service principals en Azure
@@ -100,6 +106,7 @@ Entregable:
 - decisión de alcance explícita: `deploy real AWS-first con owner de ejecución y separación entre revisión y apply real`
 - nota de tesis sobre extensibilidad multi-cloud vía adapters/executors
 - referencia detallada: `docs/thesis-validation/cloud-execution-model.md`
+- playbook operativo para repetir pruebas `Static Keys` y `AssumeRole`: `docs/thesis-validation/aws-cloud-connections-playbook.md`
 
 ### 1.2. Hacer útil la opción “Plantilla de laboratorio”
 

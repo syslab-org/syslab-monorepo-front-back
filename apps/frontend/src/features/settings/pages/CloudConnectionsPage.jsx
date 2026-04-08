@@ -35,10 +35,13 @@ const EMPTY_FORM = {
   name: "",
   provider: "aws",
   scope: "personal",
+  auth_type: "aws_static_keys",
   course_id: "",
   default_region: "us-east-1",
   aws_access_key_id: "",
   aws_secret_access_key: "",
+  aws_role_arn: "",
+  aws_external_id: "",
   is_active: true,
 };
 
@@ -93,10 +96,13 @@ export default function CloudConnectionsPage() {
       name: item.name || "",
       provider: item.provider || "aws",
       scope: item.scope || "personal",
+      auth_type: item.auth_type || "aws_static_keys",
       course_id: item.course?.id || "",
       default_region: item.default_region || "us-east-1",
       aws_access_key_id: "",
       aws_secret_access_key: "",
+      aws_role_arn: item.aws_role_arn || "",
+      aws_external_id: "",
       is_active: item.is_active !== false,
     });
     setOpen(true);
@@ -120,17 +126,24 @@ export default function CloudConnectionsPage() {
         name: form.name,
         provider: "aws",
         scope: form.scope,
+        auth_type: form.auth_type,
         course_id: form.scope === "course_shared" ? form.course_id || null : null,
         default_region: form.default_region,
         is_active: !!form.is_active,
       };
 
-      if (!form.id || form.aws_access_key_id) {
-        payload.aws_access_key_id = form.aws_access_key_id;
-      }
-
-      if (form.aws_secret_access_key) {
-        payload.aws_secret_access_key = form.aws_secret_access_key;
+      if (form.auth_type === "aws_static_keys") {
+        if (!form.id || form.aws_access_key_id) {
+          payload.aws_access_key_id = form.aws_access_key_id;
+        }
+        if (form.aws_secret_access_key) {
+          payload.aws_secret_access_key = form.aws_secret_access_key;
+        }
+      } else {
+        payload.aws_role_arn = form.aws_role_arn;
+        if (!form.id || form.aws_external_id) {
+          payload.aws_external_id = form.aws_external_id;
+        }
       }
 
       if (form.id) {
@@ -139,8 +152,7 @@ export default function CloudConnectionsPage() {
       } else {
         await api.createCloudConnection({
           ...payload,
-          auth_type: "aws_static_keys",
-          aws_secret_access_key: form.aws_secret_access_key,
+          aws_secret_access_key: form.auth_type === "aws_static_keys" ? form.aws_secret_access_key : "",
         });
         setMessage("Conexión cloud creada.");
       }
@@ -205,9 +217,10 @@ export default function CloudConnectionsPage() {
             <TableRow>
               <TableCell>Nombre</TableCell>
               <TableCell>Scope</TableCell>
+              <TableCell>Auth</TableCell>
               <TableCell>Curso</TableCell>
               <TableCell>Región</TableCell>
-              <TableCell>Key</TableCell>
+              <TableCell>Destino</TableCell>
               <TableCell>Última prueba</TableCell>
               <TableCell align="right">Acciones</TableCell>
             </TableRow>
@@ -224,9 +237,10 @@ export default function CloudConnectionsPage() {
                   </Stack>
                 </TableCell>
                 <TableCell>{item.scope === "course_shared" ? "Curso" : "Personal"}</TableCell>
+                <TableCell>{item.auth_type === "aws_assume_role" ? "AssumeRole" : "Static keys"}</TableCell>
                 <TableCell>{item.course?.name || "—"}</TableCell>
                 <TableCell>{item.default_region || "—"}</TableCell>
-                <TableCell>{item.masked_access_key_id || "—"}</TableCell>
+                <TableCell>{item.auth_type === "aws_assume_role" ? item.masked_role_arn || item.aws_role_arn || "—" : item.masked_access_key_id || "—"}</TableCell>
                 <TableCell>{item.last_test_status || "Sin probar"}</TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={1} justifyContent="flex-end">
@@ -239,7 +253,7 @@ export default function CloudConnectionsPage() {
             ))}
             {!items.length && !loading && (
               <TableRow>
-                <TableCell colSpan={7}>
+                <TableCell colSpan={8}>
                   <Typography variant="body2" color="text.secondary">
                     No hay conexiones cloud visibles todavía.
                   </Typography>
@@ -279,6 +293,24 @@ export default function CloudConnectionsPage() {
               </FormHelperText>
             </FormControl>
 
+            <FormControl fullWidth>
+              <InputLabel id="auth-type-label">Autenticación</InputLabel>
+              <Select
+                labelId="auth-type-label"
+                value={form.auth_type}
+                label="Autenticación"
+                onChange={(e) => handleChange("auth_type", e.target.value)}
+              >
+                <MenuItem value="aws_static_keys">AWS Static Keys</MenuItem>
+                <MenuItem value="aws_assume_role">AWS AssumeRole</MenuItem>
+              </Select>
+              <FormHelperText>
+                {form.auth_type === "aws_assume_role"
+                  ? "Recomendado para producción: la plataforma asume un role y usa credenciales temporales."
+                  : "Más simple para pruebas locales, pero menos seguro a largo plazo."}
+              </FormHelperText>
+            </FormControl>
+
             {form.scope === "course_shared" && (
               <FormControl fullWidth>
                 <InputLabel id="course-label">Curso</InputLabel>
@@ -302,20 +334,41 @@ export default function CloudConnectionsPage() {
               fullWidth
             />
 
-            <TextField
-              label="AWS Access Key ID"
-              value={form.aws_access_key_id}
-              onChange={(e) => handleChange("aws_access_key_id", e.target.value)}
-              fullWidth
-            />
+            {form.auth_type === "aws_static_keys" ? (
+              <>
+                <TextField
+                  label="AWS Access Key ID"
+                  value={form.aws_access_key_id}
+                  onChange={(e) => handleChange("aws_access_key_id", e.target.value)}
+                  fullWidth
+                />
 
-            <TextField
-              label={form.id ? "AWS Secret Access Key (solo si quieres reemplazarla)" : "AWS Secret Access Key"}
-              value={form.aws_secret_access_key}
-              onChange={(e) => handleChange("aws_secret_access_key", e.target.value)}
-              type="password"
-              fullWidth
-            />
+                <TextField
+                  label={form.id ? "AWS Secret Access Key (solo si quieres reemplazarla)" : "AWS Secret Access Key"}
+                  value={form.aws_secret_access_key}
+                  onChange={(e) => handleChange("aws_secret_access_key", e.target.value)}
+                  type="password"
+                  fullWidth
+                />
+              </>
+            ) : (
+              <>
+                <TextField
+                  label="AWS Role ARN"
+                  value={form.aws_role_arn}
+                  onChange={(e) => handleChange("aws_role_arn", e.target.value)}
+                  placeholder="arn:aws:iam::123456789012:role/syslab-course-role"
+                  fullWidth
+                />
+
+                <TextField
+                  label={form.id ? "External ID (solo si quieres reemplazarlo)" : "External ID"}
+                  value={form.aws_external_id}
+                  onChange={(e) => handleChange("aws_external_id", e.target.value)}
+                  fullWidth
+                />
+              </>
+            )}
 
             <Stack direction="row" spacing={1} alignItems="center">
               <Switch checked={!!form.is_active} onChange={(e) => handleChange("is_active", e.target.checked)} />

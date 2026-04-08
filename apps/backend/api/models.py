@@ -26,6 +26,7 @@ CLOUD_SCOPE_PERSONAL = "personal"
 CLOUD_SCOPE_COURSE_SHARED = "course_shared"
 
 CLOUD_AUTH_AWS_STATIC = "aws_static_keys"
+CLOUD_AUTH_AWS_ASSUME_ROLE = "aws_assume_role"
 
 
 class RoleChoices(models.TextChoices):
@@ -58,6 +59,7 @@ class CloudConnectionScopeChoices(models.TextChoices):
 
 class CloudAuthTypeChoices(models.TextChoices):
     AWS_STATIC_KEYS = CLOUD_AUTH_AWS_STATIC, "AWS Static Keys"
+    AWS_ASSUME_ROLE = CLOUD_AUTH_AWS_ASSUME_ROLE, "AWS Assume Role"
 
 
 class Course(models.Model):
@@ -130,6 +132,8 @@ class CloudConnection(models.Model):
     default_region = models.CharField(max_length=32, blank=True, default="")
     aws_access_key_id = models.CharField(max_length=128, blank=True, default="")
     aws_secret_access_key_encrypted = models.TextField(blank=True, default="")
+    aws_role_arn = models.CharField(max_length=255, blank=True, default="")
+    aws_external_id_encrypted = models.TextField(blank=True, default="")
     is_active = models.BooleanField(default=True, db_index=True)
     last_test_status = models.CharField(max_length=24, blank=True, default="")
     last_test_message = models.TextField(blank=True, default="")
@@ -150,6 +154,13 @@ class CloudConnection(models.Model):
         if len(value) <= 4:
             return value
         return f"{value[:4]}...{value[-4:]}"
+
+    @property
+    def masked_role_arn(self) -> str:
+        value = str(self.aws_role_arn or "").strip()
+        if len(value) <= 18:
+            return value
+        return f"{value[:12]}...{value[-6:]}"
 
 
 class UserProfile(models.Model):

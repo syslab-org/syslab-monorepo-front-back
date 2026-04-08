@@ -17,10 +17,27 @@ La pregunta clave no es la IP desde la que entra profesor o alumno, sino **qué 
 Hoy el runtime real:
 
 - ejecuta sobre `AWS`
-- resuelve credenciales desde la plataforma (`AWS_PROFILE`, variables de entorno o task role)
-- no modela todavía una conexión cloud por usuario/curso/equipo
+- modela conexiones cloud por usuario y por curso
+- resuelve una conexión efectiva por laboratorio
+- soporta autenticación `AWS Static Keys` y `AWS AssumeRole`
+- sigue pudiendo usar credenciales base de la plataforma para el principal que asume un role
 
-Además, antes de este ajuste un profesor podía ver planes de su curso y también disparar `deploy` real sobre un laboratorio de un alumno, lo que mezclaba visibilidad académica con autoridad sobre infraestructura.
+Hoy el modelo operativo implementado es:
+
+- `CloudConnection` personal del usuario
+- `CloudConnection` compartida por curso
+- asociación explícita de conexión al laboratorio o resolución automática
+- snapshot auditado del último `APPLY` real
+- visibilidad en UI de la conexión efectiva antes del deploy
+
+La política actual ya no mezcla visibilidad académica con autoridad cloud:
+
+- alumnos pueden desplegar con su conexión personal
+- profesores pueden revisar y validar en `PLAN`
+- profesores pueden ejecutar `APPLY` y `DESTROY` sobre labs de alumnos solo si la conexión efectiva es `course_shared`
+- sobre conexiones personales del alumno, el profesor sigue bloqueado salvo `platform_admin`
+
+Además, el deploy real no depende del computador del usuario ni de su IP. Terraform y `boto3` corren en backend/celery usando la conexión cloud resuelta por la plataforma.
 
 ## Decisión recomendada
 
@@ -34,7 +51,8 @@ Regla propuesta:
 - el `owner` del laboratorio es también el `execution owner`
 - el `deploy` real y `destroy` usan la conexión cloud del `execution owner`
 - profesores pueden ver, revisar y validar en modo `PLAN` los canvas de sus estudiantes
-- profesores no deben ejecutar `APPLY` real ni `DESTROY` sobre cuentas cloud de estudiantes salvo delegación explícita
+- profesores no deben ejecutar `APPLY` real ni `DESTROY` sobre cuentas cloud personales de estudiantes salvo delegación explícita
+- profesores sí pueden ejecutar infraestructura real cuando el laboratorio usa una cuenta `course_shared` del curso
 - `platform_admin` conserva capacidad operativa excepcional
 
 ## Implicancia para alumnos y profesores
@@ -83,6 +101,11 @@ Para `AWS`, priorizar:
 - `assume role` en vez de access keys permanentes
 - validación con `sts:GetCallerIdentity`
 - scopes mínimos por laboratorio/curso
+- evidencia visible en UI de:
+  - conexión efectiva
+  - cuenta AWS prevista
+  - `ARN` conocido antes del `APPLY`
+  - snapshot auditado del último `APPLY` real
 
 ## Proyección multi-cloud
 
@@ -98,10 +121,16 @@ La extensión natural es:
 
 ## Cambio aplicado en este corte
 
-En este repo se dejó resuelta la política inmediata:
+En este repo quedó resuelto lo siguiente:
 
 - usuarios visibles del curso pueden seguir revisando y validando en `PLAN`
-- solo el dueño del laboratorio o un `platform_admin` pueden lanzar `APPLY` real o `DESTROY`
+- el laboratorio puede resolver una conexión efectiva:
+  - explícita en el lab
+  - personal del owner
+  - compartida del curso
+- la UI expone `Próxima ejecución real` con provider, source, scope, región, cuenta prevista y `ARN` conocido
+- cada `APPLY` real guarda evidencia auditada del contexto usado
+- el profesor del curso puede ejecutar `APPLY`/`DESTROY` solo si la conexión efectiva es `course_shared`
 
 Además, este corte agrega una primera versión operativa de `bring-your-own-cloud` para `AWS`:
 
@@ -110,9 +139,33 @@ Además, este corte agrega una primera versión operativa de `bring-your-own-clo
 - conexiones compartidas por curso
 - selección opcional de conexión al crear o editar un laboratorio
 - resolución backend de credenciales para que el deploy no dependa del computador ni de la IP del usuario
+- autenticación `AWS Static Keys`
+- autenticación `AWS AssumeRole`
+
+Escenarios ya validados manualmente:
+
+- alumno con conexión personal `Static Keys`
+- alumno con conexión personal `AssumeRole`
+- profesor bloqueado cuando el lab del alumno usa conexión personal
+- profesor habilitado cuando el lab usa conexión `course_shared`
+- lectura de evidencia de ejecución desde `Plan Detail`
+
+Ejemplo validado en este ciclo:
+
+- conexión efectiva: `assume-role-alumno22`
+- `source`: `lab_explicit`
+- `scope`: `personal`
+- cuenta prevista: `034739223309`
+- `ARN` conocido antes del deploy:
+  - `arn:aws:sts::034739223309:assumed-role/syslab-alumno22-role/syslab-...`
 
 Límite actual:
 
 - solo `AWS`
-- autenticación real implementada con `access key + secret key`
-- multi-cloud y mecanismos como `assume role` quedan como siguiente iteración
+- el flujo `AssumeRole` actual depende de una identidad base válida en backend para llamar `sts:AssumeRole`
+- `GCP` y `Azure` siguen siendo roadmap
+- multi-cloud sigue siendo extensibilidad arquitectónica, no capacidad cerrada del MVP
+
+Referencia operativa:
+
+- [Playbook de Conexiones Cloud AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/aws-cloud-connections-playbook.md)

@@ -7,6 +7,7 @@ from rest_framework.response import Response
 
 from .cloud_connections import test_aws_connection
 from .models import (
+    CLOUD_AUTH_AWS_ASSUME_ROLE,
     CLOUD_SCOPE_COURSE_SHARED,
     CLOUD_SCOPE_PERSONAL,
     Course,
@@ -69,8 +70,10 @@ class CloudConnectionViewSet(viewsets.ViewSet):
             course=course,
             created_by=user,
             default_region=data.get("default_region", ""),
-            aws_access_key_id=data["aws_access_key_id"].strip(),
-            aws_secret_access_key_encrypted=encrypt_secret(data["aws_secret_access_key"]),
+            aws_access_key_id=str(data.get("aws_access_key_id") or "").strip(),
+            aws_secret_access_key_encrypted=encrypt_secret(data.get("aws_secret_access_key")),
+            aws_role_arn=str(data.get("aws_role_arn") or "").strip(),
+            aws_external_id_encrypted=encrypt_secret(data.get("aws_external_id")),
             is_active=bool(data.get("is_active", True)),
         )
         out = CloudConnectionSerializer(connection, context={"request": request})
@@ -81,16 +84,29 @@ class CloudConnectionViewSet(viewsets.ViewSet):
         if not can_edit_cloud_connection(request.user, connection):
             return Response({"detail": "No autorizado para editar esta conexion."}, status=status.HTTP_403_FORBIDDEN)
 
-        serializer = CloudConnectionUpdateSerializer(data=request.data or {}, partial=True)
+        serializer = CloudConnectionUpdateSerializer(
+            data=request.data or {},
+            partial=True,
+            context={"instance": connection},
+        )
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        for field in ("name", "default_region", "aws_access_key_id", "is_active"):
+        for field in ("name", "default_region", "aws_access_key_id", "aws_role_arn", "auth_type", "is_active"):
             if field in data:
                 setattr(connection, field, data[field])
 
         if "aws_secret_access_key" in data and str(data["aws_secret_access_key"] or "").strip():
             connection.aws_secret_access_key_encrypted = encrypt_secret(data["aws_secret_access_key"])
+        if "aws_external_id" in data:
+            connection.aws_external_id_encrypted = encrypt_secret(data["aws_external_id"])
+
+        if connection.auth_type == CLOUD_AUTH_AWS_ASSUME_ROLE:
+            connection.aws_access_key_id = ""
+            connection.aws_secret_access_key_encrypted = ""
+        else:
+            connection.aws_role_arn = ""
+            connection.aws_external_id_encrypted = ""
 
         connection.save()
         out = CloudConnectionSerializer(connection, context={"request": request})
