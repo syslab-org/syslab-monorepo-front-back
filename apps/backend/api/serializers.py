@@ -1,6 +1,7 @@
 import json
 
 from django.contrib.auth.models import User
+from django.utils import timezone
 from rest_framework import serializers
 
 from .cloud_connections import resolve_lab_cloud_connection_with_source
@@ -9,12 +10,14 @@ from .models import (
     AmiCatalogEntry,
     CLOUD_SCOPE_PERSONAL,
     CLOUD_AUTH_AWS_STATIC,
+    CloudExecutionDelegation,
     CloudAuthTypeChoices,
     CloudConnection,
     CloudConnectionScopeChoices,
     Course,
     Lab,
     Plan,
+    PlanExecutionRecord,
     ProviderChoices,
     ROLE_PLATFORM_ADMIN,
     ROLE_STUDENT,
@@ -30,6 +33,130 @@ from .permissions import can_edit_cloud_connection, can_execute_plan, canonical_
 
 ROLE_CHOICES = [ROLE_PLATFORM_ADMIN, ROLE_TEACHER, ROLE_STUDENT]
 STATUS_CHOICES = [STATUS_PENDING, STATUS_ACTIVE, STATUS_DEACTIVATED]
+
+
+class PlanExecutionRecordSerializer(serializers.ModelSerializer):
+    requested_by = serializers.SerializerMethodField()
+    delegation_id = serializers.UUIDField(source="delegation.id", read_only=True)
+
+    class Meta:
+        model = PlanExecutionRecord
+        fields = (
+            "id",
+            "action",
+            "status",
+            "simulate_only",
+            "provider",
+            "task_id",
+            "cloud_connection_name",
+            "cloud_connection_scope",
+            "resolved_execution_source",
+            "credential_source",
+            "account_id",
+            "arn",
+            "sts_user_id",
+            "error",
+            "requested_by",
+            "delegation_id",
+            "started_at",
+            "completed_at",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+    def get_requested_by(self, obj):
+        if not obj.requested_by_id:
+            return None
+        user = obj.requested_by
+        full = f"{user.first_name} {user.last_name}".strip()
+        return {
+            "id": user.id,
+            "email": user.email,
+            "display_name": full or user.username or user.email,
+            "role": canonical_role(user),
+        }
+
+
+class CloudExecutionDelegationSerializer(serializers.ModelSerializer):
+    owner_user = serializers.SerializerMethodField()
+    delegate_user = serializers.SerializerMethodField()
+    lab = serializers.SerializerMethodField()
+    cloud_connection = serializers.SerializerMethodField()
+    course = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CloudExecutionDelegation
+        fields = (
+            "id",
+            "lab",
+            "cloud_connection",
+            "owner_user",
+            "delegate_user",
+            "course",
+            "provider",
+            "note",
+            "is_active",
+            "status",
+            "expires_at",
+            "revoked_at",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+    def get_status(self, obj):
+        if obj.revoked_at:
+            return "revoked"
+        if obj.expires_at and obj.expires_at <= timezone.now():
+            return "expired"
+        return "active" if obj.is_currently_active else "inactive"
+
+    def _serialize_user(self, user):
+        if not user:
+            return None
+        full = f"{user.first_name} {user.last_name}".strip()
+        return {
+            "id": user.id,
+            "email": user.email,
+            "display_name": full or user.username or user.email,
+            "role": canonical_role(user),
+        }
+
+    def get_owner_user(self, obj):
+        return self._serialize_user(getattr(obj, "owner_user", None))
+
+    def get_delegate_user(self, obj):
+        return self._serialize_user(getattr(obj, "delegate_user", None))
+
+    def get_lab(self, obj):
+        return {
+            "id": str(obj.lab_id),
+            "name": obj.lab.name,
+            "canvas_id": obj.lab.canvas_id,
+        } if obj.lab_id else None
+
+    def get_cloud_connection(self, obj):
+        if not obj.cloud_connection_id:
+            return None
+        return {
+            "id": str(obj.cloud_connection_id),
+            "name": obj.cloud_connection.name,
+            "scope": obj.cloud_connection.scope,
+        }
+
+    def get_course(self, obj):
+        if not obj.course_id:
+            return None
+        return {
+            "id": str(obj.course_id),
+            "name": obj.course.name,
+            "code": obj.course.code,
+            "teacher_id": obj.course.teacher_id,
+            "teacher_email": obj.course.teacher.email,
+            "is_active": obj.course.is_active,
+        }
 
 
 class CanonicalProviderChoiceField(serializers.ChoiceField):
@@ -122,6 +249,7 @@ class PlanDetailSerializer(serializers.ModelSerializer):
     lab = serializers.SerializerMethodField()
     last_apply_context = serializers.JSONField(read_only=True)
     resolved_execution_target = serializers.SerializerMethodField()
+    execution_history = serializers.SerializerMethodField()
 
     class Meta:
         model = Plan
@@ -144,6 +272,7 @@ class PlanDetailSerializer(serializers.ModelSerializer):
             "last_destroy_task_id",
             "last_apply_context",
             "resolved_execution_target",
+            "execution_history",
             "canvas_id",
             "firestore_vpc_id",
             "canvas_hash",
@@ -180,6 +309,10 @@ class PlanDetailSerializer(serializers.ModelSerializer):
 
     def get_resolved_execution_target(self, obj):
         return serialize_resolved_execution_target(getattr(obj, "lab", None), getattr(obj, "payload", None))
+
+    def get_execution_history(self, obj):
+        history = list(obj.execution_history.select_related("requested_by", "delegation").all()[:10])
+        return PlanExecutionRecordSerializer(history, many=True).data
 
 
 class CourseSummarySerializer(serializers.ModelSerializer):
@@ -492,6 +625,13 @@ class CloudConnectionUpdateSerializer(serializers.Serializer):
         else:
             raise serializers.ValidationError("Tipo de autenticacion AWS no soportado en este MVP.")
         return attrs
+
+
+class CloudExecutionDelegationCreateSerializer(serializers.Serializer):
+    lab_id = serializers.UUIDField()
+    delegate_user_id = serializers.IntegerField(required=False)
+    expires_at = serializers.DateTimeField(required=False, allow_null=True)
+    note = serializers.CharField(required=False, allow_blank=True, default="")
 
 
 class LabSerializer(serializers.ModelSerializer):

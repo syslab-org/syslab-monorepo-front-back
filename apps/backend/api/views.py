@@ -10,10 +10,15 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from .cloud_connections import build_aws_runtime_env, build_boto3_session_from_runtime_env, resolve_lab_cloud_connection
+from .cloud_connections import (
+    build_aws_runtime_env,
+    build_boto3_session_from_runtime_env,
+    resolve_lab_cloud_connection,
+    resolve_lab_cloud_connection_with_source,
+)
 from .helpers import ensure_lab_for_canvas, visible_plans_queryset
-from .models import Plan
-from .permissions import can_execute_plan
+from .models import Plan, PlanExecutionRecord
+from .permissions import can_execute_plan, get_active_execution_delegation
 from .providers.aws.payload import get_network_id, get_region
 from .tasks import destroy_last_deploy, process_network_plan, prueba_larga
 from .validators import validate_network_plan
@@ -388,9 +393,42 @@ def deploy_plan(request, plan_id: UUID):
         plan.assign_canvas_id(canvas_id)
         plan.save(update_fields=["canvas_id"])
 
-    task = process_network_plan.delay(plan_id=str(plan.id), payload=task_payload)
+    resolved_connection, resolved_source = resolve_lab_cloud_connection_with_source(
+        getattr(plan, "lab", None),
+        (plan.payload or {}).get("cloud"),
+    )
+    delegation = None
+    if not simulate_only:
+        delegation = get_active_execution_delegation(request.user, getattr(plan, "lab", None), resolved_connection)
+    execution_record = PlanExecutionRecord.objects.create(
+        plan=plan,
+        lab=getattr(plan, "lab", None),
+        requested_by=request.user,
+        delegation=delegation,
+        action=Plan.LastAction.APPLY if not simulate_only else Plan.LastAction.PLAN,
+        simulate_only=simulate_only,
+        provider=(task_payload.get("cloud") or getattr(getattr(plan, "lab", None), "target_provider", "aws") or "aws"),
+        status=PlanExecutionRecord.Status.PENDING,
+        cloud_connection=resolved_connection,
+        cloud_connection_name=getattr(resolved_connection, "name", "") or "",
+        cloud_connection_scope=getattr(resolved_connection, "scope", "") or "",
+        resolved_execution_source=resolved_source,
+        request_summary={
+            "plan_id": str(plan.id),
+            "canvas_id": str(plan.canvas_id or ""),
+            "name": task_payload.get("name") or plan.name or "",
+        },
+    )
+
+    task = process_network_plan.delay(
+        plan_id=str(plan.id),
+        payload=task_payload,
+        execution_record_id=str(execution_record.id),
+    )
     plan.task_id = task.id
     plan.save(update_fields=["task_id"])
+    execution_record.task_id = task.id
+    execution_record.save(update_fields=["task_id", "updated_at"])
 
     return Response(
         {
@@ -446,10 +484,37 @@ def _start_destroy_for_plan(user, plan: Plan):
     plan.last_action = Plan.LastAction.DESTROY
     plan.save(update_fields=["status", "error", "updated_at", "payload", "last_action"])
 
-    task = destroy_last_deploy.delay(str(plan.id))
+    resolved_connection, resolved_source = resolve_lab_cloud_connection_with_source(
+        getattr(plan, "lab", None),
+        (plan.payload or {}).get("cloud"),
+    )
+    delegation = get_active_execution_delegation(user, getattr(plan, "lab", None), resolved_connection)
+    execution_record = PlanExecutionRecord.objects.create(
+        plan=plan,
+        lab=getattr(plan, "lab", None),
+        requested_by=user,
+        delegation=delegation,
+        action=Plan.LastAction.DESTROY,
+        simulate_only=False,
+        provider=((plan.payload or {}).get("cloud") or getattr(getattr(plan, "lab", None), "target_provider", "aws") or "aws"),
+        status=PlanExecutionRecord.Status.PENDING,
+        cloud_connection=resolved_connection,
+        cloud_connection_name=getattr(resolved_connection, "name", "") or "",
+        cloud_connection_scope=getattr(resolved_connection, "scope", "") or "",
+        resolved_execution_source=resolved_source,
+        request_summary={
+            "plan_id": str(plan.id),
+            "canvas_id": str(plan.canvas_id or ""),
+            "name": (plan.payload or {}).get("name") or plan.name or "",
+        },
+    )
+
+    task = destroy_last_deploy.delay(str(plan.id), execution_record_id=str(execution_record.id))
     plan.task_id = task.id
     plan.updated_at = timezone.now()
     plan.save(update_fields=["task_id", "updated_at"])
+    execution_record.task_id = task.id
+    execution_record.save(update_fields=["task_id", "updated_at"])
 
     return Response(
         {

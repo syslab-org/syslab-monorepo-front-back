@@ -1,6 +1,15 @@
 from django.contrib import admin
 
-from .models import AmiCatalogEntry, CloudConnection, Course, Lab, Plan, UserProfile
+from .models import (
+    AmiCatalogEntry,
+    CloudConnection,
+    CloudExecutionDelegation,
+    Course,
+    Lab,
+    Plan,
+    PlanExecutionRecord,
+    UserProfile,
+)
 
 
 @admin.register(Plan)
@@ -51,3 +60,17 @@ class CloudConnectionAdmin(admin.ModelAdmin):
     list_display = ("name", "provider", "scope", "owner_user", "course", "is_active", "updated_at")
     list_filter = ("provider", "scope", "is_active")
     search_fields = ("name", "aws_access_key_id", "owner_user__email", "course__name")
+
+
+@admin.register(PlanExecutionRecord)
+class PlanExecutionRecordAdmin(admin.ModelAdmin):
+    list_display = ("id", "plan", "action", "status", "requested_by", "cloud_connection_name", "created_at")
+    list_filter = ("action", "status", "provider", "simulate_only")
+    search_fields = ("plan__name", "task_id", "account_id", "arn", "requested_by__email")
+
+
+@admin.register(CloudExecutionDelegation)
+class CloudExecutionDelegationAdmin(admin.ModelAdmin):
+    list_display = ("id", "lab", "owner_user", "delegate_user", "cloud_connection", "is_active", "expires_at", "created_at")
+    list_filter = ("provider", "is_active", "course")
+    search_fields = ("lab__name", "owner_user__email", "delegate_user__email", "cloud_connection__name")

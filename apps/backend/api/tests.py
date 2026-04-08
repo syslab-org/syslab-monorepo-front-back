@@ -1,12 +1,14 @@
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import SimpleTestCase
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from .domain.network_intent import normalize_network_intent
-from .models import CLOUD_AUTH_AWS_ASSUME_ROLE, CLOUD_SCOPE_COURSE_SHARED, CLOUD_SCOPE_PERSONAL, CloudConnection, Course, Lab, Plan, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, STATUS_ACTIVE, VISIBILITY_COURSE, VISIBILITY_OWNER
+from .models import CLOUD_AUTH_AWS_ASSUME_ROLE, CLOUD_SCOPE_COURSE_SHARED, CLOUD_SCOPE_PERSONAL, CloudConnection, CloudExecutionDelegation, Course, Lab, Plan, PlanExecutionRecord, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, STATUS_ACTIVE, VISIBILITY_COURSE, VISIBILITY_OWNER
 from .providers import get_provider_adapter, get_provider_executor
 from .cloud_connections import build_aws_runtime_env
 from .providers.aws.runtime import build_nat_cleanup_targets
@@ -760,6 +762,40 @@ class VisibilityApiTests(APITestCase):
         self.assertEqual(plan.last_action, Plan.LastAction.APPLY)
         self.assertEqual(plan.task_id, "task-course-apply-1")
 
+    @patch("api.views.process_network_plan.delay")
+    @patch("api.views._can_run_real_terraform", return_value=True)
+    def test_teacher_can_apply_student_plan_when_personal_connection_has_active_delegation(
+        self,
+        _can_run_real_terraform,
+        mocked_delay,
+    ):
+        mocked_delay.return_value = SimpleNamespace(id="task-delegated-apply-1")
+        plan = Plan.objects.get(name="Plan alumno")
+        delegation = CloudExecutionDelegation.objects.create(
+            lab=self.student_lab,
+            cloud_connection=self.student_connection,
+            owner_user=self.student,
+            delegate_user=self.teacher,
+            course=self.course,
+            provider="aws",
+            note="Revisión docente autorizada",
+            created_by=self.student,
+            expires_at=timezone.now() + timedelta(hours=2),
+        )
+
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(
+            f"/api/network/plans/{plan.id}/deploy/",
+            {"simulate_only": False},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 202)
+        execution = PlanExecutionRecord.objects.filter(plan=plan).order_by("-created_at").first()
+        self.assertIsNotNone(execution)
+        self.assertEqual(execution.delegation_id, delegation.id)
+        self.assertEqual(execution.requested_by_id, self.teacher.id)
+
     def test_teacher_cannot_destroy_student_plan(self):
         plan = Plan.objects.get(name="Plan alumno")
         plan.applied = True
@@ -841,6 +877,37 @@ class VisibilityApiTests(APITestCase):
         self.assertEqual(res.json()["last_apply_context"]["cloud_connection_id"], str(self.student_connection.id))
         self.assertEqual(res.json()["last_apply_context"]["account_id"], "123456789012")
 
+    def test_plan_detail_exposes_execution_history(self):
+        plan = Plan.objects.get(name="Plan alumno")
+        PlanExecutionRecord.objects.create(
+            plan=plan,
+            lab=self.student_lab,
+            requested_by=self.student,
+            action=Plan.LastAction.APPLY,
+            simulate_only=False,
+            provider="aws",
+            status=PlanExecutionRecord.Status.SUCCESS,
+            task_id="task-history-1",
+            cloud_connection=self.student_connection,
+            cloud_connection_name=self.student_connection.name,
+            cloud_connection_scope=self.student_connection.scope,
+            resolved_execution_source="lab_explicit",
+            credential_source="cloud_connection",
+            account_id="123456789012",
+            arn="arn:aws:sts::123456789012:assumed-role/syslab-student-role/syslab-1234",
+            sts_user_id="AIDAEXAMPLE",
+        )
+
+        self.client.force_authenticate(self.student)
+        res = self.client.get(f"/api/network/plans/{plan.id}/")
+
+        self.assertEqual(res.status_code, 200)
+        history = res.json()["execution_history"]
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["task_id"], "task-history-1")
+        self.assertEqual(history[0]["credential_source"], "cloud_connection")
+        self.assertEqual(history[0]["requested_by"]["email"], "student@example.com")
+
     def test_plan_detail_exposes_resolved_execution_target(self):
         plan = Plan.objects.get(name="Plan alumno")
 
@@ -916,6 +983,30 @@ class VisibilityApiTests(APITestCase):
             format="json",
         )
         self.assertEqual(res.status_code, 403)
+
+    def test_student_can_create_and_revoke_execution_delegation_for_course_teacher(self):
+        self.client.force_authenticate(self.student)
+        create_res = self.client.post(
+            "/api/execution-delegations/",
+            {
+                "lab_id": str(self.student_lab.id),
+                "note": "Autorización temporal para revisión",
+            },
+            format="json",
+        )
+
+        self.assertEqual(create_res.status_code, 201)
+        delegation_id = create_res.json()["id"]
+        self.assertEqual(create_res.json()["delegate_user"]["email"], "teacher@example.com")
+        self.assertEqual(create_res.json()["cloud_connection"]["id"], str(self.student_connection.id))
+
+        list_res = self.client.get("/api/execution-delegations/")
+        self.assertEqual(list_res.status_code, 200)
+        self.assertEqual(len(list_res.json()), 1)
+
+        revoke_res = self.client.post(f"/api/execution-delegations/{delegation_id}/revoke/")
+        self.assertEqual(revoke_res.status_code, 200)
+        self.assertEqual(revoke_res.json()["status"], "revoked")
 
     def test_lab_can_be_created_with_visible_cloud_connection(self):
         self.client.force_authenticate(self.student)

@@ -1043,6 +1043,7 @@ export default function PlanDetailPage() {
   const hasResolvedExecutionTarget = Object.keys(resolvedExecutionTarget).length > 0;
   const lastApplyContext = safeObject(plan?.last_apply_context);
   const hasLastApplyContext = Object.keys(lastApplyContext).length > 0;
+  const executionHistory = Array.isArray(plan?.execution_history) ? plan.execution_history : [];
   const hasOutputsData = Boolean(
     outputsResponse?.outputs &&
       typeof outputsResponse.outputs === 'object' &&
@@ -1881,6 +1882,71 @@ export default function PlanDetailPage() {
                         No se pudo resolver STS al capturar la auditoría: {lastApplyContext.identity_error}
                       </Alert>
                     )}
+                  </Stack>
+                )}
+              </Paper>
+
+              <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Historial reciente de ejecuciones
+                </Typography>
+                {executionHistory.length === 0 ? (
+                  <Alert severity="info" variant="outlined">
+                    Aún no hay ejecuciones registradas para este plan.
+                  </Alert>
+                ) : (
+                  <Stack spacing={1.5}>
+                    {executionHistory.map((item) => (
+                      <Paper
+                        key={item.id}
+                        variant="outlined"
+                        sx={{ p: 1.5, bgcolor: 'background.default' }}
+                      >
+                        <Stack spacing={1}>
+                          <Stack direction="row" spacing={1} flexWrap="wrap">
+                            <Chip size="small" label={(item.action || '—').toUpperCase()} variant="outlined" />
+                            <Chip size="small" label={item.status || '—'} {...statusChipProps(String(item.status || '').toUpperCase())} />
+                            <Chip
+                              size="small"
+                              label={item.simulate_only ? 'PREVIEW' : 'REAL'}
+                              color={item.simulate_only ? 'info' : 'success'}
+                              variant={item.simulate_only ? 'outlined' : 'filled'}
+                            />
+                            {item.cloud_connection_scope && (
+                              <Chip size="small" label={`Scope: ${item.cloud_connection_scope}`} variant="outlined" />
+                            )}
+                          </Stack>
+                          <Typography component="div" variant="body2" color="text.secondary">
+                            Solicitado por:{' '}
+                            <b>{item.requested_by?.display_name || item.requested_by?.email || '—'}</b>
+                            {item.delegation_id ? ` · delegación ${item.delegation_id}` : ''}
+                          </Typography>
+                          <Typography component="div" variant="body2" color="text.secondary">
+                            Conexión:{' '}
+                            <b>{item.cloud_connection_name || 'Credenciales del entorno'}</b>
+                            {item.resolved_execution_source ? ` · source ${item.resolved_execution_source}` : ''}
+                          </Typography>
+                          {(item.account_id || item.arn) && (
+                            <Typography component="div" variant="body2" color="text.secondary">
+                              Identidad:{' '}
+                              <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                                {item.account_id || '—'}
+                                {item.arn ? ` · ${item.arn}` : ''}
+                              </Box>
+                            </Typography>
+                          )}
+                          <Typography component="div" variant="body2" color="text.secondary">
+                            Inicio: <b>{formatDateTime(item.started_at || item.created_at)}</b>
+                            {item.completed_at ? ` · Fin: ${formatDateTime(item.completed_at)}` : ''}
+                          </Typography>
+                          {item.error && (
+                            <Alert severity="warning" variant="outlined">
+                              {item.error}
+                            </Alert>
+                          )}
+                        </Stack>
+                      </Paper>
+                    ))}
                   </Stack>
                 )}
               </Paper>

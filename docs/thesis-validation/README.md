@@ -72,6 +72,10 @@ Playbook operativo complementario:
 - validación de `personal` vs `course_shared`
 - señales concretas en `Plan Detail` para confirmar qué identidad ejecutó
 
+Documentos de cierre de control de usuarios:
+- [Matriz Formal de Permisos y Control de Usuarios](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/user-control-permissions-matrix.md)
+- [Hardening de AssumeRole e IAM Mínimo](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/aws-assumerole-hardening.md)
+
 ### 5. Guion de presentación
 
 Documento operativo:
@@ -101,10 +105,12 @@ Documento operativo:
 1. leer el [Plan de Cierre del MVP para Tesis](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/mvp-thesis-plan.md)
 2. leer el [Modelo de Ejecución Cloud por Usuario](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/cloud-execution-model.md)
 3. leer el [Playbook de Conexiones Cloud AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/aws-cloud-connections-playbook.md)
-4. usar como idea central:
+4. leer la [Matriz Formal de Permisos y Control de Usuarios](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/user-control-permissions-matrix.md)
+5. usar como idea central:
    - `AWS-first`
    - conexión cloud por owner de ejecución
    - `course_shared` como caso docente controlado
+   - delegación explícita como excepción auditable sobre cuentas personales
    - `AssumeRole` como mejora de seguridad frente a keys permanentes
    - multi-cloud como extensibilidad arquitectónica, no como capacidad cerrada del MVP
 

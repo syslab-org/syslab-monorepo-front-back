@@ -10,7 +10,7 @@ from .cloud_connections import (
     get_aws_identity_from_runtime_env,
     resolve_lab_cloud_connection,
 )
-from .models import Plan
+from .models import Plan, PlanExecutionRecord
 from .providers import get_provider_executor, get_provider_key
 
 
@@ -71,6 +71,52 @@ def _build_last_apply_context(*, provider, connection, bundle, identity=None, id
     return context
 
 
+def _mark_execution_record_running(record_id: str | None, *, task_id: str):
+    if not record_id:
+        return
+    PlanExecutionRecord.objects.filter(id=record_id).update(
+        status=PlanExecutionRecord.Status.RUNNING,
+        task_id=task_id,
+        started_at=timezone.now(),
+        updated_at=timezone.now(),
+    )
+
+
+def _mark_execution_record_finished(
+    record_id: str | None,
+    *,
+    status_value: str,
+    task_id: str = "",
+    bundle=None,
+    connection=None,
+    identity=None,
+    error: str = "",
+):
+    if not record_id:
+        return
+
+    identity = identity or {}
+    updates = {
+        "status": status_value,
+        "completed_at": timezone.now(),
+        "updated_at": timezone.now(),
+        "error": str(error or ""),
+    }
+    if task_id:
+        updates["task_id"] = task_id
+    if bundle:
+        updates["credential_source"] = bundle.diag.get("credential_source") or ("cloud_connection" if connection else "environment")
+    if connection:
+        updates["cloud_connection_id"] = connection.id
+        updates["cloud_connection_name"] = getattr(connection, "name", "") or ""
+        updates["cloud_connection_scope"] = getattr(connection, "scope", "") or ""
+    if identity:
+        updates["account_id"] = str(identity.get("Account") or "")
+        updates["arn"] = str(identity.get("Arn") or "")
+        updates["sts_user_id"] = str(identity.get("UserId") or "")
+    PlanExecutionRecord.objects.filter(id=record_id).update(**updates)
+
+
 # === TAREAS CELERY ===
 @shared_task(name="api.tasks.prueba_larga")
 def prueba_larga(n: int = 3):
@@ -81,7 +127,7 @@ def prueba_larga(n: int = 3):
 
 
 @shared_task(bind=True)
-def process_network_plan(self, plan_id: str, payload: dict):
+def process_network_plan(self, plan_id: str, payload: dict, execution_record_id: str | None = None):
     """
     Renderiza main.tf.j2 y ejecuta Terraform (plan o apply).
     - simulate_only=True => modo simulación (sin aplicar)
@@ -135,6 +181,7 @@ def process_network_plan(self, plan_id: str, payload: dict):
                 payload=plan_obj.payload,
                 deploy=True,
             )
+        _mark_execution_record_running(execution_record_id, task_id=self.request.id)
         log_flush = _make_incremental_log_flusher(plan_obj, bundle)
         bundle.on_log_append = lambda _bundle: log_flush()
 
@@ -157,6 +204,14 @@ def process_network_plan(self, plan_id: str, payload: dict):
                     "Puedes destruir TGWs viejos o cambiar el router a modo peering."
                 )
                 plan_obj.mark_failure(error=msg, full_log=bundle.full_log, last_action="apply", applied=False)
+                _mark_execution_record_finished(
+                    execution_record_id,
+                    status_value=PlanExecutionRecord.Status.FAILURE,
+                    task_id=self.request.id,
+                    bundle=bundle,
+                    connection=connection,
+                    error=msg,
+                )
 
                 return {
                     "ok": False,
@@ -184,6 +239,14 @@ def process_network_plan(self, plan_id: str, payload: dict):
                 msg = executor.blocked_credentials_message("apply", bundle)
                 bundle.append_log(f"\n[SEGURIDAD] {msg}\n")
                 plan_obj.mark_failure(error=msg, full_log=bundle.full_log, last_action="apply", applied=False)
+                _mark_execution_record_finished(
+                    execution_record_id,
+                    status_value=PlanExecutionRecord.Status.FAILURE,
+                    task_id=self.request.id,
+                    bundle=bundle,
+                    connection=connection,
+                    error=msg,
+                )
 
                 return {
                     "ok": False,
@@ -239,6 +302,14 @@ def process_network_plan(self, plan_id: str, payload: dict):
             last_action="apply" if applied else "plan",
             outputs=outputs,
         )
+        _mark_execution_record_finished(
+            execution_record_id,
+            status_value=PlanExecutionRecord.Status.SUCCESS,
+            task_id=self.request.id,
+            bundle=bundle,
+            connection=connection,
+            identity=identity if not bundle.simulate_only else {},
+        )
 
         return {
             "ok": True,
@@ -255,6 +326,14 @@ def process_network_plan(self, plan_id: str, payload: dict):
                 error=str(e),
                 full_log=((bundle.full_log if bundle else "") + f"\n\nERROR: {e}\n"),
             )
+        _mark_execution_record_finished(
+            execution_record_id,
+            status_value=PlanExecutionRecord.Status.FAILURE,
+            task_id=getattr(self.request, "id", ""),
+            bundle=bundle,
+            connection=connection,
+            error=str(e),
+        )
 
         return {
             "ok": False,
@@ -270,7 +349,7 @@ def process_network_plan(self, plan_id: str, payload: dict):
 
 
 @shared_task(bind=True)
-def destroy_last_deploy(self, plan_id: str):
+def destroy_last_deploy(self, plan_id: str, execution_record_id: str | None = None):
     plan = Plan.objects.select_related("lab", "lab__cloud_connection", "lab__course", "lab__owner_user").get(id=plan_id)
     provider = get_provider_key((plan.payload or {}).get("cloud"))
     executor = get_provider_executor(provider)
@@ -284,6 +363,14 @@ def destroy_last_deploy(self, plan_id: str):
         # No-op idempotente: no hay recursos reales que destruir.
         msg = "Plan en modo simulación: no hay infraestructura real que destruir."
         plan.mark_destroy_noop(message=msg, full_log=bundle.full_log)
+        _mark_execution_record_finished(
+            execution_record_id,
+            status_value=PlanExecutionRecord.Status.NOOP,
+            task_id=self.request.id,
+            bundle=bundle,
+            connection=connection,
+            error="",
+        )
         return {
             "ok": True,
             "message": msg,
@@ -295,6 +382,14 @@ def destroy_last_deploy(self, plan_id: str):
     if not bundle.creds_ok_for_apply:
         msg = executor.blocked_credentials_message("destroy", bundle)
         plan.mark_failure(error=msg, full_log=bundle.full_log + msg, last_action="destroy")
+        _mark_execution_record_finished(
+            execution_record_id,
+            status_value=PlanExecutionRecord.Status.FAILURE,
+            task_id=self.request.id,
+            bundle=bundle,
+            connection=connection,
+            error=msg,
+        )
         return {
             "ok": False,
             "error": msg,
@@ -314,6 +409,7 @@ def destroy_last_deploy(self, plan_id: str):
         last_action="destroy",
         destroy=True,
     )
+    _mark_execution_record_running(execution_record_id, task_id=self.request.id)
     log_flush = _make_incremental_log_flusher(plan, bundle)
     bundle.on_log_append = lambda _bundle: log_flush()
 
@@ -357,6 +453,13 @@ def destroy_last_deploy(self, plan_id: str):
         # Importante: NO borramos outputs en destroy.
         # Se conservan como "últimos outputs cuando estuvo ACTIVE" para auditoría/debug.
         plan.mark_success(full_log=bundle.full_log, applied=False, last_action="destroy", outputs=plan.outputs)
+        _mark_execution_record_finished(
+            execution_record_id,
+            status_value=PlanExecutionRecord.Status.SUCCESS,
+            task_id=self.request.id,
+            bundle=bundle,
+            connection=connection,
+        )
 
         return {
             "ok": True,
@@ -368,6 +471,14 @@ def destroy_last_deploy(self, plan_id: str):
 
     except Exception as e:
         plan.mark_failure(error=str(e), full_log=bundle.full_log + f"\n\nERROR: {e}\n", last_action="destroy")
+        _mark_execution_record_finished(
+            execution_record_id,
+            status_value=PlanExecutionRecord.Status.FAILURE,
+            task_id=self.request.id,
+            bundle=bundle,
+            connection=connection,
+            error=str(e),
+        )
         return {"ok": False, "error": str(e), "log": bundle.full_log}
 
     finally:

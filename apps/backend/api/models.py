@@ -588,3 +588,159 @@ class Plan(models.Model):
                 name="uniq_plan_canvas_id",
             )
         ]
+
+
+class CloudExecutionDelegation(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    lab = models.ForeignKey(
+        Lab,
+        on_delete=models.CASCADE,
+        related_name="execution_delegations",
+    )
+    cloud_connection = models.ForeignKey(
+        CloudConnection,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="execution_delegations",
+    )
+    owner_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="execution_delegations_granted",
+    )
+    delegate_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="execution_delegations_received",
+    )
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="execution_delegations",
+    )
+    provider = models.CharField(
+        max_length=16,
+        choices=ProviderChoices.choices,
+        default=ProviderChoices.AWS,
+        db_index=True,
+    )
+    note = models.TextField(blank=True, default="")
+    is_active = models.BooleanField(default=True, db_index=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_execution_delegations",
+    )
+    revoked_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="revoked_execution_delegations",
+    )
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.owner_user_id}->{self.delegate_user_id} {self.lab_id}"
+
+    @property
+    def is_currently_active(self) -> bool:
+        if not self.is_active or self.revoked_at:
+            return False
+        if self.expires_at and timezone.now() >= self.expires_at:
+            return False
+        return True
+
+
+class PlanExecutionRecord(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        RUNNING = "running", "Running"
+        SUCCESS = "success", "Success"
+        FAILURE = "failure", "Failure"
+        NOOP = "noop", "No-op"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    plan = models.ForeignKey(
+        Plan,
+        on_delete=models.CASCADE,
+        related_name="execution_history",
+    )
+    lab = models.ForeignKey(
+        Lab,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="execution_history",
+    )
+    requested_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="requested_plan_executions",
+    )
+    delegation = models.ForeignKey(
+        CloudExecutionDelegation,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="execution_history",
+    )
+    action = models.CharField(
+        max_length=20,
+        choices=Plan.LastAction.choices,
+        db_index=True,
+    )
+    simulate_only = models.BooleanField(default=True)
+    provider = models.CharField(
+        max_length=16,
+        choices=ProviderChoices.choices,
+        default=ProviderChoices.AWS,
+        db_index=True,
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    task_id = models.CharField(max_length=64, blank=True, default="")
+    cloud_connection = models.ForeignKey(
+        CloudConnection,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="execution_history",
+    )
+    cloud_connection_name = models.CharField(max_length=120, blank=True, default="")
+    cloud_connection_scope = models.CharField(max_length=24, blank=True, default="")
+    resolved_execution_source = models.CharField(max_length=32, blank=True, default="")
+    credential_source = models.CharField(max_length=32, blank=True, default="")
+    account_id = models.CharField(max_length=64, blank=True, default="")
+    arn = models.CharField(max_length=512, blank=True, default="")
+    sts_user_id = models.CharField(max_length=128, blank=True, default="")
+    error = models.TextField(blank=True, default="")
+    request_summary = models.JSONField(default=dict, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.plan_id}:{self.action}:{self.status}"
