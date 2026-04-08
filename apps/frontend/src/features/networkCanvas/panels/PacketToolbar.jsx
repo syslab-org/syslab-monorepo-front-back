@@ -10,6 +10,9 @@ import SchoolIcon from '@mui/icons-material/School';
 import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import SyncRoundedIcon from '@mui/icons-material/SyncRounded';
 import { Button, Chip, IconButton, Tooltip } from '@mui/material';
 import { computePlanActionState } from '@/features/networkCanvas/utils/planActionUi';
 import { useThemeMode } from '@/shared/ui/theme/AppThemeProvider';
@@ -17,6 +20,9 @@ import { useThemeMode } from '@/shared/ui/theme/AppThemeProvider';
 
 export default function PacketToolbar({
   onSave,
+  saveState = "idle",
+  saveMessage = "",
+  lastSavedAt = null,
   onRestore,
   onRestoreInitial,
   onDeploy,
@@ -49,6 +55,61 @@ export default function PacketToolbar({
   const actionState = computePlanActionState(planStatus, canvasState, validationState);
   const planSnapshotStatus = String(planStatus?.status || '').toUpperCase();
   const hasActiveInfra = planStatus?.applied === true;
+  const formatSaveTime = (value) => {
+    if (!value) return "";
+    try {
+      return new Date(value).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+    } catch {
+      return "";
+    }
+  };
+
+  const renderSaveChip = () => {
+    if (saveState === "saving") {
+      return (
+        <Chip
+          size="small"
+          color="info"
+          variant="filled"
+          icon={<SyncRoundedIcon fontSize="small" />}
+          label={saveMessage || "Guardando..."}
+          sx={{ fontWeight: 700 }}
+        />
+      );
+    }
+
+    if (saveState === "saved") {
+      return (
+        <Chip
+          size="small"
+          color="success"
+          variant="outlined"
+          icon={<CheckCircleOutlineIcon fontSize="small" />}
+          label={lastSavedAt ? `Guardado ${formatSaveTime(lastSavedAt)}` : (saveMessage || "Guardado")}
+          sx={{ fontWeight: 700, bgcolor: "rgba(34,197,94,0.06)" }}
+        />
+      );
+    }
+
+    if (saveState === "error") {
+      return (
+        <Chip
+          size="small"
+          color="error"
+          variant="filled"
+          icon={<ErrorOutlineIcon fontSize="small" />}
+          label={saveMessage || "Error al guardar"}
+          sx={{ fontWeight: 700 }}
+        />
+      );
+    }
+
+    return null;
+  };
 
   const renderPlanChip = () => {
     if (!normalizedValidation || normalizedValidation === PLAN_STATES.IDLE) {
@@ -175,6 +236,7 @@ export default function PacketToolbar({
 
         {/* Botones de acción */}
         <div className="pt-toolbar__group">
+          {renderSaveChip()}
           <Tooltip title="Guardar estado actual del canvas en la API">
             <span>
               <Button
@@ -183,9 +245,9 @@ export default function PacketToolbar({
                 startIcon={<SaveIcon />}
                 onClick={onSave}
                 size="small"
-                disabled={canvasState === "PLAN_RUNNING"}
+                disabled={canvasState === "PLAN_RUNNING" || saveState === "saving"}
               >
-                Guardar
+                {saveState === "saving" ? "Guardando…" : "Guardar"}
               </Button>
             </span>
           </Tooltip>
