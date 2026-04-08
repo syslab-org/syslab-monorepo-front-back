@@ -149,6 +149,7 @@ Escenarios ya validados manualmente:
 - profesor bloqueado cuando el lab del alumno usa conexión personal
 - profesor habilitado cuando el lab usa conexión `course_shared`
 - lectura de evidencia de ejecución desde `Plan Detail`
+- guardrail cuando la conexión cloud actual cambia respecto del último `APPLY` real
 
 Ejemplo validado en este ciclo:
 

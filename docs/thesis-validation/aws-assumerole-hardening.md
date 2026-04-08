@@ -77,9 +77,9 @@ Esto mejora:
 
 ## Qué se usó en la validación
 
-Para validar rápido el flujo end-to-end, se permitió temporalmente `AdministratorAccess` en el role destino.
+Para validar rápido el flujo end-to-end, primero se permitió temporalmente `AdministratorAccess` en el role destino.
 
-Eso es útil para pruebas iniciales, pero no debería quedar como configuración estable.
+Eso fue útil para la primera prueba, pero no quedó como configuración final del caso compartido validado.
 
 ## Política mínima orientativa para el runtime actual
 
@@ -151,6 +151,166 @@ Definir dos policies administradas por la plataforma:
 La primera puede tener más holgura operativa.
 
 La segunda debería ser más conservadora y, si es posible, acotada por tags o naming convention.
+
+## Caso ya validado con policy mínima
+
+El role compartido del curso:
+
+- `syslab-course-redes1-role`
+
+ya fue probado exitosamente sin `AdministratorAccess`, usando una policy mínima alineada con el runtime real del repositorio.
+
+El caso validado cubrió:
+
+- conexión `course_shared`
+- autenticación `AWS AssumeRole`
+- principal técnico dedicado del backend
+- `APPLY` real exitoso
+- reconciliación correcta entre:
+  - `Próxima ejecución real`
+  - `Evidencia del último APPLY real`
+  - `Reconciliación de cuenta cloud`
+
+Esto permite afirmar que el flujo compartido del curso ya no depende de privilegios administrativos totales para funcionar en el camino principal.
+
+## Policy mínima validada para el role compartido
+
+La policy usada y validada para `syslab-course-redes1-role` fue:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "Ec2DescribeReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:Describe*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "VpcCoreLifecycle",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateVpc",
+        "ec2:DeleteVpc",
+        "ec2:ModifyVpcAttribute",
+        "ec2:CreateSubnet",
+        "ec2:DeleteSubnet",
+        "ec2:ModifySubnetAttribute",
+        "ec2:CreateRouteTable",
+        "ec2:DeleteRouteTable",
+        "ec2:AssociateRouteTable",
+        "ec2:DisassociateRouteTable",
+        "ec2:CreateRoute",
+        "ec2:ReplaceRoute",
+        "ec2:DeleteRoute",
+        "ec2:CreateInternetGateway",
+        "ec2:AttachInternetGateway",
+        "ec2:DetachInternetGateway",
+        "ec2:DeleteInternetGateway",
+        "ec2:CreateSecurityGroup",
+        "ec2:DeleteSecurityGroup",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:RevokeSecurityGroupIngress",
+        "ec2:AuthorizeSecurityGroupEgress",
+        "ec2:RevokeSecurityGroupEgress",
+        "ec2:CreateTags",
+        "ec2:DeleteTags"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "Ec2InstanceLifecycle",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:RunInstances",
+        "ec2:TerminateInstances",
+        "ec2:StartInstances",
+        "ec2:StopInstances",
+        "ec2:RebootInstances"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "NatAndElasticIpLifecycle",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:AllocateAddress",
+        "ec2:ReleaseAddress",
+        "ec2:AssociateAddress",
+        "ec2:DisassociateAddress",
+        "ec2:CreateNatGateway",
+        "ec2:DeleteNatGateway"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "VpcPeeringLifecycle",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateVpcPeeringConnection",
+        "ec2:AcceptVpcPeeringConnection",
+        "ec2:DeleteVpcPeeringConnection"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "TransitGatewayLifecycle",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateTransitGateway",
+        "ec2:DeleteTransitGateway",
+        "ec2:CreateTransitGatewayVpcAttachment",
+        "ec2:DeleteTransitGatewayVpcAttachment",
+        "ec2:CreateTransitGatewayRouteTable",
+        "ec2:DeleteTransitGatewayRouteTable",
+        "ec2:AssociateTransitGatewayRouteTable",
+        "ec2:DisassociateTransitGatewayRouteTable",
+        "ec2:EnableTransitGatewayRouteTablePropagation",
+        "ec2:DisableTransitGatewayRouteTablePropagation",
+        "ec2:CreateTransitGatewayRoute",
+        "ec2:DeleteTransitGatewayRoute",
+        "ec2:SearchTransitGatewayRoutes"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ReadAmiFromSsm",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetParameter"
+      ],
+      "Resource": [
+        "arn:aws:ssm:*::parameter/aws/service/ami-amazon-linux-latest/*"
+      ]
+    },
+    {
+      "Sid": "ReadTgwQuota",
+      "Effect": "Allow",
+      "Action": [
+        "servicequotas:GetServiceQuota"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ReadCallerIdentity",
+      "Effect": "Allow",
+      "Action": [
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+## Nota de alcance
+
+Esta policy mínima validada es adecuada para el runtime actual del repositorio y sus recursos Terraform principales.
+
+No debe interpretarse todavía como policy universal ni definitiva para cualquier topología futura; si el runtime agrega más recursos AWS, la policy deberá ajustarse.
 
 ## 4. Quién crea la cuenta compartida
 

@@ -1044,6 +1044,8 @@ export default function PlanDetailPage() {
   const lastApplyContext = safeObject(plan?.last_apply_context);
   const hasLastApplyContext = Object.keys(lastApplyContext).length > 0;
   const executionHistory = Array.isArray(plan?.execution_history) ? plan.execution_history : [];
+  const cloudTargetState = safeObject(plan?.cloud_target_state);
+  const cloudTargetMismatch = Boolean(cloudTargetState?.is_mismatch);
   const hasOutputsData = Boolean(
     outputsResponse?.outputs &&
       typeof outputsResponse.outputs === 'object' &&
@@ -1078,15 +1080,17 @@ export default function PlanDetailPage() {
 
   // Deploy permitido cuando el plan NO está corriendo
   const canDeploy = !isRunning;
-  const canApply = Boolean(plan?.can_apply ?? true);
+  const canApply = Boolean(plan?.can_apply ?? true) && !cloudTargetMismatch;
 
   // Destroy permitido según regla backend (incluye apply real fallido), y no está corriendo
   const canDestroy =
     !isRunning &&
     Boolean(
-      plan?.can_destroy ??
+      !cloudTargetMismatch &&
+      (plan?.can_destroy ??
       (plan?.applied === true &&
         String(plan?.last_action || '').toLowerCase() !== 'destroy')
+      )
     );
 
   const fetchPlan = useCallback(
@@ -1290,6 +1294,14 @@ export default function PlanDetailPage() {
       return;
     }
     if (applyMode && !canApply) {
+      if (cloudTargetMismatch) {
+        setErr(
+          cloudTargetState?.message ||
+          'La conexión cloud actual ya no coincide con la usada en el último APPLY real. Revisa la cuenta actual antes de ejecutar infraestructura real.',
+        );
+        actionLockRef.current = false;
+        return;
+      }
       setErr(
         'El APPLY real y el Destroy solo están permitidos al owner, al platform admin o al docente cuando la conexión efectiva del laboratorio es course_shared. Puedes seguir usando PLAN para revisión.',
       );
@@ -1318,6 +1330,11 @@ export default function PlanDetailPage() {
     } catch (e) {
       const status = e?.status ?? e?.response?.status;
       const payload = e?.data ?? e?.response?.data;
+      if (status === 409 && payload?.code === 'CLOUD_TARGET_CHANGED') {
+        setErr(payload?.error || 'La cuenta cloud actual ya no coincide con la usada en el último APPLY real.');
+        await fetchPlan();
+        return;
+      }
       // If the backend says "conflict" (already running), treat it as info and refresh status
       if (status === 409) {
         setErr(null);
@@ -1354,6 +1371,12 @@ export default function PlanDetailPage() {
       return;
     }
     if (!canDestroy) {
+      if (cloudTargetMismatch) {
+        setErr(
+          cloudTargetState?.message ||
+          'La conexión cloud actual ya no coincide con la usada en el último APPLY real. Destroy real se bloquea para evitar operar en una cuenta equivocada.',
+        );
+      }
       actionLockRef.current = false;
       return;
     }
@@ -1390,6 +1413,11 @@ export default function PlanDetailPage() {
     } catch (e) {
       const status = e?.status ?? e?.response?.status;
       const payload = e?.data ?? e?.response?.data;
+      if (status === 409 && payload?.code === 'CLOUD_TARGET_CHANGED') {
+        setErr(payload?.error || 'La cuenta cloud actual ya no coincide con la usada en el último APPLY real.');
+        await fetchPlan();
+        return;
+      }
       if (status === 409) {
         setErr(null);
         setMsg({
@@ -1438,7 +1466,9 @@ export default function PlanDetailPage() {
     : applyMode && !canApply
       ? {
           severity: 'warning',
-          text: 'Este plan es visible para revisión. El APPLY real y el Destroy solo están permitidos al owner, al platform admin o al docente cuando la conexión efectiva es course_shared.',
+          text: cloudTargetMismatch
+            ? (cloudTargetState?.message || 'La cuenta cloud actual ya no coincide con la usada en el último APPLY real.')
+            : 'Este plan es visible para revisión. El APPLY real y el Destroy solo están permitidos al owner, al platform admin o al docente cuando la conexión efectiva es course_shared.',
         }
     : canDestroy && isRedeployAvailable
       ? {
@@ -1573,6 +1603,11 @@ export default function PlanDetailPage() {
           {(String(plan?.last_action || plan?.lastAction || '').toLowerCase() === 'canvas_update') && (
             <Alert severity="warning" sx={{ mb: 2 }}>
               Plan actualizado desde canvas. Hay cambios pendientes; ejecuta <b>Deploy</b> para aplicar la nueva infraestructura.
+            </Alert>
+          )}
+          {cloudTargetMismatch && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              {cloudTargetState?.message || 'La conexión cloud actual ya no coincide con la usada en el último APPLY real.'}
             </Alert>
           )}
 
@@ -1821,6 +1856,18 @@ export default function PlanDetailPage() {
                     )}
                   </Stack>
                 )}
+              </Paper>
+
+              <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Reconciliación de cuenta cloud
+                </Typography>
+                <Alert
+                  severity={cloudTargetMismatch ? 'warning' : 'success'}
+                  variant="outlined"
+                >
+                  {cloudTargetState?.message || 'Sin información suficiente para reconciliar la cuenta cloud.'}
+                </Alert>
               </Paper>
 
               <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>

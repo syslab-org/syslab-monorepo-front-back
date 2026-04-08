@@ -61,6 +61,18 @@ Esto impacta directamente la autorización:
 - si el resultado es `personal`, el profesor queda bloqueado salvo delegación explícita
 - si el resultado es `course_shared`, el profesor del curso puede ejecutar
 
+## Guardrail por cambio de cuenta cloud
+
+Si un laboratorio tuvo un `APPLY` real y luego cambia su conexión efectiva a otra cuenta cloud:
+
+- el estado anterior pasa a ser histórico
+- la UI lo marca como `target_changed`
+- `APPLY` y `DESTROY` reales se bloquean para evitar operar sobre una cuenta distinta a la del último despliegue
+
+Esto evita un error sutil pero crítico:
+
+- creer que un laboratorio sigue `ACTIVE` en la cuenta actual cuando en realidad esa infraestructura fue creada bajo otra conexión cloud
+
 ## Delegación explícita y auditable
 
 La delegación implementada en este corte es:

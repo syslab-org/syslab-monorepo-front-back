@@ -828,6 +828,69 @@ class VisibilityApiTests(APITestCase):
         self.assertEqual(plan.status, Plan.Status.RUNNING)
         self.assertEqual(plan.last_action, Plan.LastAction.DESTROY)
 
+    @patch("api.views._can_run_real_terraform", return_value=True)
+    def test_real_apply_is_blocked_when_current_cloud_target_differs_from_last_real_apply(
+        self,
+        _can_run_real_terraform,
+    ):
+        self.student_lab.cloud_connection = self.course_connection
+        self.student_lab.save(update_fields=["cloud_connection", "updated_at"])
+        plan = Plan.objects.get(name="Plan alumno")
+        plan.last_apply_context = {
+            "provider": "aws",
+            "credential_source": "cloud_connection",
+            "region": "us-east-1",
+            "cloud_connection_id": str(self.student_connection.id),
+            "cloud_connection_name": self.student_connection.name,
+            "cloud_connection_scope": self.student_connection.scope,
+            "account_id": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/alumno22-syslab",
+            "user_id": "AIDAEXAMPLE",
+            "captured_at": "2026-04-07T20:00:00Z",
+        }
+        plan.save(update_fields=["last_apply_context", "updated_at"])
+
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(
+            f"/api/network/plans/{plan.id}/deploy/",
+            {"simulate_only": False},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 409)
+        self.assertEqual(res.json()["code"], "CLOUD_TARGET_CHANGED")
+
+    @patch("api.views._can_run_real_terraform", return_value=True)
+    def test_destroy_is_blocked_when_current_cloud_target_differs_from_last_real_apply(
+        self,
+        _can_run_real_terraform,
+    ):
+        self.student_lab.cloud_connection = self.course_connection
+        self.student_lab.save(update_fields=["cloud_connection", "updated_at"])
+        plan = Plan.objects.get(name="Plan alumno")
+        plan.applied = True
+        plan.status = Plan.Status.SUCCESS
+        plan.last_action = Plan.LastAction.APPLY
+        plan.last_apply_context = {
+            "provider": "aws",
+            "credential_source": "cloud_connection",
+            "region": "us-east-1",
+            "cloud_connection_id": str(self.student_connection.id),
+            "cloud_connection_name": self.student_connection.name,
+            "cloud_connection_scope": self.student_connection.scope,
+            "account_id": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/alumno22-syslab",
+            "user_id": "AIDAEXAMPLE",
+            "captured_at": "2026-04-07T20:00:00Z",
+        }
+        plan.save(update_fields=["applied", "status", "last_action", "last_apply_context", "updated_at"])
+
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(f"/api/network/plans/{plan.id}/destroy/", format="json")
+
+        self.assertEqual(res.status_code, 409)
+        self.assertEqual(res.json()["code"], "CLOUD_TARGET_CHANGED")
+
     def test_plan_list_exposes_apply_capability_to_teacher_when_student_lab_uses_course_shared(self):
         self.student_lab.cloud_connection = self.course_connection
         self.student_lab.save(update_fields=["cloud_connection", "updated_at"])
@@ -907,6 +970,31 @@ class VisibilityApiTests(APITestCase):
         self.assertEqual(history[0]["task_id"], "task-history-1")
         self.assertEqual(history[0]["credential_source"], "cloud_connection")
         self.assertEqual(history[0]["requested_by"]["email"], "student@example.com")
+
+    def test_plan_detail_exposes_cloud_target_state_when_connection_changed(self):
+        plan = Plan.objects.get(name="Plan alumno")
+        self.student_lab.cloud_connection = self.course_connection
+        self.student_lab.save(update_fields=["cloud_connection", "updated_at"])
+        plan.last_apply_context = {
+            "provider": "aws",
+            "credential_source": "cloud_connection",
+            "region": "us-east-1",
+            "cloud_connection_id": str(self.student_connection.id),
+            "cloud_connection_name": self.student_connection.name,
+            "cloud_connection_scope": self.student_connection.scope,
+            "account_id": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/alumno22-syslab",
+            "user_id": "AIDAEXAMPLE",
+            "captured_at": "2026-04-07T20:00:00Z",
+        }
+        plan.save(update_fields=["last_apply_context", "updated_at"])
+
+        self.client.force_authenticate(self.student)
+        res = self.client.get(f"/api/network/plans/{plan.id}/")
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["cloud_target_state"]["status"], "target_changed")
+        self.assertTrue(res.json()["cloud_target_state"]["is_mismatch"])
 
     def test_plan_detail_exposes_resolved_execution_target(self):
         plan = Plan.objects.get(name="Plan alumno")
