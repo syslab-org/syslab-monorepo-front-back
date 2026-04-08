@@ -194,6 +194,8 @@ class PlanListSerializer(serializers.ModelSerializer):
     canvas_id = serializers.SerializerMethodField()
     firestore_vpc_id = serializers.SerializerMethodField()
     lab = serializers.SerializerMethodField()
+    owner_user = serializers.SerializerMethodField()
+    course = serializers.SerializerMethodField()
 
     class Meta:
         model = Plan
@@ -210,6 +212,8 @@ class PlanListSerializer(serializers.ModelSerializer):
             "canvas_id",
             "firestore_vpc_id",
             "lab",
+            "owner_user",
+            "course",
         )
         read_only_fields = fields
 
@@ -237,7 +241,23 @@ class PlanListSerializer(serializers.ModelSerializer):
     def get_lab(self, obj):
         if not obj.lab_id:
             return None
-        return {"id": str(obj.lab_id), "name": obj.lab.name}
+        return {
+            "id": str(obj.lab_id),
+            "name": obj.lab.name,
+            "owner_user": UserSummarySerializer(obj.lab.owner_user).data if getattr(obj.lab, "owner_user", None) else None,
+            "course": CourseSummarySerializer(obj.lab.course).data if getattr(obj.lab, "course", None) else None,
+            "visibility_scope": obj.lab.visibility_scope,
+        }
+
+    def get_owner_user(self, obj):
+        if not getattr(obj, "lab", None) or not getattr(obj.lab, "owner_user", None):
+            return None
+        return UserSummarySerializer(obj.lab.owner_user).data
+
+    def get_course(self, obj):
+        if not getattr(obj, "lab", None) or not getattr(obj.lab, "course", None):
+            return None
+        return CourseSummarySerializer(obj.lab.course).data
 
 
 class PlanDetailSerializer(serializers.ModelSerializer):
@@ -251,6 +271,8 @@ class PlanDetailSerializer(serializers.ModelSerializer):
     resolved_execution_target = serializers.SerializerMethodField()
     execution_history = serializers.SerializerMethodField()
     cloud_target_state = serializers.SerializerMethodField()
+    owner_user = serializers.SerializerMethodField()
+    course = serializers.SerializerMethodField()
 
     class Meta:
         model = Plan
@@ -280,6 +302,8 @@ class PlanDetailSerializer(serializers.ModelSerializer):
             "canvas_hash",
             "canvas_updated_at",
             "lab",
+            "owner_user",
+            "course",
         )
         read_only_fields = fields
 
@@ -307,7 +331,13 @@ class PlanDetailSerializer(serializers.ModelSerializer):
     def get_lab(self, obj):
         if not obj.lab_id:
             return None
-        return {"id": str(obj.lab_id), "name": obj.lab.name}
+        return {
+            "id": str(obj.lab_id),
+            "name": obj.lab.name,
+            "owner_user": UserSummarySerializer(obj.lab.owner_user).data if getattr(obj.lab, "owner_user", None) else None,
+            "course": CourseSummarySerializer(obj.lab.course).data if getattr(obj.lab, "course", None) else None,
+            "visibility_scope": obj.lab.visibility_scope,
+        }
 
     def get_resolved_execution_target(self, obj):
         return serialize_resolved_execution_target(getattr(obj, "lab", None), getattr(obj, "payload", None))
@@ -318,6 +348,16 @@ class PlanDetailSerializer(serializers.ModelSerializer):
 
     def get_cloud_target_state(self, obj):
         return serialize_cloud_target_state(obj)
+
+    def get_owner_user(self, obj):
+        if not getattr(obj, "lab", None) or not getattr(obj.lab, "owner_user", None):
+            return None
+        return UserSummarySerializer(obj.lab.owner_user).data
+
+    def get_course(self, obj):
+        if not getattr(obj, "lab", None) or not getattr(obj.lab, "course", None):
+            return None
+        return CourseSummarySerializer(obj.lab.course).data
 
 
 class CourseSummarySerializer(serializers.ModelSerializer):

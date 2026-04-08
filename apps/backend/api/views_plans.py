@@ -109,6 +109,7 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
             Plan.objects.select_related(
                 "lab",
                 "lab__owner_user",
+                "lab__owner_user__profile",
                 "lab__course",
                 "lab__course__teacher",
                 "lab__cloud_connection",

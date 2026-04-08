@@ -565,10 +565,16 @@ class VisibilityApiTests(APITestCase):
         first = res.json()[0]
         self.assertIn("canvas_id", first)
         self.assertEqual(first["canvas_id"], first["firestore_vpc_id"])
+        self.assertIn("lab", first)
+        self.assertIn("owner_user", first["lab"])
+        self.assertIn("owner_user", first)
         names = {item["name"] for item in res.json()}
         self.assertIn("Plan alumno", names)
         self.assertIn("Plan compartido", names)
         self.assertNotIn("Plan ajeno", names)
+        plans_by_name = {item["name"]: item for item in res.json()}
+        self.assertEqual(plans_by_name["Plan alumno"]["lab"]["owner_user"]["email"], "student@example.com")
+        self.assertEqual(plans_by_name["Plan alumno"]["owner_user"]["email"], "student@example.com")
 
     def test_teacher_sees_unassigned_students_but_not_other_teacher_students(self):
         self.client.force_authenticate(self.teacher)
