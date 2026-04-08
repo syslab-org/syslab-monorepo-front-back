@@ -1,5 +1,6 @@
-import { Box, Chip, Stack, Typography } from "@mui/material";
-import { useState } from "react";
+import { Box, Button, Chip, Stack, Typography } from "@mui/material";
+import { useEffect, useRef, useState } from "react";
+import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
 import SidebarFlow from "@/features/networkCanvas/panels/SidebarFlow";
 import ReactFlowCanvas from "@/features/networkCanvas/canvas/ReactFlowCanvas";
 import PacketToolbar from "@/features/networkCanvas/panels/PacketToolbar";
@@ -35,6 +36,7 @@ export default function FlowWorkspace({
 }) {
     const [isPaletteOpen, setIsPaletteOpen] = useState(false);
     const [isGuideOpen, setIsGuideOpen] = useState(false);
+    const hasAutoOpenedPalette = useRef(false);
     const workspaceActionState = computePlanActionState(
         toolbarProps?.planStatus,
         toolbarProps?.canvasState,
@@ -44,6 +46,13 @@ export default function FlowWorkspace({
         toolbarProps?.canvasState === "PLAN_OUTDATED" ||
         toolbarProps?.canvasState === "PLAN_RUNNING" ||
         workspaceActionState.workspaceSeverity === "warning";
+
+    useEffect(() => {
+        if (nodes.length === 0 && !hasAutoOpenedPalette.current) {
+            setIsPaletteOpen(true);
+            hasAutoOpenedPalette.current = true;
+        }
+    }, [nodes.length]);
 
     return (
         <Box
@@ -63,6 +72,7 @@ export default function FlowWorkspace({
             }}
         >
             <Box
+                id="tool-palette-panel"
                 sx={{
                     width: isPaletteOpen ? { xs: 220, md: 260 } : 0,
                     minWidth: isPaletteOpen ? { xs: 220, md: 260 } : 0,
@@ -179,7 +189,7 @@ export default function FlowWorkspace({
                                 px: 2,
                             }}
                         >
-                            <Box>
+                            <Box sx={{ pointerEvents: "auto" }}>
                                 <Typography variant="h6" sx={{ fontWeight: 700 }}>
                                     Diseña tu laboratorio de red
                                 </Typography>
@@ -187,9 +197,19 @@ export default function FlowWorkspace({
                                     Modela la topología en lenguaje neutral, valida su traducción a AWS y decide si corresponde un deploy o un redeploy.
                                 </Typography>
                                 {!isPaletteOpen && (
-                                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.8, display: "block" }}>
-                                        Tip: abre la paleta de herramientas desde la barra superior para comenzar a arrastrar componentes.
-                                    </Typography>
+                                    <Stack spacing={1} alignItems="center" sx={{ mt: 1.25, pointerEvents: "auto" }}>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Abre la paleta para comenzar a arrastrar componentes al lienzo.
+                                        </Typography>
+                                        <Button
+                                            size="small"
+                                            variant="contained"
+                                            startIcon={<ViewSidebarIcon />}
+                                            onClick={() => setIsPaletteOpen(true)}
+                                        >
+                                            Abrir herramientas
+                                        </Button>
+                                    </Stack>
                                 )}
                             </Box>
                         </Box>
@@ -225,6 +245,7 @@ export default function FlowWorkspace({
             </Box>
 
             <Box
+                id="learning-guide-panel"
                 sx={{
                     width: isGuideOpen ? { xs: 0, lg: 320 } : 0,
                     minWidth: isGuideOpen ? { xs: 0, lg: 320 } : 0,

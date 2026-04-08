@@ -11,6 +11,8 @@ import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import SyncRoundedIcon from '@mui/icons-material/SyncRounded';
 import { Button, Chip, IconButton, Tooltip } from '@mui/material';
@@ -55,6 +57,40 @@ export default function PacketToolbar({
   const actionState = computePlanActionState(planStatus, canvasState, validationState);
   const planSnapshotStatus = String(planStatus?.status || '').toUpperCase();
   const hasActiveInfra = planStatus?.applied === true;
+  const getPanelToggleSx = (isOpen, tone = "primary") => {
+    const accent = tone === "secondary"
+      ? (mode === "light" ? "#0f766e" : "#67e8f9")
+      : (mode === "light" ? "#1d4ed8" : "#93c5fd");
+    const border = tone === "secondary"
+      ? (mode === "light" ? "rgba(15,118,110,0.24)" : "rgba(103,232,249,0.32)")
+      : (mode === "light" ? "rgba(29,78,216,0.22)" : "rgba(147,197,253,0.34)");
+    const background = isOpen
+      ? tone === "secondary"
+        ? (mode === "light" ? "rgba(20,184,166,0.14)" : "rgba(20,184,166,0.24)")
+        : (mode === "light" ? "rgba(59,130,246,0.14)" : "rgba(59,130,246,0.24)")
+      : (mode === "light" ? "#f8fafc" : "rgba(15,23,42,0.72)");
+
+    return {
+      color: accent,
+      borderColor: border,
+      backgroundColor: background,
+      boxShadow: mode === "light"
+        ? "0 8px 18px rgba(15,23,42,0.08)"
+        : "0 10px 22px rgba(2,6,23,0.34)",
+      fontWeight: 700,
+      "&:hover": {
+        borderColor: accent,
+        backgroundColor: isOpen
+          ? tone === "secondary"
+            ? (mode === "light" ? "rgba(20,184,166,0.18)" : "rgba(20,184,166,0.3)")
+            : (mode === "light" ? "rgba(59,130,246,0.18)" : "rgba(59,130,246,0.3)")
+          : (mode === "light" ? "#eef4ff" : "rgba(30,41,59,0.92)"),
+      },
+      "& .MuiButton-startIcon, & .MuiButton-endIcon": {
+        color: accent,
+      },
+    };
+  };
   const formatSaveTime = (value) => {
     if (!value) return "";
     try {
@@ -202,23 +238,49 @@ export default function PacketToolbar({
         {/* Controles de vista */}
         <div className="pt-toolbar__group">
           {canTogglePalette && (
-            <Tooltip title={paletteOpen ? "Ocultar paleta de herramientas" : "Mostrar paleta de herramientas"}>
-              <IconButton size="small" className="pt-ibtn" onClick={onTogglePalette}>
-                <ViewSidebarIcon
-                  fontSize="small"
-                  sx={{ transform: paletteOpen ? "scaleX(1)" : "scaleX(-1)" }}
-                />
-              </IconButton>
+            <Tooltip title={paletteOpen ? "Ocultar herramientas para modelar" : "Mostrar herramientas para modelar"}>
+              <Button
+                size="small"
+                variant="outlined"
+                className="pt-btn"
+                sx={getPanelToggleSx(paletteOpen, "primary")}
+                startIcon={
+                  <ViewSidebarIcon
+                    fontSize="small"
+                    sx={{ transform: paletteOpen ? "scaleX(1)" : "scaleX(-1)" }}
+                  />
+                }
+                endIcon={paletteOpen ? <ChevronLeftIcon /> : <ChevronRightIcon />}
+                onClick={onTogglePalette}
+                aria-expanded={paletteOpen}
+                aria-controls="tool-palette-panel"
+                aria-label={paletteOpen ? "Ocultar herramientas para modelar" : "Mostrar herramientas para modelar"}
+              >
+                Herramientas
+              </Button>
             </Tooltip>
           )}
           {canToggleGuide && (
-            <Tooltip title={guideOpen ? "Ocultar guía de aprendizaje" : "Mostrar guía de aprendizaje"}>
-              <IconButton size="small" className="pt-ibtn" onClick={onToggleGuide}>
-                <SchoolIcon
-                  fontSize="small"
-                  sx={{ opacity: guideOpen ? 1 : 0.7 }}
-                />
-              </IconButton>
+            <Tooltip title={guideOpen ? "Ocultar guía de modelado" : "Mostrar guía de modelado"}>
+              <Button
+                size="small"
+                variant="outlined"
+                className="pt-btn"
+                sx={getPanelToggleSx(guideOpen, "secondary")}
+                startIcon={
+                  <SchoolIcon
+                    fontSize="small"
+                    sx={{ opacity: guideOpen ? 1 : 0.82 }}
+                  />
+                }
+                endIcon={guideOpen ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+                onClick={onToggleGuide}
+                aria-expanded={guideOpen}
+                aria-controls="learning-guide-panel"
+                aria-label={guideOpen ? "Ocultar guía de modelado" : "Mostrar guía de modelado"}
+              >
+                Guía
+              </Button>
             </Tooltip>
           )}
           <Tooltip title="Acercar"><IconButton size="small" className="pt-ibtn" onClick={onZoomIn}><ZoomInIcon fontSize="small" /></IconButton></Tooltip>
