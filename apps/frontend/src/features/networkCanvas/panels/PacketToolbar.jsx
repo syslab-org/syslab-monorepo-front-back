@@ -1,7 +1,5 @@
 // apps/frontend/src/components/flow/PacketToolbar.jsx
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
-import DarkModeIcon from '@mui/icons-material/DarkMode';
-import LightModeIcon from '@mui/icons-material/LightMode';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import RestoreIcon from '@mui/icons-material/Restore';
@@ -40,8 +38,9 @@ export default function PacketToolbar({
   guideOpen = false,
   onTogglePalette,
   onToggleGuide,
+  showPanelToggles = true,
 }) {
-  const { mode, toggle } = useThemeMode();
+  const { mode } = useThemeMode();
   const canTogglePalette = typeof onTogglePalette === "function";
   const canToggleGuide = typeof onToggleGuide === "function";
 
@@ -237,7 +236,7 @@ export default function PacketToolbar({
 
         {/* Controles de vista */}
         <div className="pt-toolbar__group">
-          {canTogglePalette && (
+          {showPanelToggles && canTogglePalette && (
             <Tooltip title={paletteOpen ? "Ocultar herramientas para modelar" : "Mostrar herramientas para modelar"}>
               <Button
                 size="small"
@@ -260,7 +259,7 @@ export default function PacketToolbar({
               </Button>
             </Tooltip>
           )}
-          {canToggleGuide && (
+          {showPanelToggles && canToggleGuide && (
             <Tooltip title={guideOpen ? "Ocultar guía de modelado" : "Mostrar guía de modelado"}>
               <Button
                 size="small"
@@ -286,11 +285,6 @@ export default function PacketToolbar({
           <Tooltip title="Acercar"><IconButton size="small" className="pt-ibtn" onClick={onZoomIn}><ZoomInIcon fontSize="small" /></IconButton></Tooltip>
           <Tooltip title="Alejar"><IconButton size="small" className="pt-ibtn" onClick={onZoomOut}><ZoomOutIcon fontSize="small" /></IconButton></Tooltip>
           <Tooltip title="Ajustar vista"><IconButton size="small" className="pt-ibtn" onClick={onFitView}><CenterFocusStrongIcon fontSize="small" /></IconButton></Tooltip>
-          <Tooltip title={mode === 'light' ? 'Modo oscuro' : 'Modo claro'}>
-            <IconButton size="small" className="pt-ibtn" onClick={toggle}>
-              {mode === 'light' ? <DarkModeIcon fontSize="small" /> : <LightModeIcon fontSize="small" />}
-            </IconButton>
-          </Tooltip>
         </div>
 
         {/* Spacer que empuja todo lo siguiente a la derecha */}

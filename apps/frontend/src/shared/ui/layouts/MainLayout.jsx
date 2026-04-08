@@ -21,6 +21,8 @@ import NotificationsIcon from "@mui/icons-material/Notifications";
 import MenuIcon from "@mui/icons-material/Menu";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import LogoutIcon from "@mui/icons-material/Logout";
+import DarkModeIcon from "@mui/icons-material/DarkMode";
+import LightModeIcon from "@mui/icons-material/LightMode";
 
 import "@/App.css";
 import { AppBarStyle } from "@/shared/ui/theme/dashboard/elements/AppBarStyle.jsx";
@@ -31,6 +33,7 @@ import {
 } from "@/shared/ui/theme/dashboard/listItems.jsx";
 import { useAuth } from '@/app/providers/AuthContext';
 import LoadingFlow from "@/shared/ui/organisms/LoadingFlow";
+import { useThemeMode } from "@/shared/ui/theme/AppThemeProvider";
 
 export const PageHeader = ({ title, subtitle, actions }) => {
   return (
@@ -100,6 +103,7 @@ function MainLayout() {
   const auth = useAuth();
   const user = auth?.user;
   const logout = auth?.logout || (() => { });
+  const { mode, toggle } = useThemeMode();
 
   const isCanvasRoute = useMemo(
     () => /^\/admin\/(labs\/[^/]+\/canvas|vpcs\/[^/]+\/mainflow)$/.test(location.pathname),
@@ -166,6 +170,12 @@ function MainLayout() {
           </Box>
 
           <Box sx={{ display: { md: "flex" } }}>
+            <Tooltip title={mode === "light" ? "Activar modo oscuro" : "Activar modo claro"}>
+              <IconButton size="large" color="inherit" onClick={toggle} aria-label={mode === "light" ? "Activar modo oscuro" : "Activar modo claro"}>
+                {mode === "light" ? <DarkModeIcon /> : <LightModeIcon />}
+              </IconButton>
+            </Tooltip>
+
             <IconButton size="large" color="inherit">
               <Badge badgeContent={4} color="error">
                 <MailOutline />
