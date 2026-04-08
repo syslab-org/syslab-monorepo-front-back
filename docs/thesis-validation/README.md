@@ -63,6 +63,15 @@ Documento de decisión:
 - cómo pasar de `AWS-first` a multi-cloud sin rehacer permisos
 - cómo registrar conexiones personales y compartidas de curso en el MVP
 
+Playbook operativo complementario:
+- [Playbook de Conexiones Cloud AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/aws-cloud-connections-playbook.md)
+
+Útil para redactar y repetir pruebas:
+- flujo `Static Keys` vs `AssumeRole`
+- diferencia entre principal base y role destino
+- validación de `personal` vs `course_shared`
+- señales concretas en `Plan Detail` para confirmar qué identidad ejecutó
+
 ### 5. Guion de presentación
 
 Documento operativo:
@@ -91,9 +100,12 @@ Documento operativo:
 
 1. leer el [Plan de Cierre del MVP para Tesis](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/mvp-thesis-plan.md)
 2. leer el [Modelo de Ejecución Cloud por Usuario](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/cloud-execution-model.md)
-3. usar como idea central:
+3. leer el [Playbook de Conexiones Cloud AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/aws-cloud-connections-playbook.md)
+4. usar como idea central:
    - `AWS-first`
    - conexión cloud por owner de ejecución
+   - `course_shared` como caso docente controlado
+   - `AssumeRole` como mejora de seguridad frente a keys permanentes
    - multi-cloud como extensibilidad arquitectónica, no como capacidad cerrada del MVP
 
 ### Si quieres preparar la defensa/demo
@@ -110,6 +122,7 @@ Documento operativo:
 - El flujo `Canvas -> Validate -> Deploy/Redeploy -> Plan Detail` está suficientemente maduro para demo.
 - El estado `OUTDATED` ya funciona como guardrail real antes de redeploy.
 - `Plan Detail` ya centraliza suficiente observabilidad para no depender tanto de AWS Console.
+- `Próxima ejecución real` y `Evidencia del último APPLY real` ya sirven como trazabilidad concreta de qué cuenta/ARN ejecutó.
 - `Managed egress` debe mantenerse como decisión explícita del usuario; no conviene autoactivarlo al crear una zona pública.
 - La pedagogía mejora cuando la UI distingue entre:
   - intención neutral

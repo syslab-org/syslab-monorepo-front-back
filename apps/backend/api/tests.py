@@ -6,8 +6,9 @@ from django.test import SimpleTestCase
 from rest_framework.test import APITestCase
 
 from .domain.network_intent import normalize_network_intent
-from .models import CLOUD_SCOPE_COURSE_SHARED, CLOUD_SCOPE_PERSONAL, CloudConnection, Course, Lab, Plan, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, STATUS_ACTIVE, VISIBILITY_COURSE, VISIBILITY_OWNER
+from .models import CLOUD_AUTH_AWS_ASSUME_ROLE, CLOUD_SCOPE_COURSE_SHARED, CLOUD_SCOPE_PERSONAL, CloudConnection, Course, Lab, Plan, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, STATUS_ACTIVE, VISIBILITY_COURSE, VISIBILITY_OWNER
 from .providers import get_provider_adapter, get_provider_executor
+from .cloud_connections import build_aws_runtime_env
 from .providers.aws.runtime import build_nat_cleanup_targets
 from .providers.aws.terraform import render_workspace
 from .secret_store import encrypt_secret
@@ -379,6 +380,36 @@ class ApplyAuditContextTests(SimpleTestCase):
         self.assertEqual(context["arn"], "arn:aws:iam::123456789012:user/alumno22-syslab")
         self.assertEqual(context["user_id"], "AIDAEXAMPLE")
         self.assertIn("captured_at", context)
+
+
+class AssumeRoleConnectionTests(SimpleTestCase):
+    @patch("api.cloud_connections.build_base_aws_session")
+    def test_build_runtime_env_assume_role_uses_sts_credentials(self, mocked_base_session):
+        fake_sts = SimpleNamespace(
+            assume_role=lambda **_kwargs: {
+                "Credentials": {
+                    "AccessKeyId": "ASIAEXAMPLE",
+                    "SecretAccessKey": "temp-secret",
+                    "SessionToken": "temp-token",
+                }
+            }
+        )
+        mocked_base_session.return_value = SimpleNamespace(client=lambda *_args, **_kwargs: fake_sts)
+        connection = CloudConnection(
+            name="AWS role",
+            provider="aws",
+            auth_type=CLOUD_AUTH_AWS_ASSUME_ROLE,
+            aws_role_arn="arn:aws:iam::123456789012:role/syslab-course-role",
+            aws_external_id_encrypted=encrypt_secret("ext-123"),
+            default_region="us-east-1",
+        )
+
+        env = build_aws_runtime_env(connection)
+
+        self.assertEqual(env["AWS_ACCESS_KEY_ID"], "ASIAEXAMPLE")
+        self.assertEqual(env["AWS_SECRET_ACCESS_KEY"], "temp-secret")
+        self.assertEqual(env["AWS_SESSION_TOKEN"], "temp-token")
+        self.assertEqual(env["AWS_REGION"], "us-east-1")
 
 
 class VisibilityApiTests(APITestCase):
@@ -847,6 +878,26 @@ class VisibilityApiTests(APITestCase):
         )
         self.assertEqual(res.status_code, 201)
         self.assertEqual(res.json()["scope"], "personal")
+
+    def test_teacher_can_create_course_shared_assume_role_connection(self):
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(
+            "/api/cloud-connections/",
+            {
+                "name": "AWS assume role curso",
+                "provider": "aws",
+                "scope": "course_shared",
+                "auth_type": "aws_assume_role",
+                "course_id": str(self.course.id),
+                "default_region": "us-east-1",
+                "aws_role_arn": "arn:aws:iam::123456789012:role/syslab-course-role",
+                "aws_external_id": "ext-123",
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.json()["auth_type"], "aws_assume_role")
+        self.assertEqual(res.json()["aws_role_arn"], "arn:aws:iam::123456789012:role/syslab-course-role")
 
     def test_student_cannot_create_course_shared_cloud_connection(self):
         self.client.force_authenticate(self.student)
