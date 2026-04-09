@@ -34,6 +34,8 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useNavigate } from 'react-router-dom';
 
 import { api } from '@/infrastructure/http/api';
+import TourLauncherButton from '@/shared/ui/onboarding/TourLauncherButton';
+import useOnboardingTour from '@/shared/ui/onboarding/useOnboardingTour';
 import { PageHeader } from '@/shared/ui/layouts/MainLayout';
 
 const statusChipColor = (status) => {
@@ -92,6 +94,7 @@ export default function PlanListPage() {
   const [actionsAnchorEl, setActionsAnchorEl] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState(null);
   const navigate = useNavigate();
+  const { startTourIfNeeded, restartTour } = useOnboardingTour();
 
   const load = async () => {
     setLoading(true);
@@ -111,6 +114,10 @@ export default function PlanListPage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    startTourIfNeeded('plans-list-overview');
+  }, [startTourIfNeeded]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -178,23 +185,25 @@ export default function PlanListPage() {
         p: 3,
       }}
     >
-      <PageHeader
-        title="Ejecuciones de infraestructura"
-        subtitle={
-          <>
-            Lista de ejecuciones (simulación y reales). Usa{" "}
-            <Box component="span" sx={{ fontFamily: "monospace" }}>
-              Outputs
-            </Box>{" "}
-            para depurar sin ir a la consola de AWS.
-          </>
-        }
-        actions={
-          <Button variant="outlined" onClick={load} disabled={loading}>
-            {loading ? "Actualizando…" : "Refrescar"}
-          </Button>
-        }
-      />
+      <Box data-tour="plans-list-header">
+        <PageHeader
+          title="Ejecuciones de infraestructura"
+          subtitle={
+            <>
+              Lista de ejecuciones (simulación y reales). Usa{" "}
+              <Box component="span" sx={{ fontFamily: "monospace" }}>
+                Outputs
+              </Box>{" "}
+              para depurar sin ir a la consola de AWS.
+            </>
+          }
+          actions={
+            <Button variant="outlined" onClick={load} disabled={loading}>
+              {loading ? "Actualizando…" : "Refrescar"}
+            </Button>
+          }
+        />
+      </Box>
 
       {err && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -203,6 +212,7 @@ export default function PlanListPage() {
       )}
 
       <Paper
+        data-tour="plans-list-filters"
         elevation={0}
         className="pt-panel"
         sx={{
@@ -248,6 +258,7 @@ export default function PlanListPage() {
       </Paper>
 
       <TableContainer
+        data-tour="plans-list-table"
         component={Paper}
         elevation={0}
         sx={{
@@ -482,6 +493,10 @@ export default function PlanListPage() {
       <Typography variant="caption" color="text.secondary">
         Nota: el botón <Box component="span" sx={{ fontFamily: 'monospace' }}>Destroy</Box> se habilita solo cuando el plan es destruible, pero el backend vuelve a validar la regla.
       </Typography>
+      <TourLauncherButton
+        onClick={() => restartTour('plans-list-overview')}
+        label="Ver tour de planes"
+      />
     </Box>
   );
 }

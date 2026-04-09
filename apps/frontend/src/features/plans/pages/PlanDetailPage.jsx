@@ -30,6 +30,8 @@ import BoltRoundedIcon from '@mui/icons-material/BoltRounded';
 import { TASK_STATE_PENDING, TASK_STATE_RUNNING } from '@/shared/constants';
 import { api } from '@/infrastructure/http/api';
 import { parseTerraformPlanSummary } from '@/features/plans/utils/parseTerraformPlanSummary';
+import TourLauncherButton from '@/shared/ui/onboarding/TourLauncherButton';
+import useOnboardingTour from '@/shared/ui/onboarding/useOnboardingTour';
 
 const POLL_MS = 2000;
 
@@ -1031,6 +1033,7 @@ function buildPostDeployConsoleGuide(
 export default function PlanDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { startTourIfNeeded, restartTour } = useOnboardingTour();
 
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1317,6 +1320,11 @@ export default function PlanDetailPage() {
       if (logHighlightTimerRef.current) clearTimeout(logHighlightTimerRef.current);
     };
   }, [fetchPlan, id]);
+
+  useEffect(() => {
+    if (loading || !plan) return;
+    startTourIfNeeded('plan-detail-overview');
+  }, [loading, plan, startTourIfNeeded]);
 
   useEffect(() => {
     if (tab !== 'logs') return;
@@ -1667,6 +1675,7 @@ export default function PlanDetailPage() {
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Stack spacing={2}>
         <Paper
+          data-tour="plan-detail-header"
           sx={{
             p: 3,
             position: 'relative',
@@ -1790,7 +1799,7 @@ export default function PlanDetailPage() {
               </Typography>
             </Stack>
 
-            <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+            <Stack data-tour="plan-detail-actions" direction="row" spacing={2} alignItems="center" flexWrap="wrap">
               <>
                 <FormControlLabel
                   control={
@@ -1929,6 +1938,7 @@ export default function PlanDetailPage() {
 
         <Paper sx={{ p: 0 }}>
           <Tabs
+            data-tour="plan-detail-tabs"
             value={tab}
             onChange={(_e, v) => setTab(v)}
             variant="scrollable"
@@ -1945,7 +1955,7 @@ export default function PlanDetailPage() {
 
           {/* SUMMARY */}
           {tab === 'summary' && (
-            <Box sx={{ p: 3 }}>
+            <Box sx={{ p: 3 }} data-tour="plan-detail-summary">
               <Paper
                 variant="outlined"
                 sx={{
@@ -2943,6 +2953,10 @@ export default function PlanDetailPage() {
           )}
         </Paper>
       </Stack>
+      <TourLauncherButton
+        onClick={() => restartTour('plan-detail-overview')}
+        label="Ver tour del plan"
+      />
       <Dialog
         open={consoleGuideOpen}
         onClose={() => setConsoleGuideOpen(false)}
