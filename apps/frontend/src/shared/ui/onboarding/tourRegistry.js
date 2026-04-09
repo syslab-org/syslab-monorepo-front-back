@@ -113,6 +113,72 @@ export const tourRegistry = {
       },
     ],
   },
+  "plans-list-overview": {
+    id: "plans-list-overview",
+    steps: [
+      {
+        id: "plans-list-header",
+        target: "plans-list-header",
+        title: "Aquí revisas las ejecuciones",
+        description:
+          "Esta pantalla concentra los planes simulados y reales para que puedas seguir el historial operativo sin entrar aún al detalle.",
+        placement: "bottom",
+      },
+      {
+        id: "plans-list-filters",
+        target: "plans-list-filters",
+        title: "Filtra y busca planes",
+        description:
+          "Usa estos controles para encontrar un plan por nombre, estado, canvas o laboratorio asociado.",
+        placement: "bottom",
+      },
+      {
+        id: "plans-list-table",
+        target: "plans-list-table",
+        title: "Compara el estado de cada plan",
+        description:
+          "Aquí ves quién es el owner, el estado técnico, el lifecycle lógico y el acceso rápido al detalle o a otras acciones.",
+        placement: "top",
+      },
+    ],
+  },
+  "plan-detail-overview": {
+    id: "plan-detail-overview",
+    steps: [
+      {
+        id: "plan-detail-header",
+        target: "plan-detail-header",
+        title: "Este es el estado general del plan",
+        description:
+          "Aquí puedes leer el resultado actual, el lifecycle operativo y volver al listado o al canvas asociado.",
+        placement: "bottom",
+      },
+      {
+        id: "plan-detail-actions",
+        target: "plan-detail-actions",
+        title: "Desde aquí ejecutas acciones",
+        description:
+          "Puedes alternar entre preview y apply real, desplegar cambios o destruir infraestructura cuando el plan lo permita.",
+        placement: "left",
+      },
+      {
+        id: "plan-detail-tabs",
+        target: "plan-detail-tabs",
+        title: "Explora la información del plan por secciones",
+        description:
+          "Estas pestañas separan resumen, outputs, pruebas, logs y payload para que la lectura técnica sea más ordenada.",
+        placement: "bottom",
+      },
+      {
+        id: "plan-detail-summary",
+        target: "plan-detail-summary",
+        title: "Resumen operativo y pedagógico",
+        description:
+          "En esta sección ves el estado, la próxima ejecución real, la reconciliación cloud y el historial reciente del plan.",
+        placement: "top",
+      },
+    ],
+  },
 };
 
 export function getTourDefinition(tourId) {

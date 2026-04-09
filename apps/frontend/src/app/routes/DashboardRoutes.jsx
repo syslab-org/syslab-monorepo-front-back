@@ -20,9 +20,7 @@ import ProtectedRoute from '@/shared/ui/organisms/ProtectedRoute'
 
 const LabsLayout = () => (
   <WizardProvider>
-    <OnboardingTourProvider>
-      <Outlet />
-    </OnboardingTourProvider>
+    <Outlet />
   </WizardProvider>
 );
 
@@ -31,7 +29,7 @@ const DashboardRoutes = () => {
   return (
     <LoadingFlowProvider>
       <Routes>
-        <Route path="/" element={<MainLayout />}>
+        <Route path="/" element={<OnboardingTourProvider><MainLayout /></OnboardingTourProvider>}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path='dashboard' element={<Dashboard />} />
 
