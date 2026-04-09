@@ -45,6 +45,8 @@ import { usePlanPolling } from "@/features/networkCanvas/core/usePlanPolling";
 import { useLearningGuide } from "@/features/networkCanvas/core/useLearningGuide";
 import RoutePreviewPanel from "@/features/networkCanvas/panels/RoutePreviewPanel";
 // import { buildRoutingPreview } from "@/features/networkCanvas/utils/buildRoutingPreview";
+import TourLauncherButton from "@/shared/ui/onboarding/TourLauncherButton";
+import useOnboardingTour from "@/shared/ui/onboarding/useOnboardingTour";
 import { useTheme } from "@mui/material/styles";
 import { useAmiList } from "@/features/networkCanvas/core/useAmiList";
 import { useContext } from "react";
@@ -101,6 +103,7 @@ function CanvasFlowPage() {
   const [hasValidatedInSession, setHasValidatedInSession] = useState(false);
 
   const { loadingFlow } = useContext(LoadingFlowContext);
+  const { startTourIfNeeded, restartTour } = useOnboardingTour();
 
   const [target, setTarget] = useState(null);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
@@ -309,6 +312,11 @@ function CanvasFlowPage() {
   }, [isWizardEntry, active, start, setStep]);
 
   useEffect(() => {
+    if (loadingFlow) return;
+    startTourIfNeeded("canvas-overview");
+  }, [loadingFlow, startTourIfNeeded]);
+
+  useEffect(() => {
 
 
     return () => {
@@ -447,6 +455,12 @@ function CanvasFlowPage() {
           deleteNodeInstance={deleteNodeInstance}
           cidrBlockVPC={masterCidrBlock}
           prefixLength={prefixLength}
+        />
+        <TourLauncherButton
+          onClick={() => restartTour("canvas-overview")}
+          label="Ver tour del canvas"
+          bottom={32}
+          right={32}
         />
 
 

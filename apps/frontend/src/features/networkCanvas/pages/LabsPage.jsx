@@ -33,6 +33,8 @@ import { useNavigate } from "react-router-dom";
 
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext.jsx";
 import { useWizard } from "@/features/networkCanvas/context/WizardContext";
+import TourLauncherButton from "@/shared/ui/onboarding/TourLauncherButton";
+import useOnboardingTour from "@/shared/ui/onboarding/useOnboardingTour";
 import { useCanvasLabStore } from '../store/canvasLabStore';
 import CreateLabModal from "./CreateLabModal";
 import { PageHeader } from '@/shared/ui/layouts/MainLayout';
@@ -102,9 +104,14 @@ const LabsPage = () => {
   const navigate = useNavigate()
   const { setLoadingFlow } = useContext(LoadingFlowContext)
   const { setMasterCidrBlock, setPrefixLength, setLabName, setLabRegion } = useCanvasLabStore();
+  const { startTourIfNeeded, restartTour } = useOnboardingTour();
 
   const { vpcs, fetchVPCs } = useFetchLabs(setLoadingFlow)
   const { start, finish, setStep } = useWizard()
+
+  useEffect(() => {
+    startTourIfNeeded("labs-overview");
+  }, [startTourIfNeeded]);
 
   useEffect(() => {
     let alive = true;
@@ -303,20 +310,32 @@ const LabsPage = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <PageHeader
-        title="Laboratorios"
-        subtitle="Gestiona tus laboratorios y abre el canvas para editar topologías, validar intención y preparar despliegues."
-        actions={
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-            <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreateGuideLab}>
-              Crear guiado
-            </Button>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateLab}>
-              Crear laboratorio
-            </Button>
-          </Stack>
-        }
-      />
+      <Box data-tour="labs-page-header">
+        <PageHeader
+          title="Laboratorios"
+          subtitle="Gestiona tus laboratorios y abre el canvas para editar topologías, validar intención y preparar despliegues."
+          actions={
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <Button
+                variant="outlined"
+                startIcon={<AddIcon />}
+                onClick={handleCreateGuideLab}
+                data-tour="labs-create-guided-button"
+              >
+                Crear guiado
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleCreateLab}
+                data-tour="labs-create-lab-button"
+              >
+                Crear laboratorio
+              </Button>
+            </Stack>
+          }
+        />
+      </Box>
 
       <Paper className="pt-panel" sx={{ p: 2.5, mb: 3, borderRadius: 2 }}>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
@@ -347,7 +366,12 @@ const LabsPage = () => {
         </Stack>
       </Paper>
 
-      <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2, overflowX: 'auto' }}>
+      <TableContainer
+        component={Paper}
+        elevation={0}
+        sx={{ borderRadius: 2, overflowX: 'auto' }}
+        data-tour="labs-list-table"
+      >
         <Table
           size="small"
           sx={{
@@ -553,6 +577,10 @@ const LabsPage = () => {
       </Dialog>
 
       <CreateLabModal open={isCreateLabModalOpen} onClose={handleCreateLabModalClose} wizardMode={wizardMode} />
+      <TourLauncherButton
+        onClick={() => restartTour("labs-overview")}
+        label="Ver tour de laboratorios"
+      />
     </Box>
   )
 }
