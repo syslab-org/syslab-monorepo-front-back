@@ -157,6 +157,7 @@ export default function FlowWorkspace({
                 />
 
                 <Box
+                    data-tour="canvas-state-summary"
                     sx={{
                         px: { xs: 1.5, md: 2 },
                         py: isExpandedWorkspaceState ? 1 : 0.75,
@@ -218,6 +219,7 @@ export default function FlowWorkspace({
                 </Box>
 
                 <Box
+                    data-tour="canvas-drop-area"
                     sx={{
                         flex: 1,
                         minHeight: 0,
@@ -234,6 +236,7 @@ export default function FlowWorkspace({
                                 aria-expanded={isPaletteOpen}
                                 aria-controls="tool-palette-panel"
                                 aria-label={isPaletteOpen ? "Ocultar herramientas para modelar" : "Abrir herramientas para modelar"}
+                                data-tour="canvas-tools-toggle"
                                 sx={getFloatingToggleSx("left", isPaletteOpen, "primary")}
                                 startIcon={<ViewSidebarIcon fontSize="small" />}
                                 endIcon={isPaletteOpen ? <ChevronLeftIcon /> : <ChevronRightIcon />}
@@ -249,6 +252,7 @@ export default function FlowWorkspace({
                                 aria-expanded={isGuideOpen}
                                 aria-controls="learning-guide-panel"
                                 aria-label={isGuideOpen ? "Ocultar guía de modelado" : "Abrir guía de modelado"}
+                                data-tour="canvas-guide-toggle"
                                 sx={{
                                     ...getFloatingToggleSx("right", isGuideOpen, "secondary"),
                                     display: { xs: "none", lg: "inline-flex" },

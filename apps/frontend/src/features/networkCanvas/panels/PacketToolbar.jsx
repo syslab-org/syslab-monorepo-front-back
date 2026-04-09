@@ -294,7 +294,7 @@ export default function PacketToolbar({
         <div className="pt-toolbar__group">
           {renderSaveChip()}
           <Tooltip title="Guardar estado actual del canvas en la API">
-            <span>
+            <span data-tour="canvas-toolbar-save">
               <Button
                 variant="outlined"
                 className="pt-btn"
@@ -308,7 +308,7 @@ export default function PacketToolbar({
             </span>
           </Tooltip>
           <Tooltip title="Restaurar última versión guardada desde la API">
-            <span>
+            <span data-tour="canvas-toolbar-restore">
               <Button
                 variant="outlined"
                 className="pt-btn"
@@ -322,7 +322,7 @@ export default function PacketToolbar({
             </span>
           </Tooltip>
           <Tooltip title="Restablecer canvas al estado inicial de la plantilla">
-            <span>
+            <span data-tour="canvas-toolbar-restore-initial">
               <Button
                 variant="outlined"
                 className="pt-btn pt-btn--yellow"
@@ -336,7 +336,7 @@ export default function PacketToolbar({
             </span>
           </Tooltip>
           <Tooltip title={actionState.actionTooltip}>
-            <span>
+            <span data-tour="canvas-toolbar-deploy">
               <Button
                 variant="outlined"
                 className="pt-btn pt-btn--green"
@@ -350,7 +350,7 @@ export default function PacketToolbar({
             </span>
           </Tooltip>
           <Tooltip title="Generar y revisar el plan de ruteo sin aplicar cambios">
-            <span>
+            <span data-tour="canvas-toolbar-routes">
               <Button
                 variant="outlined"
                 className="pt-btn pt-btn--green"

@@ -3,6 +3,7 @@ import { ReactFlowProvider } from "@xyflow/react";
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { USER_ROL_STUDENT, USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER } from '@/shared/constants';
 import { LoadingFlowProvider } from '@/app/providers/LoadingFlowContext';
+import { OnboardingTourProvider } from '@/app/providers/OnboardingTourContext';
 import Dashboard from '@/features/admin/pages/Dashboard';
 import PlanDetailPage from '@/features/plans/pages/PlanDetailPage';
 import PlanListPage from '@/features/plans/pages/PlanListPage';
@@ -19,7 +20,9 @@ import ProtectedRoute from '@/shared/ui/organisms/ProtectedRoute'
 
 const LabsLayout = () => (
   <WizardProvider>
-    <Outlet />
+    <OnboardingTourProvider>
+      <Outlet />
+    </OnboardingTourProvider>
   </WizardProvider>
 );
 
