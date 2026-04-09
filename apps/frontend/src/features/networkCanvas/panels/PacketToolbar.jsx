@@ -1,5 +1,6 @@
 // apps/frontend/src/components/flow/PacketToolbar.jsx
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import RestoreIcon from '@mui/icons-material/Restore';
@@ -13,7 +14,8 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import SyncRoundedIcon from '@mui/icons-material/SyncRounded';
-import { Button, Chip, IconButton, Tooltip } from '@mui/material';
+import { Box, Button, Chip, Divider, IconButton, Popover, Stack, Tooltip, Typography } from '@mui/material';
+import { useMemo, useState } from 'react';
 import { computePlanActionState } from '@/features/networkCanvas/utils/planActionUi';
 import { useThemeMode } from '@/shared/ui/theme/AppThemeProvider';
 
@@ -43,6 +45,7 @@ export default function PacketToolbar({
   const { mode } = useThemeMode();
   const canTogglePalette = typeof onTogglePalette === "function";
   const canToggleGuide = typeof onToggleGuide === "function";
+  const [statusGuideAnchor, setStatusGuideAnchor] = useState(null);
 
   const PLAN_STATES = {
     IDLE: "IDLE",
@@ -56,6 +59,63 @@ export default function PacketToolbar({
   const actionState = computePlanActionState(planStatus, canvasState, validationState);
   const planSnapshotStatus = String(planStatus?.status || '').toUpperCase();
   const hasActiveInfra = planStatus?.applied === true;
+  const statusGuideOpen = Boolean(statusGuideAnchor);
+  const currentCanvasStateLabel = useMemo(() => {
+    switch (canvasState) {
+      case "PLAN_RUNNING":
+        return "Plan en ejecución";
+      case "PLAN_OUTDATED":
+        return "Canvas desactualizado";
+      case "PLAN_VALIDATED":
+        return "Canvas validado";
+      case "PLAN_SYNCED":
+        return "Canvas sincronizado";
+      case "NO_PLAN":
+      default:
+        return "Sin plan asociado";
+    }
+  }, [canvasState]);
+  const statusGuideItems = useMemo(
+    () => [
+      {
+        label: "VALIDATED",
+        color: "success",
+        description:
+          "El canvas ya pasó validación y la topología actual coincide con el último plan validado.",
+      },
+      {
+        label: "PLAN SUCCESS",
+        color: "success",
+        description:
+          "La última ejecución del plan terminó correctamente en backend.",
+      },
+      {
+        label: "ACTIVE INFRA",
+        color: "warning",
+        description:
+          "Existe infraestructura real activa en AWS asociada a este laboratorio.",
+      },
+      {
+        label: "OUTDATED",
+        color: "warning",
+        description:
+          "El canvas cambió después de la última validación y conviene revalidar antes de desplegar.",
+      },
+      {
+        label: "VALIDATING...",
+        color: "info",
+        description:
+          "El sistema está generando o sincronizando un plan para reflejar el estado actual del canvas.",
+      },
+      {
+        label: "ERROR",
+        color: "error",
+        description:
+          "Hubo un problema al validar o sincronizar el plan y necesitas revisar el mensaje asociado.",
+      },
+    ],
+    [],
+  );
   const getPanelToggleSx = (isOpen, tone = "primary") => {
     const accent = tone === "secondary"
       ? (mode === "light" ? "#0f766e" : "#67e8f9")
@@ -231,6 +291,16 @@ export default function PacketToolbar({
                 color="warning"
               />
             )}
+            <Tooltip title="Ver significado de los estados del canvas">
+              <IconButton
+                size="small"
+                className="pt-ibtn"
+                onClick={(event) => setStatusGuideAnchor(event.currentTarget)}
+                aria-label="Ver significado de los estados del canvas"
+              >
+                <InfoOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           </>
         </div>
 
@@ -366,6 +436,74 @@ export default function PacketToolbar({
         </div>
 
       </div>
+      <Popover
+        open={statusGuideOpen}
+        anchorEl={statusGuideAnchor}
+        onClose={() => setStatusGuideAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        PaperProps={{
+          sx: {
+            mt: 1,
+            width: 360,
+            maxWidth: 'calc(100vw - 24px)',
+            borderRadius: 3,
+            p: 2,
+          },
+        }}
+      >
+        <Stack spacing={1.5}>
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+              Estados del canvas
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Esta ayuda resume qué significan los chips que ves en la cabecera del laboratorio.
+            </Typography>
+          </Box>
+
+          <PaperStatusSummary label={currentCanvasStateLabel} detail={`Estado interno actual: ${canvasState || 'NO_PLAN'}`} />
+
+          <Divider />
+
+          <Stack spacing={1.25}>
+            {statusGuideItems.map((item) => (
+              <Box key={item.label}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Chip size="small" label={item.label} color={item.color} variant="outlined" />
+                </Stack>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  {item.description}
+                </Typography>
+              </Box>
+            ))}
+          </Stack>
+        </Stack>
+      </Popover>
     </div>
+  );
+}
+
+function PaperStatusSummary({ label, detail }) {
+  return (
+    <Box
+      sx={{
+        p: 1.25,
+        borderRadius: 2,
+        border: '1px solid',
+        borderColor: 'divider',
+        bgcolor: 'background.default',
+      }}
+    >
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+        Estado actual
+      </Typography>
+      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+        {label}
+      </Typography>
+      <Typography variant="caption" color="text.secondary">
+        {detail}
+      </Typography>
+    </Box>
   );
 }
