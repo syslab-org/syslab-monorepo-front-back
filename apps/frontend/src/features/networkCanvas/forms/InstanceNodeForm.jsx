@@ -85,6 +85,9 @@ const InstanceNodeForm = ({
             id: entry?.id || name,
             value: name,
             label: label || name,
+            scope: String(entry?.scope || "").trim(),
+            region,
+            connectionId: String(entry?.cloud_connection?.id || "").trim(),
             subtitle: [scopeLabel, region || null, connectionName || courseName || null]
               .filter(Boolean)
               .join(" • "),
@@ -117,6 +120,7 @@ const InstanceNodeForm = ({
     }
   });
   const watchedSshAccess = watch("sshAccess");
+  const executionRegion = String(executionTarget?.region || "").trim().toLowerCase();
   const selectedKeyPairMeta = useMemo(() => {
     const current = String(watchedSshAccess || "").trim();
     if (!current) return null;
@@ -142,6 +146,50 @@ const InstanceNodeForm = ({
     : hasConnectionMismatch
       ? "La key pair seleccionada está vinculada a otra conexión cloud. Verifica que exista en la cuenta efectiva del deploy."
       : "";
+  const keyPairOptionsWithMatch = useMemo(
+    () =>
+      keyPairOptions.map((option) => {
+        const scopeMatches = !executionScope || !option.scope || option.scope === executionScope;
+        const regionMatches =
+          !executionRegion || !option.region || option.region.toLowerCase() === executionRegion;
+        const connectionMatches =
+          !executionConnectionId || !option.connectionId || option.connectionId === executionConnectionId;
+        const isCompatible = scopeMatches && regionMatches && connectionMatches;
+        const reasons = [];
+        if (!scopeMatches) reasons.push(`scope ${option.scope || "n/a"}`);
+        if (!regionMatches) reasons.push(`región ${option.region || "n/a"}`);
+        if (!connectionMatches) reasons.push("otra conexión");
+        return {
+          ...option,
+          isCompatible,
+          compatibilityHint: reasons.length > 0 ? `No coincide por ${reasons.join(" · ")}` : "Compatible con este laboratorio",
+        };
+      }),
+    [keyPairOptions, executionScope, executionRegion, executionConnectionId]
+  );
+  const compatibleKeyPairOptions = useMemo(
+    () => keyPairOptionsWithMatch.filter((option) => option.isCompatible),
+    [keyPairOptionsWithMatch]
+  );
+  const visibleKeyPairOptions = useMemo(() => {
+    if (!executionScope && !executionRegion && !executionConnectionId) {
+      return keyPairOptionsWithMatch;
+    }
+    const current = String(watchedSshAccess || "").trim();
+    const compatibleIds = new Set(compatibleKeyPairOptions.map((option) => option.id));
+    const selectedFallback = keyPairOptionsWithMatch.find((option) => option.value === current && !compatibleIds.has(option.id));
+    return selectedFallback
+      ? [...compatibleKeyPairOptions, selectedFallback]
+      : compatibleKeyPairOptions;
+  }, [
+    keyPairOptionsWithMatch,
+    compatibleKeyPairOptions,
+    executionScope,
+    executionRegion,
+    executionConnectionId,
+    watchedSshAccess,
+  ]);
+  const hiddenKeyPairCount = Math.max(keyPairOptionsWithMatch.length - visibleKeyPairOptions.length, 0);
 
   useEffect(() => {
     reset({
@@ -336,9 +384,9 @@ const InstanceNodeForm = ({
           render={({ field }) => (
             <Autocomplete
               freeSolo
-              options={keyPairOptions}
+              options={visibleKeyPairOptions}
               value={
-                keyPairOptions.find((option) => option.value === (field.value || "")) ||
+                keyPairOptionsWithMatch.find((option) => option.value === (field.value || "")) ||
                 field.value ||
                 null
               }
@@ -361,17 +409,28 @@ const InstanceNodeForm = ({
               renderOption={(props, option) => (
                 <Box component="li" {...props} key={option.id} sx={{ py: 1 }}>
                   <Box>
-                    <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
-                      {option.label}
+                  <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
+                    {option.label}
+                  </Typography>
+                  {option.subtitle && (
+                    <Typography variant="caption" color="text.secondary">
+                      {option.subtitle}
                     </Typography>
-                    {option.subtitle && (
-                      <Typography variant="caption" color="text.secondary">
-                        {option.subtitle}
-                      </Typography>
-                    )}
-                  </Box>
+                  )}
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      display: "block",
+                      mt: 0.2,
+                      color: option.isCompatible ? "success.main" : "warning.main",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {option.compatibilityHint}
+                  </Typography>
                 </Box>
-              )}
+              </Box>
+            )}
               renderInput={(params) => (
                 <TextField
                   {...params}
@@ -379,8 +438,8 @@ const InstanceNodeForm = ({
                   error={!!errors.sshAccess}
                   helperText={
                     errors.sshAccess?.message ||
-                    (keyPairOptions.length > 0
-                      ? "Elige una key pair registrada o escribe el nombre manualmente."
+                    (visibleKeyPairOptions.length > 0
+                      ? "Elige una key pair compatible o escribe el nombre manualmente."
                       : "Opcional. Puedes escribir manualmente el nombre de una key pair existente en AWS.")
                   }
                   placeholder="p. ej., tesis-key"
@@ -392,12 +451,17 @@ const InstanceNodeForm = ({
           )}
         />
 
-        {keyPairOptions.length > 0 && (
+        {visibleKeyPairOptions.length > 0 && (
           <Box className="pt-node-form__microCopy">
             <Typography className="pt-node-form__microCopyText">
-              El catálogo reduce errores de tipeo y aún te deja escribir un nombre manual si no registraste esa key pair.
+              El catálogo prioriza las key pairs compatibles con la conexión y región efectivas, y aún te deja escribir un nombre manual.
             </Typography>
           </Box>
+        )}
+        {hiddenKeyPairCount > 0 && (
+          <Alert severity="info" variant="outlined" sx={{ mt: 0.6 }}>
+            Ocultamos {hiddenKeyPairCount} key pair{hiddenKeyPairCount === 1 ? "" : "s"} del catálogo porque no coinciden con la conexión cloud o la región efectivas de este laboratorio.
+          </Alert>
         )}
 
         <Stack spacing={1.1} sx={{ mt: 0.8 }}>
