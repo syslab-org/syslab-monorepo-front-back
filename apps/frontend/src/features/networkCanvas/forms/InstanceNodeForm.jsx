@@ -5,15 +5,19 @@ import {
   Autocomplete,
   Box,
   Button,
+  Chip,
+  Divider,
   FormControl,
   FormHelperText,
   InputLabel,
   MenuItem,
   Select,
+  Snackbar,
+  Stack,
   TextField,
   Typography,
 } from "@mui/material";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import CidrLearningGuideButton from '@/features/networkCanvas/ui/CidrLearningGuideButton';
 import { TYPE_INSTANCE_NODE } from "../utils/constants";
@@ -41,6 +45,7 @@ const InstanceNodeForm = ({
   executionTarget = null,
   defaultAssociatePublicIp = true,
 }) => {
+  const [mismatchSnackbarOpen, setMismatchSnackbarOpen] = useState(false);
   const validationSchema = useFormValidationSchema(
     TYPE_INSTANCE_NODE,
     parentSubnetCidr,
@@ -132,6 +137,11 @@ const InstanceNodeForm = ({
     !!executionConnectionId &&
     !!selectedKeyPairConnectionId &&
     executionConnectionId !== selectedKeyPairConnectionId;
+  const mismatchSnackbarMessage = hasScopeMismatch
+    ? `La key pair seleccionada es ${selectedKeyPairScope}, pero este laboratorio desplegará con una conexión ${executionScope}.`
+    : hasConnectionMismatch
+      ? "La key pair seleccionada está vinculada a otra conexión cloud. Verifica que exista en la cuenta efectiva del deploy."
+      : "";
 
   useEffect(() => {
     reset({
@@ -146,6 +156,14 @@ const InstanceNodeForm = ({
           : defaultAssociatePublicIp,
     });
   }, [nodeData, reset, defaultAssociatePublicIp]);
+
+  useEffect(() => {
+    if (hasScopeMismatch || hasConnectionMismatch) {
+      setMismatchSnackbarOpen(true);
+    } else {
+      setMismatchSnackbarOpen(false);
+    }
+  }, [hasScopeMismatch, hasConnectionMismatch, mismatchSnackbarMessage]);
 
   const onSubmit = (data) => {
     const ipRaw = (data.ipAddress || '').trim();
@@ -180,6 +198,20 @@ const InstanceNodeForm = ({
     });
   };
 
+  const renderSectionHeader = (eyebrow, title, helper) => (
+    <Box className="pt-node-form__sectionHeader">
+      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+        <Chip label={eyebrow} size="small" className="pt-node-form__sectionChip" />
+        <Typography className="pt-node-form__sectionTitle">{title}</Typography>
+      </Stack>
+      {helper && (
+        <Typography className="pt-node-form__sectionHint">
+          {helper}
+        </Typography>
+      )}
+    </Box>
+  );
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="pt-node-form">
       <Box className="pt-node-form__header">
@@ -190,184 +222,210 @@ const InstanceNodeForm = ({
         </Typography>
       </Box>
 
-      <TextField
-        label="Name of Instance"
-        {...register("name")}
-        error={!!errors.name}
-        helperText={errors.name?.message}
-        fullWidth
-        margin="normal"
-      />
-
-      <TextField
-        label={`private IP (inside ${parentSubnetCidr || 'subnet'})`}
-        {...register("ipAddress")}
-        error={!!errors.ipAddress}
-        helperText={errors.ipAddress?.message || `Deja vacío o escribe "auto" para asignación automática`}
-        placeholder="10.10.0.10  •  o escribe: auto"
-        fullWidth
-        margin="normal"
-      />
-
-      <Alert severity="info" variant="outlined" sx={{ mt: 0.2, mb: 0.8 }}>
-        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-          Qué significa este workload
-        </Typography>
-        <Typography variant="caption" display="block" sx={{ mt: 0.4 }}>
-          - La private IP debe pertenecer a la subred padre.
-        </Typography>
-        <Typography variant="caption" display="block">
-          - Si la dejas vacía o escribes `auto`, el provider asignará una IP disponible automáticamente.
-        </Typography>
-        <Typography variant="caption" display="block">
-          - La IP pública depende del tipo de subred y de la política de despliegue, no reemplaza la private IP interna.
-        </Typography>
-        <Typography variant="caption" display="block">
-          - La SSH key define con qué par de llaves podrás entrar si habilitas acceso remoto.
-        </Typography>
-        <Typography variant="caption" display="block">
-          - Aquí guardamos solo el nombre de la key pair en AWS; el archivo privado `.pem` no se almacena en la plataforma.
-        </Typography>
-        <Typography variant="caption" display="block">
-          - Para conectarte por SSH después del deploy, el `.pem` debe estar en el computador desde el que harás la sesión.
-        </Typography>
-        <Box sx={{ mt: 1.25 }}>
-          <CidrLearningGuideButton buttonLabel="Ayuda con CIDR e IPs" />
-        </Box>
-      </Alert>
-
-      <FormControl fullWidth margin="normal" error={!!errors.ami}>
-        <InputLabel id="ami-label">AMI</InputLabel>
-        <Select
-          labelId="ami-label"
-          {...register("ami")}
-          label="AMI"
-          defaultValue={nodeData.ami || ""}
-          displayEmpty
-        >
-          <MenuItem value="">
-            <em>Usar AMI por defecto</em>
-          </MenuItem>
-          {amiOptions.map((ami) => (
-            <MenuItem key={ami.key} value={ami.value}>
-              {ami.region ? `${ami.label} (${ami.region})` : ami.label}
-            </MenuItem>
-          ))}
-        </Select>
-        {errors.ami && <FormHelperText>{errors.ami.message}</FormHelperText>}
-        {!errors.ami && amiOptions.length === 0 && (
-          <FormHelperText>
-            No hay AMIs configuradas en el catalogo. Si lo dejas vacio, el backend usara la AMI por defecto.
-          </FormHelperText>
+      <Box className="pt-node-form__section">
+        {renderSectionHeader(
+          "Identidad y red",
+          "Nombre e IP privada",
+          "Primero define cómo se verá esta VM dentro del segmento y si quieres fijar una IP."
         )}
-      </FormControl>
 
-      <FormControl fullWidth margin="normal" error={!!errors.instanceType}>
-        <InputLabel id="instance-type-label">Instance Type</InputLabel>
-        <Select
-          labelId="instance-type-label"
-          label="Instance Type"
-          {...register("instanceType")}
-          defaultValue={nodeData.instanceType || "t2.micro"}
-        >
-          {INSTANCE_TYPE_OPTIONS.map(opt => (
-            <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
-          ))}
-        </Select>
-        {errors.instanceType && (
-          <FormHelperText>{errors.instanceType.message}</FormHelperText>
-        )}
-      </FormControl>
-
-      {/* Mensaje didáctico si se elige t4g.* */}
-      {watch("instanceType")?.startsWith("t4g") && (
-        <Alert severity="info" variant="outlined" sx={{ mt: 0.4 }}>
-          Los tipos t4g.* usan ARM (Graviton). Selecciona una AMI ARM64.
-        </Alert>
-      )}
-
-      <Controller
-        control={control}
-        name="sshAccess"
-        render={({ field }) => (
-          <Autocomplete
-            freeSolo
-            options={keyPairOptions}
-            value={
-              keyPairOptions.find((option) => option.value === (field.value || "")) ||
-              field.value ||
-              null
-            }
-            onChange={(_event, newValue) => {
-              if (typeof newValue === "string") {
-                field.onChange(newValue);
-                return;
-              }
-              field.onChange(newValue?.value || "");
-            }}
-            onInputChange={(_event, newInputValue, reason) => {
-              if (reason === "input" || reason === "clear") {
-                field.onChange(newInputValue || "");
-              }
-            }}
-            getOptionLabel={(option) => {
-              if (typeof option === "string") return option;
-              return option?.value || "";
-            }}
-            renderOption={(props, option) => (
-              <Box component="li" {...props} key={option.id} sx={{ py: 1 }}>
-                <Box>
-                  <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
-                    {option.label}
-                  </Typography>
-                  {option.subtitle && (
-                    <Typography variant="caption" color="text.secondary">
-                      {option.subtitle}
-                    </Typography>
-                  )}
-                </Box>
-              </Box>
-            )}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="SSH Access (KeyPair)"
-                error={!!errors.sshAccess}
-                helperText={
-                  errors.sshAccess?.message ||
-                  (keyPairOptions.length > 0
-                    ? "Elige una key pair registrada o escribe el nombre manualmente."
-                    : "Opcional. Puedes escribir manualmente el nombre de una key pair existente en AWS.")
-                }
-                placeholder="p. ej., tesis-key"
-                fullWidth
-                margin="normal"
-              />
-            )}
+        <Box className="pt-node-form__grid pt-node-form__grid--two">
+          <TextField
+            label="Name of Instance"
+            {...register("name")}
+            error={!!errors.name}
+            helperText={errors.name?.message}
+            fullWidth
+            margin="normal"
           />
+
+          <TextField
+            label={`private IP (inside ${parentSubnetCidr || 'subnet'})`}
+            {...register("ipAddress")}
+            error={!!errors.ipAddress}
+            helperText={errors.ipAddress?.message || `Deja vacío o escribe "auto" para asignación automática`}
+            placeholder="10.10.0.10  •  o escribe: auto"
+            fullWidth
+            margin="normal"
+          />
+        </Box>
+
+        <Box className="pt-node-form__noteCard">
+          <Typography className="pt-node-form__noteTitle">Pistas rápidas</Typography>
+          <Typography className="pt-node-form__noteText">
+            La private IP debe pertenecer a la subred padre. Si usas <b>auto</b>, el provider asignará una IP disponible.
+          </Typography>
+          <Typography className="pt-node-form__noteText">
+            La IP pública no reemplaza la private IP: depende de la subred y de la política del deploy.
+          </Typography>
+          <Box sx={{ mt: 1.2 }}>
+            <CidrLearningGuideButton buttonLabel="Ayuda con CIDR e IPs" />
+          </Box>
+        </Box>
+      </Box>
+
+      <Box className="pt-node-form__section">
+        {renderSectionHeader(
+          "Runtime",
+          "Imagen y tamaño",
+          "Aquí decides con qué AMI se crea la instancia y qué tipo de máquina se reservará."
         )}
-      />
-      {keyPairOptions.length > 0 && (
-        <FormHelperText sx={{ mt: -0.5 }}>
-          El catálogo reduce errores de tipeo y sigue permitiendo un nombre manual si aún no registraste la key pair.
-        </FormHelperText>
-      )}
-      {hasScopeMismatch && (
-        <Alert severity="warning" variant="outlined" sx={{ mt: 0.8 }}>
-          La key pair seleccionada es de tipo <b>{selectedKeyPairScope}</b>, pero este laboratorio está resolviendo una
-          conexión cloud de tipo <b>{executionScope}</b>. Puede que AWS no encuentre esa key pair en la cuenta efectiva del deploy.
-        </Alert>
-      )}
-      {!hasScopeMismatch && hasConnectionMismatch && (
-        <Alert severity="warning" variant="outlined" sx={{ mt: 0.8 }}>
-          La key pair seleccionada está vinculada a otra conexión cloud. Verifica que exista también en la cuenta que
-          este laboratorio usará realmente para desplegar.
-        </Alert>
-      )}
-      <Alert severity="info" variant="outlined" sx={{ mt: 0.8 }}>
-        El <b>deploy</b> valida que esa key pair exista en la cuenta y región efectivas. El acceso <b>SSH</b> posterior
-        sigue dependiendo de que tengas el <b>.pem</b> fuera de la plataforma.
-      </Alert>
+
+        <Box className="pt-node-form__grid pt-node-form__grid--two">
+          <FormControl fullWidth margin="normal" error={!!errors.ami}>
+            <InputLabel id="ami-label">AMI</InputLabel>
+            <Select
+              labelId="ami-label"
+              {...register("ami")}
+              label="AMI"
+              defaultValue={nodeData.ami || ""}
+              displayEmpty
+            >
+              <MenuItem value="">
+                <em>Usar AMI por defecto</em>
+              </MenuItem>
+              {amiOptions.map((ami) => (
+                <MenuItem key={ami.key} value={ami.value}>
+                  {ami.region ? `${ami.label} (${ami.region})` : ami.label}
+                </MenuItem>
+              ))}
+            </Select>
+            {errors.ami && <FormHelperText>{errors.ami.message}</FormHelperText>}
+            {!errors.ami && amiOptions.length === 0 && (
+              <FormHelperText>
+                No hay AMIs configuradas en el catalogo. Si lo dejas vacio, el backend usara la AMI por defecto.
+              </FormHelperText>
+            )}
+          </FormControl>
+
+          <FormControl fullWidth margin="normal" error={!!errors.instanceType}>
+            <InputLabel id="instance-type-label">Instance Type</InputLabel>
+            <Select
+              labelId="instance-type-label"
+              label="Instance Type"
+              {...register("instanceType")}
+              defaultValue={nodeData.instanceType || "t2.micro"}
+            >
+              {INSTANCE_TYPE_OPTIONS.map(opt => (
+                <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+              ))}
+            </Select>
+            {errors.instanceType && (
+              <FormHelperText>{errors.instanceType.message}</FormHelperText>
+            )}
+          </FormControl>
+        </Box>
+
+        {watch("instanceType")?.startsWith("t4g") && (
+          <Alert severity="info" variant="outlined" sx={{ mt: 0.6 }}>
+            Los tipos <b>t4g.*</b> usan arquitectura ARM (Graviton). Asegúrate de elegir una AMI compatible con ARM64.
+          </Alert>
+        )}
+      </Box>
+
+      <Box className="pt-node-form__section">
+        {renderSectionHeader(
+          "Acceso SSH",
+          "Key pair y compatibilidad",
+          "Aquí eliges la referencia al key pair que AWS buscará al lanzar la instancia."
+        )}
+
+        <Controller
+          control={control}
+          name="sshAccess"
+          render={({ field }) => (
+            <Autocomplete
+              freeSolo
+              options={keyPairOptions}
+              value={
+                keyPairOptions.find((option) => option.value === (field.value || "")) ||
+                field.value ||
+                null
+              }
+              onChange={(_event, newValue) => {
+                if (typeof newValue === "string") {
+                  field.onChange(newValue);
+                  return;
+                }
+                field.onChange(newValue?.value || "");
+              }}
+              onInputChange={(_event, newInputValue, reason) => {
+                if (reason === "input" || reason === "clear") {
+                  field.onChange(newInputValue || "");
+                }
+              }}
+              getOptionLabel={(option) => {
+                if (typeof option === "string") return option;
+                return option?.value || "";
+              }}
+              renderOption={(props, option) => (
+                <Box component="li" {...props} key={option.id} sx={{ py: 1 }}>
+                  <Box>
+                    <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
+                      {option.label}
+                    </Typography>
+                    {option.subtitle && (
+                      <Typography variant="caption" color="text.secondary">
+                        {option.subtitle}
+                      </Typography>
+                    )}
+                  </Box>
+                </Box>
+              )}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="SSH Access (KeyPair)"
+                  error={!!errors.sshAccess}
+                  helperText={
+                    errors.sshAccess?.message ||
+                    (keyPairOptions.length > 0
+                      ? "Elige una key pair registrada o escribe el nombre manualmente."
+                      : "Opcional. Puedes escribir manualmente el nombre de una key pair existente en AWS.")
+                  }
+                  placeholder="p. ej., tesis-key"
+                  fullWidth
+                  margin="normal"
+                />
+              )}
+            />
+          )}
+        />
+
+        {keyPairOptions.length > 0 && (
+          <Box className="pt-node-form__microCopy">
+            <Typography className="pt-node-form__microCopyText">
+              El catálogo reduce errores de tipeo y aún te deja escribir un nombre manual si no registraste esa key pair.
+            </Typography>
+          </Box>
+        )}
+
+        <Stack spacing={1.1} sx={{ mt: 0.8 }}>
+          {hasScopeMismatch && (
+            <Alert severity="warning" variant="outlined">
+              La key pair seleccionada es de tipo <b>{selectedKeyPairScope}</b>, pero este laboratorio está resolviendo una
+              conexión cloud de tipo <b>{executionScope}</b>. Puede que AWS no encuentre esa key pair en la cuenta efectiva del deploy.
+            </Alert>
+          )}
+          {!hasScopeMismatch && hasConnectionMismatch && (
+            <Alert severity="warning" variant="outlined">
+              La key pair seleccionada está vinculada a otra conexión cloud. Verifica que exista también en la cuenta que
+              este laboratorio usará realmente para desplegar.
+            </Alert>
+          )}
+
+          <Box className="pt-node-form__noteCard pt-node-form__noteCard--soft">
+            <Typography className="pt-node-form__noteTitle">Qué valida el sistema</Typography>
+            <Typography className="pt-node-form__noteText">
+              El <b>deploy</b> valida que esa key pair exista en la cuenta y región efectivas.
+            </Typography>
+            <Divider flexItem sx={{ my: 0.9 }} />
+            <Typography className="pt-node-form__noteText">
+              El acceso <b>SSH</b> posterior sigue dependiendo de que tengas el archivo <b>.pem</b> fuera de la plataforma, en el equipo desde el que te conectarás.
+            </Typography>
+          </Box>
+        </Stack>
+      </Box>
 
 
       <Box className="pt-node-form__actions">
@@ -378,6 +436,22 @@ const InstanceNodeForm = ({
           Delete Node
         </Button>
       </Box>
+
+      <Snackbar
+        open={mismatchSnackbarOpen}
+        autoHideDuration={5000}
+        onClose={() => setMismatchSnackbarOpen(false)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setMismatchSnackbarOpen(false)}
+          severity="warning"
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          {mismatchSnackbarMessage}
+        </Alert>
+      </Snackbar>
     </form>
   );
 };
