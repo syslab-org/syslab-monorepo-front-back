@@ -36,6 +36,25 @@ def normalize_payload(payload: dict) -> dict:
     return payload
 
 
+def collect_required_key_pairs(payload: dict) -> list[str]:
+    """Extrae key pairs declaradas en instancias EC2 del payload AWS."""
+    payload = payload if isinstance(payload, dict) else {}
+    found = set()
+    for vpc in get_segment_payloads(payload):
+        subnets = vpc.get("subnets") if isinstance(vpc.get("subnets"), list) else []
+        for subnet in subnets:
+            if not isinstance(subnet, dict):
+                continue
+            instances = subnet.get("instances") if isinstance(subnet.get("instances"), list) else []
+            for instance in instances:
+                if not isinstance(instance, dict):
+                    continue
+                key_name = str(instance.get("ssh_access") or "").strip()
+                if key_name:
+                    found.add(key_name)
+    return sorted(found)
+
+
 def build_nat_cleanup_targets(payload: dict, outputs: dict) -> dict[str, dict]:
     """Relaciona VPC real -> metadata de cleanup NAT a partir de payload y outputs."""
     payload = payload if isinstance(payload, dict) else {}
@@ -251,3 +270,41 @@ def check_tgw_quota_preflight(payload: dict, runtime_env: dict | None = None) ->
         return False, msg, info
 
     return True, "ok", info
+
+
+def check_key_pairs_preflight(payload: dict, runtime_env: dict | None = None) -> tuple[bool, str, dict]:
+    """Valida que las key pairs usadas por las EC2 existan en la cuenta/región objetivo."""
+    region = get_region(payload if isinstance(payload, dict) else {})
+    required_key_pairs = collect_required_key_pairs(payload)
+    info = {
+        "used": bool(required_key_pairs),
+        "region": region,
+        "required_key_pairs": required_key_pairs,
+        "missing_key_pairs": [],
+    }
+    if not required_key_pairs:
+        return True, "key_pairs_not_used", info
+
+    session = build_boto3_session_from_runtime_env(runtime_env)
+    ec2 = session.client("ec2", region_name=region)
+    missing = []
+    for key_name in required_key_pairs:
+        try:
+            ec2.describe_key_pairs(KeyNames=[key_name])
+        except ClientError as e:
+            code = str((e.response or {}).get("Error", {}).get("Code") or "")
+            if code == "InvalidKeyPair.NotFound":
+                missing.append(key_name)
+                continue
+            raise
+
+    info["missing_key_pairs"] = sorted(set(missing))
+    if info["missing_key_pairs"]:
+        missing_text = ", ".join(f"'{name}'" for name in info["missing_key_pairs"])
+        return (
+            False,
+            f"KeyPair preflight failed en {region}: {missing_text} no existe en la cuenta/región AWS efectiva.",
+            info,
+        )
+
+    return True, "key_pairs_ok", info

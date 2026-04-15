@@ -171,6 +171,12 @@ def ensure_apply_succeeded(result: TerraformCommandResult) -> None:
             "Se detectó drift: AWS ya no tiene una subnet referenciada en el state. "
             "Ejecuta Destroy del plan para limpiar estado y vuelve a aplicar."
         )
+    if "invalidkeypair.notfound" in err_text:
+        raise RuntimeError(
+            "terraform apply failed: InvalidKeyPair.NotFound. "
+            "La key pair EC2 declarada en el plan no existe en la cuenta/región AWS efectiva. "
+            "Corrige el nombre de ssh_access o crea/importa esa key pair antes de reintentar."
+        )
     raise RuntimeError("terraform apply failed")
 
 

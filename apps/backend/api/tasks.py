@@ -195,13 +195,13 @@ def process_network_plan(self, plan_id: str, payload: dict, execution_record_id:
 
         # === 5.1) Preflight TGW quota (solo apply real con TGW) ===
         if not bundle.simulate_only:
-            tgw_ok, tgw_reason, tgw_info = executor.preflight_apply(bundle)
-            bundle.append_log(f"[preflight][tgw] reason={tgw_reason} info={tgw_info}\n\n")
+            preflight_ok, preflight_reason, preflight_info = executor.preflight_apply(bundle)
+            bundle.append_log(f"[preflight][apply] reason={preflight_reason} info={preflight_info}\n\n")
 
-            if not tgw_ok:
+            if not preflight_ok:
                 msg = (
-                    f"Terraform apply BLOQUEADO: {tgw_reason} "
-                    "Puedes destruir TGWs viejos o cambiar el router a modo peering."
+                    f"Terraform apply BLOQUEADO: {preflight_reason} "
+                    "Corrige el prerequisito AWS faltante antes de reintentar."
                 )
                 plan_obj.mark_failure(error=msg, full_log=bundle.full_log, last_action="apply", applied=False)
                 _mark_execution_record_finished(

@@ -108,8 +108,9 @@ export const api = {
 
   logout: () => jsonFetch("/api/auth/logout/", { method: "POST" }),
   me: () => jsonFetch("/api/me/"),
-  updateMe: (payload) =>
+  updateMe: (payload, options = {}) =>
     jsonFetch("/api/me/", {
+      ...options,
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
