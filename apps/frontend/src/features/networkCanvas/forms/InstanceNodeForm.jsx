@@ -1,5 +1,7 @@
 // apps/frontend/src/components/flow/forms/InstanceNodeForm.jsx
 import { yupResolver } from '@hookform/resolvers/yup';
+import CheckCircleOutlineRoundedIcon from '@mui/icons-material/CheckCircleOutlineRounded';
+import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import {
   Alert,
   Autocomplete,
@@ -408,29 +410,47 @@ const InstanceNodeForm = ({
               }}
               renderOption={(props, option) => (
                 <Box component="li" {...props} key={option.id} sx={{ py: 1 }}>
-                  <Box>
-                  <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
-                    {option.label}
-                  </Typography>
-                  {option.subtitle && (
-                    <Typography variant="caption" color="text.secondary">
-                      {option.subtitle}
+                  <Box sx={{ width: "100%" }}>
+                    <Stack direction="row" spacing={1} alignItems="flex-start" justifyContent="space-between">
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
+                          {option.label}
+                        </Typography>
+                        {option.subtitle && (
+                          <Typography variant="caption" color="text.secondary">
+                            {option.subtitle}
+                          </Typography>
+                        )}
+                      </Box>
+                      <Chip
+                        icon={
+                          option.isCompatible ? (
+                            <CheckCircleOutlineRoundedIcon sx={{ fontSize: 16 }} />
+                          ) : (
+                            <WarningAmberRoundedIcon sx={{ fontSize: 16 }} />
+                          )
+                        }
+                        label={option.isCompatible ? "Compatible" : "Revisar"}
+                        size="small"
+                        color={option.isCompatible ? "success" : "warning"}
+                        variant={option.isCompatible ? "filled" : "outlined"}
+                        sx={{ flexShrink: 0, fontWeight: 700 }}
+                      />
+                    </Stack>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        display: "block",
+                        mt: 0.4,
+                        color: option.isCompatible ? "success.main" : "warning.main",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {option.compatibilityHint}
                     </Typography>
-                  )}
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      display: "block",
-                      mt: 0.2,
-                      color: option.isCompatible ? "success.main" : "warning.main",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {option.compatibilityHint}
-                  </Typography>
+                  </Box>
                 </Box>
-              </Box>
-            )}
+              )}
               renderInput={(params) => (
                 <TextField
                   {...params}
@@ -456,6 +476,25 @@ const InstanceNodeForm = ({
             <Typography className="pt-node-form__microCopyText">
               El catálogo prioriza las key pairs compatibles con la conexión y región efectivas, y aún te deja escribir un nombre manual.
             </Typography>
+          </Box>
+        )}
+        {selectedKeyPairMeta && !hasScopeMismatch && !hasConnectionMismatch && (
+          <Box className="pt-node-form__microCopy" sx={{ mt: 0.2 }}>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <Chip
+                icon={<CheckCircleOutlineRoundedIcon sx={{ fontSize: 16 }} />}
+                label="Key pair compatible con este laboratorio"
+                size="small"
+                color="success"
+                variant="filled"
+                sx={{ fontWeight: 700 }}
+              />
+              {executionRegion && (
+                <Typography className="pt-node-form__microCopyText">
+                  Región efectiva: <b>{executionRegion}</b>
+                </Typography>
+              )}
+            </Stack>
           </Box>
         )}
         {hiddenKeyPairCount > 0 && (

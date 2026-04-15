@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Chip,
+  Divider,
   Dialog,
   DialogActions,
   DialogContent,
@@ -16,7 +17,13 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import { DeleteOutlineOutlined } from "@mui/icons-material";
+import {
+  CloudOutlined,
+  DeleteOutlineOutlined,
+  KeyOutlined,
+  PersonOutlineRounded,
+  SchoolOutlined,
+} from "@mui/icons-material";
 
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
 import { useAuth } from "@/app/providers/AuthContext";
@@ -39,44 +46,73 @@ const KeyPairList = ({ items, onDelete }) => (
           sx={{
             border: "1px solid",
             borderColor: "divider",
-            borderRadius: 2,
-            mb: 1,
-            alignItems: "center",
+            borderRadius: 3,
+            mb: 1.2,
+            alignItems: "flex-start",
+            px: 2,
+            py: 1.6,
+            background: "linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(248,250,252,0.96) 100%)",
           }}
         >
           <ListItemText
             primary={
-              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                <Typography sx={{ fontWeight: 700 }}>{entry.label || entry.name}</Typography>
-                <Chip
-                  size="small"
-                  variant="outlined"
-                  label={entry.scope === "course_shared" ? "Curso" : "Personal"}
-                />
-                {entry.region && <Chip size="small" variant="outlined" label={entry.region} />}
+              <Stack spacing={1}>
+                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <KeyOutlined sx={{ fontSize: 18, color: "primary.main" }} />
+                    <Typography sx={{ fontWeight: 800 }}>{entry.label || entry.name}</Typography>
+                  </Stack>
+                  <Chip
+                    size="small"
+                    color={entry.scope === "course_shared" ? "secondary" : "primary"}
+                    variant={entry.scope === "course_shared" ? "filled" : "outlined"}
+                    label={entry.scope === "course_shared" ? "Curso compartido" : "Personal"}
+                  />
+                  {entry.region && <Chip size="small" variant="outlined" label={entry.region} />}
+                </Stack>
+
+                <Typography variant="body2" color="text.secondary">
+                  Nombre AWS: <b>{entry.name}</b>
+                </Typography>
+
+                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                  {entry.cloud_connection?.name && (
+                    <Chip
+                      size="small"
+                      icon={<CloudOutlined />}
+                      label={`Conexión: ${entry.cloud_connection.name}`}
+                      variant="outlined"
+                    />
+                  )}
+                  {entry.course?.name && (
+                    <Chip
+                      size="small"
+                      icon={<SchoolOutlined />}
+                      label={`Curso: ${entry.course.name}`}
+                      color="secondary"
+                      variant="outlined"
+                    />
+                  )}
+                  {!entry.course?.name && entry.owner_user?.display_name && (
+                    <Chip
+                      size="small"
+                      icon={<PersonOutlineRounded />}
+                      label={`Owner: ${entry.owner_user.display_name}`}
+                      variant="outlined"
+                    />
+                  )}
+                </Stack>
               </Stack>
             }
             secondary={
-              <Stack spacing={0.4} sx={{ mt: 0.5 }}>
-                <Typography variant="body2" color="text.secondary">
-                  Nombre AWS: {entry.name}
+              <Box sx={{ mt: 1 }}>
+                <Divider sx={{ mb: 1 }} />
+                <Typography variant="caption" color="text.secondary">
+                  {entry.scope === "course_shared"
+                    ? "Pensada para laboratorios que despliegan sobre la cuenta compartida del curso."
+                    : "Pensada para laboratorios que despliegan sobre la cuenta personal del usuario."}
                 </Typography>
-                {entry.cloud_connection?.name && (
-                  <Typography variant="body2" color="text.secondary">
-                    Conexión cloud: {entry.cloud_connection.name}
-                  </Typography>
-                )}
-                {entry.course?.name && (
-                  <Typography variant="body2" color="text.secondary">
-                    Curso: {entry.course.name}
-                  </Typography>
-                )}
-                {!entry.course?.name && entry.owner_user?.display_name && (
-                  <Typography variant="body2" color="text.secondary">
-                    Owner: {entry.owner_user.display_name}
-                  </Typography>
-                )}
-              </Stack>
+              </Box>
             }
             secondaryTypographyProps={{ component: "div" }}
           />
@@ -88,6 +124,19 @@ const KeyPairList = ({ items, onDelete }) => (
       </ListItem>
     )}
   </List>
+);
+
+const KeyPairLegend = () => (
+  <Stack
+    direction={{ xs: "column", md: "row" }}
+    spacing={1}
+    useFlexGap
+    sx={{ mt: 1.5, mb: 0.25 }}
+  >
+    <Chip size="small" color="primary" variant="outlined" label="Personal: cuenta individual" />
+    <Chip size="small" color="secondary" variant="filled" label="Curso compartido: cuenta del curso" />
+    <Chip size="small" variant="outlined" icon={<CloudOutlined />} label="Conexión cloud vinculada" />
+  </Stack>
 );
 
 export default function KeyPairCatalogPage() {
@@ -202,6 +251,7 @@ export default function KeyPairCatalogPage() {
         <Typography variant="body2" color="text.secondary">
           Las key pairs son dependientes de la cuenta y la región AWS. Este catálogo no crea la key en AWS, pero sí ayuda a declararla con contexto y a reutilizarla correctamente desde el canvas.
         </Typography>
+        <KeyPairLegend />
       </Paper>
 
       <Paper sx={{ p: 2.5 }}>
