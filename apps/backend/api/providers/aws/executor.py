@@ -8,6 +8,7 @@ from .payload import uses_tgw
 from .runtime import (
     aws_creds_diagnostics,
     can_call_aws_sts,
+    check_key_pairs_preflight,
     check_tgw_quota_preflight,
     cleanup_residual_nat_gateways,
     normalize_payload,
@@ -109,11 +110,23 @@ class AwsProviderExecutor(ProviderExecutor):
 
     def preflight_apply(self, bundle: ProviderExecutionBundle) -> tuple[bool, str, dict]:
         try:
-            return check_tgw_quota_preflight(bundle.payload, bundle.runtime_env)
+            key_ok, key_reason, key_info = check_key_pairs_preflight(bundle.payload, bundle.runtime_env)
+            if not key_ok:
+                return key_ok, key_reason, {"kind": "key_pairs", **key_info}
+
+            tgw_ok, tgw_reason, tgw_info = check_tgw_quota_preflight(bundle.payload, bundle.runtime_env)
+            if not tgw_ok:
+                return tgw_ok, tgw_reason, {"kind": "tgw", **tgw_info}
+
+            return True, "ok", {
+                "kind": "combined",
+                "key_pairs": key_info,
+                "tgw": tgw_info,
+            }
         except Exception as e:
             return (
                 False,
-                f"TGW preflight error: {e}",
+                f"AWS preflight error: {e}",
                 {"used": uses_tgw(bundle.payload), "preflight_error": str(e)},
             )
 

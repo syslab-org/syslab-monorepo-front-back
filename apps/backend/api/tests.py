@@ -1,7 +1,8 @@
 from datetime import timedelta
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
+from botocore.exceptions import ClientError
 from django.contrib.auth.models import User
 from django.test import SimpleTestCase
 from django.utils import timezone
@@ -11,7 +12,7 @@ from .domain.network_intent import normalize_network_intent
 from .models import CLOUD_AUTH_AWS_ASSUME_ROLE, CLOUD_SCOPE_COURSE_SHARED, CLOUD_SCOPE_PERSONAL, CloudConnection, CloudExecutionDelegation, Course, Lab, Plan, PlanExecutionRecord, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, STATUS_ACTIVE, VISIBILITY_COURSE, VISIBILITY_OWNER
 from .providers import get_provider_adapter, get_provider_executor
 from .cloud_connections import build_aws_runtime_env
-from .providers.aws.runtime import build_nat_cleanup_targets
+from .providers.aws.runtime import build_nat_cleanup_targets, check_key_pairs_preflight, collect_required_key_pairs
 from .providers.aws.terraform import render_workspace
 from .secret_store import encrypt_secret
 from .tasks import _build_last_apply_context
@@ -156,6 +157,65 @@ class NatCleanupTargetTests(SimpleTestCase):
             "eipalloc-0abc123def4567890",
         )
         self.assertFalse(targets["vpc-123"]["release_generated_eip"])
+
+
+class AwsPreflightTests(SimpleTestCase):
+    def test_collect_required_key_pairs_returns_unique_non_empty_names(self):
+        payload = {
+            "vlan": {"region": "us-east-1"},
+            "vpcs": [
+                {
+                    "subnets": [
+                        {
+                            "instances": [
+                                {"name": "bastion-a1", "ssh_access": "tesis-key-new"},
+                                {"name": "app-a1", "ssh_access": "tesis-key-new"},
+                                {"name": "app-a2", "ssh_access": ""},
+                            ]
+                        }
+                    ]
+                }
+            ],
+        }
+
+        self.assertEqual(collect_required_key_pairs(payload), ["tesis-key-new"])
+
+    @patch("api.providers.aws.runtime.build_boto3_session_from_runtime_env")
+    def test_key_pair_preflight_fails_when_any_declared_key_pair_is_missing(self, mocked_session_builder):
+        ec2 = Mock()
+        ec2.describe_key_pairs.side_effect = ClientError(
+            {"Error": {"Code": "InvalidKeyPair.NotFound", "Message": "missing"}},
+            "DescribeKeyPairs",
+        )
+        session = Mock()
+        session.client.return_value = ec2
+        mocked_session_builder.return_value = session
+
+        ok, reason, info = check_key_pairs_preflight(
+            {
+                "vlan": {"region": "us-east-1"},
+                "vpcs": [
+                    {
+                        "subnets": [
+                            {
+                                "instances": [
+                                    {"name": "bastion-a1", "ssh_access": "tesis-key-new"},
+                                ]
+                            }
+                        ]
+                    }
+                ],
+            },
+            runtime_env={
+                "AWS_ACCESS_KEY_ID": "x",
+                "AWS_SECRET_ACCESS_KEY": "y",
+                "AWS_DEFAULT_REGION": "us-east-1",
+            },
+        )
+
+        self.assertFalse(ok)
+        self.assertIn("tesis-key-new", reason)
+        self.assertEqual(info["missing_key_pairs"], ["tesis-key-new"])
 
 
 class NetworkIntentTests(SimpleTestCase):
