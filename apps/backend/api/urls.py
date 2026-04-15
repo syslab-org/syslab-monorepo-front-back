@@ -15,6 +15,7 @@ from .views_ami import AmiCatalogViewSet
 from .views_courses import CourseViewSet
 from .views_cloud_connections import CloudConnectionViewSet
 from .views_execution_delegations import CloudExecutionDelegationViewSet
+from .views_key_pairs import KeyPairCatalogViewSet
 from .views_labs import LabViewSet
 from .views_plans import PlanViewSet
 from .views_provider import provider_capabilities_view
@@ -28,6 +29,7 @@ router.register(r"users", UserViewSet, basename="users")
 router.register(r"cloud-connections", CloudConnectionViewSet, basename="cloud-connections")
 router.register(r"execution-delegations", CloudExecutionDelegationViewSet, basename="execution-delegations")
 router.register(r"settings/amis", AmiCatalogViewSet, basename="ami-catalog")
+router.register(r"settings/key-pairs", KeyPairCatalogViewSet, basename="key-pair-catalog")
 
 urlpatterns = [
     path("auth/login/", login_with_email, name="auth-login"),

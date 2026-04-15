@@ -5,6 +5,7 @@ from .models import (
     CloudConnection,
     CloudExecutionDelegation,
     Course,
+    KeyPairCatalogEntry,
     Lab,
     Plan,
     PlanExecutionRecord,
@@ -53,6 +54,13 @@ class AmiCatalogEntryAdmin(admin.ModelAdmin):
     list_display = ("code", "provider", "region", "created_by", "updated_at")
     list_filter = ("provider", "region")
     search_fields = ("code", "label")
+
+
+@admin.register(KeyPairCatalogEntry)
+class KeyPairCatalogEntryAdmin(admin.ModelAdmin):
+    list_display = ("name", "provider", "region", "scope", "owner_user", "course", "cloud_connection", "updated_at")
+    list_filter = ("provider", "region", "scope")
+    search_fields = ("name", "label", "owner_user__email", "course__name", "cloud_connection__name")
 
 
 @admin.register(CloudConnection)

@@ -11,7 +11,7 @@ import { CanvasFlowPage, LabsPage, WizardProvider } from '@/features/networkCanv
 import MainLayout from '@/shared/ui/layouts/MainLayout';
 import PanelAdmin from '@/features/admin/pages/PanelAdmin';
 import ProfilePage from '@/features/admin/pages/ProfilePage';
-import { SettingsPage } from "@/features/settings";
+import { AmiCatalogPage, KeyPairCatalogPage } from "@/features/settings";
 import CloudConnectionsPage from '@/features/settings/pages/CloudConnectionsPage';
 import GeneralSettings from '@/features/settings/pages/GeneralSettings';
 import CoursesManagement from '@/features/settings/pages/CoursesManagement';
@@ -35,7 +35,17 @@ const DashboardRoutes = () => {
 
           <Route path='paneladmin' element={<PanelAdmin />} />
 
-          <Route path='settings/amilist' element={<SettingsPage />} />
+          <Route path='settings/amilist' element={<Navigate to="/admin/settings/amis" replace />} />
+          <Route path='settings/amis' element={
+            <ProtectedRoute allowedRoles={[USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER]}>
+              <AmiCatalogPage />
+            </ProtectedRoute>
+          } />
+          <Route path='settings/key-pairs' element={
+            <ProtectedRoute allowedRoles={[USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER, USER_ROL_STUDENT]}>
+              <KeyPairCatalogPage />
+            </ProtectedRoute>
+          } />
           <Route path='settings/usersmanagement' element={
             <ProtectedRoute allowedRoles={[USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER]}>
               <UsersManagement />

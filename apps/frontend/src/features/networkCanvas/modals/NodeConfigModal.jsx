@@ -243,6 +243,7 @@ function NodeConfigModal({
     nodes,
     edges,
     amiList,
+    keyPairList,
     saveNodeData,
     deleteNodeInstance,
     cidrBlockVPC,
@@ -299,6 +300,7 @@ function NodeConfigModal({
                             parentSubnetCidr={parentSubnetCidr}
                             siblingIpsInSameSubnet={siblingIpsInSameSubnet}
                             amiList={amiList}
+                            keyPairList={keyPairList}
                         />
                     );
                 })()}

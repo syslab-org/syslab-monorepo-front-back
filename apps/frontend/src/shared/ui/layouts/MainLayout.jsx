@@ -34,6 +34,7 @@ import {
 import { useAuth } from '@/app/providers/AuthContext';
 import LoadingFlow from "@/shared/ui/organisms/LoadingFlow";
 import { useThemeMode } from "@/shared/ui/theme/AppThemeProvider";
+import { USER_ROL_STUDENT, USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER } from "@/shared/constants";
 
 export const PageHeader = ({ title, subtitle, actions }) => {
   return (
@@ -89,12 +90,6 @@ export const PageHeader = ({ title, subtitle, actions }) => {
   );
 };
 
-const settings = [
-  { label: "Profile", url: "/admin/settings/profile" },
-  { label: "Cloud Connections", url: "/admin/settings/cloud-connections" },
-  { label: "Dashboard", url: "/admin/dashboard" },
-];
-
 function MainLayout() {
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [anchorElUser, setAnchorElUser] = useState(null);
@@ -104,6 +99,19 @@ function MainLayout() {
   const user = auth?.user;
   const logout = auth?.logout || (() => { });
   const { mode, toggle } = useThemeMode();
+  const role = user?.role;
+  const settings = useMemo(() => {
+    const items = [
+      { label: "Profile", url: "/admin/settings/profile" },
+      { label: "Cloud Connections", url: "/admin/settings/cloud-connections" },
+      { label: "Key Pairs", url: "/admin/settings/key-pairs" },
+      { label: "Dashboard", url: "/admin/dashboard" },
+    ];
+    if (role === USER_ROL_SUPER_ADMIN || role === USER_ROL_TEACHER) {
+      items.splice(2, 0, { label: "AMIs", url: "/admin/settings/amis" });
+    }
+    return items;
+  }, [role]);
 
   const isCanvasRoute = useMemo(
     () => /^\/admin\/(labs\/[^/]+\/canvas|vpcs\/[^/]+\/mainflow)$/.test(location.pathname),

@@ -208,6 +208,19 @@ export const api = {
     jsonFetch(`/api/settings/amis/${id}/`, {
       method: "DELETE",
     }),
+  listKeyPairs: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return jsonFetch(`/api/settings/key-pairs/${query ? `?${query}` : ""}`);
+  },
+  createKeyPair: (payload) =>
+    jsonFetch("/api/settings/key-pairs/", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  deleteKeyPair: (id) =>
+    jsonFetch(`/api/settings/key-pairs/${id}/`, {
+      method: "DELETE",
+    }),
 
   listProviderCapabilities: () => jsonFetch("/api/providers/capabilities/"),
 
