@@ -2,6 +2,7 @@
 import { yupResolver } from '@hookform/resolvers/yup';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   FormControl,
@@ -13,7 +14,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useEffect, useMemo } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import CidrLearningGuideButton from '@/features/networkCanvas/ui/CidrLearningGuideButton';
 import { TYPE_INSTANCE_NODE } from "../utils/constants";
 import { INSTANCE_TYPE_OPTIONS } from './options/instanceTypes';
@@ -36,6 +37,7 @@ const InstanceNodeForm = ({
   parentSubnetCidr,
   siblingIpsInSameSubnet = [],
   amiList = [],
+  keyPairList = [],
   defaultAssociatePublicIp = true,
 }) => {
   const validationSchema = useFormValidationSchema(
@@ -61,6 +63,29 @@ const InstanceNodeForm = ({
         })
         .filter(Boolean),
     [amiList]
+  );
+  const keyPairOptions = useMemo(
+    () =>
+      (Array.isArray(keyPairList) ? keyPairList : [])
+        .map((entry) => {
+          const name = String(entry?.name || "").trim();
+          if (!name) return null;
+          const label = String(entry?.label || "").trim();
+          const scopeLabel = entry?.scope === "course_shared" ? "Curso" : "Personal";
+          const region = String(entry?.region || "").trim();
+          const connectionName = String(entry?.cloud_connection?.name || "").trim();
+          const courseName = String(entry?.course?.name || "").trim();
+          return {
+            id: entry?.id || name,
+            value: name,
+            label: label || name,
+            subtitle: [scopeLabel, region || null, connectionName || courseName || null]
+              .filter(Boolean)
+              .join(" • "),
+          };
+        })
+        .filter(Boolean),
+    [keyPairList]
   );
 
   const {
@@ -178,6 +203,12 @@ const InstanceNodeForm = ({
         <Typography variant="caption" display="block">
           - La SSH key define con qué par de llaves podrás entrar si habilitas acceso remoto.
         </Typography>
+        <Typography variant="caption" display="block">
+          - Aquí guardamos solo el nombre de la key pair en AWS; el archivo privado `.pem` no se almacena en la plataforma.
+        </Typography>
+        <Typography variant="caption" display="block">
+          - Para conectarte por SSH después del deploy, el `.pem` debe estar en el computador desde el que harás la sesión.
+        </Typography>
         <Box sx={{ mt: 1.25 }}>
           <CidrLearningGuideButton buttonLabel="Ayuda con CIDR e IPs" />
         </Box>
@@ -233,15 +264,76 @@ const InstanceNodeForm = ({
         </Alert>
       )}
 
-      <TextField
-        label="SSH Access (KeyPair)"
-        {...register("sshAccess")}
-        error={!!errors.sshAccess}
-        helperText={errors.sshAccess?.message || "Opcional. Déjalo vacío si no necesitas SSH"}
-        placeholder="p. ej., tesis-key  (opcional)"
-        fullWidth
-        margin="normal"
+      <Controller
+        control={control}
+        name="sshAccess"
+        render={({ field }) => (
+          <Autocomplete
+            freeSolo
+            options={keyPairOptions}
+            value={
+              keyPairOptions.find((option) => option.value === (field.value || "")) ||
+              field.value ||
+              null
+            }
+            onChange={(_event, newValue) => {
+              if (typeof newValue === "string") {
+                field.onChange(newValue);
+                return;
+              }
+              field.onChange(newValue?.value || "");
+            }}
+            onInputChange={(_event, newInputValue, reason) => {
+              if (reason === "input" || reason === "clear") {
+                field.onChange(newInputValue || "");
+              }
+            }}
+            getOptionLabel={(option) => {
+              if (typeof option === "string") return option;
+              return option?.value || "";
+            }}
+            renderOption={(props, option) => (
+              <Box component="li" {...props} key={option.id} sx={{ py: 1 }}>
+                <Box>
+                  <Typography sx={{ fontWeight: 700, fontSize: 14 }}>
+                    {option.label}
+                  </Typography>
+                  {option.subtitle && (
+                    <Typography variant="caption" color="text.secondary">
+                      {option.subtitle}
+                    </Typography>
+                  )}
+                </Box>
+              </Box>
+            )}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="SSH Access (KeyPair)"
+                error={!!errors.sshAccess}
+                helperText={
+                  errors.sshAccess?.message ||
+                  (keyPairOptions.length > 0
+                    ? "Elige una key pair registrada o escribe el nombre manualmente."
+                    : "Opcional. Puedes escribir manualmente el nombre de una key pair existente en AWS.")
+                }
+                placeholder="p. ej., tesis-key"
+                fullWidth
+                margin="normal"
+              />
+            )}
+          />
+        )}
       />
+      {keyPairOptions.length > 0 && (
+        <FormHelperText sx={{ mt: -0.5 }}>
+          El catálogo reduce errores de tipeo y sigue permitiendo un nombre manual si aún no registraste la key pair.
+        </FormHelperText>
+      )}
+      <Alert severity="info" variant="outlined" sx={{ mt: 0.8 }}>
+        El <b>deploy</b> valida que esa key pair exista en la cuenta y región efectivas. El acceso <b>SSH</b> posterior
+        sigue dependiendo de que tengas el <b>.pem</b> fuera de la plataforma.
+      </Alert>
 
 
       <Box className="pt-node-form__actions">

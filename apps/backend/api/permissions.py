@@ -7,6 +7,7 @@ from .models import (
     CLOUD_SCOPE_PERSONAL,
     CLOUD_SCOPE_COURSE_SHARED,
     CloudExecutionDelegation,
+    KeyPairCatalogEntry,
     ROLE_PLATFORM_ADMIN,
     ROLE_STUDENT,
     ROLE_TEACHER,
@@ -168,6 +169,40 @@ def can_edit_cloud_connection(user, connection: CloudConnection) -> bool:
         and is_teacher(user)
         and connection.course
         and connection.course.teacher_id == user.id
+    )
+
+
+def visible_key_pairs_queryset(user, base_qs=None):
+    qs = base_qs if base_qs is not None else KeyPairCatalogEntry.objects.all()
+    if not user or not user.is_authenticated:
+        return qs.none()
+    if is_platform_admin(user):
+        return qs
+    if is_teacher(user):
+        return qs.filter(
+            Q(owner_user=user)
+            | Q(scope=CLOUD_SCOPE_COURSE_SHARED, course__teacher=user)
+        ).distinct()
+
+    course_id = getattr(getattr(user, "profile", None), "course_id", None)
+    return qs.filter(
+        Q(owner_user=user)
+        | Q(scope=CLOUD_SCOPE_COURSE_SHARED, course_id=course_id)
+    ).distinct()
+
+
+def can_edit_key_pair(user, entry: KeyPairCatalogEntry) -> bool:
+    if not user or not user.is_authenticated or not entry:
+        return False
+    if is_platform_admin(user):
+        return True
+    if entry.owner_user_id == user.id:
+        return True
+    return bool(
+        entry.scope == CLOUD_SCOPE_COURSE_SHARED
+        and is_teacher(user)
+        and entry.course
+        and entry.course.teacher_id == user.id
     )
 
 

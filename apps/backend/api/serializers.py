@@ -15,6 +15,7 @@ from .models import (
     CloudConnection,
     CloudConnectionScopeChoices,
     Course,
+    KeyPairCatalogEntry,
     Lab,
     Plan,
     PlanExecutionRecord,
@@ -854,6 +855,59 @@ class AmiCatalogEntrySerializer(serializers.ModelSerializer):
         model = AmiCatalogEntry
         fields = ("id", "code", "label", "provider", "region", "metadata", "created_at", "updated_at")
         read_only_fields = ("id", "created_at", "updated_at")
+
+
+class KeyPairCatalogEntrySerializer(serializers.ModelSerializer):
+    provider = CanonicalProviderChoiceField(choices=ProviderChoices.choices, required=False)
+    owner_user = serializers.SerializerMethodField()
+    course = serializers.SerializerMethodField()
+    cloud_connection = serializers.SerializerMethodField()
+
+    class Meta:
+        model = KeyPairCatalogEntry
+        fields = (
+            "id",
+            "name",
+            "label",
+            "provider",
+            "region",
+            "scope",
+            "owner_user",
+            "course",
+            "cloud_connection",
+            "metadata",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "owner_user",
+            "course",
+            "cloud_connection",
+            "created_at",
+            "updated_at",
+        )
+
+    def get_owner_user(self, obj):
+        if not obj.owner_user_id:
+            return None
+        return UserSummarySerializer(obj.owner_user).data
+
+    def get_course(self, obj):
+        if not obj.course_id:
+            return None
+        return CourseSummarySerializer(obj.course).data
+
+    def get_cloud_connection(self, obj):
+        if not obj.cloud_connection_id:
+            return None
+        return {
+            "id": str(obj.cloud_connection_id),
+            "name": obj.cloud_connection.name,
+            "scope": obj.cloud_connection.scope,
+            "provider": obj.cloud_connection.provider,
+            "default_region": obj.cloud_connection.default_region,
+        }
 
 
 class SubnetSerializer(serializers.Serializer):

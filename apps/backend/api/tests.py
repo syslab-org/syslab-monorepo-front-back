@@ -9,7 +9,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from .domain.network_intent import normalize_network_intent
-from .models import CLOUD_AUTH_AWS_ASSUME_ROLE, CLOUD_SCOPE_COURSE_SHARED, CLOUD_SCOPE_PERSONAL, CloudConnection, CloudExecutionDelegation, Course, Lab, Plan, PlanExecutionRecord, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, STATUS_ACTIVE, VISIBILITY_COURSE, VISIBILITY_OWNER
+from .models import CLOUD_AUTH_AWS_ASSUME_ROLE, CLOUD_SCOPE_COURSE_SHARED, CLOUD_SCOPE_PERSONAL, CloudConnection, CloudExecutionDelegation, Course, KeyPairCatalogEntry, Lab, Plan, PlanExecutionRecord, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, STATUS_ACTIVE, VISIBILITY_COURSE, VISIBILITY_OWNER
 from .providers import get_provider_adapter, get_provider_executor
 from .cloud_connections import build_aws_runtime_env
 from .providers.aws.runtime import build_nat_cleanup_targets, check_key_pairs_preflight, collect_required_key_pairs
@@ -580,6 +580,26 @@ class VisibilityApiTests(APITestCase):
             aws_secret_access_key_encrypted=encrypt_secret("course-secret"),
             default_region="us-east-1",
         )
+        self.student_key_pair = KeyPairCatalogEntry.objects.create(
+            name="tesis-key",
+            label="Key personal alumno",
+            provider="aws",
+            region="us-east-1",
+            scope=CLOUD_SCOPE_PERSONAL,
+            owner_user=self.student,
+            cloud_connection=self.student_connection,
+            created_by=self.student,
+        )
+        self.course_key_pair = KeyPairCatalogEntry.objects.create(
+            name="curso-key",
+            label="Key compartida Redes 1",
+            provider="aws",
+            region="us-east-1",
+            scope=CLOUD_SCOPE_COURSE_SHARED,
+            course=self.course,
+            cloud_connection=self.course_connection,
+            created_by=self.teacher,
+        )
 
         Plan.objects.create(
             name="Plan alumno",
@@ -635,6 +655,66 @@ class VisibilityApiTests(APITestCase):
         plans_by_name = {item["name"]: item for item in res.json()}
         self.assertEqual(plans_by_name["Plan alumno"]["lab"]["owner_user"]["email"], "student@example.com")
         self.assertEqual(plans_by_name["Plan alumno"]["owner_user"]["email"], "student@example.com")
+
+    def test_student_sees_personal_and_course_shared_key_pairs(self):
+        self.client.force_authenticate(self.student)
+        res = self.client.get("/api/settings/key-pairs/?provider=aws")
+        self.assertEqual(res.status_code, 200)
+        names = {item["name"] for item in res.json()}
+        self.assertIn("tesis-key", names)
+        self.assertIn("curso-key", names)
+
+    def test_student_cannot_create_course_shared_key_pair(self):
+        self.client.force_authenticate(self.student)
+        res = self.client.post(
+            "/api/settings/key-pairs/",
+            {
+                "name": "forbidden-shared-key",
+                "provider": "aws",
+                "region": "us-east-1",
+                "scope": CLOUD_SCOPE_COURSE_SHARED,
+                "course_id": str(self.course.id),
+                "cloud_connection_id": str(self.course_connection.id),
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 403)
+
+    def test_teacher_can_create_course_shared_key_pair(self):
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(
+            "/api/settings/key-pairs/",
+            {
+                "name": "redes-1-key",
+                "label": "Key curso",
+                "provider": "aws",
+                "region": "us-east-1",
+                "scope": CLOUD_SCOPE_COURSE_SHARED,
+                "course_id": str(self.course.id),
+                "cloud_connection_id": str(self.course_connection.id),
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.json()["scope"], CLOUD_SCOPE_COURSE_SHARED)
+        self.assertEqual(res.json()["course"]["id"], str(self.course.id))
+        self.assertEqual(res.json()["cloud_connection"]["id"], str(self.course_connection.id))
+
+    def test_teacher_can_manage_ami_catalog(self):
+        self.client.force_authenticate(self.teacher)
+        create_res = self.client.post(
+            "/api/settings/amis/",
+            {
+                "code": "ami-teacher-001",
+                "label": "AMI docente",
+                "provider": "aws",
+                "region": "us-east-1",
+            },
+            format="json",
+        )
+        self.assertEqual(create_res.status_code, 201)
+        delete_res = self.client.delete(f"/api/settings/amis/{create_res.json()['id']}/")
+        self.assertEqual(delete_res.status_code, 204)
 
     def test_teacher_sees_unassigned_students_but_not_other_teacher_students(self):
         self.client.force_authenticate(self.teacher)

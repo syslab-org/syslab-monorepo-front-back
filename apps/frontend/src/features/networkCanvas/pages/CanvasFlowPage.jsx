@@ -49,6 +49,7 @@ import TourLauncherButton from "@/shared/ui/onboarding/TourLauncherButton";
 import useOnboardingTour from "@/shared/ui/onboarding/useOnboardingTour";
 import { useTheme } from "@mui/material/styles";
 import { useAmiList } from "@/features/networkCanvas/core/useAmiList";
+import { useKeyPairList } from "@/features/networkCanvas/core/useKeyPairList";
 import { useContext } from "react";
 
 const makeRandomId = (length) => {
@@ -140,6 +141,7 @@ function CanvasFlowPage() {
   );
 
   const amiList = useAmiList();
+  const keyPairList = useKeyPairList();
 
   const {
     isCanvasDirty,
@@ -451,6 +453,7 @@ function CanvasFlowPage() {
           nodes={nodes}
           edges={edges}
           amiList={amiList}
+          keyPairList={keyPairList}
           saveNodeData={saveNodeData}
           deleteNodeInstance={deleteNodeInstance}
           cidrBlockVPC={masterCidrBlock}
