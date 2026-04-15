@@ -199,10 +199,22 @@ def process_network_plan(self, plan_id: str, payload: dict, execution_record_id:
             bundle.append_log(f"[preflight][apply] reason={preflight_reason} info={preflight_info}\n\n")
 
             if not preflight_ok:
-                msg = (
-                    f"Terraform apply BLOQUEADO: {preflight_reason} "
-                    "Corrige el prerequisito AWS faltante antes de reintentar."
-                )
+                if str(preflight_info.get("kind") or "") == "key_pairs":
+                    missing = preflight_info.get("missing_key_pairs") or []
+                    missing_text = ", ".join(missing) if missing else "unknown"
+                    msg = (
+                        "Terraform apply BLOQUEADO por key pair inexistente. "
+                        f"AWS no encontró: {missing_text}. "
+                        "Revisa ssh_access y confirma que esa key pair exista en la cuenta y región efectivas."
+                    )
+                    bundle.append_log(
+                        f"[preflight][key_pairs] missing={missing} region={preflight_info.get('region')}\n\n"
+                    )
+                else:
+                    msg = (
+                        f"Terraform apply BLOQUEADO: {preflight_reason} "
+                        "Corrige el prerequisito AWS faltante antes de reintentar."
+                    )
                 plan_obj.mark_failure(error=msg, full_log=bundle.full_log, last_action="apply", applied=False)
                 _mark_execution_record_finished(
                     execution_record_id,

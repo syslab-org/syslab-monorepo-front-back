@@ -247,6 +247,14 @@ export default function KeyPairCatalogPage() {
           </Stack>
         </DialogContent>
         <DialogActions>
+          <Button
+            component="a"
+            href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/create-key-pairs.html"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Ver documentación AWS
+          </Button>
           <Button onClick={() => setInfoOpen(false)}>Cerrar</Button>
         </DialogActions>
       </Dialog>

@@ -173,6 +173,7 @@ function CanvasFlowPage() {
     state.setMasterCidrBlock,
     state.setPrefixLength
   ]);
+  const resolvedExecutionTarget = useCanvasLabStore((state) => state.resolvedExecutionTarget);
 
   // eslint-disable-next-line no-unused-vars
   const [nodeName, setNodeName] = useState("Node - 1")
@@ -454,6 +455,7 @@ function CanvasFlowPage() {
           edges={edges}
           amiList={amiList}
           keyPairList={keyPairList}
+          executionTarget={resolvedExecutionTarget}
           saveNodeData={saveNodeData}
           deleteNodeInstance={deleteNodeInstance}
           cidrBlockVPC={masterCidrBlock}

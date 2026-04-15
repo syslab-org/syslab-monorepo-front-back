@@ -244,6 +244,7 @@ function NodeConfigModal({
     edges,
     amiList,
     keyPairList,
+    executionTarget,
     saveNodeData,
     deleteNodeInstance,
     cidrBlockVPC,
@@ -301,6 +302,7 @@ function NodeConfigModal({
                             siblingIpsInSameSubnet={siblingIpsInSameSubnet}
                             amiList={amiList}
                             keyPairList={keyPairList}
+                            executionTarget={executionTarget}
                         />
                     );
                 })()}

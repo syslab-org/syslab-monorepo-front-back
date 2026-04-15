@@ -38,6 +38,7 @@ const InstanceNodeForm = ({
   siblingIpsInSameSubnet = [],
   amiList = [],
   keyPairList = [],
+  executionTarget = null,
   defaultAssociatePublicIp = true,
 }) => {
   const validationSchema = useFormValidationSchema(
@@ -110,6 +111,27 @@ const InstanceNodeForm = ({
           : defaultAssociatePublicIp,
     }
   });
+  const watchedSshAccess = watch("sshAccess");
+  const selectedKeyPairMeta = useMemo(() => {
+    const current = String(watchedSshAccess || "").trim();
+    if (!current) return null;
+    return keyPairOptions.find((option) => option.value === current) || null;
+  }, [keyPairOptions, watchedSshAccess]);
+  const executionScope = String(executionTarget?.scope || "").trim();
+  const executionConnectionId = String(executionTarget?.id || "").trim();
+  const selectedKeyPairScope = String(
+    keyPairList.find((entry) => entry?.name === selectedKeyPairMeta?.value)?.scope || ""
+  ).trim();
+  const selectedKeyPairConnectionId = String(
+    keyPairList.find((entry) => entry?.name === selectedKeyPairMeta?.value)?.cloud_connection?.id || ""
+  ).trim();
+  const hasScopeMismatch =
+    !!selectedKeyPairMeta && !!executionScope && !!selectedKeyPairScope && executionScope !== selectedKeyPairScope;
+  const hasConnectionMismatch =
+    !!selectedKeyPairMeta &&
+    !!executionConnectionId &&
+    !!selectedKeyPairConnectionId &&
+    executionConnectionId !== selectedKeyPairConnectionId;
 
   useEffect(() => {
     reset({
@@ -329,6 +351,18 @@ const InstanceNodeForm = ({
         <FormHelperText sx={{ mt: -0.5 }}>
           El catálogo reduce errores de tipeo y sigue permitiendo un nombre manual si aún no registraste la key pair.
         </FormHelperText>
+      )}
+      {hasScopeMismatch && (
+        <Alert severity="warning" variant="outlined" sx={{ mt: 0.8 }}>
+          La key pair seleccionada es de tipo <b>{selectedKeyPairScope}</b>, pero este laboratorio está resolviendo una
+          conexión cloud de tipo <b>{executionScope}</b>. Puede que AWS no encuentre esa key pair en la cuenta efectiva del deploy.
+        </Alert>
+      )}
+      {!hasScopeMismatch && hasConnectionMismatch && (
+        <Alert severity="warning" variant="outlined" sx={{ mt: 0.8 }}>
+          La key pair seleccionada está vinculada a otra conexión cloud. Verifica que exista también en la cuenta que
+          este laboratorio usará realmente para desplegar.
+        </Alert>
       )}
       <Alert severity="info" variant="outlined" sx={{ mt: 0.8 }}>
         El <b>deploy</b> valida que esa key pair exista en la cuenta y región efectivas. El acceso <b>SSH</b> posterior
