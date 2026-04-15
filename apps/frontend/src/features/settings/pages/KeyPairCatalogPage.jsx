@@ -10,11 +10,16 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  FormControl,
+  InputLabel,
   List,
   ListItem,
   ListItemText,
+  MenuItem,
   Paper,
+  Select,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 import {
@@ -147,6 +152,9 @@ export default function KeyPairCatalogPage() {
   const [infoOpen, setInfoOpen] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [scopeFilter, setScopeFilter] = useState("all");
+  const [regionFilter, setRegionFilter] = useState("all");
   const { setLoadingFlow } = useContext(LoadingFlowContext);
   const { user } = useAuth();
 
@@ -182,6 +190,38 @@ export default function KeyPairCatalogPage() {
     }
     return [];
   }, [courses, user]);
+
+  const regionOptions = useMemo(() => {
+    const regions = Array.from(
+      new Set(
+        keyPairList
+          .map((entry) => String(entry?.region || "").trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+    return regions;
+  }, [keyPairList]);
+
+  const filteredKeyPairs = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    return keyPairList.filter((entry) => {
+      const matchesScope = scopeFilter === "all" || entry.scope === scopeFilter;
+      const matchesRegion = regionFilter === "all" || entry.region === regionFilter;
+      const haystack = [
+        entry.label,
+        entry.name,
+        entry.region,
+        entry.cloud_connection?.name,
+        entry.course?.name,
+        entry.owner_user?.display_name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      const matchesSearch = !query || haystack.includes(query);
+      return matchesScope && matchesRegion && matchesSearch;
+    });
+  }, [keyPairList, searchTerm, scopeFilter, regionFilter]);
 
   const handleClose = async (newKeyPairData) => {
     setOpen(false);
@@ -257,9 +297,52 @@ export default function KeyPairCatalogPage() {
       <Paper sx={{ p: 2.5 }}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
           <Typography variant="h6" sx={{ fontWeight: 800 }}>Key pairs registradas</Typography>
-          <Chip size="small" label={`${keyPairList.length}`} />
+          <Chip size="small" label={`${filteredKeyPairs.length}/${keyPairList.length}`} />
         </Stack>
-        <KeyPairList items={keyPairList} onDelete={handleDelete} />
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={1.25}
+          useFlexGap
+          sx={{ mb: 1.5 }}
+        >
+          <TextField
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            label="Buscar"
+            placeholder="Nombre, conexión, curso u owner"
+            fullWidth
+          />
+          <FormControl sx={{ minWidth: { xs: "100%", md: 180 } }}>
+            <InputLabel id="keypair-scope-filter-label">Scope</InputLabel>
+            <Select
+              labelId="keypair-scope-filter-label"
+              label="Scope"
+              value={scopeFilter}
+              onChange={(event) => setScopeFilter(event.target.value)}
+            >
+              <MenuItem value="all">Todos</MenuItem>
+              <MenuItem value="personal">Personal</MenuItem>
+              <MenuItem value="course_shared">Curso compartido</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl sx={{ minWidth: { xs: "100%", md: 180 } }}>
+            <InputLabel id="keypair-region-filter-label">Región</InputLabel>
+            <Select
+              labelId="keypair-region-filter-label"
+              label="Región"
+              value={regionFilter}
+              onChange={(event) => setRegionFilter(event.target.value)}
+            >
+              <MenuItem value="all">Todas</MenuItem>
+              {regionOptions.map((region) => (
+                <MenuItem key={region} value={region}>
+                  {region}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Stack>
+        <KeyPairList items={filteredKeyPairs} onDelete={handleDelete} />
       </Paper>
 
       <AddKeyPairModal
