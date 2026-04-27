@@ -1,0 +1,53 @@
+{
+  "generated": [
+    {
+      "source": "01-single-vpc-public.json",
+      "scenario": "scenario-01-single-vpc-public",
+      "output": "01-single-vpc-public.canvas.json",
+      "nodes": 3,
+      "edges": 2
+    },
+    {
+      "source": "02-single-vpc-public-private-nat.json",
+      "scenario": "scenario-02-single-vpc-public-private-nat",
+      "output": "02-single-vpc-public-private-nat.canvas.json",
+      "nodes": 5,
+      "edges": 4
+    },
+    {
+      "source": "03-two-vpcs-peering-bidirectional.json",
+      "scenario": "scenario-03-two-vpcs-peering-bidirectional",
+      "output": "03-two-vpcs-peering-bidirectional.canvas.json",
+      "nodes": 7,
+      "edges": 6
+    },
+    {
+      "source": "04-two-vpcs-isolated-baseline.json",
+      "scenario": "scenario-04-two-vpcs-isolated-baseline",
+      "output": "04-two-vpcs-isolated-baseline.canvas.json",
+      "nodes": 6,
+      "edges": 4
+    },
+    {
+      "source": "05-three-vpcs-tgw-full-mesh.json",
+      "scenario": "scenario-05-three-vpcs-tgw-full-mesh",
+      "output": "05-three-vpcs-tgw-full-mesh.canvas.json",
+      "nodes": 10,
+      "edges": 9
+    },
+    {
+      "source": "06-three-vpcs-peering-partial.json",
+      "scenario": "scenario-06-three-vpcs-peering-partial",
+      "output": "06-three-vpcs-peering-partial.canvas.json",
+      "nodes": 10,
+      "edges": 9
+    },
+    {
+      "source": "07-overlapping-subnets-invalid.json",
+      "scenario": "scenario-07-overlapping-subnets-invalid",
+      "output": "07-overlapping-subnets-invalid.canvas.json",
+      "nodes": 3,
+      "edges": 2
+    }
+  ]
+}

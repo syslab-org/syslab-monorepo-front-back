@@ -1,0 +1,176 @@
+{
+  "nodes": [
+    {
+      "id": "vpc-a-02",
+      "type": "vpc",
+      "position": {
+        "x": 80,
+        "y": 80
+      },
+      "width": 640,
+      "height": 874,
+      "data": {
+        "label": "vpc-vpc-a-02",
+        "title": "VPC",
+        "vpcName": "VPC-A",
+        "name": "VPC-A",
+        "region": "us-east-1",
+        "cidrBlock": "10.30.0.0",
+        "prefixLength": 16,
+        "cloudProvider": "AWS",
+        "internetGateway": true,
+        "enableNatGateway": true,
+        "natGatewayPublicSubnet": "public-a1",
+        "natGatewayElasticIp": "",
+        "nat_gateway": {
+          "enabled": true,
+          "public_subnet": "public-a1",
+          "elastic_ip": ""
+        },
+        "allowedSshCidr": "190.20.221.154/32"
+      }
+    },
+    {
+      "id": "vpc-a-02--subnet--public-a1",
+      "type": "subnetwork",
+      "parentId": "vpc-a-02",
+      "parentNode": "vpc-a-02",
+      "extent": "parent",
+      "position": {
+        "x": 24,
+        "y": 182
+      },
+      "width": 400,
+      "height": 320,
+      "data": {
+        "label": "subnet-public-a1",
+        "title": "SUBNETWORK",
+        "subnetName": "public-a1",
+        "name": "public-a1",
+        "cidrBlock": "10.30.1.0/24",
+        "availabilityZone": "us-east-1a",
+        "availability_zone": "us-east-1a",
+        "subnetType": "public",
+        "subnet_type": "public",
+        "map_public_ip_on_launch": true,
+        "route_table": "public"
+      }
+    },
+    {
+      "id": "vm-a1",
+      "type": "server",
+      "parentId": "vpc-a-02--subnet--public-a1",
+      "parentNode": "vpc-a-02--subnet--public-a1",
+      "extent": "parent",
+      "position": {
+        "x": 16,
+        "y": 126
+      },
+      "width": 212,
+      "height": 168,
+      "data": {
+        "label": "instance-bastion-a1",
+        "title": "SERVER",
+        "name": "bastion-a1",
+        "ipAddress": "10.30.1.10",
+        "ip_address": "10.30.1.10",
+        "ami": "ami-0ebfd941bbafe70c6",
+        "instanceType": "t2.micro",
+        "instance_type": "t2.micro",
+        "sshAccess": "tesis-key",
+        "ssh_access": "tesis-key",
+        "associate_public_ip": true
+      }
+    },
+    {
+      "id": "vpc-a-02--subnet--private-a1",
+      "type": "subnetwork",
+      "parentId": "vpc-a-02",
+      "parentNode": "vpc-a-02",
+      "extent": "parent",
+      "position": {
+        "x": 24,
+        "y": 526
+      },
+      "width": 400,
+      "height": 320,
+      "data": {
+        "label": "subnet-private-a1",
+        "title": "SUBNETWORK",
+        "subnetName": "private-a1",
+        "name": "private-a1",
+        "cidrBlock": "10.30.2.0/24",
+        "availabilityZone": "us-east-1a",
+        "availability_zone": "us-east-1a",
+        "subnetType": "private",
+        "subnet_type": "private",
+        "map_public_ip_on_launch": false,
+        "route_table": "private"
+      }
+    },
+    {
+      "id": "vm-a2",
+      "type": "server",
+      "parentId": "vpc-a-02--subnet--private-a1",
+      "parentNode": "vpc-a-02--subnet--private-a1",
+      "extent": "parent",
+      "position": {
+        "x": 16,
+        "y": 126
+      },
+      "width": 212,
+      "height": 168,
+      "data": {
+        "label": "instance-app-a1",
+        "title": "SERVER",
+        "name": "app-a1",
+        "ipAddress": "10.30.2.10",
+        "ip_address": "10.30.2.10",
+        "ami": "ami-0ebfd941bbafe70c6",
+        "instanceType": "t2.micro",
+        "instance_type": "t2.micro",
+        "sshAccess": "tesis-key",
+        "ssh_access": "tesis-key",
+        "associate_public_ip": false
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-1-vpc-a-02-vpc-a-02--subnet--public-a1",
+      "source": "vpc-a-02",
+      "target": "vpc-a-02--subnet--public-a1"
+    },
+    {
+      "id": "e-2-vpc-a-02--subnet--public-a1-vm-a1",
+      "source": "vpc-a-02--subnet--public-a1",
+      "target": "vm-a1"
+    },
+    {
+      "id": "e-3-vpc-a-02-vpc-a-02--subnet--private-a1",
+      "source": "vpc-a-02",
+      "target": "vpc-a-02--subnet--private-a1"
+    },
+    {
+      "id": "e-4-vpc-a-02--subnet--private-a1-vm-a2",
+      "source": "vpc-a-02--subnet--private-a1",
+      "target": "vm-a2"
+    }
+  ],
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 0.7
+  },
+  "meta": {
+    "generated_from": "02-single-vpc-public-private-nat.json",
+    "scenario_name": "scenario-02-single-vpc-public-private-nat",
+    "generated_at": "2026-03-12T11:20:13.782885+00:00",
+    "counts": {
+      "nodes": 5,
+      "edges": 4,
+      "vpcs": 1,
+      "routers": 0
+    }
+  }
+}

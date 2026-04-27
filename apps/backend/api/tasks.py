@@ -1,141 +1,120 @@
+import json
+import time
+
 from celery import shared_task
-import os, tempfile, subprocess, json, pathlib
-
-import boto3
-from botocore.exceptions import (
-    ProfileNotFound,
-    NoCredentialsError,
-    NoRegionError,
-    ClientError,
-)
-from django.utils import timezone
 from django.db import transaction
-from jinja2 import Environment, FileSystemLoader, StrictUndefined
-from pathlib import Path
-from .models import Plan
-from provisioning.terraform_runner import cleanup  # solo usamos cleanup aquí
+from django.utils import timezone
 
-# === CONFIGURACIONES GLOBALES ===
-TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "provisioning" / "templates"
-
-
-# === FUNCIONES AUXILIARES ===
-def run(cmd, cwd):
-    """Ejecuta un comando y captura stdout/stderr sin levantar excepción."""
-    return subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, check=False)
+from .cloud_connections import (
+    build_aws_runtime_env,
+    get_aws_identity_from_runtime_env,
+    resolve_lab_cloud_connection,
+)
+from .models import Plan, PlanExecutionRecord
+from .providers import get_provider_executor, get_provider_key
 
 
-def normalize_payload(payload: dict) -> dict:
-    """Asegura shape estable del payload para que Jinja/Terraform no dependan del curl."""
-    payload = payload or {}
+LOG_FLUSH_MIN_INTERVAL_SECONDS = 1.0
+LOG_FLUSH_MIN_CHARS = 160
 
-    # Colecciones esperadas
-    payload.setdefault("vpcs", [])
-    payload.setdefault("links", [])
-    payload.setdefault("routers", [])
 
-    # vlan suele existir en algunos flujos (aunque venga vacío)
-    vlan = payload.get("vlan")
-    if not isinstance(vlan, dict):
-        vlan = {}
-    payload["vlan"] = vlan
+def _make_incremental_log_flusher(plan_obj, bundle):
+    state = {"ts": 0.0, "size": 0}
 
-    # Normaliza región si viene en vpcs[0]
-    if not vlan.get("region") and payload.get("vpcs"):
-        first_vpc = (
-            payload["vpcs"][0]
-            if isinstance(payload["vpcs"], list) and payload["vpcs"]
-            else {}
+    def flush(*, force: bool = False):
+        size = len(bundle.full_log or "")
+        if size == 0:
+            return
+
+        now = time.monotonic()
+        grew_enough = (size - state["size"]) >= LOG_FLUSH_MIN_CHARS
+        waited_enough = (now - state["ts"]) >= LOG_FLUSH_MIN_INTERVAL_SECONDS
+
+        if not force and not grew_enough and not waited_enough:
+            return
+
+        Plan.objects.filter(id=plan_obj.id).update(
+            last_log=bundle.full_log,
+            last_log_updated_at=timezone.now(),
+            updated_at=timezone.now(),
         )
-        if isinstance(first_vpc, dict) and first_vpc.get("region"):
-            vlan["region"] = first_vpc.get("region")
+        state["ts"] = now
+        state["size"] = size
 
-    # Normaliza simulate_only (default True)
-    payload["simulate_only"] = bool(payload.get("simulate_only", True))
-
-    return payload
+    return flush
 
 
-# === Helper: Lee outputs de Terraform como JSON simplificado ===
-def read_terraform_outputs_json(cwd: str) -> dict:
-    """Lee `terraform output -json` y devuelve un dict simplificado (solo values).
-
-    Nota: solo funciona si existe state con outputs (normalmente después de apply).
-    """
-    proc = run(["terraform", "output", "-json", "-no-color"], cwd=cwd)
-    if proc.returncode != 0:
-        raise RuntimeError(f"terraform output failed: {proc.stderr.strip()}")
-
-    raw = (proc.stdout or "{}").strip() or "{}"
-    data = json.loads(raw)
-
-    # Terraform devuelve: { key: { value, type, sensitive } }
-    simplified = {}
-    for k, v in (data or {}).items():
-        if isinstance(v, dict) and "value" in v:
-            simplified[k] = v.get("value")
-        else:
-            simplified[k] = v
-    return simplified
-
-
-def aws_creds_diagnostics() -> dict:
-    """Devuelve un diagnóstico simple sobre credenciales AWS dentro del container.
-
-    Soporta:
-    - ECS task role (AWS_EXECUTION_ENV / metadata)
-    - Static creds por env vars
-    - Shared config/credentials (AWS_PROFILE + ~/.aws montado)
-
-    Nota: esto NO imprime secretos; solo estado y errores.
-    """
-    profile = os.getenv("AWS_PROFILE")
-    region = os.getenv("AWS_DEFAULT_REGION") or os.getenv("AWS_REGION")
-    allow_local = os.getenv("ALLOW_LOCAL_APPLY") == "1"
-
-    running_in_ecs = bool(
-        os.getenv("ECS_TASK_DEFINITION")
-        or os.getenv("ECS_CONTAINER_METADATA_URI")
-        or os.getenv("ECS_CONTAINER_METADATA_URI_V4")
-        or os.getenv("AWS_EXECUTION_ENV")
+def _build_last_apply_context(*, provider, connection, bundle, identity=None, identity_error=""):
+    identity = identity or {}
+    runtime_env = bundle.runtime_env or {}
+    region = (
+        bundle.diag.get("aws_region")
+        or runtime_env.get("AWS_DEFAULT_REGION")
+        or runtime_env.get("AWS_REGION")
+        or ""
     )
-
-    has_static_creds = bool(
-        os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY")
-    )
-
-    return {
-        "running_in_ecs": running_in_ecs,
-        "allow_local_apply": allow_local,
-        "has_static_creds": has_static_creds,
-        "aws_profile": profile or "",
-        "aws_region": region or "",
+    context = {
+        "provider": provider,
+        "credential_source": bundle.diag.get("credential_source") or ("cloud_connection" if connection else "environment"),
+        "region": region,
+        "cloud_connection_id": str(connection.id) if connection else "",
+        "cloud_connection_name": getattr(connection, "name", "") if connection else "",
+        "cloud_connection_scope": getattr(connection, "scope", "") if connection else "",
+        "account_id": str(identity.get("Account") or ""),
+        "arn": str(identity.get("Arn") or ""),
+        "user_id": str(identity.get("UserId") or ""),
+        "identity": identity,
+        "captured_at": timezone.now().isoformat(),
     }
+    if identity_error:
+        context["identity_error"] = identity_error
+    return context
 
 
-def can_call_aws_sts() -> tuple[bool, str]:
-    """Chequeo REAL: intenta llamar STS GetCallerIdentity.
+def _mark_execution_record_running(record_id: str | None, *, task_id: str):
+    if not record_id:
+        return
+    PlanExecutionRecord.objects.filter(id=record_id).update(
+        status=PlanExecutionRecord.Status.RUNNING,
+        task_id=task_id,
+        started_at=timezone.now(),
+        updated_at=timezone.now(),
+    )
 
-    Esto valida que boto3/botocore pueden resolver credenciales en el container.
-    """
-    profile = os.getenv("AWS_PROFILE")
 
-    try:
-        # Si hay profile, lo usamos. Si no, boto3 decide (env/role/etc).
-        session = boto3.Session(profile_name=profile) if profile else boto3.Session()
-        sts = session.client("sts")
-        _ = sts.get_caller_identity()
-        return True, "sts_ok"
-    except ProfileNotFound as e:
-        return False, f"profile_not_found: {e}"
-    except NoRegionError as e:
-        return False, f"no_region: {e}"
-    except NoCredentialsError as e:
-        return False, f"no_credentials: {e}"
-    except ClientError as e:
-        return False, f"client_error: {e}"
-    except Exception as e:
-        return False, f"unknown_error: {e}"
+def _mark_execution_record_finished(
+    record_id: str | None,
+    *,
+    status_value: str,
+    task_id: str = "",
+    bundle=None,
+    connection=None,
+    identity=None,
+    error: str = "",
+):
+    if not record_id:
+        return
+
+    identity = identity or {}
+    updates = {
+        "status": status_value,
+        "completed_at": timezone.now(),
+        "updated_at": timezone.now(),
+        "error": str(error or ""),
+    }
+    if task_id:
+        updates["task_id"] = task_id
+    if bundle:
+        updates["credential_source"] = bundle.diag.get("credential_source") or ("cloud_connection" if connection else "environment")
+    if connection:
+        updates["cloud_connection_id"] = connection.id
+        updates["cloud_connection_name"] = getattr(connection, "name", "") or ""
+        updates["cloud_connection_scope"] = getattr(connection, "scope", "") or ""
+    if identity:
+        updates["account_id"] = str(identity.get("Account") or "")
+        updates["arn"] = str(identity.get("Arn") or "")
+        updates["sts_user_id"] = str(identity.get("UserId") or "")
+    PlanExecutionRecord.objects.filter(id=record_id).update(**updates)
 
 
 # === TAREAS CELERY ===
@@ -148,244 +127,200 @@ def prueba_larga(n: int = 3):
 
 
 @shared_task(bind=True)
-def process_network_plan(self, plan_id: str, payload: dict):
+def process_network_plan(self, plan_id: str, payload: dict, execution_record_id: str | None = None):
     """
     Renderiza main.tf.j2 y ejecuta Terraform (plan o apply).
     - simulate_only=True => modo simulación (sin aplicar)
     - simulate_only=False => apply real (requiere credenciales)
     """
-    workdir = None
-    full_log = ""
-    plan_obj = None
-
-    # --- Normaliza payload ---
-    if isinstance(payload, str):
+    raw_payload = payload
+    if isinstance(raw_payload, str):
         try:
-            payload = json.loads(payload or "{}")
+            raw_payload = json.loads(raw_payload or "{}")
         except Exception:
-            payload = {}
-
-    payload = normalize_payload(payload if isinstance(payload, dict) else {})
-    simulate_only = payload["simulate_only"]
-
-    # --- Detecta entorno/credenciales (soporta AWS_PROFILE + ~/.aws montado) ---
-    diag = aws_creds_diagnostics()
-    ALLOW_LOCAL = diag["allow_local_apply"]
-
-    # Solo exigimos credenciales si se va a hacer apply real.
-    # En ECS: ok por task role. En local: requiere ALLOW_LOCAL_APPLY=1 y credenciales resolubles.
-    sts_ok, sts_reason = can_call_aws_sts()
-    creds_ok_for_apply = bool(diag["running_in_ecs"] or (ALLOW_LOCAL and sts_ok))
+            raw_payload = {}
+    provider = get_provider_key((raw_payload or {}).get("cloud") if isinstance(raw_payload, dict) else None)
+    plan_obj = None
+    previous_applied = False
+    executor = get_provider_executor(provider)
+    bundle = None
+    connection = None
 
     try:
         # === 1) Actualiza estado del Plan ===
         with transaction.atomic():
             try:
                 plan_obj = Plan.objects.select_for_update().get(id=plan_id)
-                if payload and not plan_obj.payload:
-                    plan_obj.payload = payload
+                previous_applied = bool(plan_obj.applied)
+                if raw_payload and not plan_obj.payload:
+                    plan_obj.payload = raw_payload
             except Plan.DoesNotExist:
                 plan_obj = Plan.objects.create(
-                    name=payload.get("name", ""),
-                    payload=payload,
+                    name=(raw_payload or {}).get("name", ""),
+                    payload=raw_payload or {},
                     status=Plan.Status.PENDING,
                 )
+                previous_applied = False
 
-            plan_obj.status = Plan.Status.RUNNING
-            plan_obj.task_id = self.request.id
-            # ✅ Persistimos el task_id específico del último deploy (plan/apply)
-            plan_obj.last_deploy_task_id = self.request.id
-            plan_obj.updated_at = timezone.now()
-            plan_obj.last_log = ""
-            plan_obj.last_log_updated_at = timezone.now()
-            plan_obj.last_action = "apply" if not simulate_only else "plan"
-            plan_obj.save(
-                update_fields=[
-                    "status",
-                    "task_id",
-                    "last_deploy_task_id",
-                    "payload",
-                    "updated_at",
-                    "last_log",
-                    "last_log_updated_at",
-                    "last_action",
-                ]
+            runtime_env = {}
+            if plan_obj.lab_id:
+                plan_obj = Plan.objects.select_related(
+                    "lab",
+                    "lab__cloud_connection",
+                    "lab__course",
+                    "lab__owner_user",
+                ).get(id=plan_obj.id)
+                connection = resolve_lab_cloud_connection(plan_obj.lab, provider)
+                runtime_env = build_aws_runtime_env(connection) if connection else {}
+
+            bundle = executor.build_bundle(plan_id, raw_payload, runtime_env=runtime_env)
+
+            plan_obj.mark_running(
+                task_id=self.request.id,
+                last_action="apply" if not bundle.simulate_only else "plan",
+                payload=plan_obj.payload,
+                deploy=True,
             )
+        _mark_execution_record_running(execution_record_id, task_id=self.request.id)
+        log_flush = _make_incremental_log_flusher(plan_obj, bundle)
+        bundle.on_log_append = lambda _bundle: log_flush()
 
-        # === 2) Renderiza main.tf (Jinja) ===
-        env = Environment(
-            loader=FileSystemLoader(str(TEMPLATES_DIR)),
-            trim_blocks=True,
-            lstrip_blocks=True,
-            undefined=StrictUndefined,
+        # === 2) Renderiza workspace Terraform ===
+        executor.prepare_workspace(
+            bundle,
+            prefix="tf-multi-",
+            include_debug_dumps=True,
         )
-        tpl = env.get_template("main.tf.j2")
+        executor.append_runtime_diagnostics(bundle, action_label="plan")
 
-        tf_text = tpl.render(
-            payload=payload,
-            simulate_only=simulate_only,
-        )
+        # === 5.1) Preflight TGW quota (solo apply real con TGW) ===
+        if not bundle.simulate_only:
+            preflight_ok, preflight_reason, preflight_info = executor.preflight_apply(bundle)
+            bundle.append_log(f"[preflight][apply] reason={preflight_reason} info={preflight_info}\n\n")
 
-        # === 3) Crea directorio temporal de trabajo ===
-        workdir = tempfile.mkdtemp(prefix="tf-multi-")
-        main_tf = os.path.join(workdir, "main.tf")
-
-        # === 3.1) Estado Terraform estable por plan (DEV) ===
-        state_dir = f"/tfstate/{plan_id}"
-        os.makedirs(state_dir, exist_ok=True)
-        state_path = f"{state_dir}/terraform.tfstate"
-
-        backend_tf = f"""terraform {{
-            backend "local" {{
-                path = "{state_path}"
-            }}
-        }}
-        """.lstrip()
-
-        # 1) backend.tf primero
-        with open(os.path.join(workdir, "backend.tf"), "w") as f:
-            f.write(backend_tf)
-
-        # 2) main.tf después
-        with open(main_tf, "w") as f:
-            f.write(tf_text)
-
-        full_log += f"[state] backend local path={state_path}\n"
-
-        # === 4) Archivos de depuración ===
-        try:
-            import json as _json
-
-            pathlib.Path(workdir, "_received_plan.json").write_text(
-                _json.dumps(payload, indent=2, default=str)
-            )
-            preview = "".join(tf_text.splitlines(True)[:60])
-            pathlib.Path(workdir, "_main_preview.txt").write_text(preview)
-            full_log += f"[debug] dumps escritos en {workdir}\n"
-        except Exception as e:
-            full_log += f"[debug] no pude escribir dumps: {e}\n"
-
-        # === 5) Añade preview al log ===
-        try:
-            preview = "".join(pathlib.Path(main_tf).read_text().splitlines(True)[:40])
-            full_log += f"\n--- main.tf (primeras líneas) ---\n{preview}\n-------------------------------\n"
-        except Exception:
-            pass
-
-        full_log += f"workdir={workdir}\n"
-        full_log += f"simulate_only={simulate_only}\n"
-        full_log += f"aws_diag={diag} sts_ok={sts_ok} sts_reason={sts_reason} ALLOW_LOCAL_APPLY={ALLOW_LOCAL}\n\n"
-
-        # === 6) Terraform init ===
-        proc = run(["terraform", "init", "-input=false", "-no-color"], cwd=workdir)
-        full_log += f"$ terraform init\n{proc.stdout}\n{proc.stderr}\n"
-        if proc.returncode != 0:
-            raise RuntimeError("terraform init failed")
-
-        # === 7) Terraform plan ===
-        proc = run(
-            [
-                "terraform",
-                "plan",
-                "-input=false",
-                "-refresh=false",
-                "-no-color",
-                "-out",
-                "plan.out",
-            ],
-            cwd=workdir,
-        )
-        full_log += f"\n$ terraform plan\n{proc.stdout}\n{proc.stderr}\n"
-        if proc.returncode != 0:
-            raise RuntimeError("terraform plan failed")
-
-        # === 8) Terraform apply (solo si simulate_only=False) ===
-        applied = False
-        if not simulate_only:
-            if not creds_ok_for_apply:
-                msg = (
-                    "Terraform apply BLOQUEADO: no hay credenciales AWS resolubles en este container. "
-                    "En ECS se resuelve por task role. En local requiere ALLOW_LOCAL_APPLY=1 y credenciales disponibles "
-                    "(env vars o AWS_PROFILE + ~/.aws montado). "
-                    f"Diagnóstico: {diag} / sts_reason={sts_reason}"
-                )
-                full_log += f"\n[SEGURIDAD] {msg}\n"
-                # Persistimos logs en DB para depuración desde el frontend
-                plan_obj.last_log = full_log
-                plan_obj.last_log_updated_at = timezone.now()
-                # Marca el plan como FAILURE (apply intentado sin credenciales)
-                plan_obj.status = Plan.Status.FAILURE
-                plan_obj.error = msg
-                plan_obj.applied = False
-                plan_obj.last_action = "apply"
-                plan_obj.updated_at = timezone.now()
-                plan_obj.save(
-                    update_fields=[
-                        "status",
-                        "error",
-                        "applied",
-                        "last_action",
-                        "last_log",
-                        "last_log_updated_at",
-                        "updated_at",
-                    ]
+            if not preflight_ok:
+                if str(preflight_info.get("kind") or "") == "key_pairs":
+                    missing = preflight_info.get("missing_key_pairs") or []
+                    missing_text = ", ".join(missing) if missing else "unknown"
+                    msg = (
+                        "Terraform apply BLOQUEADO por key pair inexistente. "
+                        f"AWS no encontró: {missing_text}. "
+                        "Revisa ssh_access y confirma que esa key pair exista en la cuenta y región efectivas."
+                    )
+                    bundle.append_log(
+                        f"[preflight][key_pairs] missing={missing} region={preflight_info.get('region')}\n\n"
+                    )
+                else:
+                    msg = (
+                        f"Terraform apply BLOQUEADO: {preflight_reason} "
+                        "Corrige el prerequisito AWS faltante antes de reintentar."
+                    )
+                plan_obj.mark_failure(error=msg, full_log=bundle.full_log, last_action="apply", applied=False)
+                _mark_execution_record_finished(
+                    execution_record_id,
+                    status_value=PlanExecutionRecord.Status.FAILURE,
+                    task_id=self.request.id,
+                    bundle=bundle,
+                    connection=connection,
+                    error=msg,
                 )
 
                 return {
                     "ok": False,
                     "error": msg,
                     "plan_id": str(plan_obj.id),
-                    "log": full_log,
+                    "log": bundle.full_log,
                 }
 
-            proc = run(
-                ["terraform", "apply", "-input=false", "-no-color", "plan.out"],
-                cwd=workdir,
+        # === 6) Terraform init ===
+        proc = executor.terraform_init(bundle)
+        bundle.append_log(proc.log_block())
+        executor.ensure_init_succeeded(proc)
+
+        # === 7) Terraform plan ===
+        # En preview mantenemos refresh=false para no depender de llamadas AWS.
+        # En apply real usamos refresh=true para reconciliar drift manual en AWS.
+        proc = executor.terraform_plan(bundle)
+        bundle.append_log(f"\n{proc.log_block()}")
+        executor.ensure_plan_succeeded(proc)
+
+        # === 8) Terraform apply (solo si simulate_only=False) ===
+        applied = False
+        if not bundle.simulate_only:
+            if not bundle.creds_ok_for_apply:
+                msg = executor.blocked_credentials_message("apply", bundle)
+                bundle.append_log(f"\n[SEGURIDAD] {msg}\n")
+                plan_obj.mark_failure(error=msg, full_log=bundle.full_log, last_action="apply", applied=False)
+                _mark_execution_record_finished(
+                    execution_record_id,
+                    status_value=PlanExecutionRecord.Status.FAILURE,
+                    task_id=self.request.id,
+                    bundle=bundle,
+                    connection=connection,
+                    error=msg,
+                )
+
+                return {
+                    "ok": False,
+                    "error": msg,
+                    "plan_id": str(plan_obj.id),
+                    "log": bundle.full_log,
+                }
+
+            identity = {}
+            identity_error = ""
+            try:
+                identity = get_aws_identity_from_runtime_env(bundle.runtime_env)
+            except Exception as exc:
+                identity_error = str(exc)
+
+            apply_context = _build_last_apply_context(
+                provider=provider,
+                connection=connection,
+                bundle=bundle,
+                identity=identity,
+                identity_error=identity_error,
             )
-            full_log += f"\n$ terraform apply\n{proc.stdout}\n{proc.stderr}\n"
-            if proc.returncode != 0:
-                raise RuntimeError("terraform apply failed")
+            bundle.append_log(f"[audit][apply] {json.dumps(apply_context, sort_keys=True)}\n\n")
+            plan_obj.last_apply_context = apply_context
+            plan_obj.updated_at = timezone.now()
+            plan_obj.save(update_fields=["last_apply_context", "updated_at"])
+
+            proc = executor.terraform_apply(bundle)
+            bundle.append_log(f"\n{proc.log_block()}")
+            executor.ensure_apply_succeeded(proc)
             applied = True
 
             # Guardar outputs (solo después de apply real)
             try:
-                tf_outputs = read_terraform_outputs_json(workdir)
+                tf_outputs = executor.read_outputs(bundle)
                 plan_obj.outputs = tf_outputs
             except Exception as oe:
-                full_log += f"\n[outputs] No pude leer terraform output -json: {oe}\n"
+                bundle.append_log(f"\n[outputs] No pude leer terraform output -json: {oe}\n")
 
         # === 9) Guarda logs y marca SUCCESS ===
         # Persistimos logs en DB para depuración desde el frontend
-        plan_obj.last_log = full_log
-        plan_obj.last_log_updated_at = timezone.now()
-
-        plan_obj.status = Plan.Status.SUCCESS
-        plan_obj.s3_key = ""
-        plan_obj.error = ""
-        plan_obj.applied = applied
-        plan_obj.last_action = "apply" if applied else "plan"
-        plan_obj.updated_at = timezone.now()
-
+        outputs = plan_obj.outputs
         # Si fue solo plan (simulate), intentamos leer outputs pero puede no existir state.
         if not applied:
             try:
-                tf_outputs = read_terraform_outputs_json(workdir)
-                plan_obj.outputs = tf_outputs
+                outputs = executor.read_outputs(bundle)
             except Exception:
                 pass
 
-        plan_obj.save(
-            update_fields=[
-                "status",
-                "s3_key",
-                "error",
-                "applied",
-                "last_action",
-                "outputs",
-                "last_log",
-                "last_log_updated_at",
-                "updated_at",
-            ]
+        plan_obj.mark_success(
+            full_log=bundle.full_log,
+            applied=previous_applied if bundle.simulate_only else applied,
+            last_action="apply" if applied else "plan",
+            outputs=outputs,
+        )
+        _mark_execution_record_finished(
+            execution_record_id,
+            status_value=PlanExecutionRecord.Status.SUCCESS,
+            task_id=self.request.id,
+            bundle=bundle,
+            connection=connection,
+            identity=identity if not bundle.simulate_only else {},
         )
 
         return {
@@ -393,116 +328,79 @@ def process_network_plan(self, plan_id: str, payload: dict):
             "plan_id": str(plan_obj.id),
             "applied": applied,
             "s3_key": "",
-            "log": full_log,
+            "log": bundle.full_log,
         }
 
     except Exception as e:
         # === Error general ===
         if plan_obj:
-            # Persistimos logs en DB incluso en fallo
-            plan_obj.last_log = full_log + f"\n\nERROR: {e}\n"
-            plan_obj.last_log_updated_at = timezone.now()
-            plan_obj.status = Plan.Status.FAILURE
-            plan_obj.error = str(e)
-            plan_obj.updated_at = timezone.now()
-            plan_obj.save(
-                update_fields=[
-                    "status",
-                    "error",
-                    "last_log",
-                    "last_log_updated_at",
-                    "updated_at",
-                ]
+            plan_obj.mark_failure(
+                error=str(e),
+                full_log=((bundle.full_log if bundle else "") + f"\n\nERROR: {e}\n"),
             )
+        _mark_execution_record_finished(
+            execution_record_id,
+            status_value=PlanExecutionRecord.Status.FAILURE,
+            task_id=getattr(self.request, "id", ""),
+            bundle=bundle,
+            connection=connection,
+            error=str(e),
+        )
 
         return {
             "ok": False,
             "error": str(e),
             "plan_id": (str(plan_obj.id) if plan_obj else None),
-            "log": full_log,
+            "log": bundle.full_log,
         }
 
     finally:
         # === Limpieza del directorio temporal ===
-        if workdir:
-            if os.getenv("KEEP_TF_DIRS", "0") == "1":
-                full_log += f"[debug] KEEP_TF_DIRS activo, conservando {workdir}\n"
-            else:
-                cleanup(workdir)
+        if bundle:
+            executor.cleanup_workspace(bundle)
 
 
 @shared_task(bind=True)
-def destroy_last_deploy(self, plan_id: str):
-    full_log = ""
-    workdir = None
+def destroy_last_deploy(self, plan_id: str, execution_record_id: str | None = None):
+    plan = Plan.objects.select_related("lab", "lab__cloud_connection", "lab__course", "lab__owner_user").get(id=plan_id)
+    provider = get_provider_key((plan.payload or {}).get("cloud"))
+    executor = get_provider_executor(provider)
+    connection = resolve_lab_cloud_connection(getattr(plan, "lab", None), provider)
+    runtime_env = build_aws_runtime_env(connection) if connection else {}
+    bundle = executor.build_bundle(plan_id, plan.payload or {}, force_simulate_only=False, runtime_env=runtime_env)
 
-    plan = Plan.objects.get(id=plan_id)
-    payload = plan.payload or {}
-
-    # 🔒 Regla de dominio: solo destruir si fue aplicado realmente
-    if not plan.applied:
-        msg = "Destroy bloqueado: el plan nunca fue aplicado (applied=false)."
-        plan.error = msg
-        plan.last_log = full_log + msg
-        plan.last_log_updated_at = timezone.now()
-        plan.updated_at = timezone.now()
-        plan.save(
-            update_fields=["error", "last_log", "last_log_updated_at", "updated_at"]
+    # La validación de "si se puede destruir" se hace en la vista antes de encolar.
+    # Aquí evitamos revalidar con `can_destroy_now` porque el plan ya viene en RUNNING.
+    if (plan.payload or {}).get("simulate_only", True) and not plan.applied:
+        # No-op idempotente: no hay recursos reales que destruir.
+        msg = "Plan en modo simulación: no hay infraestructura real que destruir."
+        plan.mark_destroy_noop(message=msg, full_log=bundle.full_log)
+        _mark_execution_record_finished(
+            execution_record_id,
+            status_value=PlanExecutionRecord.Status.NOOP,
+            task_id=self.request.id,
+            bundle=bundle,
+            connection=connection,
+            error="",
         )
         return {
-            "ok": False,
-            "error": msg,
-            "log": "",
+            "ok": True,
+            "message": msg,
+            "log": msg,
             "state_path": None,
             "plan_id": str(plan.id),
         }
 
-    # --- Detecta entorno/credenciales (soporta AWS_PROFILE + ~/.aws montado) ---
-    diag = aws_creds_diagnostics()
-    ALLOW_LOCAL = diag["allow_local_apply"]
-
-    sts_ok, sts_reason = can_call_aws_sts()
-    creds_ok_for_apply = bool(diag["running_in_ecs"] or (ALLOW_LOCAL and sts_ok))
-
-    if payload.get("simulate_only", True):
-        # No es un fallo del sistema: es un NO-OP (no hay nada que destruir).
-        msg = "Plan en modo simulación: no hay infraestructura que destruir."
-        plan.error = msg
-        plan.last_log = full_log + msg
-        plan.last_log_updated_at = timezone.now()
-        plan.updated_at = timezone.now()
-        # OJO: NO cambiamos status a FAILURE
-        plan.save(
-            update_fields=["error", "last_log", "last_log_updated_at", "updated_at"]
-        )
-        return {
-            "ok": False,
-            "error": msg,
-            "log": "",
-            "state_path": None,
-            "plan_id": str(plan.id),
-        }
-
-    if not creds_ok_for_apply:
-        msg = (
-            "Terraform destroy BLOQUEADO: no hay credenciales AWS resolubles en este container. "
-            "En ECS se resuelve por task role. En local requiere ALLOW_LOCAL_APPLY=1 y credenciales disponibles "
-            "(env vars o AWS_PROFILE + ~/.aws montado). "
-            f"Diagnóstico: {diag} / sts_reason={sts_reason}"
-        )
-        plan.status = Plan.Status.FAILURE
-        plan.error = msg
-        plan.last_log = full_log + msg
-        plan.last_log_updated_at = timezone.now()
-        plan.updated_at = timezone.now()
-        plan.save(
-            update_fields=[
-                "status",
-                "error",
-                "last_log",
-                "last_log_updated_at",
-                "updated_at",
-            ]
+    if not bundle.creds_ok_for_apply:
+        msg = executor.blocked_credentials_message("destroy", bundle)
+        plan.mark_failure(error=msg, full_log=bundle.full_log + msg, last_action="destroy")
+        _mark_execution_record_finished(
+            execution_record_id,
+            status_value=PlanExecutionRecord.Status.FAILURE,
+            task_id=self.request.id,
+            bundle=bundle,
+            connection=connection,
+            error=msg,
         )
         return {
             "ok": False,
@@ -518,133 +416,82 @@ def destroy_last_deploy(self, plan_id: str):
     # if payload.get("simulate_only", True):
     #     return {"ok": False, "error": "Plan en modo simulación: no hay infraestructura que destruir."}
 
-    plan.status = Plan.Status.RUNNING
-    plan.error = ""
-    plan.s3_key = ""
-    plan.task_id = self.request.id
-    # ✅ Persistimos el task_id específico del último destroy
-    plan.last_destroy_task_id = self.request.id
-    plan.last_action = "destroy"
-    plan.last_log = ""
-    plan.last_log_updated_at = timezone.now()
-    plan.updated_at = timezone.now()
-    plan.save(
-        update_fields=[
-            "status",
-            "error",
-            "s3_key",
-            "task_id",
-            "last_destroy_task_id",
-            "last_action",
-            "last_log",
-            "last_log_updated_at",
-            "updated_at",
-        ]
+    plan.mark_running(
+        task_id=self.request.id,
+        last_action="destroy",
+        destroy=True,
     )
+    _mark_execution_record_running(execution_record_id, task_id=self.request.id)
+    log_flush = _make_incremental_log_flusher(plan, bundle)
+    bundle.on_log_append = lambda _bundle: log_flush()
 
     try:
-        # 1) workdir nuevo
-        workdir = tempfile.mkdtemp(prefix="tf-destroy-")
-
-        full_log += f"[destroy] workdir={workdir}\n"
-        full_log += f"aws_diag={diag} sts_ok={sts_ok} sts_reason={sts_reason} ALLOW_LOCAL_APPLY={ALLOW_LOCAL}\n"
-
-        # 2) backend estable por plan_id (primero, para construir backend.tf)
-        state_dir = f"/tfstate/{plan_id}"
-        os.makedirs(state_dir, exist_ok=True)
-        state_path = f"{state_dir}/terraform.tfstate"
-
-        backend_tf = f"""terraform {{
-            backend "local" {{
-                path = "{state_path}"
-            }}
-        }}
-        """.lstrip()
-
-        # 3) render main.tf
-        env = Environment(
-            loader=FileSystemLoader(str(TEMPLATES_DIR)),
-            trim_blocks=True,
-            lstrip_blocks=True,
-            undefined=StrictUndefined,
+        executor.prepare_workspace(
+            bundle,
+            prefix="tf-destroy-",
+            include_debug_dumps=False,
         )
-        tpl = env.get_template("main.tf.j2")
-
-        payload = normalize_payload(payload if isinstance(payload, dict) else {})
-        payload["simulate_only"] = False
-
-        tf_text = tpl.render(
-            payload=payload, simulate_only=False
-        )  # destroy siempre real
-
-        # 4) escribir backend.tf primero, main.tf después
-        pathlib.Path(os.path.join(workdir, "backend.tf")).write_text(backend_tf)
-        pathlib.Path(os.path.join(workdir, "main.tf")).write_text(tf_text)
-
-        full_log += f"[state] backend local path={state_path}\n"
+        executor.append_runtime_diagnostics(bundle, action_label="destroy")
 
         # 4) init
-        p_init = run(["terraform", "init", "-input=false", "-no-color"], cwd=workdir)
-        full_log += f"$ terraform init\n{p_init.stdout}\n{p_init.stderr}\n"
-        if p_init.returncode != 0:
-            raise RuntimeError("terraform init failed")
+        p_init = executor.terraform_init(bundle)
+        bundle.append_log(p_init.log_block())
+        executor.ensure_init_succeeded(p_init)
 
         # 5) destroy
-        p = run(["terraform", "destroy", "-auto-approve", "-no-color"], cwd=workdir)
-        full_log += f"$ terraform destroy\n{p.stdout}\n{p.stderr}\n"
-        if p.returncode != 0:
-            raise RuntimeError("terraform destroy failed")
+        p = executor.terraform_destroy(bundle)
+        bundle.append_log(p.log_block())
+        nat_cleanup_error = ""
+        nat_cleanup_summary = {}
+        try:
+            nat_cleanup_summary = executor.cleanup_after_destroy(bundle, outputs=plan.outputs or {})
+            bundle.append_log(
+                f"[cleanup][nat] {json.dumps(nat_cleanup_summary, indent=2, sort_keys=True)}\n"
+            )
+        except Exception as cleanup_exc:
+            nat_cleanup_error = str(cleanup_exc)
+            bundle.append_log(f"[cleanup][nat][error] {cleanup_exc}\n")
+        executor.ensure_destroy_succeeded(p)
+        if nat_cleanup_error:
+            raise RuntimeError(
+                f"destroy completed but NAT residual cleanup failed: {nat_cleanup_error}"
+            )
+        if nat_cleanup_summary.get("remaining_nat_ids"):
+            remaining = ", ".join(nat_cleanup_summary["remaining_nat_ids"])
+            raise RuntimeError(
+                f"destroy completed but residual NAT Gateways remain: {remaining}"
+            )
 
-        plan.last_log = full_log
-        plan.last_log_updated_at = timezone.now()
-        plan.status = Plan.Status.SUCCESS
-        plan.s3_key = ""
-        plan.error = ""
-        plan.applied = False
         # Importante: NO borramos outputs en destroy.
         # Se conservan como "últimos outputs cuando estuvo ACTIVE" para auditoría/debug.
-        plan.last_action = "destroy"
-        plan.updated_at = timezone.now()
-        plan.save(
-            update_fields=[
-                "status",
-                "s3_key",
-                "error",
-                "applied",
-                "last_action",
-                "last_log",
-                "last_log_updated_at",
-                "updated_at",
-            ]
+        plan.mark_success(full_log=bundle.full_log, applied=False, last_action="destroy", outputs=plan.outputs)
+        _mark_execution_record_finished(
+            execution_record_id,
+            status_value=PlanExecutionRecord.Status.SUCCESS,
+            task_id=self.request.id,
+            bundle=bundle,
+            connection=connection,
         )
 
         return {
             "ok": True,
-            "log": full_log,
-            "state_path": state_path,
+            "log": bundle.full_log,
+            "state_path": bundle.state_path,
             "plan_id": str(plan.id),
             "s3_key": "",
         }
 
     except Exception as e:
-        plan.last_log = full_log + f"\n\nERROR: {e}\n"
-        plan.last_log_updated_at = timezone.now()
-        plan.status = Plan.Status.FAILURE
-        plan.error = str(e)
-        plan.last_action = "destroy"
-        plan.updated_at = timezone.now()
-        plan.save(
-            update_fields=[
-                "status",
-                "error",
-                "last_action",
-                "last_log",
-                "last_log_updated_at",
-                "updated_at",
-            ]
+        plan.mark_failure(error=str(e), full_log=bundle.full_log + f"\n\nERROR: {e}\n", last_action="destroy")
+        _mark_execution_record_finished(
+            execution_record_id,
+            status_value=PlanExecutionRecord.Status.FAILURE,
+            task_id=self.request.id,
+            bundle=bundle,
+            connection=connection,
+            error=str(e),
         )
-        return {"ok": False, "error": str(e), "log": full_log}
+        return {"ok": False, "error": str(e), "log": bundle.full_log}
 
     finally:
-        if workdir:
-            cleanup(workdir)
+        executor.cleanup_workspace(bundle)

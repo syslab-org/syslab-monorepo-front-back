@@ -1,0 +1,58 @@
+[
+  {
+    "id": "01-single-vpc-public",
+    "file": "01-single-vpc-public.json",
+    "category": "baseline",
+    "valid": true,
+    "focus": "Internet edge y salida publica",
+    "summary": "Un solo segmento con zona publica y workload bastion."
+  },
+  {
+    "id": "02-single-vpc-public-private-nat",
+    "file": "02-single-vpc-public-private-nat.json",
+    "category": "baseline",
+    "valid": true,
+    "focus": "Salida administrada para zona privada",
+    "summary": "Un segmento con zona publica, zona privada y salida privada administrada."
+  },
+  {
+    "id": "03-two-vpcs-peering-bidirectional",
+    "file": "03-two-vpcs-peering-bidirectional.json",
+    "category": "routing",
+    "valid": true,
+    "focus": "Direct links correctos",
+    "summary": "Dos segmentos con ruteo bidireccional para validar enlaces directos."
+  },
+  {
+    "id": "04-two-vpcs-isolated-baseline",
+    "file": "04-two-vpcs-isolated-baseline.json",
+    "category": "routing",
+    "valid": true,
+    "focus": "Sin conectividad",
+    "summary": "Dos segmentos sin enlaces entre si para comparar el estado aislado contra direct links o hub routing."
+  },
+  {
+    "id": "05-three-vpcs-tgw-full-mesh",
+    "file": "05-three-vpcs-tgw-full-mesh.json",
+    "category": "routing",
+    "valid": true,
+    "focus": "Hub routing",
+    "summary": "Tres segmentos conectados mediante hub routing con rutas de ida y vuelta."
+  },
+  {
+    "id": "06-three-vpcs-peering-partial",
+    "file": "06-three-vpcs-peering-partial.json",
+    "category": "routing",
+    "valid": true,
+    "focus": "Direct links parciales",
+    "summary": "Tres segmentos donde solo algunos pares se conectan, para contrastar con hub routing."
+  },
+  {
+    "id": "07-overlapping-subnets-invalid",
+    "file": "07-overlapping-subnets-invalid.json",
+    "category": "validation",
+    "valid": false,
+    "focus": "CIDR solapado",
+    "summary": "Un segmento con dos zonas que se solapan para probar validaciones de direccionamiento."
+  }
+]

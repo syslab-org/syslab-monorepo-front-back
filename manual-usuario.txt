@@ -1,0 +1,374 @@
+MANUAL DE USUARIO
+Architectta / Cloud Orchestrator
+
+Fecha de actualización: 11/03/2026
+
+====================================================================
+1. QUÉ ES ESTA PLATAFORMA
+====================================================================
+
+Esta plataforma te permite:
+
+- diseñar una topología de red en un canvas,
+- configurarla con criterios reales de AWS,
+- desplegarla usando Terraform,
+- revisar outputs y logs,
+- y probar conectividad entre VPCs.
+
+No es solo un editor de diagramas. Las decisiones que tomas en el canvas
+pueden crear recursos reales en AWS.
+
+Importante:
+
+- si ejecutas un APPLY real, el laboratorio puede generar costo monetario;
+- el costo depende de los recursos desplegados y del tiempo que permanezcan
+  activos;
+- destroy elimina el stack principal, pero ciertos recursos externos o
+  preexistentes que tú aportaste pueden quedar fuera de su alcance.
+
+
+====================================================================
+2. QUÉ PUEDES CONSTRUIR
+====================================================================
+
+Con la implementación actual puedes trabajar, entre otros, con estos casos:
+
+- una VPC simple con acceso a Internet;
+- varias VPCs conectadas por peering;
+- varias VPCs conectadas por Transit Gateway;
+- subnets públicas;
+- laboratorios con NAT Gateway;
+- instancias bastion para pruebas;
+- pruebas de conectividad por ping entre VPCs.
+
+
+====================================================================
+3. CONCEPTOS BÁSICOS
+====================================================================
+
+3.1 VPC
+
+Es una red virtual en AWS. Es el contenedor principal de tu laboratorio.
+
+3.2 Subnet
+
+Es una porción del rango IP de una VPC. Allí ubicas las instancias.
+
+3.3 CIDR
+
+Es el rango de direcciones IP de la red. Ejemplo:
+
+`10.60.0.0/16`
+
+3.4 Route table
+
+Define hacia dónde debe salir el tráfico. Sin rutas correctas, la topología no
+funciona aunque visualmente parezca conectada.
+
+3.5 Security Group (SG)
+
+Es el firewall virtual de AWS. Controla qué tráfico entra y sale.
+
+3.6 Internet Gateway (IGW)
+
+Permite conectividad directa entre una VPC e Internet.
+
+3.7 NAT Gateway
+
+Permite que redes privadas salgan a Internet sin exponerlas directamente.
+
+3.8 VPC Peering
+
+Conecta dos VPCs directamente.
+
+3.9 Transit Gateway (TGW)
+
+Conecta varias VPCs usando un hub central.
+
+
+====================================================================
+4. CÓMO LEER EL CANVAS
+====================================================================
+
+Cada elemento del canvas tiene un significado técnico:
+
+- VPC:
+  red virtual principal.
+
+- Subnet:
+  segmento interno de una VPC.
+
+- Instancia:
+  máquina virtual EC2.
+
+- Router TGW:
+  hub central de enrutamiento.
+
+- Enlace:
+  intención de conectividad que luego debe expresarse como rutas reales.
+
+No trabajes el canvas como si fuera solo un dibujo. Piensa que estás
+declarando infraestructura.
+
+
+====================================================================
+5. CÓMO CONFIGURAR UNA VPC
+====================================================================
+
+En el formulario de VPC puedes definir:
+
+- nombre,
+- CIDR,
+- región,
+- Internet Gateway,
+- NAT Gateway,
+- subnet pública para NAT,
+- Elastic IP opcional (Allocation ID),
+- Allowed SSH CIDR.
+
+Qué significa cada uno:
+
+Internet Gateway
+- habilita salida y posible acceso público si la subnet y el SG también están
+  configurados correctamente.
+
+Enable NAT Gateway
+- da salida a Internet a redes privadas;
+- no permite entrar desde tu laptop.
+
+Elastic IP (opcional)
+- si la dejas vacía, AWS asigna una EIP nueva al NAT;
+- si escribes un valor, debe ser un Allocation ID existente, por ejemplo
+  `eipalloc-0123456789abcdef0`.
+- no debes escribir la IP pública visible de la EIP, porque Terraform necesita
+  el `Allocation ID`.
+
+Allowed SSH CIDR
+- define desde qué IP o red podrás conectarte por SSH;
+- ejemplo: `190.20.219.125/32`;
+- técnicamente crea una regla `tcp/22` en el Security Group.
+
+
+====================================================================
+6. DIFERENCIA ENTRE PEERING Y TGW
+====================================================================
+
+Peering
+- conexión directa entre dos VPCs;
+- requiere rutas explícitas en ambos lados;
+- útil para escenarios pequeños o explicación de conectividad por pares.
+
+TGW
+- hub central de enrutamiento;
+- cada VPC se conecta al hub mediante attachments;
+- el tráfico entre VPCs pasa por el hub;
+- útil para escenarios multipunto y más escalables.
+
+Regla práctica:
+- si quieres explicar conexión directa, usa peering;
+- si quieres explicar topología centralizada, usa TGW.
+
+
+====================================================================
+7. VALIDAR, PREVISUALIZAR Y DESPLEGAR
+====================================================================
+
+Validar
+- revisa consistencia de la topología.
+
+Previsualizar / PLAN
+- muestra lo que Terraform haría;
+- no crea recursos reales.
+
+Desplegar / APPLY
+- ejecuta Terraform apply;
+- crea recursos reales en AWS;
+- produce outputs y habilita pruebas post-deploy.
+
+
+====================================================================
+8. ESTADOS DEL PLAN
+====================================================================
+
+Los estados más importantes son:
+
+- SUCCESS:
+  la última ejecución terminó bien.
+
+- FAILURE:
+  la última ejecución terminó con error.
+
+- ACTIVE:
+  la infraestructura está aplicada en AWS.
+
+- DESTROYED:
+  la infraestructura fue eliminada.
+
+- RUNNING:
+  hay una tarea en curso.
+
+- PREVIEW:
+  corresponde a simulación, no a infraestructura aplicada.
+
+
+====================================================================
+9. FLUJO DE USO RECOMENDADO
+====================================================================
+
+1. Diseña la topología.
+2. Configura CIDRs sin solapamiento.
+3. Configura instancias con una key pair que realmente tengas.
+4. Si necesitas SSH desde tu laptop, define `Allowed SSH CIDR`.
+5. Revisa rutas y modo de enrutamiento.
+6. Ejecuta preview si el escenario es complejo.
+7. Ejecuta apply.
+8. Revisa outputs y pestaña `Pruebas`.
+9. Ejecuta pruebas de conectividad.
+10. Destruye la infraestructura cuando termines.
+
+
+====================================================================
+10. CÓMO PROBAR CONECTIVIDAD
+====================================================================
+
+La pestaña `Pruebas` te indica:
+
+- desde qué bastion conectarte,
+- a qué IP privada debes hacer ping,
+- qué pares de VPC deberían responder.
+
+Ejemplo:
+
+```bash
+ssh -i ~/.ssh/tesis-key-new.pem ec2-user@18.212.139.179
+ping -c 4 10.61.1.10
+```
+
+La idea es:
+
+1. entrar por SSH a una bastion pública;
+2. desde allí hacer ping a una IP privada en otra VPC.
+
+Así validas conectividad real entre redes.
+
+
+====================================================================
+11. CÓMO ENTRAR POR SSH
+====================================================================
+
+Comando general:
+
+```bash
+ssh -i ~/.ssh/tu-key.pem ec2-user@IP_PUBLICA
+```
+
+Para que funcione, deben cumplirse estas condiciones:
+
+- la instancia debe haberse creado con esa key pair;
+- la instancia debe tener IP pública si vas a entrar desde Internet;
+- la subnet debe tener salida por IGW si es una bastion pública;
+- el Security Group debe permitir `tcp/22`;
+- tu IP pública debe estar incluida en `Allowed SSH CIDR`.
+
+
+====================================================================
+12. QUÉ HACE `ping-tgw-mesh.sh`
+====================================================================
+
+El script:
+
+- descubre bastions desplegadas,
+- abre SSH temporalmente si se le pide,
+- entra a las instancias por SSH,
+- ejecuta pings entre VPCs,
+- y valida ida y retorno.
+
+Ejemplo de ejecución:
+
+```bash
+OPEN_SSH=1 AWS_PROFILE=tesis AWS_REGION=us-east-1 ./scripts/ping-tgw-mesh.sh ~/.ssh/tesis-key-new.pem
+```
+
+Importante:
+
+- el puerto 22 se usa solo para acceder por SSH;
+- la prueba de conectividad entre VPCs usa ICMP;
+- si ya configuraste correctamente `Allowed SSH CIDR`, normalmente no necesitas
+  apertura temporal.
+
+
+====================================================================
+13. ERRORES FRECUENTES
+====================================================================
+
+13.1 No puedo entrar por SSH
+
+Revisa:
+
+- key pair correcta,
+- `Allowed SSH CIDR`,
+- IP pública de la instancia,
+- route table con IGW,
+- reglas del SG.
+
+13.2 Terraform dice que una subnet no existe
+
+Suele indicar drift:
+
+- el recurso se borró manualmente en AWS,
+- pero Terraform aún lo tiene en su state.
+
+13.3 Dibujé un TGW, pero no hay conectividad
+
+Revisa:
+
+- attachments,
+- rutas hacia TGW,
+- Security Groups,
+- IPs privadas correctas.
+
+13.4 Activé NAT y pensé que podría entrar desde Internet
+
+Eso es incorrecto.
+NAT sirve para salida desde redes privadas, no para acceso entrante.
+
+13.5 Hice destroy y aún veo recursos en la consola
+
+Revisa estas posibilidades:
+
+- una Elastic IP aportada manualmente al NAT no se libera automáticamente;
+- AWS mantiene un `DHCP option set` por defecto por región, y no implica que
+  el stack haya quedado vivo;
+- los outputs que ves en la plataforma son históricos y no generan costo por sí
+  mismos.
+
+
+====================================================================
+14. BUENAS PRÁCTICAS
+====================================================================
+
+- Usa CIDRs claros y no superpuestos.
+- No mezcles key pairs que no tengas disponibles.
+- Define `Allowed SSH CIDR` antes del apply si quieres probar manualmente.
+- Usa preview cuando el laboratorio sea complejo.
+- No borres recursos manualmente en AWS si fueron creados por Terraform.
+- Destruye desde la plataforma al terminar.
+- Verifica conectividad real, no solo éxito de deploy.
+
+
+====================================================================
+15. RESUMEN FINAL
+====================================================================
+
+El flujo correcto de uso es:
+
+1. Diseñar.
+2. Configurar.
+3. Validar.
+4. Desplegar.
+5. Probar.
+6. Destruir.
+
+Si entiendes el significado de cada decisión del canvas, la plataforma deja de
+ser solo un orquestador y pasa a ser una herramienta efectiva para aprender y
+experimentar con redes en AWS.

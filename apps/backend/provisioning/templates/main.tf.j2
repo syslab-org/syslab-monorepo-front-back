@@ -120,12 +120,36 @@ locals {
   inst_map = { for i in local.all_instances : "${i.vpc_id_key}:${i.name}" => i }
 }
 
-{% if not sim %}
 # ---------------------- AMI base ----------------------
 data "aws_ssm_parameter" "al2023_ami" {
+  count = {{ 0 if sim else 1 }}
   name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64"
 }
-locals { default_ami_id = data.aws_ssm_parameter.al2023_ami.value }
+locals {
+  # En preview/simulación no consultamos AWS para resolver la AMI por defecto.
+  # El payload de este proyecto suele traer una AMI explícita; si no viene,
+  # usamos un placeholder estable para evitar que desaparezca la configuración.
+  default_ami_id = {{ '"ami-simulated-preview"' if sim else 'data.aws_ssm_parameter.al2023_ami[0].value' }}
+
+  # Todas las reglas ingress del SG deben vivir en el mismo recurso
+  # aws_security_group.vm_sg. Mezclar ingress inline con
+  # aws_security_group_rule separados hace que Terraform elimine reglas
+  # "externas" durante updates in-place y rompe el ping entre VPCs.
+  peering_icmp_sources_by_vpc = {
+    for v in local.vpcs : v.id => distinct(concat(
+      [
+        for l in [for x in local.links : x if try(lower(x.type), "") == "peering"] :
+        local.vpc_by_id[l.vpc_b_id].cidr_block
+        if local.allow_cross_vpc_ping && l.vpc_a_id == v.id && contains(keys(local.vpc_by_id), l.vpc_b_id)
+      ],
+      [
+        for l in [for x in local.links : x if try(lower(x.type), "") == "peering"] :
+        local.vpc_by_id[l.vpc_a_id].cidr_block
+        if local.allow_cross_vpc_ping && l.vpc_b_id == v.id && contains(keys(local.vpc_by_id), l.vpc_a_id)
+      ]
+    ))
+  }
+}
 
 # ---------------------- SECURITY GROUPS ----------------------
 resource "aws_security_group" "vm_sg" {
@@ -137,8 +161,10 @@ resource "aws_security_group" "vm_sg" {
     ]) > 0
   }
 
-  name        = "${each.value.name}-vm-sg"
-  description = "Security group for VMs in ${each.value.name}"
+  # Mantener name/description estables evita reemplazos del SG cuando el
+  # usuario solo renombra el segmento en el canvas.
+  name        = "vm-sg-${substr(replace(each.key, "-", ""), 0, 12)}"
+  description = "Security group for VMs in segment ${each.key}"
   vpc_id      = aws_vpc.vpc[each.key].id
 
   # ICMP dentro de la misma VPC
@@ -176,6 +202,23 @@ resource "aws_security_group" "vm_sg" {
     cidr_blocks = [each.value.cidr_block]
   }
 
+  # ICMP entre VPCs conectadas (peering o TGW). Se mantiene inline para que
+  # el SG no revoque estas reglas en redeploys posteriores.
+  dynamic "ingress" {
+    for_each = distinct(concat(
+      try(local.peering_icmp_sources_by_vpc[each.key], []),
+      try(local.tgw_icmp_sources_by_vpc[each.key], [])
+    ))
+
+    content {
+      description = "ICMP from connected VPC ${ingress.value}"
+      from_port   = -1
+      to_port     = -1
+      protocol    = "icmp"
+      cidr_blocks = [ingress.value]
+    }
+  }
+
   # Salida libre (necesaria para ping saliente y updates del sistema)
   egress {
     from_port   = 0
@@ -185,39 +228,6 @@ resource "aws_security_group" "vm_sg" {
   }
 
   tags = { Name = "${each.value.name}-vm-sg" }
-}
-
-# --- ICMP entre VPCs conectadas por PEERING (activado con allow_cross_vpc_ping=true) ---
-resource "aws_security_group_rule" "cross_vpc_ping_peering_a" {
-  for_each = {
-    for l in [for x in local.links : x if try(lower(x.type), "") == "peering"] :
-    "${l.vpc_a_id}--${l.vpc_b_id}" => l
-    if local.allow_cross_vpc_ping && contains(keys(aws_security_group.vm_sg), l.vpc_a_id)
-  }
-
-  type              = "ingress"
-  from_port         = -1
-  to_port           = -1
-  protocol          = "icmp"
-  security_group_id = aws_security_group.vm_sg[each.value.vpc_a_id].id
-  cidr_blocks       = [local.vpc_by_id[each.value.vpc_b_id].cidr_block]
-  description       = "Allow ICMP from peer ${each.value.vpc_b_id}"
-}
-
-resource "aws_security_group_rule" "cross_vpc_ping_peering_b" {
-  for_each = {
-    for l in [for x in local.links : x if try(lower(x.type), "") == "peering"] :
-    "${l.vpc_b_id}--${l.vpc_a_id}" => l
-    if local.allow_cross_vpc_ping && contains(keys(aws_security_group.vm_sg), l.vpc_b_id)
-  }
-
-  type              = "ingress"
-  from_port         = -1
-  to_port           = -1
-  protocol          = "icmp"
-  security_group_id = aws_security_group.vm_sg[each.value.vpc_b_id].id
-  cidr_blocks       = [local.vpc_by_id[each.value.vpc_a_id].cidr_block]
-  description       = "Allow ICMP from peer ${each.value.vpc_a_id}"
 }
 
 # --- ICMP entre VPCs conectadas a un mismo TGW (activado con allow_cross_vpc_ping=true) ---
@@ -236,38 +246,20 @@ locals {
       ]
     ]
   ])
-}
-
-resource "aws_security_group_rule" "cross_vpc_ping_tgw_a" {
-  for_each = {
-    for p in local.tgw_pairs :
-    "${p.a}--${p.b}" => p
-    if local.allow_cross_vpc_ping && contains(keys(aws_security_group.vm_sg), p.a)
+  tgw_icmp_sources_by_vpc = {
+    for v in local.vpcs : v.id => distinct(concat(
+      [
+        for p in local.tgw_pairs :
+        local.vpc_by_id[p.b].cidr_block
+        if local.allow_cross_vpc_ping && p.a == v.id && contains(keys(local.vpc_by_id), p.b)
+      ],
+      [
+        for p in local.tgw_pairs :
+        local.vpc_by_id[p.a].cidr_block
+        if local.allow_cross_vpc_ping && p.b == v.id && contains(keys(local.vpc_by_id), p.a)
+      ]
+    ))
   }
-
-  type              = "ingress"
-  from_port         = -1
-  to_port           = -1
-  protocol          = "icmp"
-  security_group_id = aws_security_group.vm_sg[each.value.a].id
-  cidr_blocks       = [local.vpc_by_id[each.value.b].cidr_block]
-  description       = "Allow ICMP from TGW-connected VPC ${each.value.b}"
-}
-
-resource "aws_security_group_rule" "cross_vpc_ping_tgw_b" {
-  for_each = {
-    for p in local.tgw_pairs :
-    "${p.b}--${p.a}" => p
-    if local.allow_cross_vpc_ping && contains(keys(aws_security_group.vm_sg), p.b)
-  }
-
-  type              = "ingress"
-  from_port         = -1
-  to_port           = -1
-  protocol          = "icmp"
-  security_group_id = aws_security_group.vm_sg[each.value.b].id
-  cidr_blocks       = [local.vpc_by_id[each.value.a].cidr_block]
-  description       = "Allow ICMP from TGW-connected VPC ${each.value.a}"
 }
 
 # ---------------------- EC2 instances ----------------------
@@ -290,8 +282,13 @@ resource "aws_instance" "vm" {
   tags = {
     Name = each.value.name
   }
+
+  # En cuentas/labs con alta latencia de provisión EC2, 10m puede ser insuficiente
+  # y generar falsos FAIL aunque la instancia termine arrancando después.
+  timeouts {
+    create = "20m"
+  }
 }
-{% endif %}
 
 
 # =========================
@@ -317,12 +314,16 @@ resource "aws_internet_gateway" "igw" {
 
 # --- NAT Gateway (1 por VPC habilitada) ---
 locals {
-  vpc_nat_enabled    = { for v in local.vpcs : v.id => try(v.nat_gateway.enabled, false) }
-  vpc_nat_pub_subnet = { for v in local.vpcs : v.id => try(v.nat_gateway.public_subnet, "") }
+  vpc_nat_enabled       = { for v in local.vpcs : v.id => try(v.nat_gateway.enabled, false) }
+  vpc_nat_pub_subnet    = { for v in local.vpcs : v.id => try(v.nat_gateway.public_subnet, "") }
+  vpc_nat_eip_alloc_id  = { for v in local.vpcs : v.id => trimspace(try(v.nat_gateway.elastic_ip, "")) }
 }
 
 resource "aws_eip" "nat_eip" {
-  for_each = { for v in local.vpcs : v.id => v if local.vpc_nat_enabled[v.id] }
+  for_each = {
+    for v in local.vpcs : v.id => v
+    if local.vpc_nat_enabled[v.id] && local.vpc_nat_eip_alloc_id[v.id] == ""
+  }
   domain   = "vpc"
   tags     = { Name = "${each.value.name}-nat-eip" }
 }
@@ -330,7 +331,11 @@ resource "aws_eip" "nat_eip" {
 resource "aws_nat_gateway" "nat" {
   for_each      = { for v in local.vpcs : v.id => v if local.vpc_nat_enabled[v.id] }
   subnet_id     = aws_subnet.this["${each.key}:${local.vpc_nat_pub_subnet[each.key]}"].id
-  allocation_id = aws_eip.nat_eip[each.key].id
+  allocation_id = (
+    local.vpc_nat_eip_alloc_id[each.key] != ""
+    ? local.vpc_nat_eip_alloc_id[each.key]
+    : aws_eip.nat_eip[each.key].id
+  )
   tags          = { Name = "${each.value.name}-nat" }
   depends_on    = [aws_internet_gateway.igw]
 }
@@ -456,6 +461,20 @@ locals {
   }
 }
 
+locals {
+  explicit_route_destinations_by_rt = {
+    for rt in local.route_tables_flat :
+    rt.key => toset([
+      for r in coalesce(rt.routes, []) :
+      trimspace(try(r.dest_cidr, ""))
+      if (
+        !contains(["", "local"], lower(try(r.target, ""))) &&
+        try(length(trimspace(r.dest_cidr)) > 0, false)
+      )
+    ])
+  }
+}
+
 # Candidatos por cada subnet (sin usar attributes de recursos)
 locals {
   nat_default_candidates = flatten([
@@ -506,14 +525,45 @@ resource "aws_ec2_transit_gateway" "tgw" {
   }
 }
 
+locals {
+  tgw_attachment_subnets_by_link = {
+    for l in local.tgw_links : "${l.router_id}:${l.vpc_id}" => (
+      length([
+        for sn_name in distinct(coalesce(l.subnet_names, [])) : sn_name
+        if contains([for sn in coalesce(local.vpc_by_id[l.vpc_id].subnets, []) : sn.name], sn_name)
+      ]) > 0
+      ? [
+          for sn_name in distinct(coalesce(l.subnet_names, [])) : sn_name
+          if contains([for sn in coalesce(local.vpc_by_id[l.vpc_id].subnets, []) : sn.name], sn_name)
+        ]
+      : [for sn in coalesce(local.vpc_by_id[l.vpc_id].subnets, []) : sn.name]
+    )
+  }
+
+  tgw_attachment_subnet_name_by_az = {
+    for l in local.tgw_links : "${l.router_id}:${l.vpc_id}" => {
+      for sn_name in local.tgw_attachment_subnets_by_link["${l.router_id}:${l.vpc_id}"] :
+      coalesce(
+        try(
+          [for sn in coalesce(local.vpc_by_id[l.vpc_id].subnets, []) : lower(sn.availability_zone) if sn.name == sn_name][0],
+          null
+        ),
+        "unknown:${sn_name}"
+      ) => sn_name
+    }
+  }
+}
+
 resource "aws_ec2_transit_gateway_vpc_attachment" "tgw_attach" {
   for_each = { for l in local.tgw_links : "${l.router_id}:${l.vpc_id}" => l }
 
   transit_gateway_id = aws_ec2_transit_gateway.tgw[0].id
   vpc_id             = aws_vpc.vpc[each.value.vpc_id].id
   subnet_ids         = [
-    for sn in coalesce(each.value.subnet_names, []) :
-    aws_subnet.this["${each.value.vpc_id}:${sn}"].id
+    for az in sort(keys(local.tgw_attachment_subnet_name_by_az[each.key])) :
+    aws_subnet.this[
+      "${each.value.vpc_id}:${local.tgw_attachment_subnet_name_by_az[each.key][az]}"
+    ].id
   ]
 
   tags = { Name = "tgw-attach-${each.value.vpc_id}" }
@@ -582,20 +632,33 @@ resource "aws_ec2_transit_gateway_route" "tgw_to_vpcs" {
 # =========================
 
 locals {
-  # Para cada link TGW y cada ruta "to_router", generamos una entrada SOLO
-  # si la route table existe realmente en la VPC.
+  # Para cada link TGW, propagamos los destinos declarados por el router a TODAS
+  # las route tables de la VPC (excepto si ya existe una ruta explícita para ese destino).
   tgw_vpc_routes = flatten([
     for l in local.tgw_links : [
-      for r in coalesce(try(l.routes.to_router, []), []) : {
-        key       = "${l.vpc_id}:${r.dest_cidr}"
-        vpc_id    = l.vpc_id
-        dest_cidr = r.dest_cidr
-        rt_name   = "public"
-      }
-      if contains(
-        local.rt_names_by_vpc[l.vpc_id],
-        "public"
-      )
+      for dest_cidr in distinct([
+        for r in coalesce(try(l.routes.to_router, []), []) :
+        trimspace(try(r.dest_cidr, ""))
+        if try(length(trimspace(r.dest_cidr)) > 0, false)
+      ]) : [
+        for rt in coalesce(local.vpc_by_id[l.vpc_id].route_tables, []) : {
+          key       = "${l.vpc_id}:${rt.name}:${dest_cidr}"
+          vpc_id    = l.vpc_id
+          dest_cidr = dest_cidr
+          rt_name   = rt.name
+        }
+        if (
+          dest_cidr != try(local.vpc_by_id[l.vpc_id].cidr_block, "") &&
+          !contains(
+            lookup(
+              local.explicit_route_destinations_by_rt,
+              "${l.vpc_id}:${rt.name}",
+              toset([])
+            ),
+            dest_cidr
+          )
+        )
+      ]
     ]
   ])
 }
@@ -702,9 +765,47 @@ output "igw_ids" {
   value = { for k, g in aws_internet_gateway.igw : k => g.id }
 }
 
+# NAT gateways por VPC id (solo donde aplica)
+output "nat_gateway_ids" {
+  value = { for k, nat in aws_nat_gateway.nat : k => nat.id }
+}
+
+# Allocation ID efectiva usada por el NAT.
+# Si la EIP fue provista, reflejamos ese allocation_id; si no, el que Terraform creó.
+output "nat_eip_allocation_ids" {
+  value = {
+    for v in local.vpcs : v.id => (
+      local.vpc_nat_enabled[v.id]
+      ? (
+          local.vpc_nat_eip_alloc_id[v.id] != ""
+          ? local.vpc_nat_eip_alloc_id[v.id]
+          : aws_eip.nat_eip[v.id].id
+        )
+      : null
+    )
+    if local.vpc_nat_enabled[v.id]
+  }
+}
+
 # Peering connections por key "<vpc_a_id>--<vpc_b_id>"
 output "peering_ids" {
   value = { for k, p in aws_vpc_peering_connection.peer : k => p.id }
+}
+
+output "tgw_ids" {
+  value = {
+    for router in local.tgw_routers : router.id => aws_ec2_transit_gateway.tgw[0].id
+  }
+}
+
+output "tgw_attachment_ids" {
+  value = { for k, attachment in aws_ec2_transit_gateway_vpc_attachment.tgw_attach : k => attachment.id }
+}
+
+output "tgw_route_table_ids" {
+  value = {
+    for router in local.tgw_routers : router.id => aws_ec2_transit_gateway_route_table.tgw_rt[0].id
+  }
 }
 
 {% if not sim %}
