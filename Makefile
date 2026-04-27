@@ -5,6 +5,7 @@
 
 # -------- Variables comunes --------
 COMPOSE       = docker compose -f tools/docker/compose.dev.yml
+COMPOSE_PUBLIC = docker compose -f tools/docker/compose.dev.yml -f tools/docker/compose.public.yml
 SVC_FRONTEND  = frontend
 SVC_BACKEND   = backend
 SVC_CELERY    = celery
@@ -55,6 +56,7 @@ SLEEP             ?= 5
 .PHONY: \
   help \
   up down restart restart-frontend start stop up-nobuild recreate ps ps-healthy logs \
+  public-up public-down public-restart public-logs public-ps tunnel-up tunnel-down tunnel-logs \
   logs-backend logs-frontend logs-celery logs-flower logs-redis \
   rm-stopped ps-paused unpause build build-nc pull prune nuke \
   setup lint test migrate makemigrations-api migrate-all migrate-api createsuperuser sh-backend sh-frontend sh-celery sh-flower sh-redis \
@@ -84,6 +86,8 @@ help:
 	@echo "  make plan-outputs PLAN_ID=<uuid> # imprime Plan.outputs desde la DB local"
 	@echo "  make smoke-local   # healthz + tarea Celery + /api/network/plan"
 	@echo "  make logs          # logs de todos los servicios"
+	@echo "  make public-up     # expone la app por Caddy en :80"
+	@echo "  make tunnel-up     # publica la app via Cloudflare Tunnel (requiere token)"
 	@echo ""
 	@echo " RUNBOOK B · PUBLICAR IMÁGENES EN ECR"
 	@echo "  make push          # tag & push backend+celery al ECR (usa TAG=$(TAG))"
@@ -139,6 +143,30 @@ ps-healthy: ## Servicios healthy
 
 logs:      ## Logs de todo
 	$(COMPOSE) logs -f
+
+public-up: ## Levanta stack con Caddy en :80
+	$(COMPOSE_PUBLIC) up -d --build caddy
+
+public-down: ## Baja Caddy y cloudflared
+	$(COMPOSE_PUBLIC) stop caddy cloudflared
+
+public-restart: ## Reinicia capa publica
+	$(COMPOSE_PUBLIC) up -d --build --force-recreate caddy
+
+public-logs: ## Logs de Caddy y cloudflared
+	$(COMPOSE_PUBLIC) logs -f caddy cloudflared
+
+public-ps: ## Estado de Caddy y cloudflared
+	$(COMPOSE_PUBLIC) ps caddy cloudflared
+
+tunnel-up: ## Publica via Cloudflare Tunnel (requiere CLOUDFLARE_TUNNEL_TOKEN)
+	$(COMPOSE_PUBLIC) up -d cloudflared
+
+tunnel-down: ## Baja Cloudflare Tunnel
+	$(COMPOSE_PUBLIC) stop cloudflared
+
+tunnel-logs: ## Logs de Cloudflare Tunnel
+	$(COMPOSE_PUBLIC) logs -f cloudflared
 
 logs-backend:
 	$(COMPOSE) logs -f $(SVC_BACKEND)

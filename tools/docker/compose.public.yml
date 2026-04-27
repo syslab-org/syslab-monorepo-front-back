@@ -1,0 +1,33 @@
+services:
+  caddy:
+    image: caddy:2.9-alpine
+    container_name: tesis-caddy
+    depends_on:
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - appnet
+
+  cloudflared:
+    image: cloudflare/cloudflared:2025.4.2
+    container_name: tesis-cloudflared
+    depends_on:
+      caddy:
+        condition: service_started
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    restart: unless-stopped
+    networks:
+      - appnet
+
+volumes:
+  caddy_data:
+  caddy_config:
