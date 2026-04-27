@@ -28,6 +28,17 @@ services:
     networks:
       - appnet
 
+  cloudflared-quick:
+    image: cloudflare/cloudflared:2025.4.2
+    container_name: tesis-cloudflared-quick
+    depends_on:
+      caddy:
+        condition: service_started
+    command: tunnel --no-autoupdate --url http://caddy:80
+    restart: unless-stopped
+    networks:
+      - appnet
+
 volumes:
   caddy_data:
   caddy_config:

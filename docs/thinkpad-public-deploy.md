@@ -41,6 +41,43 @@ curl http://localhost/healthz/
 
 ## 4. Cloudflare Tunnel
 
+### Opcion recomendada para tesis: Quick Tunnel sin dominio
+
+Esto te da una URL temporal `trycloudflare.com` sin comprar dominio y sin abrir puertos del router.
+
+Levanta primero Caddy:
+
+```bash
+make public-up
+```
+
+Luego arranca el Quick Tunnel:
+
+```bash
+make quick-tunnel-up
+make quick-tunnel-logs
+```
+
+En los logs veras una URL tipo:
+
+```text
+https://random-words-example.trycloudflare.com
+```
+
+Esa URL ya deberia abrir tu app desde internet.
+
+Para apagarlo:
+
+```bash
+make quick-tunnel-down
+```
+
+Notas:
+
+- la URL es temporal
+- es suficiente para demo, validacion y presentacion de tesis
+- si reinicias o recreas el tunnel, la URL puede cambiar
+
 ### Opcion recomendada: tunnel estable con dominio
 
 1. En Cloudflare Zero Trust crea un Tunnel
@@ -99,5 +136,5 @@ No abras ni publiques directamente:
 ## 6. Notas
 
 - Esto publica el stack actual tal como esta hoy, incluyendo frontend en modo dev con Vite
-- Es suficiente para demo, tesis y piloto
+- El Quick Tunnel es suficiente para demo, tesis y piloto
 - Para un endurecimiento mayor, el siguiente paso seria servir un build estatico del frontend y ocultar por completo el puerto `5173`
