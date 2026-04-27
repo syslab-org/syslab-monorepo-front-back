@@ -1,18 +1,6 @@
 import { emitLoadingFlowEnd, emitLoadingFlowStart } from "@/app/providers/loadingFlowEvents";
 
-function inferBaseUrl() {
-  const configured = import.meta.env.VITE_API_URL?.trim();
-  if (configured) return configured.replace(/\/+$/, "");
-
-  if (typeof window !== "undefined") {
-    const { protocol, hostname } = window.location;
-    return `${protocol}//${hostname}:8000`;
-  }
-
-  return "http://localhost:8000";
-}
-
-const BASE_URL = inferBaseUrl();
+const BASE_URL = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 
 const TOKEN_KEY = "syslab_api_token";
 
