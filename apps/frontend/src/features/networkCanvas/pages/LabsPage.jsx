@@ -1,4 +1,4 @@
-import { DeleteOutline, ModeEditOutlined, ContentCopy } from "@mui/icons-material";
+import { DeleteOutline, ModeEditOutlined, ContentCopy, MoreVert, OpenInNewOutlined } from "@mui/icons-material";
 import AddIcon from '@mui/icons-material/Add';
 import {
   Box,
@@ -11,6 +11,9 @@ import {
   FormControl,
   IconButton,
   InputLabel,
+  ListItemIcon,
+  ListItemText,
+  Menu,
   MenuItem,
   Paper,
   Select,
@@ -30,6 +33,8 @@ import { useNavigate } from "react-router-dom";
 
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext.jsx";
 import { useWizard } from "@/features/networkCanvas/context/WizardContext";
+import TourLauncherButton from "@/shared/ui/onboarding/TourLauncherButton";
+import useOnboardingTour from "@/shared/ui/onboarding/useOnboardingTour";
 import { useCanvasLabStore } from '../store/canvasLabStore';
 import CreateLabModal from "./CreateLabModal";
 import { PageHeader } from '@/shared/ui/layouts/MainLayout';
@@ -48,6 +53,13 @@ const parseAndValidateCidr = (raw) => {
   }
 
   return { ok: true, base: base.trim(), prefix };
+};
+
+const executionSourceLabels = {
+  lab_explicit: 'Fijada en el lab',
+  owner_personal_auto: 'Auto -> cuenta personal',
+  course_shared_auto: 'Auto -> cuenta del curso',
+  unresolved: 'Sin resolver',
 };
 
 const useFetchLabs = (setLoadingFlow) => {
@@ -80,17 +92,42 @@ const LabsPage = () => {
   const [newName, setNewName] = useState("");
   const [editCidr, setEditCidr] = useState("");
   const [editRegion, setEditRegion] = useState("us-east-1");
+  const [editCloudConnectionId, setEditCloudConnectionId] = useState("");
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [isCreateLabModalOpen, setIsCreateLabModalOpen] = useState(false)
   const [wizardMode, setWizardMode] = useState(false)
+  const [cloudConnections, setCloudConnections] = useState([])
+  const [actionsAnchorEl, setActionsAnchorEl] = useState(null);
+  const [selectedLab, setSelectedLab] = useState(null);
 
   const navigate = useNavigate()
   const { setLoadingFlow } = useContext(LoadingFlowContext)
   const { setMasterCidrBlock, setPrefixLength, setLabName, setLabRegion } = useCanvasLabStore();
+  const { startTourIfNeeded, restartTour } = useOnboardingTour();
 
   const { vpcs, fetchVPCs } = useFetchLabs(setLoadingFlow)
   const { start, finish, setStep } = useWizard()
+
+  useEffect(() => {
+    startTourIfNeeded("labs-overview");
+  }, [startTourIfNeeded]);
+
+  useEffect(() => {
+    let alive = true;
+    const loadConnections = async () => {
+      try {
+        const response = await api.listCloudConnections({ provider: 'aws' });
+        if (alive) setCloudConnections(Array.isArray(response) ? response : []);
+      } catch (error) {
+        console.error('Error loading cloud connections:', error);
+      }
+    };
+    loadConnections();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const handleDuplicateVPC = async (vpc) => {
     if (!vpc?.id) return;
@@ -112,6 +149,7 @@ const LabsPage = () => {
         provider_overrides: vpc.provider_overrides || {},
         course_id: vpc.course?.id || null,
         visibility_scope: vpc.visibility_scope || 'owner',
+        cloud_connection_id: vpc.cloud_connection?.id || null,
       });
       await fetchVPCs();
     } catch (error) {
@@ -137,7 +175,9 @@ const LabsPage = () => {
         if (!q) return true;
         const name = (v?.name || "").toLowerCase();
         const id = (v?.id || "").toLowerCase();
-        return name.includes(q) || id.includes(q);
+        const owner = (v?.owner_user?.display_name || v?.owner_user?.email || "").toLowerCase();
+        const course = (v?.course?.name || "").toLowerCase();
+        return name.includes(q) || id.includes(q) || owner.includes(q) || course.includes(q);
       });
   }, [vpcs, query, typeFilter]);
 
@@ -205,6 +245,16 @@ const LabsPage = () => {
     setDeleteDialogOpen(true);
   };
 
+  const openActionsMenu = (event, vpc) => {
+    setActionsAnchorEl(event.currentTarget);
+    setSelectedLab(vpc);
+  };
+
+  const closeActionsMenu = () => {
+    setActionsAnchorEl(null);
+    setSelectedLab(null);
+  };
+
   const closeDeleteDialog = () => {
     setDeleteDialogOpen(false);
     setVpcToDelete(null);
@@ -219,6 +269,7 @@ const LabsPage = () => {
         : ""
     );
     setEditRegion(vpc?.region || "us-east-1");
+    setEditCloudConnectionId(vpc?.cloud_connection?.id || "");
     setRenameDialogOpen(true);
   };
 
@@ -228,6 +279,7 @@ const LabsPage = () => {
     setNewName("");
     setEditCidr("");
     setEditRegion("us-east-1");
+    setEditCloudConnectionId("");
   };
 
   const handleRename = async () => {
@@ -244,6 +296,7 @@ const LabsPage = () => {
         cidr_block: cidrCheck.base,
         prefix_length: cidrCheck.prefix,
         region: editRegion,
+        cloud_connection_id: editCloudConnectionId || null,
       });
       await fetchVPCs();
       closeRenameDialog();
@@ -257,20 +310,32 @@ const LabsPage = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <PageHeader
-        title="Laboratorios"
-        subtitle="Gestiona tus laboratorios y abre el canvas para editar topologías, validar intención y preparar despliegues."
-        actions={
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-            <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreateGuideLab}>
-              Crear guiado
-            </Button>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateLab}>
-              Crear laboratorio
-            </Button>
-          </Stack>
-        }
-      />
+      <Box data-tour="labs-page-header">
+        <PageHeader
+          title="Laboratorios"
+          subtitle="Gestiona tus laboratorios y abre el canvas para editar topologías, validar intención y preparar despliegues."
+          actions={
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <Button
+                variant="outlined"
+                startIcon={<AddIcon />}
+                onClick={handleCreateGuideLab}
+                data-tour="labs-create-guided-button"
+              >
+                Crear guiado
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleCreateLab}
+                data-tour="labs-create-lab-button"
+              >
+                Crear laboratorio
+              </Button>
+            </Stack>
+          }
+        />
+      </Box>
 
       <Paper className="pt-panel" sx={{ p: 2.5, mb: 3, borderRadius: 2 }}>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
@@ -301,14 +366,24 @@ const LabsPage = () => {
         </Stack>
       </Paper>
 
-      <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2 }}>
-        <Table size="small">
+      <TableContainer
+        component={Paper}
+        elevation={0}
+        sx={{ borderRadius: 2, overflowX: 'auto' }}
+        data-tour="labs-list-table"
+      >
+        <Table
+          size="small"
+          sx={{
+            minWidth: 920,
+            tableLayout: 'fixed',
+          }}
+        >
           <TableHead>
             <TableRow>
               <TableCell>Laboratorio</TableCell>
-              <TableCell>Provider destino</TableCell>
-              <TableCell>Curso</TableCell>
-              <TableCell>Visibilidad</TableCell>
+              <TableCell>Pertenencia</TableCell>
+              <TableCell>Ejecución</TableCell>
               <TableCell>Actualizado</TableCell>
               <TableCell align="right">Acciones</TableCell>
             </TableRow>
@@ -316,36 +391,68 @@ const LabsPage = () => {
           <TableBody>
             {filteredVpcs.map((vpc) => (
               <TableRow key={vpc.id} hover>
-                <TableCell>
+                <TableCell sx={{ width: '26%' }}>
                   <Stack spacing={0.5}>
                     <Typography fontWeight={600}>{vpc.name}</Typography>
                     <Typography variant="caption" color="text.secondary">{vpc.id}</Typography>
+                    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                      <Chip
+                        label={String(vpc.target_provider || 'aws').toUpperCase()}
+                        size="small"
+                        variant="outlined"
+                      />
+                      {vpc.narrative === 'wizard' && (
+                        <Chip label="Guiado" size="small" color="primary" variant="outlined" />
+                      )}
+                    </Stack>
                   </Stack>
                 </TableCell>
-                <TableCell>{String(vpc.target_provider || 'aws').toUpperCase()}</TableCell>
-                <TableCell>{vpc.course?.name || '-'}</TableCell>
-                <TableCell>{vpc.visibility_scope || '-'}</TableCell>
-                <TableCell>{new Date(vpc.updated_at || vpc.created_at || Date.now()).toLocaleString()}</TableCell>
-                <TableCell align="right">
+                <TableCell sx={{ width: '22%' }}>
+                  <Stack spacing={0.5}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {vpc.owner_user?.display_name || vpc.owner_user?.email || 'Sin owner'}
+                    </Typography>
+                    {vpc.owner_user?.email && (
+                      <Typography variant="caption" color="text.secondary">
+                        {vpc.owner_user.email}
+                      </Typography>
+                    )}
+                    <Typography variant="caption" color="text.secondary">
+                      Curso: {vpc.course?.name || 'Sin curso'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Visibilidad: {vpc.visibility_scope || '-'}
+                    </Typography>
+                  </Stack>
+                </TableCell>
+                <TableCell sx={{ width: '24%' }}>
+                  <Stack spacing={0.5}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {vpc.resolved_execution_target?.name || vpc.cloud_connection?.name || 'Sin conexión resuelta'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {executionSourceLabels[vpc.resolved_execution_target?.source] || 'Auto'}
+                    </Typography>
+                    {vpc.resolved_execution_target?.account_id && (
+                      <Typography variant="caption" color="text.secondary">
+                        Cuenta AWS: {vpc.resolved_execution_target.account_id}
+                      </Typography>
+                    )}
+                  </Stack>
+                </TableCell>
+                <TableCell sx={{ width: '14%' }}>
+                  {new Date(vpc.updated_at || vpc.created_at || Date.now()).toLocaleString()}
+                </TableCell>
+                <TableCell align="right" sx={{ width: '14%' }}>
                   <Stack direction="row" spacing={1} justifyContent="flex-end">
                     <Tooltip title="Abrir laboratorio">
-                      <Button size="small" variant="outlined" onClick={() => handleLinkToFlow(vpc)}>
-                        Abrir
-                      </Button>
-                    </Tooltip>
-                    <Tooltip title="Editar laboratorio">
-                      <IconButton onClick={() => openRenameDialog(vpc)} color="primary">
-                        <ModeEditOutlined />
+                      <IconButton onClick={() => handleLinkToFlow(vpc)} color="primary">
+                        <OpenInNewOutlined />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="Duplicar">
-                      <IconButton onClick={() => handleDuplicateVPC(vpc)} color="primary">
-                        <ContentCopy />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Eliminar">
-                      <IconButton onClick={() => openDeleteDialog(vpc)} color="error">
-                        <DeleteOutline />
+                    <Tooltip title="Acciones del laboratorio">
+                      <IconButton onClick={(event) => openActionsMenu(event, vpc)} color="primary">
+                        <MoreVert />
                       </IconButton>
                     </Tooltip>
                   </Stack>
@@ -355,6 +462,52 @@ const LabsPage = () => {
           </TableBody>
         </Table>
       </TableContainer>
+
+      <Menu
+        anchorEl={actionsAnchorEl}
+        open={Boolean(actionsAnchorEl)}
+        onClose={closeActionsMenu}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <MenuItem
+          onClick={() => {
+            if (!selectedLab) return;
+            openRenameDialog(selectedLab);
+            closeActionsMenu();
+          }}
+        >
+          <ListItemIcon>
+            <ModeEditOutlined fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Editar</ListItemText>
+        </MenuItem>
+        <MenuItem
+          onClick={async () => {
+            if (!selectedLab) return;
+            const lab = selectedLab;
+            closeActionsMenu();
+            await handleDuplicateVPC(lab);
+          }}
+        >
+          <ListItemIcon>
+            <ContentCopy fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Duplicar</ListItemText>
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (!selectedLab) return;
+            openDeleteDialog(selectedLab);
+            closeActionsMenu();
+          }}
+        >
+          <ListItemIcon>
+            <DeleteOutline fontSize="small" color="error" />
+          </ListItemIcon>
+          <ListItemText>Eliminar</ListItemText>
+        </MenuItem>
+      </Menu>
 
       <Dialog open={deleteDialogOpen} onClose={closeDeleteDialog}>
         <DialogTitle>Eliminar laboratorio</DialogTitle>
@@ -400,6 +553,22 @@ const LabsPage = () => {
               <MenuItem value="eu-west-1">EU (Ireland)</MenuItem>
             </Select>
           </FormControl>
+          <FormControl fullWidth margin="dense">
+            <InputLabel id="edit-connection-label">Conexión cloud</InputLabel>
+            <Select
+              labelId="edit-connection-label"
+              value={editCloudConnectionId}
+              label="Conexión cloud"
+              onChange={(e) => setEditCloudConnectionId(e.target.value)}
+            >
+              <MenuItem value="">Auto-seleccionar por owner/curso</MenuItem>
+              {cloudConnections.map((connection) => (
+                <MenuItem key={connection.id} value={connection.id}>
+                  {connection.name} · {connection.scope === 'course_shared' ? 'curso' : 'personal'}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         </DialogContent>
         <DialogActions>
           <Button onClick={closeRenameDialog}>Cancelar</Button>
@@ -408,6 +577,10 @@ const LabsPage = () => {
       </Dialog>
 
       <CreateLabModal open={isCreateLabModalOpen} onClose={handleCreateLabModalClose} wizardMode={wizardMode} />
+      <TourLauncherButton
+        onClick={() => restartTour("labs-overview")}
+        label="Ver tour de laboratorios"
+      />
     </Box>
   )
 }

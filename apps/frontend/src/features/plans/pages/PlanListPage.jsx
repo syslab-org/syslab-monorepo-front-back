@@ -9,6 +9,10 @@ import {
   Divider,
   FormControl,
   InputLabel,
+  IconButton,
+  ListItemIcon,
+  ListItemText,
+  Menu,
   MenuItem,
   Paper,
   Select,
@@ -23,12 +27,15 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-
-import SettingsSuggestIcon from '@mui/icons-material/SettingsSuggest';
-import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
-import PublicOutlinedIcon from '@mui/icons-material/PublicOutlined';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
+import DataObjectOutlinedIcon from '@mui/icons-material/DataObjectOutlined';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import { useNavigate } from 'react-router-dom';
 
 import { api } from '@/infrastructure/http/api';
+import TourLauncherButton from '@/shared/ui/onboarding/TourLauncherButton';
+import useOnboardingTour from '@/shared/ui/onboarding/useOnboardingTour';
 import { PageHeader } from '@/shared/ui/layouts/MainLayout';
 
 const statusChipColor = (status) => {
@@ -84,6 +91,10 @@ export default function PlanListPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [actionsAnchorEl, setActionsAnchorEl] = useState(null);
+  const [selectedPlan, setSelectedPlan] = useState(null);
+  const navigate = useNavigate();
+  const { startTourIfNeeded, restartTour } = useOnboardingTour();
 
   const load = async () => {
     setLoading(true);
@@ -104,6 +115,10 @@ export default function PlanListPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    startTourIfNeeded('plans-list-overview');
+  }, [startTourIfNeeded]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (items || [])
@@ -113,7 +128,23 @@ export default function PlanListPage() {
         const name = (p.name || '').toLowerCase();
         const id = (p.id || '').toLowerCase();
         const canvasId = (p.canvas_id || '').toLowerCase();
-        return name.includes(q) || id.includes(q) || canvasId.includes(q);
+        const labName = (p.lab?.name || '').toLowerCase();
+        const owner = (
+          p.owner_user?.display_name ||
+          p.owner_user?.email ||
+          p.lab?.owner_user?.display_name ||
+          p.lab?.owner_user?.email ||
+          ''
+        ).toLowerCase();
+        const course = (p.course?.name || p.lab?.course?.name || '').toLowerCase();
+        return (
+          name.includes(q) ||
+          id.includes(q) ||
+          canvasId.includes(q) ||
+          labName.includes(q) ||
+          owner.includes(q) ||
+          course.includes(q)
+        );
       });
   }, [items, query, statusFilter]);
 
@@ -138,29 +169,41 @@ export default function PlanListPage() {
     }
   };
 
+  const openActionsMenu = (event, plan) => {
+    setActionsAnchorEl(event.currentTarget);
+    setSelectedPlan(plan);
+  };
+
+  const closeActionsMenu = () => {
+    setActionsAnchorEl(null);
+    setSelectedPlan(null);
+  };
+
   return (
     <Box
       sx={{
         p: 3,
       }}
     >
-      <PageHeader
-        title="Ejecuciones de infraestructura"
-        subtitle={
-          <>
-            Lista de ejecuciones (simulación y reales). Usa{" "}
-            <Box component="span" sx={{ fontFamily: "monospace" }}>
-              Outputs
-            </Box>{" "}
-            para depurar sin ir a la consola de AWS.
-          </>
-        }
-        actions={
-          <Button variant="outlined" onClick={load} disabled={loading}>
-            {loading ? "Actualizando…" : "Refrescar"}
-          </Button>
-        }
-      />
+      <Box data-tour="plans-list-header">
+        <PageHeader
+          title="Ejecuciones de infraestructura"
+          subtitle={
+            <>
+              Lista de ejecuciones (simulación y reales). Usa{" "}
+              <Box component="span" sx={{ fontFamily: "monospace" }}>
+                Outputs
+              </Box>{" "}
+              para depurar sin ir a la consola de AWS.
+            </>
+          }
+          actions={
+            <Button variant="outlined" onClick={load} disabled={loading}>
+              {loading ? "Actualizando…" : "Refrescar"}
+            </Button>
+          }
+        />
+      </Box>
 
       {err && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -169,6 +212,7 @@ export default function PlanListPage() {
       )}
 
       <Paper
+        data-tour="plans-list-filters"
         elevation={0}
         className="pt-panel"
         sx={{
@@ -214,18 +258,26 @@ export default function PlanListPage() {
       </Paper>
 
       <TableContainer
+        data-tour="plans-list-table"
         component={Paper}
         elevation={0}
         sx={{
           borderRadius: 2,
           border: (theme) => `1px solid ${theme.palette.divider}`,
+          overflowX: 'auto',
           backgroundColor: (theme) =>
             theme.palette.mode === "light"
               ? theme.palette.background.paper
               : theme.palette.background.paper,
         }}
       >
-        <Table size="small">
+        <Table
+          size="small"
+          sx={{
+            minWidth: 980,
+            tableLayout: 'fixed',
+          }}
+        >
           <TableHead>
             <TableRow
               sx={(theme) => ({
@@ -234,42 +286,8 @@ export default function PlanListPage() {
               })}
             >
               <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Plan</TableCell>
-              <TableCell
-                sx={{
-                  fontWeight: 700,
-                  color: "text.primary",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <SettingsSuggestIcon fontSize="small" sx={{ opacity: 0.6 }} />
-                  <span>Resultado ejecución</span>
-                </Stack>
-              </TableCell>
-              <TableCell
-                sx={{
-                  fontWeight: 700,
-                  color: "text.primary",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Inventory2OutlinedIcon fontSize="small" sx={{ opacity: 0.6 }} />
-                  <span>Estado del plan</span>
-                </Stack>
-              </TableCell>
-              <TableCell
-                sx={{
-                  fontWeight: 700,
-                  color: "text.primary",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <PublicOutlinedIcon fontSize="small" sx={{ opacity: 0.6 }} />
-                  <span>Tipo de ejecución</span>
-                </Stack>
-              </TableCell>
+              <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Pertenece a</TableCell>
+              <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Estado</TableCell>
               <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Actualizado</TableCell>
               <TableCell align="right" sx={{ fontWeight: 700, color: "text.primary" }}>Acciones</TableCell>
             </TableRow>
@@ -278,7 +296,7 @@ export default function PlanListPage() {
           <TableBody>
             {loading && (
               <TableRow>
-                <TableCell colSpan={6}>
+                <TableCell colSpan={5}>
                   <Stack direction="row" spacing={1.5} alignItems="center" sx={{ py: 1 }}>
                     <CircularProgress size={18} />
                     <Typography variant="body2" color="text.secondary">Cargando…</Typography>
@@ -289,7 +307,7 @@ export default function PlanListPage() {
 
             {!loading && filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6}>
+                <TableCell colSpan={5}>
                   <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
                     No hay planes para mostrar.
                   </Typography>
@@ -321,7 +339,7 @@ export default function PlanListPage() {
                       },
                     }}
                   >
-                    <TableCell sx={{ maxWidth: 420 }}>
+                    <TableCell sx={{ width: '30%' }}>
                       <Typography variant="body2" fontWeight={700} noWrap>
                         {p.name || 'Sin nombre'}
                       </Typography>
@@ -339,89 +357,92 @@ export default function PlanListPage() {
                       )}
                     </TableCell>
 
-                    <TableCell>
-                      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                        <Tooltip title="Resultado del job de Terraform">
-                          <Chip
-                            label={p.status}
-                            size="small"
-                            color={statusChipColor(p.status)}
-                            variant="filled"
-                          />
-                        </Tooltip>
+                    <TableCell sx={{ width: '24%' }}>
+                      <Stack spacing={0.5}>
+                        <Typography variant="body2" fontWeight={600}>
+                          {p.owner_user?.display_name || p.owner_user?.email || p.lab?.owner_user?.display_name || p.lab?.owner_user?.email || 'Owner no disponible'}
+                        </Typography>
+                        {(p.owner_user?.email || p.lab?.owner_user?.email) && (
+                          <Typography variant="caption" color="text.secondary">
+                            {p.owner_user?.email || p.lab?.owner_user?.email}
+                          </Typography>
+                        )}
+                        <Typography variant="caption" color="text.secondary">
+                          Lab: {p.lab?.name || 'Sin laboratorio'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Curso: {p.course?.name || p.lab?.course?.name || 'Sin curso'}
+                        </Typography>
+                      </Stack>
+                    </TableCell>
+
+                    <TableCell sx={{ width: '22%' }}>
+                      <Stack spacing={0.75}>
+                        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                          <Tooltip title="Resultado del job de Terraform">
+                            <Chip
+                              label={p.status}
+                              size="small"
+                              color={statusChipColor(p.status)}
+                              variant="filled"
+                            />
+                          </Tooltip>
+                          <Tooltip title="Estado lógico actual del plan">
+                            <Chip
+                              label={lifecycle.label}
+                              size="small"
+                              color={lifecycle.color}
+                              variant={lifecycle.variant}
+                            />
+                          </Tooltip>
+                          <Tooltip title="Simulada (plan) o ejecución real en AWS">
+                            <Chip
+                              label={mode.label}
+                              size="small"
+                              color={mode.color}
+                              variant={mode.variant}
+                            />
+                          </Tooltip>
+                        </Stack>
 
                         {p.last_action && (
                           <Typography variant="caption" color="text.secondary">
-                            last: {p.last_action}
+                            Última acción: {p.last_action}
+                          </Typography>
+                        )}
+                        {p.lab?.visibility_scope && (
+                          <Typography variant="caption" color="text.secondary">
+                            Visibilidad: {p.lab.visibility_scope}
                           </Typography>
                         )}
                       </Stack>
                     </TableCell>
 
-                    <TableCell>
-                      <Tooltip title="Estado lógico actual del plan">
-                        <Chip
-                          label={lifecycle.label}
-                          size="small"
-                          color={lifecycle.color}
-                          variant={lifecycle.variant}
-                        />
-                      </Tooltip>
-                    </TableCell>
-
-                    <TableCell>
-                      <Tooltip title="Simulada (plan) o ejecución real en AWS">
-                        <Chip
-                          label={mode.label}
-                          size="small"
-                          color={mode.color}
-                          variant={mode.variant}
-                        />
-                      </Tooltip>
-                    </TableCell>
-
-                    <TableCell>
+                    <TableCell sx={{ width: '12%' }}>
                       <Typography variant="body2" color="text.secondary">
                         {formatDateTime(p.updated_at || p.created_at)}
                       </Typography>
                     </TableCell>
 
-                    <TableCell align="right">
+                    <TableCell align="right" sx={{ width: '12%' }}>
                       <Stack direction="row" spacing={1} justifyContent="flex-end">
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          href={`/admin/plans/${p.id}`}
-                        >
-                          Ver
-                        </Button>
-
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          href={`/admin/plans/${p.id}/outputs`}
-                        >
-                          Outputs
-                        </Button>
-
-                        <Tooltip
-                          title={
-                            p.can_destroy
-                              ? 'Destruir infraestructura de este plan'
-                              : 'Destroy solo se habilita cuando el backend detecta infraestructura real o apply real fallido para limpiar.'
-                          }
-                        >
-                          <span>
-                            <Button
-                              size="small"
-                              variant="contained"
-                              color="error"
-                              disabled={!p.can_destroy || loading}
-                              onClick={() => handleDestroy(p)}
-                            >
-                              Destroy
-                            </Button>
-                          </span>
+                        <Tooltip title="Ver detalle">
+                          <IconButton
+                            size="small"
+                            onClick={() => navigate(`/admin/plans/${p.id}`)}
+                            aria-label={`Ver detalle de ${p.name || p.id}`}
+                          >
+                            <VisibilityOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Acciones">
+                          <IconButton
+                            size="small"
+                            onClick={(event) => openActionsMenu(event, p)}
+                            aria-label={`Acciones para ${p.name || p.id}`}
+                          >
+                            <MoreVertIcon fontSize="small" />
+                          </IconButton>
                         </Tooltip>
                       </Stack>
                     </TableCell>
@@ -432,11 +453,50 @@ export default function PlanListPage() {
         </Table>
       </TableContainer>
 
+      <Menu
+        anchorEl={actionsAnchorEl}
+        open={Boolean(actionsAnchorEl)}
+        onClose={closeActionsMenu}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <MenuItem
+          onClick={() => {
+            if (!selectedPlan) return;
+            navigate(`/admin/plans/${selectedPlan.id}/outputs`);
+            closeActionsMenu();
+          }}
+        >
+          <ListItemIcon>
+            <DataObjectOutlinedIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Outputs</ListItemText>
+        </MenuItem>
+        <MenuItem
+          disabled={!selectedPlan?.can_destroy || loading}
+          onClick={async () => {
+            if (!selectedPlan?.can_destroy || loading) return;
+            const plan = selectedPlan;
+            closeActionsMenu();
+            await handleDestroy(plan);
+          }}
+        >
+          <ListItemIcon>
+            <DeleteOutlineIcon fontSize="small" color={selectedPlan?.can_destroy ? 'error' : 'disabled'} />
+          </ListItemIcon>
+          <ListItemText>Destroy</ListItemText>
+        </MenuItem>
+      </Menu>
+
       <Divider sx={{ my: 2 }} />
 
       <Typography variant="caption" color="text.secondary">
         Nota: el botón <Box component="span" sx={{ fontFamily: 'monospace' }}>Destroy</Box> se habilita solo cuando el plan es destruible, pero el backend vuelve a validar la regla.
       </Typography>
+      <TourLauncherButton
+        onClick={() => restartTour('plans-list-overview')}
+        label="Ver tour de planes"
+      />
     </Box>
   );
 }

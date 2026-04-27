@@ -23,13 +23,26 @@ class TerraformCommandResult:
         return f"$ {' '.join(self.command)}\n{self.stdout}\n{self.stderr}\n"
 
 
-def run(cmd, cwd):
+def _build_process_env(runtime_env: dict | None = None):
+    env = os.environ.copy()
+    runtime_env = runtime_env or {}
+    if runtime_env:
+        env.pop("AWS_PROFILE", None)
+        env.pop("AWS_SDK_LOAD_CONFIG", None)
+    for key, value in runtime_env.items():
+        if value is None:
+            continue
+        env[key] = str(value)
+    return env
+
+
+def run(cmd, cwd, env=None):
     """Ejecuta un comando y captura stdout/stderr sin levantar excepción."""
-    return subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, check=False)
+    return subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, check=False, env=_build_process_env(env))
 
 
-def _run_terraform(command: list[str], cwd: str) -> TerraformCommandResult:
-    proc = run(command, cwd=cwd)
+def _run_terraform(command: list[str], cwd: str, env=None) -> TerraformCommandResult:
+    proc = run(command, cwd=cwd, env=env)
     return TerraformCommandResult(
         command=command,
         returncode=proc.returncode,
@@ -38,9 +51,9 @@ def _run_terraform(command: list[str], cwd: str) -> TerraformCommandResult:
     )
 
 
-def read_outputs_json(cwd: str) -> dict:
+def read_outputs_json(cwd: str, env=None) -> dict:
     """Lee `terraform output -json` y devuelve un dict simplificado."""
-    proc = run(["terraform", "output", "-json", "-no-color"], cwd=cwd)
+    proc = run(["terraform", "output", "-json", "-no-color"], cwd=cwd, env=env)
     if proc.returncode != 0:
         raise RuntimeError(f"terraform output failed: {proc.stderr.strip()}")
 
@@ -96,11 +109,11 @@ def read_main_preview(workdir: str, lines: int = 40) -> str:
     return "".join(pathlib.Path(workdir, "main.tf").read_text().splitlines(True)[:lines])
 
 
-def terraform_init(workdir: str):
-    return _run_terraform(["terraform", "init", "-input=false", "-no-color"], cwd=workdir)
+def terraform_init(workdir: str, env=None):
+    return _run_terraform(["terraform", "init", "-input=false", "-no-color"], cwd=workdir, env=env)
 
 
-def terraform_plan(workdir: str, simulate_only: bool):
+def terraform_plan(workdir: str, simulate_only: bool, env=None):
     return _run_terraform(
         [
         "terraform",
@@ -112,20 +125,23 @@ def terraform_plan(workdir: str, simulate_only: bool):
         "plan.out",
         ],
         cwd=workdir,
+        env=env,
     )
 
 
-def terraform_apply(workdir: str):
+def terraform_apply(workdir: str, env=None):
     return _run_terraform(
         ["terraform", "apply", "-input=false", "-no-color", "plan.out"],
         cwd=workdir,
+        env=env,
     )
 
 
-def terraform_destroy(workdir: str):
+def terraform_destroy(workdir: str, env=None):
     return _run_terraform(
         ["terraform", "destroy", "-auto-approve", "-no-color"],
         cwd=workdir,
+        env=env,
     )
 
 
@@ -154,6 +170,12 @@ def ensure_apply_succeeded(result: TerraformCommandResult) -> None:
             "terraform apply failed: InvalidSubnetID.NotFound. "
             "Se detectó drift: AWS ya no tiene una subnet referenciada en el state. "
             "Ejecuta Destroy del plan para limpiar estado y vuelve a aplicar."
+        )
+    if "invalidkeypair.notfound" in err_text:
+        raise RuntimeError(
+            "terraform apply failed: InvalidKeyPair.NotFound. "
+            "La key pair EC2 declarada en el plan no existe en la cuenta/región AWS efectiva. "
+            "Corrige el nombre de ssh_access o crea/importa esa key pair antes de reintentar."
         )
     raise RuntimeError("terraform apply failed")
 

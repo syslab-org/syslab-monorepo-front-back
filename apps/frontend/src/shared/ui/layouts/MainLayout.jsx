@@ -21,6 +21,8 @@ import NotificationsIcon from "@mui/icons-material/Notifications";
 import MenuIcon from "@mui/icons-material/Menu";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import LogoutIcon from "@mui/icons-material/Logout";
+import DarkModeIcon from "@mui/icons-material/DarkMode";
+import LightModeIcon from "@mui/icons-material/LightMode";
 
 import "@/App.css";
 import { AppBarStyle } from "@/shared/ui/theme/dashboard/elements/AppBarStyle.jsx";
@@ -31,6 +33,8 @@ import {
 } from "@/shared/ui/theme/dashboard/listItems.jsx";
 import { useAuth } from '@/app/providers/AuthContext';
 import LoadingFlow from "@/shared/ui/organisms/LoadingFlow";
+import { useThemeMode } from "@/shared/ui/theme/AppThemeProvider";
+import { USER_ROL_STUDENT, USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER } from "@/shared/constants";
 
 export const PageHeader = ({ title, subtitle, actions }) => {
   return (
@@ -86,11 +90,6 @@ export const PageHeader = ({ title, subtitle, actions }) => {
   );
 };
 
-const settings = [
-  { label: "Profile", url: "/admin/settings/profile" },
-  { label: "Dashboard", url: "/admin/dashboard" },
-];
-
 function MainLayout() {
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [anchorElUser, setAnchorElUser] = useState(null);
@@ -99,6 +98,20 @@ function MainLayout() {
   const auth = useAuth();
   const user = auth?.user;
   const logout = auth?.logout || (() => { });
+  const { mode, toggle } = useThemeMode();
+  const role = user?.role;
+  const settings = useMemo(() => {
+    const items = [
+      { label: "Profile", url: "/admin/settings/profile" },
+      { label: "Cloud Connections", url: "/admin/settings/cloud-connections" },
+      { label: "Key Pairs", url: "/admin/settings/key-pairs" },
+      { label: "Dashboard", url: "/admin/dashboard" },
+    ];
+    if (role === USER_ROL_SUPER_ADMIN || role === USER_ROL_TEACHER) {
+      items.splice(2, 0, { label: "AMIs", url: "/admin/settings/amis" });
+    }
+    return items;
+  }, [role]);
 
   const isCanvasRoute = useMemo(
     () => /^\/admin\/(labs\/[^/]+\/canvas|vpcs\/[^/]+\/mainflow)$/.test(location.pathname),
@@ -165,6 +178,12 @@ function MainLayout() {
           </Box>
 
           <Box sx={{ display: { md: "flex" } }}>
+            <Tooltip title={mode === "light" ? "Activar modo oscuro" : "Activar modo claro"}>
+              <IconButton size="large" color="inherit" onClick={toggle} aria-label={mode === "light" ? "Activar modo oscuro" : "Activar modo claro"}>
+                {mode === "light" ? <DarkModeIcon /> : <LightModeIcon />}
+              </IconButton>
+            </Tooltip>
+
             <IconButton size="large" color="inherit">
               <Badge badgeContent={4} color="error">
                 <MailOutline />
@@ -246,32 +265,42 @@ function MainLayout() {
         </List>
 
         {/* Fixed logout button at bottom */}
-        <Button
-          sx={(theme) => ({
-            position: "absolute",
-            bottom: 16,
-            left: 16,
-            right: 16,
-            borderRadius: 2,
-            fontWeight: 600,
-            textTransform: "none",
-            border: `1px solid ${theme.palette.divider}`,
-            backgroundColor:
-              theme.palette.mode === "light"
-                ? theme.palette.grey[50]
-                : "rgba(255,255,255,0.04)",
-            "&:hover": {
+        <Tooltip title={drawerOpen ? "" : "Cerrar sesión"} placement="right">
+          <Button
+            sx={(theme) => ({
+              position: "absolute",
+              bottom: 16,
+              left: drawerOpen ? 16 : 12,
+              right: drawerOpen ? 16 : 12,
+              minWidth: 0,
+              px: drawerOpen ? 1.5 : 0,
+              py: 1,
+              borderRadius: 2,
+              fontWeight: 600,
+              textTransform: "none",
+              justifyContent: "center",
+              border: `1px solid ${theme.palette.divider}`,
               backgroundColor:
                 theme.palette.mode === "light"
-                  ? theme.palette.grey[100]
-                  : "rgba(255,255,255,0.08)",
-            },
-          })}
-          startIcon={<LogoutIcon />}
-          onClick={logout}
-        >
-          Cerrar sesión
-        </Button>
+                  ? theme.palette.grey[50]
+                  : "rgba(255,255,255,0.04)",
+              "&:hover": {
+                backgroundColor:
+                  theme.palette.mode === "light"
+                    ? theme.palette.grey[100]
+                    : "rgba(255,255,255,0.08)",
+              },
+              "& .MuiButton-startIcon": {
+                margin: drawerOpen ? undefined : 0,
+              },
+            })}
+            startIcon={<LogoutIcon />}
+            onClick={logout}
+            aria-label="Cerrar sesión"
+          >
+            {drawerOpen ? "Cerrar sesión" : null}
+          </Button>
+        </Tooltip>
       </DrawerStyle>
 
       {/* ================== MAIN CONTENT ================== */}

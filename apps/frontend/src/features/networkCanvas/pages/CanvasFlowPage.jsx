@@ -45,8 +45,11 @@ import { usePlanPolling } from "@/features/networkCanvas/core/usePlanPolling";
 import { useLearningGuide } from "@/features/networkCanvas/core/useLearningGuide";
 import RoutePreviewPanel from "@/features/networkCanvas/panels/RoutePreviewPanel";
 // import { buildRoutingPreview } from "@/features/networkCanvas/utils/buildRoutingPreview";
+import TourLauncherButton from "@/shared/ui/onboarding/TourLauncherButton";
+import useOnboardingTour from "@/shared/ui/onboarding/useOnboardingTour";
 import { useTheme } from "@mui/material/styles";
 import { useAmiList } from "@/features/networkCanvas/core/useAmiList";
+import { useKeyPairList } from "@/features/networkCanvas/core/useKeyPairList";
 import { useContext } from "react";
 
 const makeRandomId = (length) => {
@@ -101,6 +104,7 @@ function CanvasFlowPage() {
   const [hasValidatedInSession, setHasValidatedInSession] = useState(false);
 
   const { loadingFlow } = useContext(LoadingFlowContext);
+  const { startTourIfNeeded, restartTour } = useOnboardingTour();
 
   const [target, setTarget] = useState(null);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
@@ -137,6 +141,7 @@ function CanvasFlowPage() {
   );
 
   const amiList = useAmiList();
+  const keyPairList = useKeyPairList();
 
   const {
     isCanvasDirty,
@@ -168,6 +173,7 @@ function CanvasFlowPage() {
     state.setMasterCidrBlock,
     state.setPrefixLength
   ]);
+  const resolvedExecutionTarget = useCanvasLabStore((state) => state.resolvedExecutionTarget);
 
   // eslint-disable-next-line no-unused-vars
   const [nodeName, setNodeName] = useState("Node - 1")
@@ -218,7 +224,12 @@ function CanvasFlowPage() {
 
   const closeModal = closeNodeModal;
 
-  const onSaveFlow = useSaveFlow({ reactFlowInstance, flowKey, labId });
+  const {
+    saveFlow: onSaveFlow,
+    saveState,
+    saveMessage,
+    lastSavedAt,
+  } = useSaveFlow({ reactFlowInstance, flowKey, labId });
   const onRestoreFlow = useRestoreFlow({ setNodes, setEdges, setViewport, flowKey, getId, setCanvasPlanId, labId });
   const { saveNodeData, deleteNodeInstance } = useNodeActions({
     nodes,
@@ -304,6 +315,11 @@ function CanvasFlowPage() {
   }, [isWizardEntry, active, start, setStep]);
 
   useEffect(() => {
+    if (loadingFlow) return;
+    startTourIfNeeded("canvas-overview");
+  }, [loadingFlow, startTourIfNeeded]);
+
+  useEffect(() => {
 
 
     return () => {
@@ -375,6 +391,9 @@ function CanvasFlowPage() {
             theme={theme}
             toolbarProps={{
               onSave: onSaveFlow,
+              saveState,
+              saveMessage,
+              lastSavedAt,
               onRestore: onRestoreFlow,
               onRestoreInitial: restoreInitialNodes,
               onDeploy: guardBeforeEdit(processJsonToCloud),
@@ -435,10 +454,18 @@ function CanvasFlowPage() {
           nodes={nodes}
           edges={edges}
           amiList={amiList}
+          keyPairList={keyPairList}
+          executionTarget={resolvedExecutionTarget}
           saveNodeData={saveNodeData}
           deleteNodeInstance={deleteNodeInstance}
           cidrBlockVPC={masterCidrBlock}
           prefixLength={prefixLength}
+        />
+        <TourLauncherButton
+          onClick={() => restartTour("canvas-overview")}
+          label="Ver tour del canvas"
+          bottom={32}
+          right={32}
         />
 
 

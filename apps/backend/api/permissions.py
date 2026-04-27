@@ -1,11 +1,18 @@
 from django.db.models import Q
+from django.utils import timezone
 from rest_framework.permissions import BasePermission
 
+from .cloud_connections import resolve_lab_cloud_connection_with_source
 from .models import (
+    CLOUD_SCOPE_PERSONAL,
+    CLOUD_SCOPE_COURSE_SHARED,
+    CloudExecutionDelegation,
+    KeyPairCatalogEntry,
     ROLE_PLATFORM_ADMIN,
     ROLE_STUDENT,
     ROLE_TEACHER,
     VISIBILITY_COURSE,
+    CloudConnection,
     Lab,
 )
 
@@ -69,12 +76,56 @@ def can_edit_lab(user, lab: Lab) -> bool:
     return lab.owner_user_id == user.id
 
 
+def get_active_execution_delegation(user, lab: Lab, connection=None):
+    if not user or not user.is_authenticated or not lab:
+        return None
+
+    qs = CloudExecutionDelegation.objects.filter(
+        lab=lab,
+        owner_user_id=lab.owner_user_id,
+        delegate_user_id=user.id,
+        is_active=True,
+        revoked_at__isnull=True,
+    )
+    if connection:
+        qs = qs.filter(Q(cloud_connection__isnull=True) | Q(cloud_connection=connection))
+    now = timezone.now()
+    qs = qs.filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+    return qs.order_by("-created_at").first()
+
+
 def can_execute_lab(user, lab: Lab) -> bool:
     if not user or not user.is_authenticated or not lab:
         return False
     if is_platform_admin(user):
         return True
-    return lab.owner_user_id == user.id
+    if lab.owner_user_id == user.id:
+        return True
+
+    connection, _source = resolve_lab_cloud_connection_with_source(
+        lab,
+        getattr(lab, "target_provider", None),
+    )
+    if (
+        connection
+        and connection.scope == CLOUD_SCOPE_COURSE_SHARED
+        and is_teacher(user)
+        and lab.course
+        and lab.course.teacher_id == user.id
+    ):
+        return True
+
+    if (
+        connection
+        and connection.scope == CLOUD_SCOPE_PERSONAL
+        and is_teacher(user)
+        and lab.course
+        and lab.course.teacher_id == user.id
+        and get_active_execution_delegation(user, lab, connection)
+    ):
+        return True
+
+    return False
 
 
 def can_execute_plan(user, plan) -> bool:
@@ -85,6 +136,89 @@ def can_execute_plan(user, plan) -> bool:
     if not getattr(plan, "lab_id", None):
         return False
     return can_execute_lab(user, getattr(plan, "lab", None))
+
+
+def visible_cloud_connections_queryset(user, base_qs=None):
+    qs = base_qs if base_qs is not None else CloudConnection.objects.all()
+    if not user or not user.is_authenticated:
+        return qs.none()
+    if is_platform_admin(user):
+        return qs
+    if is_teacher(user):
+        return qs.filter(
+            Q(owner_user=user)
+            | Q(scope=CLOUD_SCOPE_COURSE_SHARED, course__teacher=user)
+        ).distinct()
+
+    course_id = getattr(getattr(user, "profile", None), "course_id", None)
+    return qs.filter(
+        Q(owner_user=user)
+        | Q(scope=CLOUD_SCOPE_COURSE_SHARED, course_id=course_id)
+    ).distinct()
+
+
+def can_edit_cloud_connection(user, connection: CloudConnection) -> bool:
+    if not user or not user.is_authenticated or not connection:
+        return False
+    if is_platform_admin(user):
+        return True
+    if connection.owner_user_id == user.id:
+        return True
+    return bool(
+        connection.scope == CLOUD_SCOPE_COURSE_SHARED
+        and is_teacher(user)
+        and connection.course
+        and connection.course.teacher_id == user.id
+    )
+
+
+def visible_key_pairs_queryset(user, base_qs=None):
+    qs = base_qs if base_qs is not None else KeyPairCatalogEntry.objects.all()
+    if not user or not user.is_authenticated:
+        return qs.none()
+    if is_platform_admin(user):
+        return qs
+    if is_teacher(user):
+        return qs.filter(
+            Q(owner_user=user)
+            | Q(scope=CLOUD_SCOPE_COURSE_SHARED, course__teacher=user)
+        ).distinct()
+
+    course_id = getattr(getattr(user, "profile", None), "course_id", None)
+    return qs.filter(
+        Q(owner_user=user)
+        | Q(scope=CLOUD_SCOPE_COURSE_SHARED, course_id=course_id)
+    ).distinct()
+
+
+def can_edit_key_pair(user, entry: KeyPairCatalogEntry) -> bool:
+    if not user or not user.is_authenticated or not entry:
+        return False
+    if is_platform_admin(user):
+        return True
+    if entry.owner_user_id == user.id:
+        return True
+    return bool(
+        entry.scope == CLOUD_SCOPE_COURSE_SHARED
+        and is_teacher(user)
+        and entry.course
+        and entry.course.teacher_id == user.id
+    )
+
+
+def visible_execution_delegations_queryset(user, base_qs=None):
+    qs = base_qs if base_qs is not None else CloudExecutionDelegation.objects.all()
+    if not user or not user.is_authenticated:
+        return qs.none()
+    if is_platform_admin(user):
+        return qs
+    if is_teacher(user):
+        return qs.filter(
+            Q(delegate_user=user)
+            | Q(course__teacher=user)
+            | Q(owner_user=user)
+        ).distinct()
+    return qs.filter(Q(owner_user=user) | Q(delegate_user=user)).distinct()
 
 
 class IsPlatformAdmin(BasePermission):

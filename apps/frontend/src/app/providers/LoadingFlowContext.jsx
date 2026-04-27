@@ -1,4 +1,5 @@
-import { createContext, useCallback, useMemo, useState } from "react"
+import { createContext, useCallback, useEffect, useMemo, useState } from "react"
+import { LOADING_FLOW_EVENT } from "@/app/providers/loadingFlowEvents"
 
 export const LoadingFlowContext = createContext()
 
@@ -28,6 +29,28 @@ export const LoadingFlowProvider = ({ children }) => {
     }, [])
 
     const loadingFlow = loadingCount > 0
+
+    useEffect(() => {
+        if (typeof window === "undefined") return undefined
+
+        const handleLoadingEvent = (event) => {
+            const type = event?.detail?.type
+            const message = event?.detail?.message
+
+            if (type === "start") {
+                if (message) setLoadingMessage(message)
+                setLoadingCount((prev) => prev + 1)
+                return
+            }
+
+            if (type === "end") {
+                setLoadingCount((prev) => Math.max(0, prev - 1))
+            }
+        }
+
+        window.addEventListener(LOADING_FLOW_EVENT, handleLoadingEvent)
+        return () => window.removeEventListener(LOADING_FLOW_EVENT, handleLoadingEvent)
+    }, [])
 
     const value = useMemo(
         () => ({

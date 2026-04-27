@@ -23,10 +23,15 @@ import {
   LinearProgress,
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined';
+import AutorenewRoundedIcon from '@mui/icons-material/AutorenewRounded';
+import BoltRoundedIcon from '@mui/icons-material/BoltRounded';
 
 import { TASK_STATE_PENDING, TASK_STATE_RUNNING } from '@/shared/constants';
 import { api } from '@/infrastructure/http/api';
 import { parseTerraformPlanSummary } from '@/features/plans/utils/parseTerraformPlanSummary';
+import TourLauncherButton from '@/shared/ui/onboarding/TourLauncherButton';
+import useOnboardingTour from '@/shared/ui/onboarding/useOnboardingTour';
 
 const POLL_MS = 2000;
 
@@ -158,6 +163,39 @@ function statusChipProps(status) {
   }
 }
 
+function executionTone(status, lifecycleKey) {
+  if (status === 'RUNNING' || status === 'PENDING') {
+    return {
+      gradient: 'linear-gradient(135deg, rgba(59,130,246,0.12) 0%, rgba(14,165,233,0.08) 55%, rgba(255,255,255,0.96) 100%)',
+      border: 'rgba(59,130,246,0.26)',
+      glow: '0 18px 40px rgba(59, 130, 246, 0.14)',
+      accent: 'linear-gradient(180deg, #38bdf8 0%, #2563eb 100%)',
+      iconBg: 'rgba(59,130,246,0.10)',
+      iconBorder: 'rgba(59,130,246,0.22)',
+    };
+  }
+
+  if (lifecycleKey === 'ACTIVE') {
+    return {
+      gradient: 'linear-gradient(135deg, rgba(34,197,94,0.10) 0%, rgba(45,212,191,0.08) 50%, rgba(255,255,255,0.96) 100%)',
+      border: 'rgba(34,197,94,0.24)',
+      glow: '0 16px 36px rgba(34, 197, 94, 0.10)',
+      accent: 'linear-gradient(180deg, #22c55e 0%, #0f766e 100%)',
+      iconBg: 'rgba(34,197,94,0.10)',
+      iconBorder: 'rgba(16,185,129,0.22)',
+    };
+  }
+
+  return {
+    gradient: 'linear-gradient(135deg, rgba(148,163,184,0.10) 0%, rgba(241,245,249,0.92) 100%)',
+    border: 'rgba(148,163,184,0.22)',
+    glow: '0 12px 30px rgba(15, 23, 42, 0.06)',
+    accent: 'linear-gradient(180deg, #94a3b8 0%, #64748b 100%)',
+    iconBg: 'rgba(148,163,184,0.12)',
+    iconBorder: 'rgba(148,163,184,0.22)',
+  };
+}
+
 function describeRunningPhase(plan, lifecycle) {
   const lastAction = String(plan?.last_action || plan?.lastAction || '').toLowerCase();
 
@@ -196,6 +234,50 @@ function describeRunningPhase(plan, lifecycle) {
   };
 }
 
+function describeExecutionHero(plan, lifecycle, runningPhase) {
+  if (plan?.status === TASK_STATE_RUNNING || plan?.status === TASK_STATE_PENDING) {
+    return runningPhase;
+  }
+
+  switch (lifecycle.key) {
+    case 'ACTIVE':
+      return {
+        title: 'Infraestructura activa en AWS',
+        description:
+          'El stack está desplegado y listo para seguir validando, actualizarse con un redeploy o destruirse cuando quieras limpiar el laboratorio.',
+      };
+    case 'DESTROYED':
+      return {
+        title: 'Infraestructura eliminada',
+        description:
+          'El último destroy terminó correctamente. Este plan queda como historial operativo y puedes volver a lanzar un deploy real cuando lo necesites.',
+      };
+    case 'PREVIEW':
+      return {
+        title: 'Plan listo para validación',
+        description:
+          'Todavía no hay infraestructura real en AWS. Puedes seguir revisando el preview o convertirlo en un APPLY real cuando estés conforme.',
+      };
+    case 'FAILED_REAL_APPLY':
+      return {
+        title: 'Recuperación recomendada',
+        description:
+          'El apply real falló y podría haber recursos parciales. La siguiente acción recomendada es limpiar el stack antes de reintentar.',
+      };
+    case 'NOT_APPLIED':
+      return {
+        title: 'Listo para primer deploy',
+        description:
+          'El plan está preparado pero aún no ha sido aplicado en AWS. Puedes lanzar un preview o el primer APPLY real según el caso.',
+      };
+    default:
+      return {
+        title: 'Estado operativo del plan',
+        description: lifecycle.helper,
+      };
+  }
+}
+
 const safeObject = (value) =>
   value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 
@@ -207,6 +289,13 @@ const splitInstanceKey = (key) => {
     vpcId: raw.slice(0, idx),
     instanceName: raw.slice(idx + 1),
   };
+};
+
+const executionSourceLabels = {
+  lab_explicit: 'Conexión fijada explícitamente en el laboratorio.',
+  owner_personal_auto: 'Auto resolverá la cuenta personal del owner del laboratorio.',
+  course_shared_auto: 'Auto resolverá la cuenta compartida del curso.',
+  unresolved: 'No hay una conexión cloud ejecutable resuelta para este laboratorio.',
 };
 
 function buildInstanceCatalog(outputs) {
@@ -842,7 +931,77 @@ function buildManagedEgressScenarios(plan, outputsResponse) {
     .filter(Boolean);
 }
 
-function buildPostDeployConsoleGuide(plan, outputsResponse, connectivityScenarios, managedEgressScenarios) {
+function buildPublicAccessScenarios(plan, outputsResponse) {
+  const payload = safeObject(plan?.payload);
+  const outputs = safeObject(outputsResponse?.outputs);
+  const vpcs = Array.isArray(payload?.vpcs) ? payload.vpcs : [];
+  const instanceCatalog = buildInstanceCatalog(outputs);
+
+  return vpcs
+    .map((vpc) => {
+      const subnets = Array.isArray(vpc?.subnets) ? vpc.subnets : [];
+      const publicSubnets = subnets.filter(
+        (subnet) => String(subnet?.subnet_type || '').toLowerCase() === 'public',
+      );
+      const outputInstances = instanceCatalog.get(vpc.id) || [];
+
+      const publicDeclared = publicSubnets.flatMap((subnet) =>
+        Array.isArray(subnet?.instances)
+          ? subnet.instances.map((instance) => ({
+            ...instance,
+            subnetName: subnet.name,
+            availabilityZone: subnet.availability_zone || 'n/a',
+          }))
+          : [],
+      );
+
+      const bastionDeclared = publicDeclared[0] || null;
+      const bastionOutput = bastionDeclared
+        ? outputInstances.find((item) => item.instanceName === bastionDeclared?.name)
+        : outputInstances.find((item) => item.publicIp);
+      const bastion = bastionDeclared || bastionOutput
+        ? {
+          instanceName: bastionDeclared?.name || bastionOutput?.instanceName || 'instancia',
+          instanceId: bastionOutput?.instanceId || null,
+          publicIp: bastionOutput?.publicIp || null,
+          privateIp: bastionOutput?.privateIp || bastionDeclared?.ip_address || null,
+          keyPair: bastionDeclared?.ssh_access || 'tu-keypair',
+          subnetName: bastionDeclared?.subnetName || publicSubnets[0]?.name || 'subnet-publica',
+          availabilityZone: bastionDeclared?.availabilityZone || publicSubnets[0]?.availability_zone || 'n/a',
+        }
+        : null;
+
+      if (!bastion?.publicIp) {
+        return null;
+      }
+
+      return {
+        type: 'public-access',
+        vpcId: vpc.id,
+        vpcName: vpc.name || vpc.id,
+        cidr: vpc.cidr_block || 'CIDR n/a',
+        bastion,
+        checks: [
+          {
+            title: `Confirmar acceso SSH a ${bastion.instanceName}`,
+            command: `ssh -i ~/.ssh/${bastion.keyPair}.pem ec2-user@${bastion.publicIp}`,
+            context:
+              'Úsalo para validar que la instancia pública quedó expuesta correctamente y que tu IP está permitida en Allowed SSH CIDR.',
+          },
+        ],
+        readyForRun: true,
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildPostDeployConsoleGuide(
+  plan,
+  outputsResponse,
+  connectivityScenarios,
+  managedEgressScenarios,
+  publicAccessScenarios,
+) {
   const crossVpcGuide = buildConsoleTestGuide(plan, outputsResponse, connectivityScenarios);
   const scenarios = [
     ...crossVpcGuide.scenarios.map((scenario) => ({
@@ -857,6 +1016,12 @@ function buildPostDeployConsoleGuide(plan, outputsResponse, connectivityScenario
       title: `${scenario.vpcName} · salida privada con NAT`,
       checks: scenario.checks,
     })),
+    ...publicAccessScenarios.map((scenario) => ({
+      key: `${scenario.vpcId}:public-access`,
+      kind: 'public-access',
+      title: `${scenario.vpcName} · acceso público directo`,
+      checks: scenario.checks,
+    })),
   ];
 
   return {
@@ -868,6 +1033,7 @@ function buildPostDeployConsoleGuide(plan, outputsResponse, connectivityScenario
 export default function PlanDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { startTourIfNeeded, restartTour } = useOnboardingTour();
 
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -906,6 +1072,10 @@ export default function PlanDetailPage() {
 
   const lifecycle = useMemo(() => computeLifecycle(plan), [plan]);
   const runningPhase = useMemo(() => describeRunningPhase(plan, lifecycle), [plan, lifecycle]);
+  const executionHero = useMemo(
+    () => describeExecutionHero(plan, lifecycle, runningPhase),
+    [plan, lifecycle, runningPhase],
+  );
   const connectivityScenarios = useMemo(
     () => buildConnectivityScenarios(plan, outputsResponse),
     [plan, outputsResponse],
@@ -913,6 +1083,14 @@ export default function PlanDetailPage() {
   const managedEgressScenarios = useMemo(
     () => buildManagedEgressScenarios(plan, outputsResponse),
     [plan, outputsResponse],
+  );
+  const publicAccessScenarios = useMemo(
+    () => buildPublicAccessScenarios(plan, outputsResponse),
+    [plan, outputsResponse],
+  );
+  const instanceCatalog = useMemo(
+    () => buildInstanceCatalog(outputsResponse?.outputs),
+    [outputsResponse],
   );
   const vpcInfraCatalog = useMemo(
     () => buildVpcInfraCatalog(plan, outputsResponse),
@@ -923,8 +1101,15 @@ export default function PlanDetailPage() {
     [plan, outputsResponse],
   );
   const consoleGuide = useMemo(
-    () => buildPostDeployConsoleGuide(plan, outputsResponse, connectivityScenarios, managedEgressScenarios),
-    [plan, outputsResponse, connectivityScenarios, managedEgressScenarios],
+    () =>
+      buildPostDeployConsoleGuide(
+        plan,
+        outputsResponse,
+        connectivityScenarios,
+        managedEgressScenarios,
+        publicAccessScenarios,
+      ),
+    [plan, outputsResponse, connectivityScenarios, managedEgressScenarios, publicAccessScenarios],
   );
   const connectivityOverview = useMemo(
     () => buildConnectivityOverview(plan, outputsResponse, connectivityScenarios),
@@ -941,6 +1126,13 @@ export default function PlanDetailPage() {
     plan?.payload?.canvasId ||
     plan?.lab?.id ||
     null;
+  const resolvedExecutionTarget = safeObject(plan?.resolved_execution_target);
+  const hasResolvedExecutionTarget = Object.keys(resolvedExecutionTarget).length > 0;
+  const lastApplyContext = safeObject(plan?.last_apply_context);
+  const hasLastApplyContext = Object.keys(lastApplyContext).length > 0;
+  const executionHistory = Array.isArray(plan?.execution_history) ? plan.execution_history : [];
+  const cloudTargetState = safeObject(plan?.cloud_target_state);
+  const cloudTargetMismatch = Boolean(cloudTargetState?.is_mismatch);
   const hasOutputsData = Boolean(
     outputsResponse?.outputs &&
       typeof outputsResponse.outputs === 'object' &&
@@ -975,15 +1167,17 @@ export default function PlanDetailPage() {
 
   // Deploy permitido cuando el plan NO está corriendo
   const canDeploy = !isRunning;
-  const canApply = Boolean(plan?.can_apply ?? true);
+  const canApply = Boolean(plan?.can_apply ?? true) && !cloudTargetMismatch;
 
   // Destroy permitido según regla backend (incluye apply real fallido), y no está corriendo
   const canDestroy =
     !isRunning &&
     Boolean(
-      plan?.can_destroy ??
+      !cloudTargetMismatch &&
+      (plan?.can_destroy ??
       (plan?.applied === true &&
         String(plan?.last_action || '').toLowerCase() !== 'destroy')
+      )
     );
 
   const fetchPlan = useCallback(
@@ -1128,6 +1322,11 @@ export default function PlanDetailPage() {
   }, [fetchPlan, id]);
 
   useEffect(() => {
+    if (loading || !plan) return;
+    startTourIfNeeded('plan-detail-overview');
+  }, [loading, plan, startTourIfNeeded]);
+
+  useEffect(() => {
     if (tab !== 'logs') return;
     if (logText) return;
     // intenta cargar el log persistido automáticamente al entrar al tab
@@ -1187,8 +1386,16 @@ export default function PlanDetailPage() {
       return;
     }
     if (applyMode && !canApply) {
+      if (cloudTargetMismatch) {
+        setErr(
+          cloudTargetState?.message ||
+          'La conexión cloud actual ya no coincide con la usada en el último APPLY real. Revisa la cuenta actual antes de ejecutar infraestructura real.',
+        );
+        actionLockRef.current = false;
+        return;
+      }
       setErr(
-        'Solo el dueño del laboratorio puede ejecutar APPLY real o Destroy. Puedes seguir usando PLAN para revisión.',
+        'El APPLY real y el Destroy solo están permitidos al owner, al platform admin o al docente cuando la conexión efectiva del laboratorio es course_shared. Puedes seguir usando PLAN para revisión.',
       );
       actionLockRef.current = false;
       return;
@@ -1215,6 +1422,11 @@ export default function PlanDetailPage() {
     } catch (e) {
       const status = e?.status ?? e?.response?.status;
       const payload = e?.data ?? e?.response?.data;
+      if (status === 409 && payload?.code === 'CLOUD_TARGET_CHANGED') {
+        setErr(payload?.error || 'La cuenta cloud actual ya no coincide con la usada en el último APPLY real.');
+        await fetchPlan();
+        return;
+      }
       // If the backend says "conflict" (already running), treat it as info and refresh status
       if (status === 409) {
         setErr(null);
@@ -1251,6 +1463,12 @@ export default function PlanDetailPage() {
       return;
     }
     if (!canDestroy) {
+      if (cloudTargetMismatch) {
+        setErr(
+          cloudTargetState?.message ||
+          'La conexión cloud actual ya no coincide con la usada en el último APPLY real. Destroy real se bloquea para evitar operar en una cuenta equivocada.',
+        );
+      }
       actionLockRef.current = false;
       return;
     }
@@ -1287,6 +1505,11 @@ export default function PlanDetailPage() {
     } catch (e) {
       const status = e?.status ?? e?.response?.status;
       const payload = e?.data ?? e?.response?.data;
+      if (status === 409 && payload?.code === 'CLOUD_TARGET_CHANGED') {
+        setErr(payload?.error || 'La cuenta cloud actual ya no coincide con la usada en el último APPLY real.');
+        await fetchPlan();
+        return;
+      }
       if (status === 409) {
         setErr(null);
         setMsg({
@@ -1316,7 +1539,7 @@ export default function PlanDetailPage() {
 
   const canOpenConsoleGuide =
     Boolean(plan?.applied) &&
-    (connectivityScenarios.length > 0 || managedEgressScenarios.length > 0) &&
+    (connectivityScenarios.length > 0 || managedEgressScenarios.length > 0 || publicAccessScenarios.length > 0) &&
     hasOutputsData;
 
   const isRedeployAvailable = lifecycle.key === 'ACTIVE' || lifecycle.key === 'FAILED_REAL_APPLY';
@@ -1335,7 +1558,9 @@ export default function PlanDetailPage() {
     : applyMode && !canApply
       ? {
           severity: 'warning',
-          text: 'Este plan es visible para revisión, pero el APPLY real y el Destroy quedan reservados al dueño del laboratorio.',
+          text: cloudTargetMismatch
+            ? (cloudTargetState?.message || 'La cuenta cloud actual ya no coincide con la usada en el último APPLY real.')
+            : 'Este plan es visible para revisión. El APPLY real y el Destroy solo están permitidos al owner, al platform admin o al docente cuando la conexión efectiva es course_shared.',
         }
     : canDestroy && isRedeployAvailable
       ? {
@@ -1416,6 +1641,8 @@ export default function PlanDetailPage() {
     </Stack>
   );
 
+  const tone = executionTone(plan?.status, lifecycle.key);
+
   if (loading) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -1447,7 +1674,36 @@ export default function PlanDetailPage() {
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Stack spacing={2}>
-        <Paper sx={{ p: 3 }}>
+        <Paper
+          data-tour="plan-detail-header"
+          sx={{
+            p: 3,
+            position: 'relative',
+            overflow: 'hidden',
+            border: `1px solid ${tone.border}`,
+            background: tone.gradient,
+            boxShadow: tone.glow,
+          }}
+        >
+          <Box
+            sx={{
+              position: 'absolute',
+              inset: 0,
+              pointerEvents: 'none',
+              background:
+                'radial-gradient(circle at top right, rgba(255,255,255,0.85) 0%, transparent 34%)',
+            }}
+          />
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              left: 0,
+              width: 6,
+              background: tone.accent,
+            }}
+          />
           {header}
 
           <Divider sx={{ my: 2 }} />
@@ -1472,29 +1728,78 @@ export default function PlanDetailPage() {
               Plan actualizado desde canvas. Hay cambios pendientes; ejecuta <b>Deploy</b> para aplicar la nueva infraestructura.
             </Alert>
           )}
+          {cloudTargetMismatch && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              {cloudTargetState?.message || 'La conexión cloud actual ya no coincide con la usada en el último APPLY real.'}
+            </Alert>
+          )}
 
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
-            <Stack spacing={0.5} sx={{ flex: 1 }}>
-              <Typography component="div" variant="body2" color="text.secondary">
-                Actualizado: <b>{formatDateTime(plan?.updated_at)}</b>
-              </Typography>
-              <Typography component="div" variant="body2" color="text.secondary">
-                Última acción: <b>{plan?.last_action || plan?.lastAction || '—'}</b>
-              </Typography>
+            <Stack spacing={1.5} sx={{ flex: 1 }}>
+              <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                <Box
+                  sx={{
+                    width: 54,
+                    height: 54,
+                    borderRadius: '18px',
+                    display: 'grid',
+                    placeItems: 'center',
+                    background: tone.iconBg,
+                    border: `1px solid ${tone.iconBorder}`,
+                    color: plan?.status === 'RUNNING' || plan?.status === 'PENDING' ? 'info.main' : lifecycle.key === 'ACTIVE' ? 'success.main' : 'text.secondary',
+                    flexShrink: 0,
+                  }}
+                >
+                  {plan?.status === 'RUNNING' || plan?.status === 'PENDING' ? (
+                    <AutorenewRoundedIcon />
+                  ) : lifecycle.key === 'ACTIVE' ? (
+                    <BoltRoundedIcon />
+                  ) : (
+                    <CloudSyncOutlinedIcon />
+                  )}
+                </Box>
+
+                <Stack spacing={0.5}>
+                  <Typography variant="overline" sx={{ letterSpacing: '0.14em', opacity: 0.72 }}>
+                    Control de ejecución
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.12 }}>
+                    {executionHero.title}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 760 }}>
+                    {executionHero.description}
+                  </Typography>
+                </Stack>
+              </Stack>
+
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} useFlexGap flexWrap="wrap">
+                <Paper variant="outlined" sx={{ px: 1.5, py: 1.1, borderRadius: 3, minWidth: 180, bgcolor: 'rgba(255,255,255,0.66)' }}>
+                  <Typography variant="caption" color="text.secondary">Actualizado</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{formatDateTime(plan?.updated_at)}</Typography>
+                </Paper>
+                <Paper variant="outlined" sx={{ px: 1.5, py: 1.1, borderRadius: 3, minWidth: 160, bgcolor: 'rgba(255,255,255,0.66)' }}>
+                  <Typography variant="caption" color="text.secondary">Última acción</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{plan?.last_action || plan?.lastAction || '—'}</Typography>
+                </Paper>
+                <Paper variant="outlined" sx={{ px: 1.5, py: 1.1, borderRadius: 3, minWidth: 260, bgcolor: 'rgba(255,255,255,0.66)' }}>
+                  <Typography variant="caption" color="text.secondary">Task actual</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                    {plan?.task_id || '—'}
+                  </Typography>
+                </Paper>
+              </Stack>
+
               {String(plan?.last_action || plan?.lastAction || '').toLowerCase() === 'canvas_update' && (
                 <Typography variant="caption" color="warning.main" sx={{ display: 'block' }}>
                   El canvas cambió: la infraestructura desplegada (si existía) ya no coincide con este plan.
                 </Typography>
               )}
-              <Typography component="div" variant="body2" color="text.secondary">
-                task_id: <b>{plan?.task_id || '—'}</b>
-              </Typography>
               <Typography variant="caption" color="text.secondary">
                 {lifecycle.helper}
               </Typography>
             </Stack>
 
-            <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+            <Stack data-tour="plan-detail-actions" direction="row" spacing={2} alignItems="center" flexWrap="wrap">
               <>
                 <FormControlLabel
                   control={
@@ -1541,9 +1846,11 @@ export default function PlanDetailPage() {
               variant="outlined"
               sx={{
                 mt: 2,
-                p: 2,
-                borderColor: 'info.light',
-                bgcolor: 'info.50',
+                p: 2.25,
+                borderColor: tone.border,
+                bgcolor: 'rgba(255,255,255,0.72)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.65)',
+                borderRadius: 4,
               }}
             >
               <Stack spacing={1.5}>
@@ -1554,9 +1861,22 @@ export default function PlanDetailPage() {
                   justifyContent="space-between"
                 >
                   <Stack direction="row" spacing={1.25} alignItems="center">
-                    <CircularProgress size={18} />
-                    <Box>
-                      <Typography variant="subtitle2">
+                    <Box
+                      sx={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: '14px',
+                        display: 'grid',
+                        placeItems: 'center',
+                        background: tone.iconBg,
+                        border: `1px solid ${tone.iconBorder}`,
+                        color: 'info.main',
+                      }}
+                    >
+                      <CircularProgress size={18} color="inherit" />
+                    </Box>
+                    <Box sx={{ maxWidth: 700 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                         {runningPhase.title}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
@@ -1566,13 +1886,24 @@ export default function PlanDetailPage() {
                   </Stack>
                   <Chip
                     size="small"
-                    color="info"
+                    color="primary"
                     variant="filled"
                     label="Actualización automática activa"
+                    sx={{ fontWeight: 700 }}
                   />
                 </Stack>
 
-                <LinearProgress />
+                <LinearProgress
+                  sx={{
+                    height: 8,
+                    borderRadius: 999,
+                    backgroundColor: 'rgba(37,99,235,0.10)',
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 999,
+                      background: tone.accent,
+                    },
+                  }}
+                />
 
                 <Stack
                   direction={{ xs: 'column', md: 'row' }}
@@ -1580,19 +1911,23 @@ export default function PlanDetailPage() {
                   alignItems={{ md: 'center' }}
                   justifyContent="space-between"
                 >
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 640 }}>
                     {runningPhase.nextStep}
                   </Typography>
                   <Stack direction="row" spacing={1} flexWrap="wrap">
                     <Chip
                       size="small"
-                      variant="outlined"
+                      variant="filled"
+                      color="default"
                       label={`Task: ${plan?.task_id || 'pendiente'}`}
+                      sx={{ bgcolor: 'rgba(255,255,255,0.84)' }}
                     />
                     <Chip
                       size="small"
-                      variant="outlined"
+                      variant="filled"
+                      color="default"
                       label={`Última acción: ${plan?.last_action || plan?.lastAction || '—'}`}
+                      sx={{ bgcolor: 'rgba(255,255,255,0.84)' }}
                     />
                   </Stack>
                 </Stack>
@@ -1603,6 +1938,7 @@ export default function PlanDetailPage() {
 
         <Paper sx={{ p: 0 }}>
           <Tabs
+            data-tour="plan-detail-tabs"
             value={tab}
             onChange={(_e, v) => setTab(v)}
             variant="scrollable"
@@ -1619,14 +1955,32 @@ export default function PlanDetailPage() {
 
           {/* SUMMARY */}
           {tab === 'summary' && (
-            <Box sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                Estado del plan
-              </Typography>
-              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
-                <Chip size="small" {...statusChipProps(plan?.status)} />
-                <Chip size="small" label={lifecycle.label} {...lifecycle.chip} />
-              </Stack>
+            <Box sx={{ p: 3 }} data-tour="plan-detail-summary">
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 2,
+                  mb: 2,
+                  borderRadius: 4,
+                  borderColor: tone.border,
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.94) 0%, rgba(248,250,252,0.98) 100%)',
+                }}
+              >
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }} justifyContent="space-between">
+                  <Box>
+                    <Typography variant="h6" sx={{ mb: 0.5 }}>
+                      Estado del plan
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Lectura rápida del resultado reciente y del estado operativo actual.
+                    </Typography>
+                  </Box>
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Chip size="small" {...statusChipProps(plan?.status)} />
+                    <Chip size="small" label={lifecycle.label} {...lifecycle.chip} />
+                  </Stack>
+                </Stack>
+              </Paper>
 
               <Typography component="div" variant="body2" color="text.secondary">
                 Este detalle sirve para entender <b>qué pasó</b> (status), <b>qué existe hoy</b> (lifecycle) y
@@ -1665,6 +2019,199 @@ export default function PlanDetailPage() {
                     </Typography>
                   </Stack>
                 </Stack>
+              </Paper>
+
+              <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Próxima ejecución real
+                </Typography>
+                {!hasResolvedExecutionTarget || resolvedExecutionTarget.status === 'missing' ? (
+                  <Alert severity="warning" variant="outlined">
+                    {executionSourceLabels[resolvedExecutionTarget.source] || executionSourceLabels.unresolved}
+                  </Alert>
+                ) : (
+                  <Stack spacing={1.5}>
+                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                      <Chip size="small" label={`Provider: ${resolvedExecutionTarget.provider || '—'}`} variant="outlined" />
+                      <Chip size="small" label={`Source: ${resolvedExecutionTarget.source || '—'}`} color="info" variant="outlined" />
+                      {resolvedExecutionTarget.scope && (
+                        <Chip size="small" label={`Scope: ${resolvedExecutionTarget.scope}`} variant="outlined" />
+                      )}
+                      {resolvedExecutionTarget.default_region && (
+                        <Chip size="small" label={`Region: ${resolvedExecutionTarget.default_region}`} variant="outlined" />
+                      )}
+                    </Stack>
+                    <Typography component="div" variant="body2" color="text.secondary">
+                      Conexión efectiva:{' '}
+                      <b>{resolvedExecutionTarget.name || '—'}</b>
+                      {resolvedExecutionTarget.id ? ` (${resolvedExecutionTarget.id})` : ''}
+                    </Typography>
+                    <Typography component="div" variant="body2" color="text.secondary">
+                      {executionSourceLabels[resolvedExecutionTarget.source] || executionSourceLabels.unresolved}
+                    </Typography>
+                    {resolvedExecutionTarget.account_id && (
+                      <Typography component="div" variant="body2" color="text.secondary">
+                        Cuenta AWS prevista:{' '}
+                        <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                          {resolvedExecutionTarget.account_id}
+                        </Box>
+                      </Typography>
+                    )}
+                    {resolvedExecutionTarget.arn && (
+                      <Typography component="div" variant="body2" color="text.secondary">
+                        ARN conocido:{' '}
+                        <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                          {resolvedExecutionTarget.arn}
+                        </Box>
+                      </Typography>
+                    )}
+                    {!resolvedExecutionTarget.account_id && (
+                      <Alert severity="info" variant="outlined">
+                        La conexión está resuelta, pero aún no tenemos identidad STS visible. Usa “Probar” en Cloud Connections para registrar cuenta y ARN.
+                      </Alert>
+                    )}
+                  </Stack>
+                )}
+              </Paper>
+
+              <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Reconciliación de cuenta cloud
+                </Typography>
+                <Alert
+                  severity={cloudTargetMismatch ? 'warning' : 'success'}
+                  variant="outlined"
+                >
+                  {cloudTargetState?.message || 'Sin información suficiente para reconciliar la cuenta cloud.'}
+                </Alert>
+              </Paper>
+
+              <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Evidencia del último APPLY real
+                </Typography>
+                {!hasLastApplyContext ? (
+                  <Alert severity="info" variant="outlined">
+                    Aún no hay snapshot de ejecución real guardado para este plan. Aparecerá después del primer APPLY real.
+                  </Alert>
+                ) : (
+                  <Stack spacing={1.5}>
+                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                      <Chip size="small" label={`Provider: ${lastApplyContext.provider || '—'}`} variant="outlined" />
+                      <Chip
+                        size="small"
+                        label={`Source: ${lastApplyContext.credential_source || '—'}`}
+                        color={lastApplyContext.credential_source === 'cloud_connection' ? 'success' : 'default'}
+                        variant={lastApplyContext.credential_source === 'cloud_connection' ? 'filled' : 'outlined'}
+                      />
+                      <Chip size="small" label={`Region: ${lastApplyContext.region || '—'}`} variant="outlined" />
+                      {lastApplyContext.cloud_connection_scope && (
+                        <Chip size="small" label={`Scope: ${lastApplyContext.cloud_connection_scope}`} variant="outlined" />
+                      )}
+                    </Stack>
+
+                    <Stack spacing={0.5}>
+                      <Typography component="div" variant="body2" color="text.secondary">
+                        Conexión usada:{' '}
+                        <b>{lastApplyContext.cloud_connection_name || 'Credenciales del entorno'}</b>
+                        {lastApplyContext.cloud_connection_id ? ` (${lastApplyContext.cloud_connection_id})` : ''}
+                      </Typography>
+                      <Typography component="div" variant="body2" color="text.secondary">
+                        Cuenta AWS:{' '}
+                        <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                          {lastApplyContext.account_id || '—'}
+                        </Box>
+                      </Typography>
+                      <Typography component="div" variant="body2" color="text.secondary">
+                        ARN:{' '}
+                        <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                          {lastApplyContext.arn || '—'}
+                        </Box>
+                      </Typography>
+                      <Typography component="div" variant="body2" color="text.secondary">
+                        UserId STS:{' '}
+                        <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                          {lastApplyContext.user_id || '—'}
+                        </Box>
+                      </Typography>
+                      <Typography component="div" variant="body2" color="text.secondary">
+                        Capturado:{' '}
+                        <b>{formatDateTime(lastApplyContext.captured_at)}</b>
+                      </Typography>
+                    </Stack>
+
+                    {lastApplyContext.identity_error && (
+                      <Alert severity="warning" variant="outlined">
+                        No se pudo resolver STS al capturar la auditoría: {lastApplyContext.identity_error}
+                      </Alert>
+                    )}
+                  </Stack>
+                )}
+              </Paper>
+
+              <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Historial reciente de ejecuciones
+                </Typography>
+                {executionHistory.length === 0 ? (
+                  <Alert severity="info" variant="outlined">
+                    Aún no hay ejecuciones registradas para este plan.
+                  </Alert>
+                ) : (
+                  <Stack spacing={1.5}>
+                    {executionHistory.map((item) => (
+                      <Paper
+                        key={item.id}
+                        variant="outlined"
+                        sx={{ p: 1.5, bgcolor: 'background.default' }}
+                      >
+                        <Stack spacing={1}>
+                          <Stack direction="row" spacing={1} flexWrap="wrap">
+                            <Chip size="small" label={(item.action || '—').toUpperCase()} variant="outlined" />
+                            <Chip size="small" label={item.status || '—'} {...statusChipProps(String(item.status || '').toUpperCase())} />
+                            <Chip
+                              size="small"
+                              label={item.simulate_only ? 'PREVIEW' : 'REAL'}
+                              color={item.simulate_only ? 'info' : 'success'}
+                              variant={item.simulate_only ? 'outlined' : 'filled'}
+                            />
+                            {item.cloud_connection_scope && (
+                              <Chip size="small" label={`Scope: ${item.cloud_connection_scope}`} variant="outlined" />
+                            )}
+                          </Stack>
+                          <Typography component="div" variant="body2" color="text.secondary">
+                            Solicitado por:{' '}
+                            <b>{item.requested_by?.display_name || item.requested_by?.email || '—'}</b>
+                            {item.delegation_id ? ` · delegación ${item.delegation_id}` : ''}
+                          </Typography>
+                          <Typography component="div" variant="body2" color="text.secondary">
+                            Conexión:{' '}
+                            <b>{item.cloud_connection_name || 'Credenciales del entorno'}</b>
+                            {item.resolved_execution_source ? ` · source ${item.resolved_execution_source}` : ''}
+                          </Typography>
+                          {(item.account_id || item.arn) && (
+                            <Typography component="div" variant="body2" color="text.secondary">
+                              Identidad:{' '}
+                              <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                                {item.account_id || '—'}
+                                {item.arn ? ` · ${item.arn}` : ''}
+                              </Box>
+                            </Typography>
+                          )}
+                          <Typography component="div" variant="body2" color="text.secondary">
+                            Inicio: <b>{formatDateTime(item.started_at || item.created_at)}</b>
+                            {item.completed_at ? ` · Fin: ${formatDateTime(item.completed_at)}` : ''}
+                          </Typography>
+                          {item.error && (
+                            <Alert severity="warning" variant="outlined">
+                              {item.error}
+                            </Alert>
+                          )}
+                        </Stack>
+                      </Paper>
+                    ))}
+                  </Stack>
+                )}
               </Paper>
 
               <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
@@ -1884,6 +2431,44 @@ export default function PlanDetailPage() {
                                   variant={item.natEipAllocationId ? 'filled' : 'outlined'}
                                 />
                               </Stack>
+
+                              {(instanceCatalog.get(item.logicalVpcId) || []).length > 0 && (
+                                <Stack spacing={1} sx={{ mt: 1.5 }}>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Instancias detectadas
+                                  </Typography>
+                                  {(instanceCatalog.get(item.logicalVpcId) || []).map((instance) => (
+                                    <Paper
+                                      key={instance.key}
+                                      variant="outlined"
+                                      sx={{ p: 1.5, bgcolor: 'background.default' }}
+                                    >
+                                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                        {instance.instanceName}
+                                      </Typography>
+                                      <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
+                                        <Chip
+                                          size="small"
+                                          label={`ID: ${instance.instanceId || '—'}`}
+                                          variant="outlined"
+                                        />
+                                        <Chip
+                                          size="small"
+                                          label={`Privada: ${instance.privateIp || '—'}`}
+                                          color={instance.privateIp ? 'info' : 'default'}
+                                          variant={instance.privateIp ? 'filled' : 'outlined'}
+                                        />
+                                        <Chip
+                                          size="small"
+                                          label={`Pública: ${instance.publicIp || '—'}`}
+                                          color={instance.publicIp ? 'success' : 'default'}
+                                          variant={instance.publicIp ? 'filled' : 'outlined'}
+                                        />
+                                      </Stack>
+                                    </Paper>
+                                  ))}
+                                </Stack>
+                              )}
                             </Paper>
                           ))}
                         </Stack>
@@ -1997,8 +2582,8 @@ export default function PlanDetailPage() {
                 <Box sx={{ flex: 1 }}>
                   <Typography variant="h6">Guía de pruebas post-deploy</Typography>
                   <Typography component="div" variant="body2" color="text.secondary">
-                    Define pruebas de conectividad entre VPCs o validaciones guiadas para una VPC con NAT, tenga o no
-                    una zona privada asociada.
+                    Define pruebas de conectividad entre VPCs, validaciones guiadas para una VPC con NAT o comprobaciones
+                    básicas de acceso directo a una bastion pública.
                   </Typography>
                 </Box>
                 <Button
@@ -2020,7 +2605,8 @@ export default function PlanDetailPage() {
               <Box sx={{ mt: 2 }}>
                 <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
                   Abre el modal de instrucciones para ver el paso a paso por consola: cómo entrar por SSH a una bastion
-                  y luego cómo ejecutar los comandos sugeridos, ya sea entre VPCs o dentro de una VPC con NAT.
+                  y luego cómo ejecutar los comandos sugeridos, ya sea entre VPCs, dentro de una VPC con NAT o en un
+                  laboratorio single-VPC con exposición pública directa.
                 </Alert>
 
                 {!hasOutputsData && (
@@ -2029,10 +2615,10 @@ export default function PlanDetailPage() {
                   </Alert>
                 )}
 
-                {connectivityScenarios.length === 0 && managedEgressScenarios.length === 0 && (
+                {connectivityScenarios.length === 0 && managedEgressScenarios.length === 0 && publicAccessScenarios.length === 0 && (
                   <Alert severity="warning">
-                    Este plan no expone pares de VPC conectados por peering/TGW ni un caso single-VPC con NAT que
-                    podamos guiar desde aquí.
+                    Este plan no expone pares de VPC conectados por peering/TGW, un caso single-VPC con NAT ni una
+                    bastion pública con salida directa que podamos guiar desde aquí.
                   </Alert>
                 )}
 
@@ -2168,10 +2754,67 @@ export default function PlanDetailPage() {
                   </Paper>
                 ))}
 
+                {publicAccessScenarios.map((scenario) => (
+                  <Paper key={`${scenario.vpcId}:public-access`} variant="outlined" sx={{ p: 2, mb: 2 }}>
+                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'center' }}>
+                      <Typography variant="subtitle2" sx={{ flex: 1 }}>
+                        {scenario.vpcName} · acceso público directo
+                      </Typography>
+                      <Chip size="small" label="Single VPC" variant="outlined" />
+                      <Chip size="small" label="Public bastion" color="success" variant="outlined" />
+                      <Chip size="small" label={scenario.cidr} variant="outlined" />
+                    </Stack>
+
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                      Bastion: {scenario.bastion.instanceName} · IP pública: {scenario.bastion.publicIp || 'n/a'}
+                    </Typography>
+
+                    <Stack spacing={1.2} sx={{ mt: 1.5 }}>
+                      {scenario.checks.map((check) => (
+                        <Box key={`${scenario.vpcId}:${check.title}`}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {check.title}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                            {check.context}
+                          </Typography>
+                          <Paper
+                            variant="outlined"
+                            sx={{ p: 1, bgcolor: 'background.default', overflow: 'auto' }}
+                          >
+                            <Box
+                              component="pre"
+                              sx={{
+                                m: 0,
+                                whiteSpace: 'pre-wrap',
+                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                fontSize: 12,
+                              }}
+                            >
+                              {check.command}
+                            </Box>
+                          </Paper>
+                        </Box>
+                      ))}
+                    </Stack>
+
+                    <Stack spacing={1} sx={{ mt: 1.5 }}>
+                      <Alert severity="info" variant="outlined">
+                        Qué observar: la bastion debería aceptar SSH solo desde el rango definido en `Allowed SSH CIDR`.
+                      </Alert>
+                      <Alert severity="warning" variant="outlined">
+                        Qué observar: este diseño expone una instancia directamente a Internet. Es útil para una prueba
+                        rápida, pero ofrece menos aislamiento que un patrón con workload privada.
+                      </Alert>
+                    </Stack>
+                  </Paper>
+                ))}
+
                 <Alert severity="info" variant="outlined">
                   Resultado esperado: cada par conectado debe responder ping en ida y retorno; en un caso single-VPC con
-                  NAT, la bastion debe alcanzar la workload privada y esta última debe permanecer sin IP pública. Si no
-                  hay zonas privadas, la validación se centra en confirmar que el NAT existe y en explicar por qué ese diseño es más débil.
+                  NAT, la bastion debe alcanzar la workload privada y esta última debe permanecer sin IP pública. En un
+                  caso con bastion pública directa, la validación mínima es confirmar acceso SSH y entender que el
+                  aislamiento es menor que en un patrón con subnet privada.
                 </Alert>
               </Box>
             </Box>
@@ -2310,6 +2953,10 @@ export default function PlanDetailPage() {
           )}
         </Paper>
       </Stack>
+      <TourLauncherButton
+        onClick={() => restartTour('plan-detail-overview')}
+        label="Ver tour del plan"
+      />
       <Dialog
         open={consoleGuideOpen}
         onClose={() => setConsoleGuideOpen(false)}

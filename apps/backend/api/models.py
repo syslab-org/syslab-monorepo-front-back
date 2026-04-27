@@ -22,6 +22,12 @@ PROVIDER_AWS = "aws"
 PROVIDER_GCP = "gcp"
 PROVIDER_AZURE = "azure"
 
+CLOUD_SCOPE_PERSONAL = "personal"
+CLOUD_SCOPE_COURSE_SHARED = "course_shared"
+
+CLOUD_AUTH_AWS_STATIC = "aws_static_keys"
+CLOUD_AUTH_AWS_ASSUME_ROLE = "aws_assume_role"
+
 
 class RoleChoices(models.TextChoices):
     PLATFORM_ADMIN = ROLE_PLATFORM_ADMIN, "Platform Admin"
@@ -44,6 +50,16 @@ class ProviderChoices(models.TextChoices):
 class VisibilityScopeChoices(models.TextChoices):
     OWNER = VISIBILITY_OWNER, "Owner"
     COURSE = VISIBILITY_COURSE, "Course"
+
+
+class CloudConnectionScopeChoices(models.TextChoices):
+    PERSONAL = CLOUD_SCOPE_PERSONAL, "Personal"
+    COURSE_SHARED = CLOUD_SCOPE_COURSE_SHARED, "Course Shared"
+
+
+class CloudAuthTypeChoices(models.TextChoices):
+    AWS_STATIC_KEYS = CLOUD_AUTH_AWS_STATIC, "AWS Static Keys"
+    AWS_ASSUME_ROLE = CLOUD_AUTH_AWS_ASSUME_ROLE, "AWS Assume Role"
 
 
 class Course(models.Model):
@@ -70,6 +86,81 @@ class Course(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class CloudConnection(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=120)
+    provider = models.CharField(
+        max_length=16,
+        choices=ProviderChoices.choices,
+        default=ProviderChoices.AWS,
+        db_index=True,
+    )
+    scope = models.CharField(
+        max_length=24,
+        choices=CloudConnectionScopeChoices.choices,
+        default=CloudConnectionScopeChoices.PERSONAL,
+        db_index=True,
+    )
+    auth_type = models.CharField(
+        max_length=32,
+        choices=CloudAuthTypeChoices.choices,
+        default=CloudAuthTypeChoices.AWS_STATIC_KEYS,
+    )
+    owner_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="cloud_connections",
+    )
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="cloud_connections",
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_cloud_connections",
+    )
+    default_region = models.CharField(max_length=32, blank=True, default="")
+    aws_access_key_id = models.CharField(max_length=128, blank=True, default="")
+    aws_secret_access_key_encrypted = models.TextField(blank=True, default="")
+    aws_role_arn = models.CharField(max_length=255, blank=True, default="")
+    aws_external_id_encrypted = models.TextField(blank=True, default="")
+    is_active = models.BooleanField(default=True, db_index=True)
+    last_test_status = models.CharField(max_length=24, blank=True, default="")
+    last_test_message = models.TextField(blank=True, default="")
+    last_test_identity = models.JSONField(default=dict, blank=True)
+    last_tested_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name", "-updated_at"]
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def masked_access_key_id(self) -> str:
+        value = str(self.aws_access_key_id or "").strip()
+        if len(value) <= 4:
+            return value
+        return f"{value[:4]}...{value[-4:]}"
+
+    @property
+    def masked_role_arn(self) -> str:
+        value = str(self.aws_role_arn or "").strip()
+        if len(value) <= 18:
+            return value
+        return f"{value[:12]}...{value[-6:]}"
 
 
 class UserProfile(models.Model):
@@ -138,6 +229,13 @@ class Lab(models.Model):
     owner_user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
+        related_name="labs",
+    )
+    cloud_connection = models.ForeignKey(
+        CloudConnection,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="labs",
     )
     course = models.ForeignKey(
@@ -218,6 +316,61 @@ class AmiCatalogEntry(models.Model):
 
     def __str__(self):
         return self.code
+
+
+class KeyPairCatalogEntry(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=128)
+    label = models.CharField(max_length=128, blank=True, default="")
+    provider = models.CharField(
+        max_length=16,
+        choices=ProviderChoices.choices,
+        default=ProviderChoices.AWS,
+    )
+    region = models.CharField(max_length=32, blank=True, default="")
+    scope = models.CharField(
+        max_length=24,
+        choices=CloudConnectionScopeChoices.choices,
+        default=CloudConnectionScopeChoices.PERSONAL,
+        db_index=True,
+    )
+    owner_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="key_pair_entries",
+    )
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="key_pair_entries",
+    )
+    cloud_connection = models.ForeignKey(
+        CloudConnection,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="key_pair_entries",
+    )
+    metadata = models.JSONField(default=dict, blank=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_key_pair_entries",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["provider", "scope", "region", "name"]
+
+    def __str__(self):
+        return self.label or self.name
 
 
 class Plan(models.Model):
@@ -324,6 +477,14 @@ class Plan(models.Model):
         blank=True,
         null=True,
         help_text="task_id de la ultima ejecucion destroy.",
+    )
+    last_apply_context = models.JSONField(
+        blank=True,
+        default=dict,
+        help_text=(
+            "Snapshot auditado del ultimo APPLY real: conexion cloud usada, "
+            "region, fuente de credenciales e identidad STS resuelta."
+        ),
     )
 
     def __str__(self) -> str:
@@ -482,3 +643,159 @@ class Plan(models.Model):
                 name="uniq_plan_canvas_id",
             )
         ]
+
+
+class CloudExecutionDelegation(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    lab = models.ForeignKey(
+        Lab,
+        on_delete=models.CASCADE,
+        related_name="execution_delegations",
+    )
+    cloud_connection = models.ForeignKey(
+        CloudConnection,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="execution_delegations",
+    )
+    owner_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="execution_delegations_granted",
+    )
+    delegate_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="execution_delegations_received",
+    )
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="execution_delegations",
+    )
+    provider = models.CharField(
+        max_length=16,
+        choices=ProviderChoices.choices,
+        default=ProviderChoices.AWS,
+        db_index=True,
+    )
+    note = models.TextField(blank=True, default="")
+    is_active = models.BooleanField(default=True, db_index=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_execution_delegations",
+    )
+    revoked_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="revoked_execution_delegations",
+    )
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.owner_user_id}->{self.delegate_user_id} {self.lab_id}"
+
+    @property
+    def is_currently_active(self) -> bool:
+        if not self.is_active or self.revoked_at:
+            return False
+        if self.expires_at and timezone.now() >= self.expires_at:
+            return False
+        return True
+
+
+class PlanExecutionRecord(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        RUNNING = "running", "Running"
+        SUCCESS = "success", "Success"
+        FAILURE = "failure", "Failure"
+        NOOP = "noop", "No-op"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    plan = models.ForeignKey(
+        Plan,
+        on_delete=models.CASCADE,
+        related_name="execution_history",
+    )
+    lab = models.ForeignKey(
+        Lab,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="execution_history",
+    )
+    requested_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="requested_plan_executions",
+    )
+    delegation = models.ForeignKey(
+        CloudExecutionDelegation,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="execution_history",
+    )
+    action = models.CharField(
+        max_length=20,
+        choices=Plan.LastAction.choices,
+        db_index=True,
+    )
+    simulate_only = models.BooleanField(default=True)
+    provider = models.CharField(
+        max_length=16,
+        choices=ProviderChoices.choices,
+        default=ProviderChoices.AWS,
+        db_index=True,
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    task_id = models.CharField(max_length=64, blank=True, default="")
+    cloud_connection = models.ForeignKey(
+        CloudConnection,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="execution_history",
+    )
+    cloud_connection_name = models.CharField(max_length=120, blank=True, default="")
+    cloud_connection_scope = models.CharField(max_length=24, blank=True, default="")
+    resolved_execution_source = models.CharField(max_length=32, blank=True, default="")
+    credential_source = models.CharField(max_length=32, blank=True, default="")
+    account_id = models.CharField(max_length=64, blank=True, default="")
+    arn = models.CharField(max_length=512, blank=True, default="")
+    sts_user_id = models.CharField(max_length=128, blank=True, default="")
+    error = models.TextField(blank=True, default="")
+    request_summary = models.JSONField(default=dict, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.plan_id}:{self.action}:{self.status}"

@@ -14,6 +14,7 @@ class ProviderExecutionBundle:
     sts_reason: str
     allow_local_apply: bool
     creds_ok_for_apply: bool
+    runtime_env: dict = field(default_factory=dict)
     workdir: str | None = None
     state_path: str | None = None
     tf_text: str = ""
@@ -30,7 +31,14 @@ class ProviderExecutor(ABC):
     provider = ""
 
     @abstractmethod
-    def build_bundle(self, plan_id: str, payload, *, force_simulate_only: bool | None = None) -> ProviderExecutionBundle:
+    def build_bundle(
+        self,
+        plan_id: str,
+        payload,
+        *,
+        force_simulate_only: bool | None = None,
+        runtime_env: dict | None = None,
+    ) -> ProviderExecutionBundle:
         raise NotImplementedError
 
     @abstractmethod

@@ -1,15 +1,21 @@
+from datetime import timedelta
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
+from botocore.exceptions import ClientError
 from django.contrib.auth.models import User
 from django.test import SimpleTestCase
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from .domain.network_intent import normalize_network_intent
-from .models import Course, Lab, Plan, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, STATUS_ACTIVE, VISIBILITY_COURSE, VISIBILITY_OWNER
+from .models import CLOUD_AUTH_AWS_ASSUME_ROLE, CLOUD_SCOPE_COURSE_SHARED, CLOUD_SCOPE_PERSONAL, CloudConnection, CloudExecutionDelegation, Course, KeyPairCatalogEntry, Lab, Plan, PlanExecutionRecord, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, STATUS_ACTIVE, VISIBILITY_COURSE, VISIBILITY_OWNER
 from .providers import get_provider_adapter, get_provider_executor
-from .providers.aws.runtime import build_nat_cleanup_targets
+from .cloud_connections import build_aws_runtime_env
+from .providers.aws.runtime import build_nat_cleanup_targets, check_key_pairs_preflight, collect_required_key_pairs
 from .providers.aws.terraform import render_workspace
+from .secret_store import encrypt_secret
+from .tasks import _build_last_apply_context
 from .validators import validate_network_plan
 
 
@@ -151,6 +157,65 @@ class NatCleanupTargetTests(SimpleTestCase):
             "eipalloc-0abc123def4567890",
         )
         self.assertFalse(targets["vpc-123"]["release_generated_eip"])
+
+
+class AwsPreflightTests(SimpleTestCase):
+    def test_collect_required_key_pairs_returns_unique_non_empty_names(self):
+        payload = {
+            "vlan": {"region": "us-east-1"},
+            "vpcs": [
+                {
+                    "subnets": [
+                        {
+                            "instances": [
+                                {"name": "bastion-a1", "ssh_access": "tesis-key-new"},
+                                {"name": "app-a1", "ssh_access": "tesis-key-new"},
+                                {"name": "app-a2", "ssh_access": ""},
+                            ]
+                        }
+                    ]
+                }
+            ],
+        }
+
+        self.assertEqual(collect_required_key_pairs(payload), ["tesis-key-new"])
+
+    @patch("api.providers.aws.runtime.build_boto3_session_from_runtime_env")
+    def test_key_pair_preflight_fails_when_any_declared_key_pair_is_missing(self, mocked_session_builder):
+        ec2 = Mock()
+        ec2.describe_key_pairs.side_effect = ClientError(
+            {"Error": {"Code": "InvalidKeyPair.NotFound", "Message": "missing"}},
+            "DescribeKeyPairs",
+        )
+        session = Mock()
+        session.client.return_value = ec2
+        mocked_session_builder.return_value = session
+
+        ok, reason, info = check_key_pairs_preflight(
+            {
+                "vlan": {"region": "us-east-1"},
+                "vpcs": [
+                    {
+                        "subnets": [
+                            {
+                                "instances": [
+                                    {"name": "bastion-a1", "ssh_access": "tesis-key-new"},
+                                ]
+                            }
+                        ]
+                    }
+                ],
+            },
+            runtime_env={
+                "AWS_ACCESS_KEY_ID": "x",
+                "AWS_SECRET_ACCESS_KEY": "y",
+                "AWS_DEFAULT_REGION": "us-east-1",
+            },
+        )
+
+        self.assertFalse(ok)
+        self.assertIn("tesis-key-new", reason)
+        self.assertEqual(info["missing_key_pairs"], ["tesis-key-new"])
 
 
 class NetworkIntentTests(SimpleTestCase):
@@ -344,6 +409,71 @@ class TerraformTemplateRenderTests(SimpleTestCase):
         self.assertIn('count = 0', tf_text)
 
 
+class ApplyAuditContextTests(SimpleTestCase):
+    def test_build_last_apply_context_snapshots_identity_and_connection(self):
+        connection = SimpleNamespace(
+            id="conn-123",
+            name="AWS alumno22",
+            scope=CLOUD_SCOPE_PERSONAL,
+        )
+        bundle = SimpleNamespace(
+            diag={"credential_source": "cloud_connection", "aws_region": "us-east-1"},
+            runtime_env={"AWS_DEFAULT_REGION": "us-east-1"},
+        )
+
+        context = _build_last_apply_context(
+            provider="aws",
+            connection=connection,
+            bundle=bundle,
+            identity={
+                "Account": "123456789012",
+                "Arn": "arn:aws:iam::123456789012:user/alumno22-syslab",
+                "UserId": "AIDAEXAMPLE",
+            },
+        )
+
+        self.assertEqual(context["provider"], "aws")
+        self.assertEqual(context["credential_source"], "cloud_connection")
+        self.assertEqual(context["cloud_connection_id"], "conn-123")
+        self.assertEqual(context["cloud_connection_name"], "AWS alumno22")
+        self.assertEqual(context["cloud_connection_scope"], CLOUD_SCOPE_PERSONAL)
+        self.assertEqual(context["region"], "us-east-1")
+        self.assertEqual(context["account_id"], "123456789012")
+        self.assertEqual(context["arn"], "arn:aws:iam::123456789012:user/alumno22-syslab")
+        self.assertEqual(context["user_id"], "AIDAEXAMPLE")
+        self.assertIn("captured_at", context)
+
+
+class AssumeRoleConnectionTests(SimpleTestCase):
+    @patch("api.cloud_connections.build_base_aws_session")
+    def test_build_runtime_env_assume_role_uses_sts_credentials(self, mocked_base_session):
+        fake_sts = SimpleNamespace(
+            assume_role=lambda **_kwargs: {
+                "Credentials": {
+                    "AccessKeyId": "ASIAEXAMPLE",
+                    "SecretAccessKey": "temp-secret",
+                    "SessionToken": "temp-token",
+                }
+            }
+        )
+        mocked_base_session.return_value = SimpleNamespace(client=lambda *_args, **_kwargs: fake_sts)
+        connection = CloudConnection(
+            name="AWS role",
+            provider="aws",
+            auth_type=CLOUD_AUTH_AWS_ASSUME_ROLE,
+            aws_role_arn="arn:aws:iam::123456789012:role/syslab-course-role",
+            aws_external_id_encrypted=encrypt_secret("ext-123"),
+            default_region="us-east-1",
+        )
+
+        env = build_aws_runtime_env(connection)
+
+        self.assertEqual(env["AWS_ACCESS_KEY_ID"], "ASIAEXAMPLE")
+        self.assertEqual(env["AWS_SECRET_ACCESS_KEY"], "temp-secret")
+        self.assertEqual(env["AWS_SESSION_TOKEN"], "temp-token")
+        self.assertEqual(env["AWS_REGION"], "us-east-1")
+
+
 class VisibilityApiTests(APITestCase):
     def setUp(self):
         self.admin = User.objects.create_user(
@@ -431,6 +561,45 @@ class VisibilityApiTests(APITestCase):
             created_by_role=ROLE_STUDENT,
             legacy_canvas_id="lab-other",
         )
+        self.student_connection = CloudConnection.objects.create(
+            name="AWS alumno",
+            provider="aws",
+            scope=CLOUD_SCOPE_PERSONAL,
+            owner_user=self.student,
+            aws_access_key_id="AKIASTUDENT1234",
+            aws_secret_access_key_encrypted=encrypt_secret("student-secret"),
+            default_region="us-east-1",
+        )
+        self.course_connection = CloudConnection.objects.create(
+            name="AWS curso",
+            provider="aws",
+            scope=CLOUD_SCOPE_COURSE_SHARED,
+            course=self.course,
+            created_by=self.teacher,
+            aws_access_key_id="AKIACOURSE1234",
+            aws_secret_access_key_encrypted=encrypt_secret("course-secret"),
+            default_region="us-east-1",
+        )
+        self.student_key_pair = KeyPairCatalogEntry.objects.create(
+            name="tesis-key",
+            label="Key personal alumno",
+            provider="aws",
+            region="us-east-1",
+            scope=CLOUD_SCOPE_PERSONAL,
+            owner_user=self.student,
+            cloud_connection=self.student_connection,
+            created_by=self.student,
+        )
+        self.course_key_pair = KeyPairCatalogEntry.objects.create(
+            name="curso-key",
+            label="Key compartida Redes 1",
+            provider="aws",
+            region="us-east-1",
+            scope=CLOUD_SCOPE_COURSE_SHARED,
+            course=self.course,
+            cloud_connection=self.course_connection,
+            created_by=self.teacher,
+        )
 
         Plan.objects.create(
             name="Plan alumno",
@@ -476,10 +645,76 @@ class VisibilityApiTests(APITestCase):
         first = res.json()[0]
         self.assertIn("canvas_id", first)
         self.assertEqual(first["canvas_id"], first["firestore_vpc_id"])
+        self.assertIn("lab", first)
+        self.assertIn("owner_user", first["lab"])
+        self.assertIn("owner_user", first)
         names = {item["name"] for item in res.json()}
         self.assertIn("Plan alumno", names)
         self.assertIn("Plan compartido", names)
         self.assertNotIn("Plan ajeno", names)
+        plans_by_name = {item["name"]: item for item in res.json()}
+        self.assertEqual(plans_by_name["Plan alumno"]["lab"]["owner_user"]["email"], "student@example.com")
+        self.assertEqual(plans_by_name["Plan alumno"]["owner_user"]["email"], "student@example.com")
+
+    def test_student_sees_personal_and_course_shared_key_pairs(self):
+        self.client.force_authenticate(self.student)
+        res = self.client.get("/api/settings/key-pairs/?provider=aws")
+        self.assertEqual(res.status_code, 200)
+        names = {item["name"] for item in res.json()}
+        self.assertIn("tesis-key", names)
+        self.assertIn("curso-key", names)
+
+    def test_student_cannot_create_course_shared_key_pair(self):
+        self.client.force_authenticate(self.student)
+        res = self.client.post(
+            "/api/settings/key-pairs/",
+            {
+                "name": "forbidden-shared-key",
+                "provider": "aws",
+                "region": "us-east-1",
+                "scope": CLOUD_SCOPE_COURSE_SHARED,
+                "course_id": str(self.course.id),
+                "cloud_connection_id": str(self.course_connection.id),
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 403)
+
+    def test_teacher_can_create_course_shared_key_pair(self):
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(
+            "/api/settings/key-pairs/",
+            {
+                "name": "redes-1-key",
+                "label": "Key curso",
+                "provider": "aws",
+                "region": "us-east-1",
+                "scope": CLOUD_SCOPE_COURSE_SHARED,
+                "course_id": str(self.course.id),
+                "cloud_connection_id": str(self.course_connection.id),
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.json()["scope"], CLOUD_SCOPE_COURSE_SHARED)
+        self.assertEqual(res.json()["course"]["id"], str(self.course.id))
+        self.assertEqual(res.json()["cloud_connection"]["id"], str(self.course_connection.id))
+
+    def test_teacher_can_manage_ami_catalog(self):
+        self.client.force_authenticate(self.teacher)
+        create_res = self.client.post(
+            "/api/settings/amis/",
+            {
+                "code": "ami-teacher-001",
+                "label": "AMI docente",
+                "provider": "aws",
+                "region": "us-east-1",
+            },
+            format="json",
+        )
+        self.assertEqual(create_res.status_code, 201)
+        delete_res = self.client.delete(f"/api/settings/amis/{create_res.json()['id']}/")
+        self.assertEqual(delete_res.status_code, 204)
 
     def test_teacher_sees_unassigned_students_but_not_other_teacher_students(self):
         self.client.force_authenticate(self.teacher)
@@ -648,6 +883,65 @@ class VisibilityApiTests(APITestCase):
         self.assertEqual(apply_res.status_code, 403)
         self.assertEqual(apply_res.json()["code"], "PLAN_EXECUTION_FORBIDDEN")
 
+    @patch("api.views.process_network_plan.delay")
+    @patch("api.views._can_run_real_terraform", return_value=True)
+    def test_teacher_can_apply_student_plan_when_effective_connection_is_course_shared(
+        self,
+        _can_run_real_terraform,
+        mocked_delay,
+    ):
+        mocked_delay.return_value = SimpleNamespace(id="task-course-apply-1")
+        self.student_lab.cloud_connection = self.course_connection
+        self.student_lab.save(update_fields=["cloud_connection", "updated_at"])
+        plan = Plan.objects.get(name="Plan alumno")
+
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(
+            f"/api/network/plans/{plan.id}/deploy/",
+            {"simulate_only": False},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 202)
+        plan.refresh_from_db()
+        self.assertEqual(plan.status, Plan.Status.RUNNING)
+        self.assertEqual(plan.last_action, Plan.LastAction.APPLY)
+        self.assertEqual(plan.task_id, "task-course-apply-1")
+
+    @patch("api.views.process_network_plan.delay")
+    @patch("api.views._can_run_real_terraform", return_value=True)
+    def test_teacher_can_apply_student_plan_when_personal_connection_has_active_delegation(
+        self,
+        _can_run_real_terraform,
+        mocked_delay,
+    ):
+        mocked_delay.return_value = SimpleNamespace(id="task-delegated-apply-1")
+        plan = Plan.objects.get(name="Plan alumno")
+        delegation = CloudExecutionDelegation.objects.create(
+            lab=self.student_lab,
+            cloud_connection=self.student_connection,
+            owner_user=self.student,
+            delegate_user=self.teacher,
+            course=self.course,
+            provider="aws",
+            note="Revisión docente autorizada",
+            created_by=self.student,
+            expires_at=timezone.now() + timedelta(hours=2),
+        )
+
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(
+            f"/api/network/plans/{plan.id}/deploy/",
+            {"simulate_only": False},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 202)
+        execution = PlanExecutionRecord.objects.filter(plan=plan).order_by("-created_at").first()
+        self.assertIsNotNone(execution)
+        self.assertEqual(execution.delegation_id, delegation.id)
+        self.assertEqual(execution.requested_by_id, self.teacher.id)
+
     def test_teacher_cannot_destroy_student_plan(self):
         plan = Plan.objects.get(name="Plan alumno")
         plan.applied = True
@@ -661,6 +955,99 @@ class VisibilityApiTests(APITestCase):
         self.assertEqual(res.status_code, 403)
         self.assertEqual(res.json()["code"], "PLAN_EXECUTION_FORBIDDEN")
 
+    @patch("api.views.destroy_last_deploy.delay")
+    def test_teacher_can_destroy_student_plan_when_effective_connection_is_course_shared(self, mocked_delay):
+        mocked_delay.return_value = SimpleNamespace(id="task-course-destroy-1")
+        self.student_lab.cloud_connection = self.course_connection
+        self.student_lab.save(update_fields=["cloud_connection", "updated_at"])
+        plan = Plan.objects.get(name="Plan alumno")
+        plan.applied = True
+        plan.status = Plan.Status.SUCCESS
+        plan.last_action = Plan.LastAction.APPLY
+        plan.save(update_fields=["applied", "status", "last_action", "updated_at"])
+
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(f"/api/network/plans/{plan.id}/destroy/", format="json")
+
+        self.assertEqual(res.status_code, 202)
+        plan.refresh_from_db()
+        self.assertEqual(plan.status, Plan.Status.RUNNING)
+        self.assertEqual(plan.last_action, Plan.LastAction.DESTROY)
+
+    @patch("api.views._can_run_real_terraform", return_value=True)
+    def test_real_apply_is_blocked_when_current_cloud_target_differs_from_last_real_apply(
+        self,
+        _can_run_real_terraform,
+    ):
+        self.student_lab.cloud_connection = self.course_connection
+        self.student_lab.save(update_fields=["cloud_connection", "updated_at"])
+        plan = Plan.objects.get(name="Plan alumno")
+        plan.last_apply_context = {
+            "provider": "aws",
+            "credential_source": "cloud_connection",
+            "region": "us-east-1",
+            "cloud_connection_id": str(self.student_connection.id),
+            "cloud_connection_name": self.student_connection.name,
+            "cloud_connection_scope": self.student_connection.scope,
+            "account_id": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/alumno22-syslab",
+            "user_id": "AIDAEXAMPLE",
+            "captured_at": "2026-04-07T20:00:00Z",
+        }
+        plan.save(update_fields=["last_apply_context", "updated_at"])
+
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(
+            f"/api/network/plans/{plan.id}/deploy/",
+            {"simulate_only": False},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 409)
+        self.assertEqual(res.json()["code"], "CLOUD_TARGET_CHANGED")
+
+    @patch("api.views._can_run_real_terraform", return_value=True)
+    def test_destroy_is_blocked_when_current_cloud_target_differs_from_last_real_apply(
+        self,
+        _can_run_real_terraform,
+    ):
+        self.student_lab.cloud_connection = self.course_connection
+        self.student_lab.save(update_fields=["cloud_connection", "updated_at"])
+        plan = Plan.objects.get(name="Plan alumno")
+        plan.applied = True
+        plan.status = Plan.Status.SUCCESS
+        plan.last_action = Plan.LastAction.APPLY
+        plan.last_apply_context = {
+            "provider": "aws",
+            "credential_source": "cloud_connection",
+            "region": "us-east-1",
+            "cloud_connection_id": str(self.student_connection.id),
+            "cloud_connection_name": self.student_connection.name,
+            "cloud_connection_scope": self.student_connection.scope,
+            "account_id": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/alumno22-syslab",
+            "user_id": "AIDAEXAMPLE",
+            "captured_at": "2026-04-07T20:00:00Z",
+        }
+        plan.save(update_fields=["applied", "status", "last_action", "last_apply_context", "updated_at"])
+
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(f"/api/network/plans/{plan.id}/destroy/", format="json")
+
+        self.assertEqual(res.status_code, 409)
+        self.assertEqual(res.json()["code"], "CLOUD_TARGET_CHANGED")
+
+    def test_plan_list_exposes_apply_capability_to_teacher_when_student_lab_uses_course_shared(self):
+        self.student_lab.cloud_connection = self.course_connection
+        self.student_lab.save(update_fields=["cloud_connection", "updated_at"])
+
+        self.client.force_authenticate(self.teacher)
+        res = self.client.get("/api/network/plans/")
+
+        self.assertEqual(res.status_code, 200)
+        plans_by_name = {item["name"]: item for item in res.json()}
+        self.assertTrue(plans_by_name["Plan alumno"]["can_apply"])
+
     def test_plan_list_exposes_apply_capability_by_owner(self):
         self.client.force_authenticate(self.teacher)
         res = self.client.get("/api/network/plans/")
@@ -669,6 +1056,249 @@ class VisibilityApiTests(APITestCase):
         plans_by_name = {item["name"]: item for item in res.json()}
         self.assertFalse(plans_by_name["Plan alumno"]["can_apply"])
         self.assertTrue(plans_by_name["Plan compartido"]["can_apply"])
+
+    def test_plan_detail_exposes_last_apply_context(self):
+        plan = Plan.objects.get(name="Plan alumno")
+        plan.last_apply_context = {
+            "provider": "aws",
+            "credential_source": "cloud_connection",
+            "region": "us-east-1",
+            "cloud_connection_id": str(self.student_connection.id),
+            "cloud_connection_name": self.student_connection.name,
+            "cloud_connection_scope": self.student_connection.scope,
+            "account_id": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/alumno22-syslab",
+            "user_id": "AIDAEXAMPLE",
+            "identity": {
+                "Account": "123456789012",
+                "Arn": "arn:aws:iam::123456789012:user/alumno22-syslab",
+                "UserId": "AIDAEXAMPLE",
+            },
+            "captured_at": "2026-04-07T20:00:00Z",
+        }
+        plan.save(update_fields=["last_apply_context", "updated_at"])
+
+        self.client.force_authenticate(self.student)
+        res = self.client.get(f"/api/network/plans/{plan.id}/")
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["last_apply_context"]["credential_source"], "cloud_connection")
+        self.assertEqual(res.json()["last_apply_context"]["cloud_connection_id"], str(self.student_connection.id))
+        self.assertEqual(res.json()["last_apply_context"]["account_id"], "123456789012")
+
+    def test_plan_detail_exposes_execution_history(self):
+        plan = Plan.objects.get(name="Plan alumno")
+        PlanExecutionRecord.objects.create(
+            plan=plan,
+            lab=self.student_lab,
+            requested_by=self.student,
+            action=Plan.LastAction.APPLY,
+            simulate_only=False,
+            provider="aws",
+            status=PlanExecutionRecord.Status.SUCCESS,
+            task_id="task-history-1",
+            cloud_connection=self.student_connection,
+            cloud_connection_name=self.student_connection.name,
+            cloud_connection_scope=self.student_connection.scope,
+            resolved_execution_source="lab_explicit",
+            credential_source="cloud_connection",
+            account_id="123456789012",
+            arn="arn:aws:sts::123456789012:assumed-role/syslab-student-role/syslab-1234",
+            sts_user_id="AIDAEXAMPLE",
+        )
+
+        self.client.force_authenticate(self.student)
+        res = self.client.get(f"/api/network/plans/{plan.id}/")
+
+        self.assertEqual(res.status_code, 200)
+        history = res.json()["execution_history"]
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["task_id"], "task-history-1")
+        self.assertEqual(history[0]["credential_source"], "cloud_connection")
+        self.assertEqual(history[0]["requested_by"]["email"], "student@example.com")
+
+    def test_plan_detail_exposes_cloud_target_state_when_connection_changed(self):
+        plan = Plan.objects.get(name="Plan alumno")
+        self.student_lab.cloud_connection = self.course_connection
+        self.student_lab.save(update_fields=["cloud_connection", "updated_at"])
+        plan.last_apply_context = {
+            "provider": "aws",
+            "credential_source": "cloud_connection",
+            "region": "us-east-1",
+            "cloud_connection_id": str(self.student_connection.id),
+            "cloud_connection_name": self.student_connection.name,
+            "cloud_connection_scope": self.student_connection.scope,
+            "account_id": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/alumno22-syslab",
+            "user_id": "AIDAEXAMPLE",
+            "captured_at": "2026-04-07T20:00:00Z",
+        }
+        plan.save(update_fields=["last_apply_context", "updated_at"])
+
+        self.client.force_authenticate(self.student)
+        res = self.client.get(f"/api/network/plans/{plan.id}/")
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["cloud_target_state"]["status"], "target_changed")
+        self.assertTrue(res.json()["cloud_target_state"]["is_mismatch"])
+
+    def test_plan_detail_exposes_resolved_execution_target(self):
+        plan = Plan.objects.get(name="Plan alumno")
+
+        self.client.force_authenticate(self.student)
+        res = self.client.get(f"/api/network/plans/{plan.id}/")
+
+        self.assertEqual(res.status_code, 200)
+        target = res.json()["resolved_execution_target"]
+        self.assertEqual(target["source"], "owner_personal_auto")
+        self.assertEqual(target["id"], str(self.student_connection.id))
+        self.assertEqual(target["name"], self.student_connection.name)
+
+    def test_student_sees_personal_and_course_shared_cloud_connections(self):
+        self.client.force_authenticate(self.student)
+        res = self.client.get("/api/cloud-connections/?provider=aws")
+        self.assertEqual(res.status_code, 200)
+        names = {item["name"] for item in res.json()}
+        self.assertIn("AWS alumno", names)
+        self.assertIn("AWS curso", names)
+
+    def test_student_can_create_personal_cloud_connection(self):
+        self.client.force_authenticate(self.student)
+        res = self.client.post(
+            "/api/cloud-connections/",
+            {
+                "name": "AWS personal 2",
+                "provider": "aws",
+                "scope": "personal",
+                "auth_type": "aws_static_keys",
+                "default_region": "us-east-1",
+                "aws_access_key_id": "AKIATEST1234",
+                "aws_secret_access_key": "secret-123",
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.json()["scope"], "personal")
+
+    def test_teacher_can_create_course_shared_assume_role_connection(self):
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(
+            "/api/cloud-connections/",
+            {
+                "name": "AWS assume role curso",
+                "provider": "aws",
+                "scope": "course_shared",
+                "auth_type": "aws_assume_role",
+                "course_id": str(self.course.id),
+                "default_region": "us-east-1",
+                "aws_role_arn": "arn:aws:iam::123456789012:role/syslab-course-role",
+                "aws_external_id": "ext-123",
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.json()["auth_type"], "aws_assume_role")
+        self.assertEqual(res.json()["aws_role_arn"], "arn:aws:iam::123456789012:role/syslab-course-role")
+
+    def test_student_cannot_create_course_shared_cloud_connection(self):
+        self.client.force_authenticate(self.student)
+        res = self.client.post(
+            "/api/cloud-connections/",
+            {
+                "name": "AWS curso intento alumno",
+                "provider": "aws",
+                "scope": "course_shared",
+                "auth_type": "aws_static_keys",
+                "course_id": str(self.course.id),
+                "default_region": "us-east-1",
+                "aws_access_key_id": "AKIATEST1234",
+                "aws_secret_access_key": "secret-123",
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 403)
+
+    def test_student_can_create_and_revoke_execution_delegation_for_course_teacher(self):
+        self.client.force_authenticate(self.student)
+        create_res = self.client.post(
+            "/api/execution-delegations/",
+            {
+                "lab_id": str(self.student_lab.id),
+                "note": "Autorización temporal para revisión",
+            },
+            format="json",
+        )
+
+        self.assertEqual(create_res.status_code, 201)
+        delegation_id = create_res.json()["id"]
+        self.assertEqual(create_res.json()["delegate_user"]["email"], "teacher@example.com")
+        self.assertEqual(create_res.json()["cloud_connection"]["id"], str(self.student_connection.id))
+
+        list_res = self.client.get("/api/execution-delegations/")
+        self.assertEqual(list_res.status_code, 200)
+        self.assertEqual(len(list_res.json()), 1)
+
+        revoke_res = self.client.post(f"/api/execution-delegations/{delegation_id}/revoke/")
+        self.assertEqual(revoke_res.status_code, 200)
+        self.assertEqual(revoke_res.json()["status"], "revoked")
+
+    def test_lab_can_be_created_with_visible_cloud_connection(self):
+        self.client.force_authenticate(self.student)
+        res = self.client.post(
+            "/api/labs/",
+            {
+                "name": "Lab con cuenta personal",
+                "target_provider": "aws",
+                "cidr_block": "10.80.0.0",
+                "prefix_length": 16,
+                "region": "us-east-1",
+                "cloud_connection_id": str(self.student_connection.id),
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.json()["cloud_connection"]["id"], str(self.student_connection.id))
+
+    def test_lab_can_be_created_with_visible_course_shared_connection(self):
+        self.client.force_authenticate(self.student)
+        res = self.client.post(
+            "/api/labs/",
+            {
+                "name": "Lab con cuenta curso",
+                "target_provider": "aws",
+                "cidr_block": "10.81.0.0",
+                "prefix_length": 16,
+                "region": "us-east-1",
+                "cloud_connection_id": str(self.course_connection.id),
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.json()["cloud_connection"]["id"], str(self.course_connection.id))
+        self.assertEqual(res.json()["resolved_execution_target"]["source"], "lab_explicit")
+
+    def test_lab_list_exposes_resolved_execution_target_sources(self):
+        self.client.force_authenticate(self.student)
+        res = self.client.get("/api/labs/")
+
+        self.assertEqual(res.status_code, 200)
+        labs_by_name = {item["name"]: item for item in res.json()}
+        self.assertEqual(
+            labs_by_name["Lab alumno"]["resolved_execution_target"]["source"],
+            "owner_personal_auto",
+        )
+        self.assertEqual(
+            labs_by_name["Lab alumno"]["resolved_execution_target"]["id"],
+            str(self.student_connection.id),
+        )
+        self.assertEqual(
+            labs_by_name["Lab compartido"]["resolved_execution_target"]["source"],
+            "course_shared_auto",
+        )
+        self.assertEqual(
+            labs_by_name["Lab compartido"]["resolved_execution_target"]["id"],
+            str(self.course_connection.id),
+        )
 
     def test_network_plan_create_preserves_applied_state_for_existing_active_plan(self):
         redeploy_lab = Lab.objects.create(

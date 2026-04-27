@@ -1,7 +1,6 @@
 // apps/frontend/src/components/flow/PacketToolbar.jsx
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
-import DarkModeIcon from '@mui/icons-material/DarkMode';
-import LightModeIcon from '@mui/icons-material/LightMode';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import RestoreIcon from '@mui/icons-material/Restore';
@@ -10,13 +9,22 @@ import SchoolIcon from '@mui/icons-material/School';
 import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
-import { Button, Chip, IconButton, Tooltip } from '@mui/material';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import SyncRoundedIcon from '@mui/icons-material/SyncRounded';
+import { Box, Button, Chip, Divider, IconButton, Popover, Stack, Tooltip, Typography } from '@mui/material';
+import { useMemo, useState } from 'react';
 import { computePlanActionState } from '@/features/networkCanvas/utils/planActionUi';
 import { useThemeMode } from '@/shared/ui/theme/AppThemeProvider';
 
 
 export default function PacketToolbar({
   onSave,
+  saveState = "idle",
+  saveMessage = "",
+  lastSavedAt = null,
   onRestore,
   onRestoreInitial,
   onDeploy,
@@ -32,10 +40,12 @@ export default function PacketToolbar({
   guideOpen = false,
   onTogglePalette,
   onToggleGuide,
+  showPanelToggles = true,
 }) {
-  const { mode, toggle } = useThemeMode();
+  const { mode } = useThemeMode();
   const canTogglePalette = typeof onTogglePalette === "function";
   const canToggleGuide = typeof onToggleGuide === "function";
+  const [statusGuideAnchor, setStatusGuideAnchor] = useState(null);
 
   const PLAN_STATES = {
     IDLE: "IDLE",
@@ -49,6 +59,152 @@ export default function PacketToolbar({
   const actionState = computePlanActionState(planStatus, canvasState, validationState);
   const planSnapshotStatus = String(planStatus?.status || '').toUpperCase();
   const hasActiveInfra = planStatus?.applied === true;
+  const statusGuideOpen = Boolean(statusGuideAnchor);
+  const currentCanvasStateLabel = useMemo(() => {
+    switch (canvasState) {
+      case "PLAN_RUNNING":
+        return "Plan en ejecución";
+      case "PLAN_OUTDATED":
+        return "Canvas desactualizado";
+      case "PLAN_VALIDATED":
+        return "Canvas validado";
+      case "PLAN_SYNCED":
+        return "Canvas sincronizado";
+      case "NO_PLAN":
+      default:
+        return "Sin plan asociado";
+    }
+  }, [canvasState]);
+  const statusGuideItems = useMemo(
+    () => [
+      {
+        label: "VALIDATED",
+        color: "success",
+        description:
+          "El canvas ya pasó validación y la topología actual coincide con el último plan validado.",
+      },
+      {
+        label: "PLAN SUCCESS",
+        color: "success",
+        description:
+          "La última ejecución del plan terminó correctamente en backend.",
+      },
+      {
+        label: "ACTIVE INFRA",
+        color: "warning",
+        description:
+          "Existe infraestructura real activa en AWS asociada a este laboratorio.",
+      },
+      {
+        label: "OUTDATED",
+        color: "warning",
+        description:
+          "El canvas cambió después de la última validación y conviene revalidar antes de desplegar.",
+      },
+      {
+        label: "VALIDATING...",
+        color: "info",
+        description:
+          "El sistema está generando o sincronizando un plan para reflejar el estado actual del canvas.",
+      },
+      {
+        label: "ERROR",
+        color: "error",
+        description:
+          "Hubo un problema al validar o sincronizar el plan y necesitas revisar el mensaje asociado.",
+      },
+    ],
+    [],
+  );
+  const getPanelToggleSx = (isOpen, tone = "primary") => {
+    const accent = tone === "secondary"
+      ? (mode === "light" ? "#0f766e" : "#67e8f9")
+      : (mode === "light" ? "#1d4ed8" : "#93c5fd");
+    const border = tone === "secondary"
+      ? (mode === "light" ? "rgba(15,118,110,0.24)" : "rgba(103,232,249,0.32)")
+      : (mode === "light" ? "rgba(29,78,216,0.22)" : "rgba(147,197,253,0.34)");
+    const background = isOpen
+      ? tone === "secondary"
+        ? (mode === "light" ? "rgba(20,184,166,0.14)" : "rgba(20,184,166,0.24)")
+        : (mode === "light" ? "rgba(59,130,246,0.14)" : "rgba(59,130,246,0.24)")
+      : (mode === "light" ? "#f8fafc" : "rgba(15,23,42,0.72)");
+
+    return {
+      color: accent,
+      borderColor: border,
+      backgroundColor: background,
+      boxShadow: mode === "light"
+        ? "0 8px 18px rgba(15,23,42,0.08)"
+        : "0 10px 22px rgba(2,6,23,0.34)",
+      fontWeight: 700,
+      "&:hover": {
+        borderColor: accent,
+        backgroundColor: isOpen
+          ? tone === "secondary"
+            ? (mode === "light" ? "rgba(20,184,166,0.18)" : "rgba(20,184,166,0.3)")
+            : (mode === "light" ? "rgba(59,130,246,0.18)" : "rgba(59,130,246,0.3)")
+          : (mode === "light" ? "#eef4ff" : "rgba(30,41,59,0.92)"),
+      },
+      "& .MuiButton-startIcon, & .MuiButton-endIcon": {
+        color: accent,
+      },
+    };
+  };
+  const formatSaveTime = (value) => {
+    if (!value) return "";
+    try {
+      return new Date(value).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+    } catch {
+      return "";
+    }
+  };
+
+  const renderSaveChip = () => {
+    if (saveState === "saving") {
+      return (
+        <Chip
+          size="small"
+          color="info"
+          variant="filled"
+          icon={<SyncRoundedIcon fontSize="small" />}
+          label={saveMessage || "Guardando..."}
+          sx={{ fontWeight: 700 }}
+        />
+      );
+    }
+
+    if (saveState === "saved") {
+      return (
+        <Chip
+          size="small"
+          color="success"
+          variant="outlined"
+          icon={<CheckCircleOutlineIcon fontSize="small" />}
+          label={lastSavedAt ? `Guardado ${formatSaveTime(lastSavedAt)}` : (saveMessage || "Guardado")}
+          sx={{ fontWeight: 700, bgcolor: "rgba(34,197,94,0.06)" }}
+        />
+      );
+    }
+
+    if (saveState === "error") {
+      return (
+        <Chip
+          size="small"
+          color="error"
+          variant="filled"
+          icon={<ErrorOutlineIcon fontSize="small" />}
+          label={saveMessage || "Error al guardar"}
+          sx={{ fontWeight: 700 }}
+        />
+      );
+    }
+
+    return null;
+  };
 
   const renderPlanChip = () => {
     if (!normalizedValidation || normalizedValidation === PLAN_STATES.IDLE) {
@@ -135,39 +291,70 @@ export default function PacketToolbar({
                 color="warning"
               />
             )}
+            <Tooltip title="Ver significado de los estados del canvas">
+              <IconButton
+                size="small"
+                className="pt-ibtn"
+                onClick={(event) => setStatusGuideAnchor(event.currentTarget)}
+                aria-label="Ver significado de los estados del canvas"
+              >
+                <InfoOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           </>
         </div>
 
         {/* Controles de vista */}
         <div className="pt-toolbar__group">
-          {canTogglePalette && (
-            <Tooltip title={paletteOpen ? "Ocultar paleta de herramientas" : "Mostrar paleta de herramientas"}>
-              <IconButton size="small" className="pt-ibtn" onClick={onTogglePalette}>
-                <ViewSidebarIcon
-                  fontSize="small"
-                  sx={{ transform: paletteOpen ? "scaleX(1)" : "scaleX(-1)" }}
-                />
-              </IconButton>
+          {showPanelToggles && canTogglePalette && (
+            <Tooltip title={paletteOpen ? "Ocultar herramientas para modelar" : "Mostrar herramientas para modelar"}>
+              <Button
+                size="small"
+                variant="outlined"
+                className="pt-btn"
+                sx={getPanelToggleSx(paletteOpen, "primary")}
+                startIcon={
+                  <ViewSidebarIcon
+                    fontSize="small"
+                    sx={{ transform: paletteOpen ? "scaleX(1)" : "scaleX(-1)" }}
+                  />
+                }
+                endIcon={paletteOpen ? <ChevronLeftIcon /> : <ChevronRightIcon />}
+                onClick={onTogglePalette}
+                aria-expanded={paletteOpen}
+                aria-controls="tool-palette-panel"
+                aria-label={paletteOpen ? "Ocultar herramientas para modelar" : "Mostrar herramientas para modelar"}
+              >
+                Herramientas
+              </Button>
             </Tooltip>
           )}
-          {canToggleGuide && (
-            <Tooltip title={guideOpen ? "Ocultar guía de aprendizaje" : "Mostrar guía de aprendizaje"}>
-              <IconButton size="small" className="pt-ibtn" onClick={onToggleGuide}>
-                <SchoolIcon
-                  fontSize="small"
-                  sx={{ opacity: guideOpen ? 1 : 0.7 }}
-                />
-              </IconButton>
+          {showPanelToggles && canToggleGuide && (
+            <Tooltip title={guideOpen ? "Ocultar guía de modelado" : "Mostrar guía de modelado"}>
+              <Button
+                size="small"
+                variant="outlined"
+                className="pt-btn"
+                sx={getPanelToggleSx(guideOpen, "secondary")}
+                startIcon={
+                  <SchoolIcon
+                    fontSize="small"
+                    sx={{ opacity: guideOpen ? 1 : 0.82 }}
+                  />
+                }
+                endIcon={guideOpen ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+                onClick={onToggleGuide}
+                aria-expanded={guideOpen}
+                aria-controls="learning-guide-panel"
+                aria-label={guideOpen ? "Ocultar guía de modelado" : "Mostrar guía de modelado"}
+              >
+                Guía
+              </Button>
             </Tooltip>
           )}
           <Tooltip title="Acercar"><IconButton size="small" className="pt-ibtn" onClick={onZoomIn}><ZoomInIcon fontSize="small" /></IconButton></Tooltip>
           <Tooltip title="Alejar"><IconButton size="small" className="pt-ibtn" onClick={onZoomOut}><ZoomOutIcon fontSize="small" /></IconButton></Tooltip>
           <Tooltip title="Ajustar vista"><IconButton size="small" className="pt-ibtn" onClick={onFitView}><CenterFocusStrongIcon fontSize="small" /></IconButton></Tooltip>
-          <Tooltip title={mode === 'light' ? 'Modo oscuro' : 'Modo claro'}>
-            <IconButton size="small" className="pt-ibtn" onClick={toggle}>
-              {mode === 'light' ? <DarkModeIcon fontSize="small" /> : <LightModeIcon fontSize="small" />}
-            </IconButton>
-          </Tooltip>
         </div>
 
         {/* Spacer que empuja todo lo siguiente a la derecha */}
@@ -175,22 +362,23 @@ export default function PacketToolbar({
 
         {/* Botones de acción */}
         <div className="pt-toolbar__group">
+          {renderSaveChip()}
           <Tooltip title="Guardar estado actual del canvas en la API">
-            <span>
+            <span data-tour="canvas-toolbar-save">
               <Button
                 variant="outlined"
                 className="pt-btn"
                 startIcon={<SaveIcon />}
                 onClick={onSave}
                 size="small"
-                disabled={canvasState === "PLAN_RUNNING"}
+                disabled={canvasState === "PLAN_RUNNING" || saveState === "saving"}
               >
-                Guardar
+                {saveState === "saving" ? "Guardando…" : "Guardar"}
               </Button>
             </span>
           </Tooltip>
           <Tooltip title="Restaurar última versión guardada desde la API">
-            <span>
+            <span data-tour="canvas-toolbar-restore">
               <Button
                 variant="outlined"
                 className="pt-btn"
@@ -204,7 +392,7 @@ export default function PacketToolbar({
             </span>
           </Tooltip>
           <Tooltip title="Restablecer canvas al estado inicial de la plantilla">
-            <span>
+            <span data-tour="canvas-toolbar-restore-initial">
               <Button
                 variant="outlined"
                 className="pt-btn pt-btn--yellow"
@@ -218,7 +406,7 @@ export default function PacketToolbar({
             </span>
           </Tooltip>
           <Tooltip title={actionState.actionTooltip}>
-            <span>
+            <span data-tour="canvas-toolbar-deploy">
               <Button
                 variant="outlined"
                 className="pt-btn pt-btn--green"
@@ -232,7 +420,7 @@ export default function PacketToolbar({
             </span>
           </Tooltip>
           <Tooltip title="Generar y revisar el plan de ruteo sin aplicar cambios">
-            <span>
+            <span data-tour="canvas-toolbar-routes">
               <Button
                 variant="outlined"
                 className="pt-btn pt-btn--green"
@@ -248,6 +436,74 @@ export default function PacketToolbar({
         </div>
 
       </div>
+      <Popover
+        open={statusGuideOpen}
+        anchorEl={statusGuideAnchor}
+        onClose={() => setStatusGuideAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        PaperProps={{
+          sx: {
+            mt: 1,
+            width: 360,
+            maxWidth: 'calc(100vw - 24px)',
+            borderRadius: 3,
+            p: 2,
+          },
+        }}
+      >
+        <Stack spacing={1.5}>
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+              Estados del canvas
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Esta ayuda resume qué significan los chips que ves en la cabecera del laboratorio.
+            </Typography>
+          </Box>
+
+          <PaperStatusSummary label={currentCanvasStateLabel} detail={`Estado interno actual: ${canvasState || 'NO_PLAN'}`} />
+
+          <Divider />
+
+          <Stack spacing={1.25}>
+            {statusGuideItems.map((item) => (
+              <Box key={item.label}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Chip size="small" label={item.label} color={item.color} variant="outlined" />
+                </Stack>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  {item.description}
+                </Typography>
+              </Box>
+            ))}
+          </Stack>
+        </Stack>
+      </Popover>
     </div>
+  );
+}
+
+function PaperStatusSummary({ label, detail }) {
+  return (
+    <Box
+      sx={{
+        p: 1.25,
+        borderRadius: 2,
+        border: '1px solid',
+        borderColor: 'divider',
+        bgcolor: 'background.default',
+      }}
+    >
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+        Estado actual
+      </Typography>
+      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+        {label}
+      </Typography>
+      <Typography variant="caption" color="text.secondary">
+        {detail}
+      </Typography>
+    </Box>
   );
 }

@@ -1,13 +1,24 @@
 import json
 
 from django.contrib.auth.models import User
+from django.utils import timezone
 from rest_framework import serializers
 
+from .cloud_connections import resolve_lab_cloud_connection_with_source
 from .models import (
+    CLOUD_AUTH_AWS_ASSUME_ROLE,
     AmiCatalogEntry,
+    CLOUD_SCOPE_PERSONAL,
+    CLOUD_AUTH_AWS_STATIC,
+    CloudExecutionDelegation,
+    CloudAuthTypeChoices,
+    CloudConnection,
+    CloudConnectionScopeChoices,
     Course,
+    KeyPairCatalogEntry,
     Lab,
     Plan,
+    PlanExecutionRecord,
     ProviderChoices,
     ROLE_PLATFORM_ADMIN,
     ROLE_STUDENT,
@@ -18,11 +29,135 @@ from .models import (
     UserProfile,
     VisibilityScopeChoices,
 )
-from .permissions import can_execute_plan, canonical_role
+from .permissions import can_edit_cloud_connection, can_execute_plan, canonical_role
 
 
 ROLE_CHOICES = [ROLE_PLATFORM_ADMIN, ROLE_TEACHER, ROLE_STUDENT]
 STATUS_CHOICES = [STATUS_PENDING, STATUS_ACTIVE, STATUS_DEACTIVATED]
+
+
+class PlanExecutionRecordSerializer(serializers.ModelSerializer):
+    requested_by = serializers.SerializerMethodField()
+    delegation_id = serializers.UUIDField(source="delegation.id", read_only=True)
+
+    class Meta:
+        model = PlanExecutionRecord
+        fields = (
+            "id",
+            "action",
+            "status",
+            "simulate_only",
+            "provider",
+            "task_id",
+            "cloud_connection_name",
+            "cloud_connection_scope",
+            "resolved_execution_source",
+            "credential_source",
+            "account_id",
+            "arn",
+            "sts_user_id",
+            "error",
+            "requested_by",
+            "delegation_id",
+            "started_at",
+            "completed_at",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+    def get_requested_by(self, obj):
+        if not obj.requested_by_id:
+            return None
+        user = obj.requested_by
+        full = f"{user.first_name} {user.last_name}".strip()
+        return {
+            "id": user.id,
+            "email": user.email,
+            "display_name": full or user.username or user.email,
+            "role": canonical_role(user),
+        }
+
+
+class CloudExecutionDelegationSerializer(serializers.ModelSerializer):
+    owner_user = serializers.SerializerMethodField()
+    delegate_user = serializers.SerializerMethodField()
+    lab = serializers.SerializerMethodField()
+    cloud_connection = serializers.SerializerMethodField()
+    course = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CloudExecutionDelegation
+        fields = (
+            "id",
+            "lab",
+            "cloud_connection",
+            "owner_user",
+            "delegate_user",
+            "course",
+            "provider",
+            "note",
+            "is_active",
+            "status",
+            "expires_at",
+            "revoked_at",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+    def get_status(self, obj):
+        if obj.revoked_at:
+            return "revoked"
+        if obj.expires_at and obj.expires_at <= timezone.now():
+            return "expired"
+        return "active" if obj.is_currently_active else "inactive"
+
+    def _serialize_user(self, user):
+        if not user:
+            return None
+        full = f"{user.first_name} {user.last_name}".strip()
+        return {
+            "id": user.id,
+            "email": user.email,
+            "display_name": full or user.username or user.email,
+            "role": canonical_role(user),
+        }
+
+    def get_owner_user(self, obj):
+        return self._serialize_user(getattr(obj, "owner_user", None))
+
+    def get_delegate_user(self, obj):
+        return self._serialize_user(getattr(obj, "delegate_user", None))
+
+    def get_lab(self, obj):
+        return {
+            "id": str(obj.lab_id),
+            "name": obj.lab.name,
+            "canvas_id": obj.lab.canvas_id,
+        } if obj.lab_id else None
+
+    def get_cloud_connection(self, obj):
+        if not obj.cloud_connection_id:
+            return None
+        return {
+            "id": str(obj.cloud_connection_id),
+            "name": obj.cloud_connection.name,
+            "scope": obj.cloud_connection.scope,
+        }
+
+    def get_course(self, obj):
+        if not obj.course_id:
+            return None
+        return {
+            "id": str(obj.course_id),
+            "name": obj.course.name,
+            "code": obj.course.code,
+            "teacher_id": obj.course.teacher_id,
+            "teacher_email": obj.course.teacher.email,
+            "is_active": obj.course.is_active,
+        }
 
 
 class CanonicalProviderChoiceField(serializers.ChoiceField):
@@ -60,6 +195,8 @@ class PlanListSerializer(serializers.ModelSerializer):
     canvas_id = serializers.SerializerMethodField()
     firestore_vpc_id = serializers.SerializerMethodField()
     lab = serializers.SerializerMethodField()
+    owner_user = serializers.SerializerMethodField()
+    course = serializers.SerializerMethodField()
 
     class Meta:
         model = Plan
@@ -76,6 +213,8 @@ class PlanListSerializer(serializers.ModelSerializer):
             "canvas_id",
             "firestore_vpc_id",
             "lab",
+            "owner_user",
+            "course",
         )
         read_only_fields = fields
 
@@ -103,7 +242,23 @@ class PlanListSerializer(serializers.ModelSerializer):
     def get_lab(self, obj):
         if not obj.lab_id:
             return None
-        return {"id": str(obj.lab_id), "name": obj.lab.name}
+        return {
+            "id": str(obj.lab_id),
+            "name": obj.lab.name,
+            "owner_user": UserSummarySerializer(obj.lab.owner_user).data if getattr(obj.lab, "owner_user", None) else None,
+            "course": CourseSummarySerializer(obj.lab.course).data if getattr(obj.lab, "course", None) else None,
+            "visibility_scope": obj.lab.visibility_scope,
+        }
+
+    def get_owner_user(self, obj):
+        if not getattr(obj, "lab", None) or not getattr(obj.lab, "owner_user", None):
+            return None
+        return UserSummarySerializer(obj.lab.owner_user).data
+
+    def get_course(self, obj):
+        if not getattr(obj, "lab", None) or not getattr(obj.lab, "course", None):
+            return None
+        return CourseSummarySerializer(obj.lab.course).data
 
 
 class PlanDetailSerializer(serializers.ModelSerializer):
@@ -113,6 +268,12 @@ class PlanDetailSerializer(serializers.ModelSerializer):
     canvas_id = serializers.SerializerMethodField()
     firestore_vpc_id = serializers.SerializerMethodField()
     lab = serializers.SerializerMethodField()
+    last_apply_context = serializers.JSONField(read_only=True)
+    resolved_execution_target = serializers.SerializerMethodField()
+    execution_history = serializers.SerializerMethodField()
+    cloud_target_state = serializers.SerializerMethodField()
+    owner_user = serializers.SerializerMethodField()
+    course = serializers.SerializerMethodField()
 
     class Meta:
         model = Plan
@@ -133,11 +294,17 @@ class PlanDetailSerializer(serializers.ModelSerializer):
             "can_destroy",
             "last_deploy_task_id",
             "last_destroy_task_id",
+            "last_apply_context",
+            "resolved_execution_target",
+            "execution_history",
+            "cloud_target_state",
             "canvas_id",
             "firestore_vpc_id",
             "canvas_hash",
             "canvas_updated_at",
             "lab",
+            "owner_user",
+            "course",
         )
         read_only_fields = fields
 
@@ -165,7 +332,33 @@ class PlanDetailSerializer(serializers.ModelSerializer):
     def get_lab(self, obj):
         if not obj.lab_id:
             return None
-        return {"id": str(obj.lab_id), "name": obj.lab.name}
+        return {
+            "id": str(obj.lab_id),
+            "name": obj.lab.name,
+            "owner_user": UserSummarySerializer(obj.lab.owner_user).data if getattr(obj.lab, "owner_user", None) else None,
+            "course": CourseSummarySerializer(obj.lab.course).data if getattr(obj.lab, "course", None) else None,
+            "visibility_scope": obj.lab.visibility_scope,
+        }
+
+    def get_resolved_execution_target(self, obj):
+        return serialize_resolved_execution_target(getattr(obj, "lab", None), getattr(obj, "payload", None))
+
+    def get_execution_history(self, obj):
+        history = list(obj.execution_history.select_related("requested_by", "delegation").all()[:10])
+        return PlanExecutionRecordSerializer(history, many=True).data
+
+    def get_cloud_target_state(self, obj):
+        return serialize_cloud_target_state(obj)
+
+    def get_owner_user(self, obj):
+        if not getattr(obj, "lab", None) or not getattr(obj.lab, "owner_user", None):
+            return None
+        return UserSummarySerializer(obj.lab.owner_user).data
+
+    def get_course(self, obj):
+        if not getattr(obj, "lab", None) or not getattr(obj.lab, "course", None):
+            return None
+        return CourseSummarySerializer(obj.lab.course).data
 
 
 class CourseSummarySerializer(serializers.ModelSerializer):
@@ -284,11 +477,278 @@ class CourseEnrollmentSerializer(serializers.Serializer):
     user_id = serializers.IntegerField()
 
 
+class CloudConnectionSerializer(serializers.ModelSerializer):
+    course = serializers.SerializerMethodField()
+    course_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
+    masked_access_key_id = serializers.CharField(read_only=True)
+    masked_role_arn = serializers.CharField(read_only=True)
+    aws_role_arn = serializers.CharField(read_only=True)
+    secret_configured = serializers.SerializerMethodField()
+    external_id_configured = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CloudConnection
+        fields = (
+            "id",
+            "name",
+            "provider",
+            "scope",
+            "auth_type",
+            "course",
+            "course_id",
+            "default_region",
+            "masked_access_key_id",
+            "masked_role_arn",
+            "aws_role_arn",
+            "secret_configured",
+            "external_id_configured",
+            "is_active",
+            "last_test_status",
+            "last_test_message",
+            "last_test_identity",
+            "last_tested_at",
+            "can_edit",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "course",
+            "masked_access_key_id",
+            "masked_role_arn",
+            "aws_role_arn",
+            "secret_configured",
+            "external_id_configured",
+            "last_test_status",
+            "last_test_message",
+            "last_test_identity",
+            "last_tested_at",
+            "can_edit",
+            "created_at",
+            "updated_at",
+        )
+
+    def get_secret_configured(self, obj):
+        return bool(obj.aws_secret_access_key_encrypted)
+
+    def get_external_id_configured(self, obj):
+        return bool(obj.aws_external_id_encrypted)
+
+    def get_course(self, obj):
+        if not obj.course_id:
+            return None
+        return {
+            "id": str(obj.course_id),
+            "name": obj.course.name,
+            "code": obj.course.code,
+            "teacher_id": obj.course.teacher_id,
+            "teacher_email": obj.course.teacher.email,
+            "is_active": obj.course.is_active,
+        }
+
+    def get_can_edit(self, obj):
+        request = self.context.get("request")
+        if not request:
+            return False
+        return can_edit_cloud_connection(request.user, obj)
+
+
+def _serialize_execution_connection(connection, source: str, provider: str):
+    identity = connection.last_test_identity if connection else {}
+    identity = identity if isinstance(identity, dict) else {}
+
+    if not connection:
+        return {
+            "provider": provider,
+            "source": source,
+            "status": "missing",
+            "id": "",
+            "name": "",
+            "scope": "",
+            "default_region": "",
+            "account_id": "",
+            "arn": "",
+            "last_test_status": "",
+        }
+
+    return {
+        "provider": connection.provider or provider,
+        "source": source,
+        "status": "resolved",
+        "id": str(connection.id),
+        "name": connection.name,
+        "scope": connection.scope,
+        "default_region": connection.default_region,
+        "account_id": str(identity.get("Account") or ""),
+        "arn": str(identity.get("Arn") or ""),
+        "last_test_status": connection.last_test_status or "",
+    }
+
+
+def serialize_resolved_execution_target(lab, payload=None):
+    provider = str(
+        (payload or {}).get("cloud")
+        or getattr(lab, "target_provider", ProviderChoices.AWS)
+        or ProviderChoices.AWS
+    ).strip().lower()
+    connection, source = resolve_lab_cloud_connection_with_source(lab, provider)
+    return _serialize_execution_connection(connection, source, provider)
+
+
+def serialize_cloud_target_state(plan):
+    if not plan:
+        return {
+            "status": "unknown",
+            "message": "No hay suficiente contexto para reconciliar la cuenta cloud de este plan.",
+            "is_mismatch": False,
+        }
+
+    last_apply = getattr(plan, "last_apply_context", None) or {}
+    if not isinstance(last_apply, dict) or not last_apply:
+        return {
+            "status": "no_real_apply",
+            "message": "Aún no existe un APPLY real previo para comparar contra la conexión cloud actual.",
+            "is_mismatch": False,
+        }
+
+    current = serialize_resolved_execution_target(getattr(plan, "lab", None), getattr(plan, "payload", None))
+    current_id = str(current.get("id") or "").strip()
+    current_account = str(current.get("account_id") or "").strip()
+    last_conn_id = str(last_apply.get("cloud_connection_id") or "").strip()
+    last_account = str(last_apply.get("account_id") or "").strip()
+    current_scope = str(current.get("scope") or "").strip()
+    last_scope = str(last_apply.get("cloud_connection_scope") or "").strip()
+
+    if current.get("status") == "missing":
+        return {
+            "status": "unresolved_current_target",
+            "message": (
+                "El último APPLY real se hizo con otra conexión cloud y hoy el laboratorio ya no "
+                "resuelve una conexión ejecutable compatible."
+            ),
+            "is_mismatch": True,
+            "current_target": current,
+            "last_apply_context": last_apply,
+        }
+
+    same_connection = bool(current_id and last_conn_id and current_id == last_conn_id)
+    same_account = bool(current_account and last_account and current_account == last_account)
+    same_scope = bool(current_scope and last_scope and current_scope == last_scope)
+
+    if same_connection or (same_account and same_scope):
+        return {
+            "status": "aligned",
+            "message": "La conexión cloud actual coincide con la usada en el último APPLY real.",
+            "is_mismatch": False,
+            "current_target": current,
+            "last_apply_context": last_apply,
+        }
+
+    return {
+        "status": "target_changed",
+        "message": (
+            "La conexión cloud actual ya no coincide con la usada en el último APPLY real. "
+            "El estado ACTIVE pasa a ser histórico respecto de otra cuenta cloud."
+        ),
+        "is_mismatch": True,
+        "current_target": current,
+        "last_apply_context": last_apply,
+    }
+
+
+class CloudConnectionCreateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=120)
+    provider = CanonicalProviderChoiceField(choices=ProviderChoices.choices, default=ProviderChoices.AWS)
+    scope = serializers.ChoiceField(
+        choices=CloudConnectionScopeChoices.choices,
+        default=CloudConnectionScopeChoices.PERSONAL,
+    )
+    auth_type = serializers.ChoiceField(
+        choices=CloudAuthTypeChoices.choices,
+        default=CloudAuthTypeChoices.AWS_STATIC_KEYS,
+    )
+    course_id = serializers.UUIDField(required=False, allow_null=True)
+    default_region = serializers.CharField(required=False, allow_blank=True, default="")
+    aws_access_key_id = serializers.CharField(max_length=128, required=False, allow_blank=True, default="")
+    aws_secret_access_key = serializers.CharField(write_only=True, trim_whitespace=True, required=False, allow_blank=True, default="")
+    aws_role_arn = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+    aws_external_id = serializers.CharField(write_only=True, trim_whitespace=True, required=False, allow_blank=True, default="")
+    is_active = serializers.BooleanField(required=False, default=True)
+
+    def validate(self, attrs):
+        provider = attrs.get("provider")
+        auth_type = attrs.get("auth_type")
+        scope = attrs.get("scope")
+        course_id = attrs.get("course_id")
+
+        if provider != ProviderChoices.AWS:
+            raise serializers.ValidationError("Por ahora solo AWS soporta conexiones ejecutables reales.")
+        if scope == CLOUD_SCOPE_PERSONAL and course_id:
+            raise serializers.ValidationError("Una conexion personal no debe quedar asociada a un curso.")
+        if scope != CLOUD_SCOPE_PERSONAL and not course_id:
+            raise serializers.ValidationError("Debes seleccionar un curso para una conexion compartida.")
+        if auth_type == CLOUD_AUTH_AWS_STATIC:
+            if not str(attrs.get("aws_access_key_id") or "").strip():
+                raise serializers.ValidationError("Debes ingresar AWS Access Key ID.")
+            if not str(attrs.get("aws_secret_access_key") or "").strip():
+                raise serializers.ValidationError("Debes ingresar AWS Secret Access Key.")
+        elif auth_type == CLOUD_AUTH_AWS_ASSUME_ROLE:
+            if not str(attrs.get("aws_role_arn") or "").strip():
+                raise serializers.ValidationError("Debes ingresar el Role ARN para AssumeRole.")
+        else:
+            raise serializers.ValidationError("Tipo de autenticacion AWS no soportado en este MVP.")
+        return attrs
+
+
+class CloudConnectionUpdateSerializer(serializers.Serializer):
+    auth_type = serializers.ChoiceField(choices=CloudAuthTypeChoices.choices, required=False)
+    name = serializers.CharField(max_length=120, required=False)
+    default_region = serializers.CharField(required=False, allow_blank=True)
+    aws_access_key_id = serializers.CharField(max_length=128, required=False)
+    aws_secret_access_key = serializers.CharField(write_only=True, trim_whitespace=True, required=False, allow_blank=True)
+    aws_role_arn = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    aws_external_id = serializers.CharField(write_only=True, trim_whitespace=True, required=False, allow_blank=True)
+    is_active = serializers.BooleanField(required=False)
+
+    def validate(self, attrs):
+        instance = self.context.get("instance")
+        auth_type = attrs.get("auth_type") or getattr(instance, "auth_type", CLOUD_AUTH_AWS_STATIC)
+        role_arn = attrs.get("aws_role_arn", getattr(instance, "aws_role_arn", ""))
+        access_key = attrs.get("aws_access_key_id", getattr(instance, "aws_access_key_id", ""))
+        secret_configured = bool(
+            str(attrs.get("aws_secret_access_key") or "").strip()
+            or getattr(instance, "aws_secret_access_key_encrypted", "")
+        )
+
+        if auth_type == CLOUD_AUTH_AWS_STATIC:
+            if not str(access_key or "").strip():
+                raise serializers.ValidationError("Debes ingresar AWS Access Key ID.")
+            if not secret_configured:
+                raise serializers.ValidationError("Debes ingresar AWS Secret Access Key.")
+        elif auth_type == CLOUD_AUTH_AWS_ASSUME_ROLE:
+            if not str(role_arn or "").strip():
+                raise serializers.ValidationError("Debes ingresar el Role ARN para AssumeRole.")
+        else:
+            raise serializers.ValidationError("Tipo de autenticacion AWS no soportado en este MVP.")
+        return attrs
+
+
+class CloudExecutionDelegationCreateSerializer(serializers.Serializer):
+    lab_id = serializers.UUIDField()
+    delegate_user_id = serializers.IntegerField(required=False)
+    expires_at = serializers.DateTimeField(required=False, allow_null=True)
+    note = serializers.CharField(required=False, allow_blank=True, default="")
+
+
 class LabSerializer(serializers.ModelSerializer):
     owner_user_id = serializers.IntegerField(source="owner_user.id", read_only=True)
     owner_user = UserSummarySerializer(read_only=True)
     course = CourseSummarySerializer(read_only=True)
     course_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
+    cloud_connection = CloudConnectionSerializer(read_only=True)
+    cloud_connection_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
+    resolved_execution_target = serializers.SerializerMethodField()
     canvas_id = serializers.SerializerMethodField()
     legacy_canvas_id = serializers.SerializerMethodField()
     visibility_scope = serializers.ChoiceField(choices=VisibilityScopeChoices.choices, required=False)
@@ -305,6 +765,9 @@ class LabSerializer(serializers.ModelSerializer):
             "owner_user",
             "course",
             "course_id",
+            "cloud_connection",
+            "cloud_connection_id",
+            "resolved_execution_target",
             "visibility_scope",
             "created_by_role",
             "target_provider",
@@ -340,6 +803,9 @@ class LabSerializer(serializers.ModelSerializer):
     def get_legacy_canvas_id(self, obj):
         return obj.legacy_canvas_id
 
+    def get_resolved_execution_target(self, obj):
+        return serialize_resolved_execution_target(obj)
+
 
 class LabCreateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=128)
@@ -360,6 +826,7 @@ class LabCreateSerializer(serializers.Serializer):
         default=VisibilityScopeChoices.OWNER,
     )
     course_id = serializers.UUIDField(required=False, allow_null=True)
+    cloud_connection_id = serializers.UUIDField(required=False, allow_null=True)
 
 
 class LabUpdateSerializer(serializers.Serializer):
@@ -378,6 +845,7 @@ class LabUpdateSerializer(serializers.Serializer):
     visibility_scope = serializers.ChoiceField(choices=VisibilityScopeChoices.choices, required=False)
     course_id = serializers.UUIDField(required=False, allow_null=True)
     plan_canvas_hash = serializers.CharField(required=False, allow_blank=True, max_length=64)
+    cloud_connection_id = serializers.UUIDField(required=False, allow_null=True)
 
 
 class AmiCatalogEntrySerializer(serializers.ModelSerializer):
@@ -387,6 +855,59 @@ class AmiCatalogEntrySerializer(serializers.ModelSerializer):
         model = AmiCatalogEntry
         fields = ("id", "code", "label", "provider", "region", "metadata", "created_at", "updated_at")
         read_only_fields = ("id", "created_at", "updated_at")
+
+
+class KeyPairCatalogEntrySerializer(serializers.ModelSerializer):
+    provider = CanonicalProviderChoiceField(choices=ProviderChoices.choices, required=False)
+    owner_user = serializers.SerializerMethodField()
+    course = serializers.SerializerMethodField()
+    cloud_connection = serializers.SerializerMethodField()
+
+    class Meta:
+        model = KeyPairCatalogEntry
+        fields = (
+            "id",
+            "name",
+            "label",
+            "provider",
+            "region",
+            "scope",
+            "owner_user",
+            "course",
+            "cloud_connection",
+            "metadata",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "owner_user",
+            "course",
+            "cloud_connection",
+            "created_at",
+            "updated_at",
+        )
+
+    def get_owner_user(self, obj):
+        if not obj.owner_user_id:
+            return None
+        return UserSummarySerializer(obj.owner_user).data
+
+    def get_course(self, obj):
+        if not obj.course_id:
+            return None
+        return CourseSummarySerializer(obj.course).data
+
+    def get_cloud_connection(self, obj):
+        if not obj.cloud_connection_id:
+            return None
+        return {
+            "id": str(obj.cloud_connection_id),
+            "name": obj.cloud_connection.name,
+            "scope": obj.cloud_connection.scope,
+            "provider": obj.cloud_connection.provider,
+            "default_region": obj.cloud_connection.default_region,
+        }
 
 
 class SubnetSerializer(serializers.Serializer):

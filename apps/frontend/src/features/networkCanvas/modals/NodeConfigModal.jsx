@@ -47,7 +47,7 @@ const styleModal = (theme) => ({
     "& .pt-node-form": {
         display: "flex",
         flexDirection: "column",
-        gap: 1.4,
+        gap: 1.1,
     },
     "& .pt-node-form__header": {
         mb: 0.5,
@@ -72,6 +72,86 @@ const styleModal = (theme) => ({
         fontSize: 12,
         color: "text.secondary",
         mt: 0.25,
+    },
+    "& .pt-node-form__section": {
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 2.5,
+        padding: theme.spacing(1.5),
+        background:
+            theme.palette.mode === "light"
+                ? "linear-gradient(180deg, rgba(255,255,255,0.88) 0%, rgba(246,249,255,0.92) 100%)"
+                : "linear-gradient(180deg, rgba(17,24,39,0.72) 0%, rgba(15,23,42,0.82) 100%)",
+    },
+    "& .pt-node-form__sectionHeader": {
+        marginBottom: theme.spacing(1),
+    },
+    "& .pt-node-form__sectionChip": {
+        fontWeight: 700,
+        letterSpacing: 0.3,
+        textTransform: "uppercase",
+    },
+    "& .pt-node-form__sectionTitle": {
+        fontSize: 15,
+        fontWeight: 700,
+        lineHeight: 1.2,
+    },
+    "& .pt-node-form__sectionHint": {
+        marginTop: theme.spacing(0.5),
+        fontSize: 12,
+        color: theme.palette.text.secondary,
+    },
+    "& .pt-node-form__grid": {
+        display: "grid",
+        gap: theme.spacing(1.1),
+    },
+    "& .pt-node-form__grid--two": {
+        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+        [theme.breakpoints.down("sm")]: {
+            gridTemplateColumns: "1fr",
+        },
+    },
+    "& .pt-node-form__noteCard": {
+        marginTop: theme.spacing(0.8),
+        padding: theme.spacing(1.2, 1.3),
+        borderRadius: 2,
+        border: "1px solid",
+        borderColor:
+            theme.palette.mode === "light"
+                ? "rgba(59,130,246,0.18)"
+                : "rgba(96,165,250,0.24)",
+        background:
+            theme.palette.mode === "light"
+                ? "rgba(239,246,255,0.75)"
+                : "rgba(30,41,59,0.58)",
+    },
+    "& .pt-node-form__noteCard--soft": {
+        background:
+            theme.palette.mode === "light"
+                ? "rgba(248,250,252,0.92)"
+                : "rgba(17,24,39,0.7)",
+    },
+    "& .pt-node-form__noteTitle": {
+        fontSize: 12,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: 0.4,
+        color: theme.palette.text.secondary,
+        marginBottom: theme.spacing(0.45),
+    },
+    "& .pt-node-form__noteText": {
+        fontSize: 12.5,
+        lineHeight: 1.5,
+        color: theme.palette.text.primary,
+    },
+    "& .pt-node-form__microCopy": {
+        marginTop: theme.spacing(0.25),
+        paddingInline: theme.spacing(0.2),
+    },
+    "& .pt-node-form__microCopyText": {
+        fontSize: 12,
+        color: theme.palette.text.secondary,
+        lineHeight: 1.45,
     },
     "& .pt-node-form .MuiFormControl-root, & .pt-node-form .MuiTextField-root": {
         mb: 0.35,
@@ -243,6 +323,8 @@ function NodeConfigModal({
     nodes,
     edges,
     amiList,
+    keyPairList,
+    executionTarget,
     saveNodeData,
     deleteNodeInstance,
     cidrBlockVPC,
@@ -272,7 +354,12 @@ function NodeConfigModal({
             <Box
                 sx={(theme) => ({
                     ...styleModal(theme),
-                    width: selectedNode && selectedNode.type === TYPE_ROUTER_NODE ? 840 : 460
+                    width:
+                        selectedNode && selectedNode.type === TYPE_ROUTER_NODE
+                            ? 840
+                            : selectedNode && restrictedNodes.includes(selectedNode.type)
+                                ? 620
+                                : 460
                 })}
             >
                 <Box sx={{ mb: 1.2, pb: 1.2, borderBottom: "1px solid", borderColor: "divider" }}>
@@ -299,6 +386,8 @@ function NodeConfigModal({
                             parentSubnetCidr={parentSubnetCidr}
                             siblingIpsInSameSubnet={siblingIpsInSameSubnet}
                             amiList={amiList}
+                            keyPairList={keyPairList}
+                            executionTarget={executionTarget}
                         />
                     );
                 })()}
