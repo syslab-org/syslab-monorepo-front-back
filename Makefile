@@ -23,8 +23,8 @@ AWS_REGION    ?= us-east-1
 AWS_PROFILE   ?= tesis
 TAG           ?= dev-latest
 
-AWS_ACCOUNT_ID := $(shell aws sts get-caller-identity --query Account --output text --profile $(AWS_PROFILE))
-ECR_REG        := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
+AWS_ACCOUNT_ID = $(shell command -v aws >/dev/null 2>&1 && aws sts get-caller-identity --query Account --output text --profile $(AWS_PROFILE) 2>/dev/null || true)
+ECR_REG        = $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 
 ECR_BACKEND    := $(ECR_REG)/tesis-dev-backend
 ECR_CELERY     := $(ECR_REG)/tesis-dev-celery
