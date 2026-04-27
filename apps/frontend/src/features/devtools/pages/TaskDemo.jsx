@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-const API =
-  import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:8000";
+const API = import.meta.env.VITE_API_URL?.replace(/\/$/, "")
+  || `${window.location.protocol}//${window.location.hostname}:8000`;
 
 export default function TaskDemo() {
   const [health, setHealth] = useState(null);
