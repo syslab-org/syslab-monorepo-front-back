@@ -56,7 +56,7 @@ SLEEP             ?= 5
 .PHONY: \
   help \
   up down restart restart-frontend start stop up-nobuild recreate ps ps-healthy logs \
-  public-up public-down public-restart public-logs public-ps tunnel-up tunnel-down tunnel-logs \
+  public-up public-down public-restart public-logs public-ps tunnel-up tunnel-down tunnel-logs quick-tunnel-up quick-tunnel-down quick-tunnel-logs \
   logs-backend logs-frontend logs-celery logs-flower logs-redis \
   rm-stopped ps-paused unpause build build-nc pull prune nuke \
   setup lint test migrate makemigrations-api migrate-all migrate-api createsuperuser sh-backend sh-frontend sh-celery sh-flower sh-redis \
@@ -87,7 +87,8 @@ help:
 	@echo "  make smoke-local   # healthz + tarea Celery + /api/network/plan"
 	@echo "  make logs          # logs de todos los servicios"
 	@echo "  make public-up     # expone la app por Caddy en :80"
-	@echo "  make tunnel-up     # publica la app via Cloudflare Tunnel (requiere token)"
+	@echo "  make quick-tunnel-up # publica la app con URL temporal trycloudflare.com"
+	@echo "  make tunnel-up     # publica la app via Cloudflare Tunnel estable (requiere token)"
 	@echo ""
 	@echo " RUNBOOK B · PUBLICAR IMÁGENES EN ECR"
 	@echo "  make push          # tag & push backend+celery al ECR (usa TAG=$(TAG))"
@@ -157,7 +158,7 @@ public-logs: ## Logs de Caddy y cloudflared
 	$(COMPOSE_PUBLIC) logs -f caddy cloudflared
 
 public-ps: ## Estado de Caddy y cloudflared
-	$(COMPOSE_PUBLIC) ps caddy cloudflared
+	$(COMPOSE_PUBLIC) ps caddy cloudflared cloudflared-quick
 
 tunnel-up: ## Publica via Cloudflare Tunnel (requiere CLOUDFLARE_TUNNEL_TOKEN)
 	$(COMPOSE_PUBLIC) up -d cloudflared
@@ -167,6 +168,15 @@ tunnel-down: ## Baja Cloudflare Tunnel
 
 tunnel-logs: ## Logs de Cloudflare Tunnel
 	$(COMPOSE_PUBLIC) logs -f cloudflared
+
+quick-tunnel-up: ## Publica via Quick Tunnel sin dominio
+	$(COMPOSE_PUBLIC) up -d cloudflared-quick
+
+quick-tunnel-down: ## Baja Quick Tunnel
+	$(COMPOSE_PUBLIC) stop cloudflared-quick
+
+quick-tunnel-logs: ## Logs de Quick Tunnel
+	$(COMPOSE_PUBLIC) logs -f cloudflared-quick
 
 logs-backend:
 	$(COMPOSE) logs -f $(SVC_BACKEND)
