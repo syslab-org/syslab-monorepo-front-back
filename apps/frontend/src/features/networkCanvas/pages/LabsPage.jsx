@@ -59,6 +59,7 @@ const executionSourceLabels = {
   lab_explicit: 'Fijada en el lab',
   owner_personal_auto: 'Auto -> cuenta personal',
   course_shared_auto: 'Auto -> cuenta del curso',
+  environment: 'Credenciales del servidor',
   unresolved: 'Sin resolver',
 };
 

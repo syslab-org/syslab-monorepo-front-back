@@ -295,6 +295,7 @@ const executionSourceLabels = {
   lab_explicit: 'Conexión fijada explícitamente en el laboratorio.',
   owner_personal_auto: 'Auto resolverá la cuenta personal del owner del laboratorio.',
   course_shared_auto: 'Auto resolverá la cuenta compartida del curso.',
+  environment: 'Se ejecutará con las credenciales AWS disponibles en el servidor.',
   unresolved: 'No hay una conexión cloud ejecutable resuelta para este laboratorio.',
 };
 
