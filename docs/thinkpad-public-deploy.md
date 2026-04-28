@@ -1,140 +1,148 @@
-# Publicacion de la ThinkPad con Caddy + Cloudflare Tunnel
+# Deploy LAN en Ubuntu Server con Caddy
 
-Esta guia expone la app desde la ThinkPad sin abrir puertos en el router.
+Esta guia deja el stack sirviendo por LAN en una maquina Ubuntu Server, por ejemplo en `http://192.168.1.149/`, sin publicar directamente los puertos internos del frontend, backend, Postgres ni Redis.
 
-## 1. Requisitos
+## 1. Arquitectura resultante
 
-- El stack base ya debe estar arriba con `make up`
-- Debes tener una cuenta de Cloudflare
-- Debes crear un Tunnel en Cloudflare Zero Trust
+- `frontend` corre en Vite dentro de Docker, solo en la red interna del compose
+- `backend` corre con Gunicorn, migraciones automaticas y `collectstatic`
+- `celery`, `postgres` y `redis` quedan internos
+- `caddy` expone la entrada publica unica en `:80`
+- opcionalmente `cloudflared` publica ese mismo `caddy` hacia internet
 
-Documentacion oficial:
-
-- https://developers.cloudflare.com/tunnel/
-- https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-remote-tunnel/
-
-## 2. Archivos nuevos
-
-- `tools/docker/compose.public.yml`
-- `tools/caddy/Caddyfile`
-- `.env.public.example`
-
-## 3. Caddy como entrada unica
-
-`Caddy` expone una sola entrada publica:
+Rutas publicas:
 
 - `/api/*`, `/healthz/`, `/admin/*`, `/static/*` -> `backend:8000`
 - todo lo demas -> `frontend:5173`
 
-Para levantarlo:
+## 2. Archivos involucrados
+
+- `tools/docker/compose.server.yml`
+- `tools/caddy/Caddyfile`
+- `.env.server.example`
+- `Makefile`
+
+## 3. Preparacion en Ubuntu
+
+Asumiendo el repo clonado en `/opt/syslab-monorepo-front-back`:
 
 ```bash
-make public-up
+cd /opt/syslab-monorepo-front-back
+cp .env.server.example .env.server
+nano .env.server
 ```
 
-Pruebas locales desde la ThinkPad:
+Valores minimos a revisar en `.env.server`:
+
+- `SECRET_KEY`
+- `ALLOWED_HOSTS=192.168.1.149,localhost,127.0.0.1`
+- `CSRF_TRUSTED_ORIGINS=http://192.168.1.149,http://localhost`
+- `AWS_PROFILE=tesis` si usaras `~/.aws`
+
+Si la maquina no tiene el profile AWS creado todavia:
 
 ```bash
-curl http://localhost/
+aws configure --profile tesis
+```
+
+## 4. Levantar el deploy completo
+
+```bash
+make server-up
+```
+
+Esto levanta:
+
+- frontend
+- backend
+- celery
+- postgres
+- redis
+- caddy
+
+Ver estado:
+
+```bash
+make server-ps
+```
+
+Ver logs:
+
+```bash
+make server-logs
+```
+
+## 5. Pruebas locales en el servidor
+
+```bash
 curl http://localhost/healthz/
+curl http://localhost/
+curl http://192.168.1.149/healthz/
 ```
 
-## 4. Cloudflare Tunnel
-
-### Opcion recomendada para tesis: Quick Tunnel sin dominio
-
-Esto te da una URL temporal `trycloudflare.com` sin comprar dominio y sin abrir puertos del router.
-
-Levanta primero Caddy:
-
-```bash
-make public-up
-```
-
-Luego arranca el Quick Tunnel:
-
-```bash
-make quick-tunnel-up
-make quick-tunnel-logs
-```
-
-En los logs veras una URL tipo:
+Si todo esta bien, la app deberia abrir en:
 
 ```text
-https://random-words-example.trycloudflare.com
+http://192.168.1.149/
 ```
 
-Esa URL ya deberia abrir tu app desde internet.
+## 6. Firewall recomendado
 
-Para apagarlo:
+Para acceso solo por LAN:
 
 ```bash
-make quick-tunnel-down
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw enable
+sudo ufw status
 ```
 
-Notas:
-
-- la URL es temporal
-- es suficiente para demo, validacion y presentacion de tesis
-- si reinicias o recreas el tunnel, la URL puede cambiar
-
-### Opcion recomendada: tunnel estable con dominio
-
-1. En Cloudflare Zero Trust crea un Tunnel
-2. Agrega un `Public hostname`
-3. Apuntalo al servicio `http://caddy:80`
-4. Copia el `token`
-
-En la ThinkPad:
-
-```bash
-cd ~/apps/syslab-monorepo-front-back
-cp .env.public.example .env.public
-nano .env.public
-```
-
-Completa:
-
-```bash
-CLOUDFLARE_TUNNEL_TOKEN=tu_token_real
-```
-
-Luego:
-
-```bash
-docker compose --env-file .env.public -f tools/docker/compose.dev.yml -f tools/docker/compose.public.yml up -d cloudflared
-```
-
-O usando `make`:
-
-```bash
-export CLOUDFLARE_TUNNEL_TOKEN=tu_token_real
-make tunnel-up
-```
-
-Logs:
-
-```bash
-make tunnel-logs
-```
-
-## 5. Firewall recomendado
-
-Si publicas solo por Cloudflare Tunnel, deja abierto solo:
-
-- `22` para SSH
-- `80` y `443` si usaras Caddy directo por LAN o pruebas locales
-
-No abras ni publiques directamente:
+No hace falta abrir:
 
 - `5173`
 - `8000`
-- `5555`
 - `5432`
 - `6379`
+- `5555`
 
-## 6. Notas
+## 7. Cloudflare Tunnel opcional
 
-- Esto publica el stack actual tal como esta hoy, incluyendo frontend en modo dev con Vite
-- El Quick Tunnel es suficiente para demo, tesis y piloto
-- Para un endurecimiento mayor, el siguiente paso seria servir un build estatico del frontend y ocultar por completo el puerto `5173`
+### Quick Tunnel
+
+```bash
+make server-quick-tunnel-up
+make server-quick-tunnel-logs
+```
+
+### Tunnel estable
+
+Completa `CLOUDFLARE_TUNNEL_TOKEN` en el entorno o exportalo antes de arrancar:
+
+```bash
+export CLOUDFLARE_TUNNEL_TOKEN=tu_token_real
+make server-tunnel-up
+make server-tunnel-logs
+```
+
+## 8. Operacion basica
+
+Reiniciar el stack:
+
+```bash
+make server-restart
+```
+
+Bajarlo:
+
+```bash
+make server-down
+```
+
+## 9. Notas importantes
+
+- este modo separa el despliegue Ubuntu/LAN del `compose.dev.yml`
+- el backend ya sirve `/admin/` y archivos estaticos detras de Caddy
+- `DEBUG=false` queda habilitado para el servidor, pero con cookies no seguras a proposito porque esta etapa usa `HTTP` por LAN
+- si luego migramos a `HTTPS` con dominio, conviene cambiar en `.env.server`:
+  - `SESSION_COOKIE_SECURE=1`
+  - `CSRF_COOKIE_SECURE=1`

@@ -6,6 +6,7 @@
 # -------- Variables comunes --------
 COMPOSE       = docker compose -f tools/docker/compose.dev.yml
 COMPOSE_PUBLIC = docker compose -f tools/docker/compose.dev.yml -f tools/docker/compose.public.yml
+COMPOSE_SERVER = docker compose -f tools/docker/compose.server.yml
 SVC_FRONTEND  = frontend
 SVC_BACKEND   = backend
 SVC_CELERY    = celery
@@ -56,6 +57,7 @@ SLEEP             ?= 5
 .PHONY: \
   help \
   up down restart restart-frontend start stop up-nobuild recreate ps ps-healthy logs \
+  server-up server-down server-restart server-logs server-ps server-tunnel-up server-tunnel-down server-tunnel-logs server-quick-tunnel-up server-quick-tunnel-down server-quick-tunnel-logs \
   public-up public-down public-restart public-logs public-ps tunnel-up tunnel-down tunnel-logs quick-tunnel-up quick-tunnel-down quick-tunnel-logs \
   logs-backend logs-frontend logs-celery logs-flower logs-redis \
   rm-stopped ps-paused unpause build build-nc pull prune nuke \
@@ -87,6 +89,7 @@ help:
 	@echo "  make smoke-local   # healthz + tarea Celery + /api/network/plan"
 	@echo "  make logs          # logs de todos los servicios"
 	@echo "  make public-up     # expone la app por Caddy en :80"
+	@echo "  make server-up     # despliegue Ubuntu/LAN en :80 sin exponer puertos internos"
 	@echo "  make quick-tunnel-up # publica la app con URL temporal trycloudflare.com"
 	@echo "  make tunnel-up     # publica la app via Cloudflare Tunnel estable (requiere token)"
 	@echo ""
@@ -147,6 +150,40 @@ logs:      ## Logs de todo
 
 public-up: ## Levanta stack con Caddy en :80
 	$(COMPOSE_PUBLIC) up -d --build caddy
+
+server-up: ## Levanta stack Ubuntu/LAN con Caddy en :80 y puertos internos cerrados
+	$(COMPOSE_SERVER) up -d --build
+
+server-down: ## Baja stack Ubuntu/LAN
+	$(COMPOSE_SERVER) down
+
+server-restart: ## Reinicia stack Ubuntu/LAN
+	$(COMPOSE_SERVER) down
+	$(COMPOSE_SERVER) up -d --build
+
+server-logs: ## Logs del stack Ubuntu/LAN
+	$(COMPOSE_SERVER) logs -f
+
+server-ps: ## Estado del stack Ubuntu/LAN
+	$(COMPOSE_SERVER) ps
+
+server-tunnel-up: ## Publica stack Ubuntu/LAN via Cloudflare Tunnel estable
+	$(COMPOSE_SERVER) up -d cloudflared
+
+server-tunnel-down: ## Baja Cloudflare Tunnel del stack Ubuntu/LAN
+	$(COMPOSE_SERVER) stop cloudflared
+
+server-tunnel-logs: ## Logs de Cloudflare Tunnel del stack Ubuntu/LAN
+	$(COMPOSE_SERVER) logs -f cloudflared
+
+server-quick-tunnel-up: ## Publica stack Ubuntu/LAN via Quick Tunnel
+	$(COMPOSE_SERVER) up -d cloudflared-quick
+
+server-quick-tunnel-down: ## Baja Quick Tunnel del stack Ubuntu/LAN
+	$(COMPOSE_SERVER) stop cloudflared-quick
+
+server-quick-tunnel-logs: ## Logs de Quick Tunnel del stack Ubuntu/LAN
+	$(COMPOSE_SERVER) logs -f cloudflared-quick
 
 public-down: ## Baja Caddy y cloudflared
 	$(COMPOSE_PUBLIC) stop caddy cloudflared
