@@ -126,8 +126,13 @@ restart:   ## Reinicia dev stack (con build)
 restart-frontend: ## Reinicia SOLO el servicio frontend
 	$(COMPOSE) restart $(SVC_FRONTEND)
 
-start:     ## Arranca contenedores existentes (sin build)
-	$(COMPOSE) start
+start:     ## Arranca contenedores existentes (sin build); si no existen, los crea con up -d
+	@if [ -n "$$($(COMPOSE) ps -a -q 2>/dev/null)" ]; then \
+		$(COMPOSE) start; \
+	else \
+		echo "ℹ️  No hay contenedores creados para compose.dev; levantando stack con 'up -d'..."; \
+		$(COMPOSE) up -d; \
+	fi
 
 stop:      ## Detiene contenedores (sin borrar)
 	$(COMPOSE) stop
