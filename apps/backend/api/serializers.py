@@ -1,10 +1,11 @@
 import json
+import os
 
 from django.contrib.auth.models import User
 from django.utils import timezone
 from rest_framework import serializers
 
-from .cloud_connections import resolve_lab_cloud_connection_with_source
+from .cloud_connections import get_aws_identity_from_runtime_env, resolve_lab_cloud_connection_with_source
 from .models import (
     CLOUD_AUTH_AWS_ASSUME_ROLE,
     AmiCatalogEntry,
@@ -586,6 +587,29 @@ def _serialize_execution_connection(connection, source: str, provider: str):
     }
 
 
+def _serialize_environment_execution_target(provider: str):
+    region = str(os.getenv("AWS_DEFAULT_REGION") or os.getenv("AWS_REGION") or "").strip()
+    try:
+        identity = get_aws_identity_from_runtime_env({})
+    except Exception:
+        identity = {}
+
+    identity = identity if isinstance(identity, dict) else {}
+    is_resolved = bool(identity)
+    return {
+        "provider": provider,
+        "source": "environment",
+        "status": "resolved" if is_resolved else "missing",
+        "id": "",
+        "name": "Environment credentials" if is_resolved else "",
+        "scope": "environment",
+        "default_region": region,
+        "account_id": str(identity.get("Account") or ""),
+        "arn": str(identity.get("Arn") or ""),
+        "last_test_status": "sts_ok" if is_resolved else "",
+    }
+
+
 def serialize_resolved_execution_target(lab, payload=None):
     provider = str(
         (payload or {}).get("cloud")
@@ -593,7 +617,14 @@ def serialize_resolved_execution_target(lab, payload=None):
         or ProviderChoices.AWS
     ).strip().lower()
     connection, source = resolve_lab_cloud_connection_with_source(lab, provider)
-    return _serialize_execution_connection(connection, source, provider)
+    target = _serialize_execution_connection(connection, source, provider)
+    if target.get("status") == "resolved":
+        return target
+
+    env_target = _serialize_environment_execution_target(provider)
+    if env_target.get("status") == "resolved":
+        return env_target
+    return target
 
 
 def serialize_cloud_target_state(plan):
@@ -617,6 +648,7 @@ def serialize_cloud_target_state(plan):
     current_account = str(current.get("account_id") or "").strip()
     last_conn_id = str(last_apply.get("cloud_connection_id") or "").strip()
     last_account = str(last_apply.get("account_id") or "").strip()
+    last_credential_source = str(last_apply.get("credential_source") or "").strip()
     current_scope = str(current.get("scope") or "").strip()
     last_scope = str(last_apply.get("cloud_connection_scope") or "").strip()
 
@@ -635,11 +667,20 @@ def serialize_cloud_target_state(plan):
     same_connection = bool(current_id and last_conn_id and current_id == last_conn_id)
     same_account = bool(current_account and last_account and current_account == last_account)
     same_scope = bool(current_scope and last_scope and current_scope == last_scope)
+    same_environment_identity = bool(
+        last_credential_source == "environment"
+        and current.get("source") == "environment"
+        and same_account
+    )
 
-    if same_connection or (same_account and same_scope):
+    if same_connection or (same_account and same_scope) or same_environment_identity:
         return {
             "status": "aligned",
-            "message": "La conexión cloud actual coincide con la usada en el último APPLY real.",
+            "message": (
+                "La conexión cloud actual coincide con la usada en el último APPLY real."
+                if not same_environment_identity
+                else "La identidad AWS actual del servidor coincide con la usada en el último APPLY real."
+            ),
             "is_mismatch": False,
             "current_target": current,
             "last_apply_context": last_apply,
