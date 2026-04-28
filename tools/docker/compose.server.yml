@@ -1,0 +1,187 @@
+name: tesis-server
+
+services:
+  frontend:
+    container_name: tesis-server-frontend
+    build:
+      context: ../..
+      dockerfile: tools/docker/frontend.Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ../../apps/frontend:/app
+      - frontend_node_modules:/app/node_modules
+    environment:
+      - VITE_PROXY_TARGET=http://backend:8000
+      - VITE_ALLOW_REAL_APPLY=1
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - appnet
+
+  backend:
+    user: "0:0"
+    container_name: tesis-server-backend
+    build:
+      context: ../..
+      dockerfile: tools/docker/backend.Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ../../apps/backend:/app
+      - tfstate:/tfstate
+      - tfwork:/tfwork
+      - ${HOME}/.aws:/home/app/.aws:ro
+    env_file:
+      - ../../.env
+      - ../../.env.server
+    environment:
+      - HOME=/home/app
+      - DJANGO_SETTINGS_MODULE=teg.settings
+      - DEBUG=false
+      - DATABASE_URL=postgres://teg:teg@postgres:5432/teg
+      - DB_SSL_REQUIRE=false
+      - AWS_SDK_LOAD_CONFIG=1
+      - AWS_PROFILE=${AWS_PROFILE:-tesis}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - ALLOW_LOCAL_APPLY=1
+      - SESSION_COOKIE_SECURE=0
+      - CSRF_COOKIE_SECURE=0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - appnet
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/healthz/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  celery:
+    user: "0:0"
+    container_name: tesis-server-celery
+    build:
+      context: ../..
+      dockerfile: tools/docker/celery.Dockerfile
+    restart: unless-stopped
+    command: bash -lc "celery -A teg worker -E --loglevel=INFO --pool=solo"
+    volumes:
+      - ../../apps/backend:/app
+      - tfstate:/tfstate
+      - tfwork:/tfwork
+      - ${HOME}/.aws:/home/app/.aws:ro
+    env_file:
+      - ../../.env
+      - ../../.env.server
+    environment:
+      - HOME=/home/app
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DATABASE_URL=postgres://teg:teg@postgres:5432/teg
+      - DB_SSL_REQUIRE=false
+      - AWS_SDK_LOAD_CONFIG=1
+      - AWS_PROFILE=${AWS_PROFILE:-tesis}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - ALLOW_LOCAL_APPLY=1
+      - KEEP_TF_DIRS=1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks:
+      - appnet
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A teg inspect ping | grep -q 'pong'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  postgres:
+    image: postgres:15
+    container_name: tesis-server-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: teg
+      POSTGRES_USER: teg
+      POSTGRES_PASSWORD: teg
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teg -d teg"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    networks:
+      - appnet
+
+  redis:
+    container_name: tesis-server-redis
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 2s
+      retries: 15
+    networks:
+      - appnet
+
+  caddy:
+    image: caddy:2.9-alpine
+    container_name: tesis-server-caddy
+    restart: unless-stopped
+    depends_on:
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - appnet
+
+  cloudflared:
+    image: cloudflare/cloudflared:2025.4.2
+    container_name: tesis-server-cloudflared
+    depends_on:
+      caddy:
+        condition: service_started
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    restart: unless-stopped
+    networks:
+      - appnet
+
+  cloudflared-quick:
+    image: cloudflare/cloudflared:2025.4.2
+    container_name: tesis-server-cloudflared-quick
+    depends_on:
+      caddy:
+        condition: service_started
+    command: tunnel --no-autoupdate --url http://caddy:80
+    restart: unless-stopped
+    networks:
+      - appnet
+
+volumes:
+  frontend_node_modules:
+  pgdata:
+  tfstate:
+  tfwork:
+  caddy_data:
+  caddy_config:
+
+networks:
+  appnet:
+    driver: bridge

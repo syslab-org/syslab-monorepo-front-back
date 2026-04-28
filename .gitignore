@@ -20,6 +20,8 @@ staticfiles/
 # Docker
 *.log
 *.pid
+.env.server
+.env.public
 
 # Terraform
 .terraform/
