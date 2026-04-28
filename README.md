@@ -5,6 +5,14 @@ Sirve como guía de referencia para el equipo y como documentación en el reposi
 
 ---
 
+## Guia de instalacion unificada
+
+Para instalar el proyecto en una maquina local, un servidor tipo ThinkPad o AWS, usa:
+
+- [docs/instalacion-local-servidor-aws.md](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/instalacion-local-servidor-aws.md)
+
+---
+
 ## 1. Organización del Repositorio
 
 Se creó un **monorepo** llamado `tesis-monorepo` con la siguiente estructura:

@@ -12,7 +12,7 @@ services:
       - frontend_node_modules:/app/node_modules
     environment:
       - VITE_PROXY_TARGET=http://backend:8000
-      - VITE_ALLOW_REAL_APPLY=1 # ✅ Permite apply real en local (si el backend también lo permite)
+      - VITE_ALLOW_REAL_APPLY=${VITE_ALLOW_REAL_APPLY:-1} # ✅ Permite apply real en local (si el backend también lo permite)
     ports:
       - "5173:5173"
     depends_on:
@@ -44,10 +44,10 @@ services:
       - DB_SSL_REQUIRE=false
       # ✅ DEV seguro: usa AWS profile montado (no keys en .env.dev)
       - AWS_SDK_LOAD_CONFIG=1
-      - AWS_PROFILE=tesis
-      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_PROFILE=${AWS_PROFILE:-tesis}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
       # ✅ Habilita apply/destroy real en local (tasks.py lo exige)
-      - ALLOW_LOCAL_APPLY=1
+      - ALLOW_LOCAL_APPLY=${ALLOW_LOCAL_APPLY:-1}
     ports:
       - "8000:8000"
     depends_on:
@@ -87,10 +87,10 @@ services:
       - DATABASE_URL=postgres://teg:teg@postgres:5432/teg
       - DB_SSL_REQUIRE=false
       - AWS_SDK_LOAD_CONFIG=1
-      - AWS_PROFILE=tesis
-      - AWS_DEFAULT_REGION=us-east-1
-      - ALLOW_LOCAL_APPLY=1
-      - KEEP_TF_DIRS=1 # Evita que celery borre los directorios temporales de terraform
+      - AWS_PROFILE=${AWS_PROFILE:-tesis}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - ALLOW_LOCAL_APPLY=${ALLOW_LOCAL_APPLY:-1}
+      - KEEP_TF_DIRS=${KEEP_TF_DIRS:-1} # Evita que celery borre los directorios temporales de terraform
     depends_on:
       postgres:
         condition: service_healthy
