@@ -1,6 +1,6 @@
 # Deploy de SysLab Detras de un Caddy Central
 
-Esta guia deja el stack de SysLab listo para correr en un Ubuntu Server compartido, publicado solo en `127.0.0.1:<puerto>` y expuesto hacia LAN o internet por un Caddy central del host.
+Esta guia deja el stack de SysLab listo para correr en un Ubuntu Server compartido, con un `caddy` interno del proyecto y un `Caddy` central del host como puerta de entrada.
 
 Importante:
 
@@ -14,12 +14,13 @@ Importante:
 - `frontend` corre en Vite dentro de Docker, solo en la red interna del compose
 - `backend` corre con Gunicorn, migraciones automaticas y `collectstatic`
 - `celery`, `postgres` y `redis` quedan internos
-- `caddy` interno de SysLab publica la app solo en `127.0.0.1:${SERVER_HTTP_PORT:-18080}`
-- un `caddy` central del host expone SysLab por nombre de dominio o hostname LAN
+- `caddy` interno de SysLab sigue expuesto en `127.0.0.1:${SERVER_HTTP_PORT:-18080}` para chequeos y depuracion desde el host
+- ese `caddy` interno tambien entra a la red Docker externa `edge` con alias `syslab`
+- un `Caddy` central del host expone SysLab por IP LAN o por un hostname LAN como `syslab.lan`
 
 Rutas publicas:
 
-- `/api/*`, `/healthz/`, `/admin/*`, `/static/*` -> `backend:8000`
+- `/api/*`, `/healthz/`, `/django-admin/*`, `/static/*` -> `backend:8000`
 - todo lo demas -> `frontend:5173`
 
 ## 2. Archivos involucrados
@@ -28,14 +29,15 @@ Rutas publicas:
 - `tools/caddy/Caddyfile`
 - `.env.server.example`
 - `Makefile`
-- `Caddyfile` del proxy central del servidor, fuera de este repo
+- `~/apps/reverse-proxy/compose.yml`
+- `~/apps/reverse-proxy/Caddyfile`
 
 ## 3. Preparacion de SysLab en Ubuntu
 
-Asumiendo el repo clonado en `/opt/syslab/syslab-monorepo-front-back`:
+Asumiendo el repo clonado en `~/apps/syslab-monorepo-front-back`:
 
 ```bash
-cd /opt/syslab/syslab-monorepo-front-back
+cd ~/apps/syslab-monorepo-front-back
 cp .env.server.example .env.server
 nano .env.server
 ```
@@ -47,6 +49,7 @@ Valores minimos a revisar en `.env.server`:
 - `CSRF_TRUSTED_ORIGINS`
 - `SERVER_HTTP_BIND_HOST=127.0.0.1`
 - `SERVER_HTTP_PORT=18080`
+- `SESSION_COOKIE_SECURE=0` y `CSRF_COOKIE_SECURE=0` si el acceso sera solo por HTTP en LAN
 - `AWS_PROFILE=tesis` si usaras `~/.aws`
 
 Si la maquina no tiene el profile AWS creado todavia:
@@ -55,7 +58,15 @@ Si la maquina no tiene el profile AWS creado todavia:
 aws configure --profile tesis
 ```
 
-## 4. Levantar el stack de SysLab
+## 4. Crear la red Docker compartida del host
+
+```bash
+docker network create edge
+```
+
+Si la red ya existe, Docker lo indicara y puedes seguir.
+
+## 5. Levantar el stack de SysLab
 
 ```bash
 make server-up
@@ -82,7 +93,7 @@ Ver logs:
 make server-logs
 ```
 
-## 5. Pruebas locales dentro del servidor
+## 6. Pruebas locales dentro del servidor
 
 ```bash
 curl http://127.0.0.1:18080/healthz/
@@ -91,31 +102,89 @@ curl -H 'Host: syslab.lan' http://127.0.0.1:18080/
 
 Si todo esta bien, SysLab deberia responder en el puerto local privado configurado.
 
-## 6. Publicacion desde el Caddy central del host
+## 7. Crear y levantar el Caddy central del host
 
-Ejemplo conceptual del `Caddyfile` central:
+Crear la carpeta:
+
+```bash
+mkdir -p ~/apps/reverse-proxy
+cd ~/apps/reverse-proxy
+```
+
+`compose.yml`:
+
+```yaml
+services:
+  caddy:
+    image: caddy:2.9-alpine
+    container_name: host-reverse-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - edge
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  edge:
+    external: true
+```
+
+`Caddyfile`:
 
 ```caddy
-syslab.lan {
-  reverse_proxy syslab:80
-}
+:80 {
+  encode gzip zstd
 
-syslab.example.com {
-  reverse_proxy syslab:80
+  @syslab host syslab.lan 192.168.1.149
+  handle @syslab {
+    reverse_proxy syslab:80
+  }
+
+  respond "Host no configurado en este servidor" 404
 }
+```
+
+Levantarlo:
+
+```bash
+docker compose up -d
+docker compose ps
+```
+
+## 8. Verificar el Caddy central
+
+```bash
+curl -i -H 'Host: syslab.lan' http://127.0.0.1
+curl -i http://192.168.1.149
+docker network inspect edge
 ```
 
 Con eso:
 
 - desde la LAN podrias entrar por `http://syslab.lan`
-- desde fuera podrias entrar por `https://syslab.example.com`
+- o directamente por `http://192.168.1.149`
 
 Importante:
 
 - el `caddy` central del host y el `caddy` interno de SysLab deben compartir una red Docker externa, por ejemplo `edge`
-- por eso el proxy central no debe apuntar a `127.0.0.1:18080` desde dentro del contenedor
+- por eso el proxy central debe apuntar a `syslab:80`, no a `127.0.0.1:18080`
 
-## 7. Firewall recomendado
+Si quieres usar `syslab.lan` desde otro equipo, agrega en el cliente:
+
+```text
+192.168.1.149 syslab.lan
+```
+
+## 9. Firewall recomendado
 
 Para un host compartido:
 
@@ -136,7 +205,7 @@ No hace falta abrir al exterior:
 - `6379`
 - `5555`
 
-## 8. Operacion basica
+## 10. Operacion basica
 
 Reiniciar el stack:
 
@@ -150,10 +219,11 @@ Bajarlo:
 make server-down
 ```
 
-## 9. Notas importantes
+## 11. Notas importantes
 
 - este modo separa el despliegue Ubuntu/LAN del `compose.dev.yml`
-- el backend ya sirve `/admin/` y archivos estaticos detras del `caddy` interno de SysLab
+- el backend ya sirve `/django-admin/` y archivos estaticos detras del `caddy` interno de SysLab
 - el acceso publico real lo controla un `caddy` central del host
 - este modo no debe afectar el flujo `local` ni `compose.dev.yml`
-- si publicas SysLab por HTTPS desde el proxy central, deja `SESSION_COOKIE_SECURE=1` y `CSRF_COOKIE_SECURE=1`
+- la configuracion LAN validada actualmente funciona sin dominio propio
+- si algun dia publicas SysLab por HTTPS real, cambia `SESSION_COOKIE_SECURE=1` y `CSRF_COOKIE_SECURE=1`

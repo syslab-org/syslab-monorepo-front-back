@@ -43,17 +43,17 @@ Traduccion practica:
 
 Ejemplo conceptual:
 
-- `syslab.lan` o `syslab.tudominio.com` -> SysLab
-- `magento.lan` o `magento.tudominio.com` -> Magento
+- `syslab.lan` o `192.168.1.149` -> SysLab
+- `magento.lan` -> Magento
 - `panel.lan` -> otro proyecto
 
 Cada proyecto vive en su carpeta:
 
 ```text
-/opt/reverse-proxy
-/opt/syslab
-/opt/magento
-/opt/otro-proyecto
+~/apps/reverse-proxy
+~/apps/syslab-monorepo-front-back
+~/apps/magento
+~/apps/otro-proyecto
 ```
 
 Cada carpeta tiene su propio `docker compose`.
@@ -76,7 +76,8 @@ Cuando SysLab conviva con otros proyectos, la forma recomendada es esta:
 
 - mantener `frontend`, `backend`, `celery`, `postgres` y `redis`
 - no exponer `postgres`, `redis` ni servicios internos al exterior
-- publicar SysLab solo en `127.0.0.1:${SERVER_HTTP_PORT:-18080}`
+- mantener el `caddy` interno conectado a la red Docker externa `edge`
+- dejar `127.0.0.1:${SERVER_HTTP_PORT:-18080}` como punto de chequeo y depuracion desde el host
 
 ### En el host compartido
 
@@ -102,7 +103,7 @@ Ventajas:
 
 ### Patron B: puertos internos por proyecto
 
-Es mas simple de entender si estas empezando.
+Es mas simple de entender si estas empezando, pero no es el patron que quedó validado para SysLab.
 
 - SysLab publica, por ejemplo, `127.0.0.1:18080 -> caddy interno`
 - Magento publica `127.0.0.1:18081 -> nginx interno`
@@ -122,8 +123,9 @@ Costo:
 Para este proyecto, la recomendacion mas estable es:
 
 1. usar `compose.server.yml` como despliegue oficial para host compartido
-2. dejar que el Caddy central del servidor publique los dominios de SysLab
-3. no mezclar otros proyectos dentro del mismo compose de SysLab
+2. conectar el `caddy` interno de SysLab y el proxy central a la red Docker externa `edge`
+3. dejar que el Caddy central del servidor publique SysLab por IP LAN o por un hostname como `syslab.lan`
+4. no mezclar otros proyectos dentro del mismo compose de SysLab
 
 En otras palabras:
 
@@ -146,16 +148,15 @@ Reverse Proxy Central (:80/:443)
 ## 9. Ejemplo de estructura operativa
 
 ```text
-/opt/reverse-proxy
+~/apps/reverse-proxy
   ├── compose.yml
   └── Caddyfile
 
-/opt/syslab
-  ├── syslab-monorepo-front-back
+~/apps/syslab-monorepo-front-back
   ├── .env.server
-  └── compose override para modo compartido
+  └── tools/docker/compose.server.yml
 
-/opt/magento
+~/apps/magento
   ├── compose.yml
   ├── .env
   └── volumenes propios
@@ -186,7 +187,17 @@ Debe vivir como proyecto separado, con sus propias dependencias, por ejemplo:
 
 La relacion con SysLab es solo de convivencia en el mismo host y uso del mismo proxy de entrada.
 
-## 12. Decision registrada para este repo
+## 12. Implementacion validada en este proyecto
+
+Flujo ya validado en Ubuntu:
+
+1. `make server-up` en `~/apps/syslab-monorepo-front-back`
+2. `docker network create edge`
+3. `docker compose up -d` en `~/apps/reverse-proxy`
+4. `Caddyfile` central apuntando a `reverse_proxy syslab:80`
+5. acceso funcional por `http://192.168.1.149/`
+
+## 13. Decision registrada para este repo
 
 Queda registrado que:
 
@@ -194,7 +205,7 @@ Queda registrado que:
 - la arquitectura recomendada para el host es `proxy central + stacks independientes`
 - cualquier otro proyecto del servidor debe convivir como stack separado, con su propio runtime, datos y dominios
 
-## 13. Documentos relacionados
+## 14. Documentos relacionados
 
 - [Servidor Ubuntu en LAN](./README.md)
 - [Deploy LAN con Caddy](./deploy-lan-caddy.md)

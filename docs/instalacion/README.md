@@ -19,7 +19,8 @@ En `local` y `servidor Ubuntu` el stack se levanta con Docker Compose:
 - `postgres`: base de datos del stack
 - `redis`: broker y result backend de Celery
 - `flower`: monitoreo de Celery en desarrollo
-- `caddy`: solo en modo servidor Ubuntu, publicado en localhost para un proxy central
+- `caddy`: solo en modo servidor Ubuntu, conectado a una red Docker compartida `edge`
+- `reverse-proxy`: stack aparte en el host, fuera de este repo, que publica `:80` y `:443`
 
 En `AWS`, `infra/terraform/` despliega la plataforma operativa:
 
