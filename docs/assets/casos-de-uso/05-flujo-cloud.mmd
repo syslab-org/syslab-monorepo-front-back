@@ -1,0 +1,43 @@
+flowchart LR
+    EST[Estudiante]
+    DOC[Docente]
+    ADM[Platform admin]
+    AWS[AWS]
+    ENG[Celery + Terraform]
+
+    subgraph SYS[SysLab]
+        UC01([Preparar cuenta personal])
+        UC02([Preparar cuenta compartida])
+        UC03([Probar conexion])
+        UC04([Delegar ejecucion])
+        UC05([Ejecutar despliegue])
+        UC06([Ejecutar destruccion])
+        UC07([Auditar ejecucion])
+    end
+
+    EST --> UC01
+    EST --> UC04
+    EST --> UC05
+    EST --> UC06
+    EST --> UC07
+
+    DOC --> UC02
+    DOC --> UC05
+    DOC --> UC06
+    DOC --> UC07
+
+    ADM --> UC01
+    ADM --> UC02
+    ADM --> UC04
+    ADM --> UC05
+    ADM --> UC06
+    ADM --> UC07
+
+    UC01 -. "<<include>>" .-> UC03
+    UC02 -. "<<include>>" .-> UC03
+    UC04 -. "<<extend>>" .-> UC05
+    UC04 -. "<<extend>>" .-> UC06
+
+    UC03 --> AWS
+    UC05 --> ENG
+    UC06 --> ENG

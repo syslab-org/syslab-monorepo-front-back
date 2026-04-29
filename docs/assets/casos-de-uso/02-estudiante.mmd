@@ -1,0 +1,35 @@
+flowchart LR
+    EST[Estudiante]
+    AWS[AWS]
+    ENG[Celery + Terraform]
+
+    subgraph SYS[SysLab]
+        UC01([Preparar entorno personal])
+        UC01A([Registrar conexion personal])
+        UC01B([Registrar key pair personal])
+        UC02([Disenar laboratorio])
+        UC03([Validar laboratorio])
+        UC04([Desplegar laboratorio])
+        UC05([Destruir laboratorio])
+        UC06([Revisar evidencias])
+        UC07([Delegar ejecucion])
+    end
+
+    EST --> UC01
+    EST --> UC02
+    EST --> UC03
+    EST --> UC04
+    EST --> UC05
+    EST --> UC06
+    EST --> UC07
+
+    UC01 -. "<<include>>" .-> UC01A
+    UC01 -. "<<include>>" .-> UC01B
+    UC04 -. "<<include>>" .-> UC03
+    UC07 -. "<<extend>>" .-> UC04
+    UC07 -. "<<extend>>" .-> UC05
+
+    UC01A --> AWS
+    UC03 --> ENG
+    UC04 --> ENG
+    UC05 --> ENG

@@ -1,0 +1,58 @@
+flowchart LR
+    EST[Estudiante]
+    DOC[Docente]
+    ADM[Platform admin]
+    AWS[AWS]
+    ENG[Motor de ejecucion<br/>Celery + Terraform]
+
+    subgraph SYS[SysLab]
+        UC01([Preparar entorno cloud])
+        UC01A([Registrar conexion])
+        UC01B([Registrar catalogo tecnico])
+        UC02([Disenar laboratorio])
+        UC03([Validar laboratorio])
+        UC04([Desplegar laboratorio])
+        UC05([Destruir laboratorio])
+        UC06([Revisar evidencias])
+        UC07([Gestionar cursos])
+        UC08([Gestionar integrantes])
+        UC09([Delegar ejecucion])
+    end
+
+    EST --> UC01
+    EST --> UC02
+    EST --> UC03
+    EST --> UC04
+    EST --> UC05
+    EST --> UC06
+    EST --> UC09
+
+    DOC --> UC01
+    DOC --> UC02
+    DOC --> UC03
+    DOC --> UC04
+    DOC --> UC05
+    DOC --> UC06
+    DOC --> UC07
+    DOC --> UC08
+
+    ADM --> UC01
+    ADM --> UC02
+    ADM --> UC03
+    ADM --> UC04
+    ADM --> UC05
+    ADM --> UC06
+    ADM --> UC07
+    ADM --> UC08
+    ADM --> UC09
+
+    UC01 -. "<<include>>" .-> UC01A
+    UC01 -. "<<include>>" .-> UC01B
+    UC04 -. "<<include>>" .-> UC03
+    UC09 -. "<<extend>>" .-> UC04
+    UC09 -. "<<extend>>" .-> UC05
+
+    UC01A --> AWS
+    UC03 --> ENG
+    UC04 --> ENG
+    UC05 --> ENG
