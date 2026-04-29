@@ -7,7 +7,7 @@ def healthz(_):
     return JsonResponse({"status": "ok", "marker": "v3"})
 
 urlpatterns = [
-    path("admin/", admin.site.urls),
+    path("django-admin/", admin.site.urls),
     path("api/", include("api.urls")),
     path("healthz/", healthz),
 ]
