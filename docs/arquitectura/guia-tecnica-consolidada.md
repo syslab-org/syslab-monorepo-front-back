@@ -136,6 +136,13 @@ La API publica vive bajo `/api/` y expone:
 
 Ademas existe `GET /healthz/` para healthcheck.
 
+En el despliegue actual tambien conviene distinguir dos espacios de rutas:
+
+- `/admin/*` pertenece a la SPA del frontend
+- `/django-admin/*` pertenece al admin de Django
+
+Esa separacion evita que un hard reload del navegador en rutas del dashboard del frontend termine resolviendo contra el admin server-side de Django.
+
 ### 5.2 Configuracion de entorno
 
 `apps/backend/teg/settings.py` muestra tres rasgos importantes:
