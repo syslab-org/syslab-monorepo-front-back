@@ -23,6 +23,12 @@ Rutas publicas:
 - `/api/*`, `/healthz/`, `/django-admin/*`, `/static/*` -> `backend:8000`
 - todo lo demas -> `frontend:5173`
 
+Importante sobre rutas:
+
+- la SPA del frontend usa `/admin/*` como espacio de navegacion interno
+- el Django admin del backend fue movido a `/django-admin/*`
+- esto evita que un hard reload en rutas como `/admin/dashboard` caiga en el admin de Django
+
 ## 2. Archivos involucrados
 
 - `tools/docker/compose.server.yml`

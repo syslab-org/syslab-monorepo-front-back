@@ -163,6 +163,12 @@ Resultado esperado:
 - `tesis-server-caddy` visible en la red `edge`
 - acceso funcional por `http://192.168.1.149/`
 
+Nota de rutas:
+
+- el frontend de SysLab vive bajo rutas como `/admin/dashboard`
+- el admin real de Django queda en `/django-admin/`
+- esa separacion evita que un hard reload de navegador en `/admin/*` termine en el login del admin de Django
+
 10. Publicar SysLab desde el Caddy central del host
 
 En el escenario validado no hace falta dominio propio.
