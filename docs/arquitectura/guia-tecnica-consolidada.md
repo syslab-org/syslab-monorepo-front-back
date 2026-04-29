@@ -927,14 +927,14 @@ Esta seccion resume donde la documentacion sigue bien y donde ya no describe fie
 
 ### 11.1 Documentacion que sigue alineada
 
-- `docs/redeploy-matrix.md`
+- `docs/operacion/aws/redeploy-matrix.md`
   - sigue alineado con el foco `AWS-first`
   - sigue siendo coherente con la idea de `redeploy`, `OUTDATED`, `Plan Detail` y comportamiento Terraform
-- `docs/thesis-validation/cloud-execution-model.md`
+- `docs/tesis/validacion/cloud-execution-model.md`
   - sigue alineado con la logica de permisos reales en backend
-- `docs/thesis-validation/aws-cloud-connections-playbook.md`
+- `docs/tesis/validacion/aws-cloud-connections-playbook.md`
   - sigue alineado con `Static Keys`, `AssumeRole` y evidencia en `Plan Detail`
-- `docs/thesis-validation/user-control-permissions-matrix.md`
+- `docs/tesis/validacion/user-control-permissions-matrix.md`
   - sigue alineado con `can_execute_plan`, `course_shared` y delegacion
 
 ### 11.2 Documentacion parcialmente desactualizada
@@ -945,7 +945,7 @@ Esta seccion resume donde la documentacion sigue bien y donde ya no describe fie
 - `apps/backend/README.md`
   - da una buena intuicion del dominio neutral y la compatibilidad legacy
   - pero no cubre en detalle el flujo real de `CloudConnection`, `PlanExecutionRecord` y delegaciones
-- `docs/mvp-thesis-plan.md`
+- `docs/tesis/mvp-thesis-plan.md`
   - describe correctamente varias decisiones de producto
   - pero contiene trabajo futuro que en codigo ya fue avanzado, por ejemplo la parte de plantillas de laboratorio
 
