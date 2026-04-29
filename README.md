@@ -5,11 +5,15 @@ Sirve como guía de referencia para el equipo y como documentación en el reposi
 
 ---
 
-## Guia de instalacion unificada
+## Documentacion principal
 
-Para instalar el proyecto en una maquina local, un servidor tipo ThinkPad o AWS, usa:
+Puntos de entrada recomendados:
 
-- [docs/instalacion-local-servidor-aws.md](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/instalacion-local-servidor-aws.md)
+- [Indice general de documentacion](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/README.md)
+- [Instalacion por entorno](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/instalacion/README.md)
+- [Instalacion en local](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/instalacion/local.md)
+- [Servidor Ubuntu en LAN](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/instalacion/servidor-ubuntu/README.md)
+- [Plataforma en AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/instalacion/aws.md)
 
 ---
 
@@ -240,7 +244,7 @@ Se documentó una matriz de pruebas manuales de redeploy sobre AWS, incluyendo:
 
 Documento:
 
-- [docs/redeploy-matrix.md](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/redeploy-matrix.md)
+- [docs/operacion/aws/redeploy-matrix.md](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/operacion/aws/redeploy-matrix.md)
 - **S3 + DynamoDB** del state cuestan muy poco; conviene **mantenerlos**.
 
 ---

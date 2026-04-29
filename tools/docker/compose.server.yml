@@ -44,8 +44,8 @@ services:
       - AWS_PROFILE=${AWS_PROFILE:-tesis}
       - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
       - ALLOW_LOCAL_APPLY=1
-      - SESSION_COOKIE_SECURE=0
-      - CSRF_COOKIE_SECURE=0
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-1}
+      - CSRF_COOKIE_SECURE=${CSRF_COOKIE_SECURE:-1}
     depends_on:
       postgres:
         condition: service_healthy
@@ -144,33 +144,11 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "80:80"
+      - "${SERVER_HTTP_BIND_HOST:-127.0.0.1}:${SERVER_HTTP_PORT:-18080}:80"
     volumes:
       - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-    networks:
-      - appnet
-
-  cloudflared:
-    image: cloudflare/cloudflared:2025.4.2
-    container_name: tesis-server-cloudflared
-    depends_on:
-      caddy:
-        condition: service_started
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-    restart: unless-stopped
-    networks:
-      - appnet
-
-  cloudflared-quick:
-    image: cloudflare/cloudflared:2025.4.2
-    container_name: tesis-server-cloudflared-quick
-    depends_on:
-      caddy:
-        condition: service_started
-    command: tunnel --no-autoupdate --url http://caddy:80
-    restart: unless-stopped
     networks:
       - appnet
 
