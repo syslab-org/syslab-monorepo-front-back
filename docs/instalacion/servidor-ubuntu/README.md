@@ -89,13 +89,15 @@ Ejemplo conceptual del `Caddyfile` central:
 
 ```caddy
 syslab.lan {
-  reverse_proxy 127.0.0.1:18080
+  reverse_proxy syslab:80
 }
 
 syslab.example.com {
-  reverse_proxy 127.0.0.1:18080
+  reverse_proxy syslab:80
 }
 ```
+
+Para que eso funcione, el `caddy` central del host y el `caddy` interno de SysLab deben compartir una red Docker externa, por ejemplo `edge`.
 
 ## Operacion diaria
 

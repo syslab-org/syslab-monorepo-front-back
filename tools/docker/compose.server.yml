@@ -150,7 +150,10 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     networks:
-      - appnet
+      appnet:
+      edge:
+        aliases:
+          - syslab
 
 volumes:
   frontend_node_modules:
@@ -163,3 +166,6 @@ volumes:
 networks:
   appnet:
     driver: bridge
+  edge:
+    external: true
+    name: edge
