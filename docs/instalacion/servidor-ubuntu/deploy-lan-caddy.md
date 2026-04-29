@@ -97,11 +97,11 @@ Ejemplo conceptual del `Caddyfile` central:
 
 ```caddy
 syslab.lan {
-  reverse_proxy 127.0.0.1:18080
+  reverse_proxy syslab:80
 }
 
 syslab.example.com {
-  reverse_proxy 127.0.0.1:18080
+  reverse_proxy syslab:80
 }
 ```
 
@@ -109,6 +109,11 @@ Con eso:
 
 - desde la LAN podrias entrar por `http://syslab.lan`
 - desde fuera podrias entrar por `https://syslab.example.com`
+
+Importante:
+
+- el `caddy` central del host y el `caddy` interno de SysLab deben compartir una red Docker externa, por ejemplo `edge`
+- por eso el proxy central no debe apuntar a `127.0.0.1:18080` desde dentro del contenedor
 
 ## 7. Firewall recomendado
 
