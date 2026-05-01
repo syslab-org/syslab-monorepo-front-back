@@ -65,12 +65,15 @@ Documento de decisión:
 
 Playbook operativo complementario:
 - [Playbook de Conexiones Cloud AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/tesis/validacion/aws-cloud-connections-playbook.md)
+- [Playbook de Key Pairs y Acceso SSH en AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/tesis/validacion/aws-key-pairs-ssh-playbook.md)
 
 Útil para redactar y repetir pruebas:
 - flujo `Static Keys` vs `AssumeRole`
 - diferencia entre principal base y role destino
 - validación de `personal` vs `course_shared`
 - señales concretas en `Plan Detail` para confirmar qué identidad ejecutó
+- escenarios probados para key pairs AWS-generadas vs public key importada
+- dependencia práctica de `Allowed SSH CIDR` para SSH real
 
 Documentos de cierre de control de usuarios:
 - [Matriz Formal de Permisos y Control de Usuarios](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/tesis/validacion/user-control-permissions-matrix.md)
@@ -109,9 +112,10 @@ Documento operativo:
 1. leer el [Plan de Cierre del MVP para Tesis](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/tesis/mvp-thesis-plan.md)
 2. leer el [Modelo de Ejecución Cloud por Usuario](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/tesis/validacion/cloud-execution-model.md)
 3. leer el [Playbook de Conexiones Cloud AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/tesis/validacion/aws-cloud-connections-playbook.md)
-4. leer la [Matriz Formal de Permisos y Control de Usuarios](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/tesis/validacion/user-control-permissions-matrix.md)
-5. leer el [Caso Validado: Cambio de Cuenta Cloud tras APPLY Real](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/tesis/validacion/cloud-target-reconciliation-case.md)
-6. usar como idea central:
+4. leer el [Playbook de Key Pairs y Acceso SSH en AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/tesis/validacion/aws-key-pairs-ssh-playbook.md)
+5. leer la [Matriz Formal de Permisos y Control de Usuarios](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/tesis/validacion/user-control-permissions-matrix.md)
+6. leer el [Caso Validado: Cambio de Cuenta Cloud tras APPLY Real](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/tesis/validacion/cloud-target-reconciliation-case.md)
+7. usar como idea central:
    - `AWS-first`
    - conexión cloud por owner de ejecución
    - `course_shared` como caso docente controlado
