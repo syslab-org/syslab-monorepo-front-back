@@ -1,33 +1,52 @@
 # Servidor Ubuntu en LAN
 
-Esta guia organiza lo necesario para levantar la app en un Ubuntu Server o una ThinkPad dentro de la red local cuando el servidor puede alojar varios proyectos al mismo tiempo.
+Esta carpeta documenta el modo validado para correr SysLab en una ThinkPad o Ubuntu Server dentro de la red local, compartiendo el host con otros proyectos.
 
-El flujo descrito aqui ya fue validado con esta topologia:
+Topologia validada:
 
 - repo SysLab en `~/apps/syslab-monorepo-front-back`
-- proxy central en `~/apps/reverse-proxy`
+- proxy central del host en `~/apps/reverse-proxy`
+- red Docker compartida `edge`
 - acceso LAN funcionando por `http://192.168.1.149/`
 
-Importante:
+## Que debes leer primero
 
-- esta ruta ya no publica `:80` ni `:443` directamente desde SysLab
-- el `caddy` interno de SysLab se conecta a una red Docker externa `edge`
-- el Caddy central del host publica SysLab por IP LAN o por un hostname como `syslab.lan`
-- la estrategia general del servidor compartido esta en [Servidor Ubuntu con multiples proyectos](./multiples-proyectos.md)
+1. Esta guia: panorama general y orden recomendado.
+2. [Deploy LAN con Caddy](./deploy-lan-caddy.md): detalle del stack SysLab + proxy central.
+3. [Servidor Ubuntu con multiples proyectos](./multiples-proyectos.md): convivencia con otros proyectos.
+4. [AWS runtime y AssumeRole](./aws-runtime-assumerole.md): como se resuelven credenciales AWS desde el backend.
+
+## Mapa mental
+
+- `tools/docker/compose.server.yml` levanta solo el stack de SysLab.
+- SysLab ya no publica `:80` ni `:443` como dueño del host.
+- El `caddy` interno de SysLab entra a la red Docker externa `edge` con alias `syslab`.
+- Un `Caddy` central del host publica la app a la LAN o a internet.
+- Las credenciales AWS reales que usa el backend viven en `~/.aws` del servidor y se montan dentro del contenedor.
+- Una `Cloud Connection` con `AssumeRole` aporta `Role ARN` y `External ID`, pero la llamada base a STS la hace el backend con su `AWS_PROFILE` actual.
 
 ## Cuándo usar esta ruta
 
 Usa este flujo si quieres:
 
 - acceder a la app desde otros equipos de la LAN
-- exponer la app mediante un proxy central del servidor
+- dejar el servidor listo para varios proyectos
 - mantener `frontend`, `backend`, `postgres` y `redis` cerrados detras de Docker
 
-El stack de este entorno usa `tools/docker/compose.server.yml`.
+## Orden recomendado
 
-## Flujo recomendado
+1. Preparar el host Ubuntu
+2. Preparar `.env.server`
+3. Configurar `~/.aws` del servidor si habrá deploy real
+4. Crear la red Docker `edge`
+5. Levantar SysLab
+6. Levantar el proxy central del host
+7. Verificar acceso LAN
+8. Recién después configurar `Cloud Connections` y `AssumeRole`
 
-1. Instalar dependencias del host:
+## Paso a paso
+
+### 1. Instalar dependencias del host
 
 ```bash
 sudo apt update
@@ -36,7 +55,7 @@ sudo apt install -y git make curl jq awscli
 
 Instala Docker Engine y Docker Compose plugin con el metodo oficial de Docker para Ubuntu.
 
-2. Clonar el repo en el servidor:
+### 2. Clonar el repo en el servidor
 
 ```bash
 mkdir -p ~/apps
@@ -45,7 +64,7 @@ git clone <URL_DEL_REPO> syslab-monorepo-front-back
 cd ~/apps/syslab-monorepo-front-back
 ```
 
-3. Preparar `.env.server`:
+### 3. Preparar `.env.server`
 
 ```bash
 cp .env.server.example .env.server
@@ -67,7 +86,7 @@ AWS_PROFILE=tesis
 AWS_DEFAULT_REGION=us-east-1
 ```
 
-4. Configurar AWS en el host si el servidor hará deploy real:
+### 4. Configurar AWS en el host si el servidor hará deploy real
 
 ```bash
 aws configure --profile tesis
@@ -75,7 +94,15 @@ aws sts get-caller-identity --profile tesis
 chmod 600 ~/.aws/credentials ~/.aws/config
 ```
 
-5. Crear la red Docker compartida del host:
+Importante:
+
+- ese `AWS_PROFILE` no es para el navegador ni para el usuario final
+- es la identidad base del backend dentro del contenedor
+- si luego una `Cloud Connection` usa `AssumeRole`, el backend intentará asumir el role con este perfil base
+- el valor sale de `.env.server`, no del shell interactivo del host
+- si cambias `AWS_PROFILE` o `AWS_DEFAULT_REGION`, recrea el stack con `down` + `up -d`
+
+### 5. Crear la red Docker compartida del host
 
 ```bash
 docker network create edge
@@ -83,13 +110,13 @@ docker network create edge
 
 Si ya existe, no pasa nada.
 
-6. Levantar el stack de SysLab:
+### 6. Levantar el stack de SysLab
 
 ```bash
 make server-up
 ```
 
-7. Verificar SysLab desde el host:
+### 7. Verificar SysLab desde el host
 
 ```bash
 make server-ps
@@ -97,7 +124,7 @@ curl http://127.0.0.1:18080/healthz/
 curl -H 'Host: syslab.lan' http://127.0.0.1:18080/
 ```
 
-8. Crear el stack del proxy central del host en `~/apps/reverse-proxy`
+### 8. Crear el stack del proxy central del host en `~/apps/reverse-proxy`
 
 `compose.yml`:
 
@@ -149,7 +176,7 @@ docker compose up -d
 docker compose ps
 ```
 
-9. Verificar el proxy central:
+### 9. Verificar el proxy central
 
 ```bash
 curl -i -H 'Host: syslab.lan' http://127.0.0.1
@@ -169,7 +196,7 @@ Nota de rutas:
 - el admin real de Django queda en `/django-admin/`
 - esa separacion evita que un hard reload de navegador en `/admin/*` termine en el login del admin de Django
 
-10. Publicar SysLab desde el Caddy central del host
+### 10. Publicar SysLab desde el Caddy central del host
 
 En el escenario validado no hace falta dominio propio.
 
@@ -188,6 +215,27 @@ Si quieres usar `syslab.lan` desde otro equipo de la red y tu router no resuelve
 192.168.1.149 syslab.lan
 ```
 
+## Verificaciones utiles
+
+### Identidad AWS base del backend
+
+```bash
+docker compose -f tools/docker/compose.server.yml exec backend \
+python manage.py shell -c "
+import boto3, os
+print('AWS_PROFILE=', os.getenv('AWS_PROFILE'))
+print(boto3.Session().client('sts').get_caller_identity())
+"
+```
+
+### Salud del stack
+
+```bash
+curl http://127.0.0.1:18080/healthz/
+docker network inspect edge
+make server-logs
+```
+
 ## Operacion diaria
 
 ```bash
@@ -200,5 +248,6 @@ make server-down
 
 - [Deploy LAN con Caddy](./deploy-lan-caddy.md)
 - [Servidor Ubuntu con multiples proyectos](./multiples-proyectos.md)
+- [AWS runtime y AssumeRole](./aws-runtime-assumerole.md)
 - [Instalacion general](../README.md)
 - [Plataforma en AWS](../aws.md)

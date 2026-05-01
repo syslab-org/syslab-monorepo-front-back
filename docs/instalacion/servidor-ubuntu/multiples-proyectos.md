@@ -58,6 +58,12 @@ Cada proyecto vive en su carpeta:
 
 Cada carpeta tiene su propio `docker compose`.
 
+Orden mental recomendado:
+
+1. primero funciona cada stack por separado
+2. luego todos entran a la red `edge`
+3. al final el proxy central decide rutas por host o path
+
 ## 4. Que significa esto para SysLab
 
 En modo servidor compartido, SysLab no deberia publicar directamente `80:80` desde su propio compose.
@@ -197,6 +203,11 @@ Flujo ya validado en Ubuntu:
 4. `Caddyfile` central apuntando a `reverse_proxy syslab:80`
 5. acceso funcional por `http://192.168.1.149/`
 
+Complemento importante:
+
+6. si SysLab ejecuta deploy real en AWS, la identidad base del backend sale de `~/.aws` + `AWS_PROFILE`
+7. si una `Cloud Connection` usa `AssumeRole`, ese role debe confiar en esa identidad base real
+
 ## 13. Decision registrada para este repo
 
 Queda registrado que:
@@ -209,4 +220,5 @@ Queda registrado que:
 
 - [Servidor Ubuntu en LAN](./README.md)
 - [Deploy LAN con Caddy](./deploy-lan-caddy.md)
+- [AWS runtime y AssumeRole](./aws-runtime-assumerole.md)
 - [Instalacion general](../README.md)

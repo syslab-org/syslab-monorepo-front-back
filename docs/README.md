@@ -9,6 +9,7 @@ Esta carpeta quedo organizada por tema para que sea mas facil encontrar cada tip
 - [Servidor Ubuntu en LAN](./instalacion/servidor-ubuntu/README.md)
 - [Deploy LAN con Caddy](./instalacion/servidor-ubuntu/deploy-lan-caddy.md)
 - [Servidor Ubuntu con multiples proyectos](./instalacion/servidor-ubuntu/multiples-proyectos.md)
+- [AWS runtime y AssumeRole](./instalacion/servidor-ubuntu/aws-runtime-assumerole.md)
 - [Plataforma en AWS](./instalacion/aws.md)
 
 ## 2. Arquitectura tecnica
