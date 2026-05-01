@@ -167,6 +167,11 @@ Permitir que estudiantes, docentes y administradores modelen laboratorios de red
 - Resultado:
   - el sistema dispone de insumos tecnicos consistentes para modelado y ejecucion
 
+Escenarios validados y consideraciones practicas:
+
+- [Playbook de Key Pairs y Acceso SSH en AWS](../tesis/validacion/aws-key-pairs-ssh-playbook.md)
+- hallazgo operativo importante: `Allowed SSH CIDR` puede impedir SSH real aunque el deploy haya sido correcto
+
 ### UC-08. Crear laboratorio de red
 
 - Objetivo: iniciar un laboratorio persistente que sera modelado y eventualmente desplegado.

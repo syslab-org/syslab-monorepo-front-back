@@ -26,6 +26,7 @@ Esta carpeta quedo organizada por tema para que sea mas facil encontrar cada tip
 
 - [Indice operativo](./operacion/README.md)
 - [Matriz de redeploy AWS](./operacion/aws/redeploy-matrix.md)
+- [Playbook de Key Pairs y Acceso SSH en AWS](./tesis/validacion/aws-key-pairs-ssh-playbook.md)
 
 ## 5. Tesis y defensa
 
