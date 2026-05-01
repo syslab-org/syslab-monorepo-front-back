@@ -37,6 +37,10 @@ Importante sobre rutas:
 - `Makefile`
 - `~/apps/reverse-proxy/compose.yml`
 - `~/apps/reverse-proxy/Caddyfile`
+- `~/.aws/credentials`
+- `~/.aws/config`
+
+Si mas adelante usaras `Cloud Connections` con `AssumeRole`, revisa tambien [AWS runtime y AssumeRole](./aws-runtime-assumerole.md).
 
 ## 3. Preparacion de SysLab en Ubuntu
 
@@ -57,6 +61,14 @@ Valores minimos a revisar en `.env.server`:
 - `SERVER_HTTP_PORT=18080`
 - `SESSION_COOKIE_SECURE=0` y `CSRF_COOKIE_SECURE=0` si el acceso sera solo por HTTP en LAN
 - `AWS_PROFILE=tesis` si usaras `~/.aws`
+
+Importante:
+
+- ese `AWS_PROFILE` define la identidad base real del backend
+- no es solo un detalle del host
+- si una `Cloud Connection` usa `AssumeRole`, el backend intentara asumir el role con esa identidad base
+- en modo `server`, el valor debe quedar en `.env.server`
+- si cambias el perfil o la region, recrea el stack con `docker compose -f tools/docker/compose.server.yml down` y luego `up -d`
 
 Si la maquina no tiene el profile AWS creado todavia:
 

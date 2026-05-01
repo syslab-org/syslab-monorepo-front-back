@@ -7,6 +7,7 @@ Esta seccion separa la instalacion por entorno para evitar mezclar pasos de desa
 - Si vas a desarrollar en tu maquina: [Instalacion en local](./local.md)
 - Si vas a levantar la app en una ThinkPad o Ubuntu Server dentro de la LAN: [Servidor Ubuntu en LAN](./servidor-ubuntu/README.md)
 - Si el mismo Ubuntu Server alojara varios proyectos: [Servidor Ubuntu con multiples proyectos](./servidor-ubuntu/multiples-proyectos.md)
+- Si vas a usar `Cloud Connections` con `AssumeRole` en ese servidor: [AWS runtime y AssumeRole](./servidor-ubuntu/aws-runtime-assumerole.md)
 - Si vas a desplegar la plataforma completa en AWS: [Plataforma en AWS](./aws.md)
 
 ## Arquitectura por entorno
@@ -21,6 +22,11 @@ En `local` y `servidor Ubuntu` el stack se levanta con Docker Compose:
 - `flower`: monitoreo de Celery en desarrollo
 - `caddy`: solo en modo servidor Ubuntu, conectado a una red Docker compartida `edge`
 - `reverse-proxy`: stack aparte en el host, fuera de este repo, que publica `:80` y `:443`
+
+En `servidor Ubuntu` hay una regla importante para AWS:
+
+- `AWS_PROFILE` del backend define la identidad base real del runtime
+- una `Cloud Connection` en modo `AssumeRole` no reemplaza esa identidad base; la usa para asumir el role configurado
 
 En `AWS`, `infra/terraform/` despliega la plataforma operativa:
 

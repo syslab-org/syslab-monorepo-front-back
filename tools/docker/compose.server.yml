@@ -41,8 +41,6 @@ services:
       - DATABASE_URL=postgres://teg:teg@postgres:5432/teg
       - DB_SSL_REQUIRE=false
       - AWS_SDK_LOAD_CONFIG=1
-      - AWS_PROFILE=${AWS_PROFILE:-tesis}
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
       - ALLOW_LOCAL_APPLY=1
       - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-1}
       - CSRF_COOKIE_SECURE=${CSRF_COOKIE_SECURE:-1}
@@ -83,8 +81,6 @@ services:
       - DATABASE_URL=postgres://teg:teg@postgres:5432/teg
       - DB_SSL_REQUIRE=false
       - AWS_SDK_LOAD_CONFIG=1
-      - AWS_PROFILE=${AWS_PROFILE:-tesis}
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
       - ALLOW_LOCAL_APPLY=1
       - KEEP_TF_DIRS=1
     depends_on:
