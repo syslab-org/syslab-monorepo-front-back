@@ -58,6 +58,8 @@ SLEEP             ?= 5
   help \
   up down restart restart-frontend start stop up-nobuild recreate ps ps-healthy logs \
   server-up server-down server-restart server-logs server-ps \
+  server-quick-tunnel-up server-quick-tunnel-down server-quick-tunnel-logs \
+  server-tunnel-up server-tunnel-down server-tunnel-logs \
   public-up public-down public-restart public-logs public-ps tunnel-up tunnel-down tunnel-logs quick-tunnel-up quick-tunnel-down quick-tunnel-logs \
   logs-backend logs-frontend logs-celery logs-flower logs-redis \
   rm-stopped ps-paused unpause build build-nc pull prune nuke \
@@ -90,6 +92,8 @@ help:
 	@echo "  make logs          # logs de todos los servicios"
 	@echo "  make public-up     # expone la app por Caddy en :80"
 	@echo "  make server-up     # despliegue Ubuntu compartido, publicado solo en localhost para proxy central"
+	@echo "  make server-quick-tunnel-up # URL temporal trycloudflare.com para el stack server"
+	@echo "  make server-tunnel-up # Cloudflare Tunnel estable para el stack server (requiere .env.public)"
 	@echo "  make quick-tunnel-up # publica la app con URL temporal trycloudflare.com"
 	@echo "  make tunnel-up     # publica la app via Cloudflare Tunnel estable (requiere token)"
 	@echo ""
@@ -171,6 +175,43 @@ server-logs: ## Logs del stack Ubuntu
 
 server-ps: ## Estado del stack Ubuntu
 	$(COMPOSE_SERVER) ps
+
+server-quick-tunnel-up: ## Publica el stack server por Quick Tunnel apuntando a localhost:${SERVER_HTTP_PORT}
+	@PORT=$$(awk -F= '/^SERVER_HTTP_PORT=/{print $$2}' .env.server 2>/dev/null | tail -n1); \
+	if [ -z "$$PORT" ]; then PORT=18080; fi; \
+	docker rm -f syslab-cloudflared-quick >/dev/null 2>&1 || true; \
+	docker run -d --network host --name syslab-cloudflared-quick cloudflare/cloudflared:2025.4.2 \
+	  tunnel --no-autoupdate --url http://127.0.0.1:$$PORT; \
+	echo "Quick Tunnel levantado. Revisa la URL con: make server-quick-tunnel-logs"
+
+server-quick-tunnel-down: ## Baja el Quick Tunnel del stack server
+	docker rm -f syslab-cloudflared-quick || true
+
+server-quick-tunnel-logs: ## Logs del Quick Tunnel del stack server
+	docker logs -f syslab-cloudflared-quick
+
+server-tunnel-up: ## Publica el stack server por Cloudflare Tunnel estable (requiere .env.public)
+	@set -a; \
+	if [ ! -f .env.public ]; then \
+	  echo "Falta .env.public. Copia .env.public.example y define CLOUDFLARE_TUNNEL_TOKEN."; \
+	  exit 1; \
+	fi; \
+	. ./.env.public; \
+	set +a; \
+	if [ -z "$$CLOUDFLARE_TUNNEL_TOKEN" ]; then \
+	  echo "CLOUDFLARE_TUNNEL_TOKEN no definido en .env.public"; \
+	  exit 1; \
+	fi; \
+	docker rm -f syslab-cloudflared >/dev/null 2>&1 || true; \
+	docker run -d --network host --name syslab-cloudflared cloudflare/cloudflared:2025.4.2 \
+	  tunnel --no-autoupdate run --token "$$CLOUDFLARE_TUNNEL_TOKEN"; \
+	echo "Tunnel estable levantado. Revisa logs con: make server-tunnel-logs"
+
+server-tunnel-down: ## Baja el Cloudflare Tunnel estable del stack server
+	docker rm -f syslab-cloudflared || true
+
+server-tunnel-logs: ## Logs del Cloudflare Tunnel estable del stack server
+	docker logs -f syslab-cloudflared
 
 public-down: ## Baja Caddy y cloudflared
 	$(COMPOSE_PUBLIC) stop caddy cloudflared
