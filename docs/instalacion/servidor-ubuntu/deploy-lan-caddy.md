@@ -237,7 +237,89 @@ Bajarlo:
 make server-down
 ```
 
-## 11. Notas importantes
+## 11. Publicar la app hacia internet con Cloudflare
+
+Para el stack `server` validado en Ubuntu, la forma mas simple es publicar el `caddy` interno que vive en `127.0.0.1:${SERVER_HTTP_PORT:-18080}`.
+
+### Opcion A. Quick Tunnel temporal
+
+Requisitos:
+
+- `ALLOWED_HOSTS` debe incluir `.trycloudflare.com`
+- `CSRF_TRUSTED_ORIGINS` debe incluir `https://*.trycloudflare.com`
+
+Eso ya esta contemplado en `.env.server.example`.
+
+Levantar el tunnel:
+
+```bash
+make server-quick-tunnel-up
+```
+
+Ver la URL generada:
+
+```bash
+make server-quick-tunnel-logs
+```
+
+En los logs veras una URL tipo:
+
+```text
+https://algo-aleatorio.trycloudflare.com
+```
+
+Bajarlo:
+
+```bash
+make server-quick-tunnel-down
+```
+
+Notas:
+
+- es ideal para pruebas, demos y validacion rapida
+- si el proceso se detiene, la URL deja de servir
+- no requiere dominio propio
+
+### Opcion B. Tunnel estable con token
+
+Preparar `.env.public`:
+
+```bash
+cp .env.public.example .env.public
+nano .env.public
+```
+
+Completa:
+
+```env
+CLOUDFLARE_TUNNEL_TOKEN=tu_token_real
+```
+
+Levantar el tunnel:
+
+```bash
+make server-tunnel-up
+```
+
+Ver logs:
+
+```bash
+make server-tunnel-logs
+```
+
+Bajarlo:
+
+```bash
+make server-tunnel-down
+```
+
+Notas:
+
+- esta opcion usa un tunnel ya creado en Cloudflare Zero Trust
+- no depende de una URL temporal
+- la configuracion del hostname final vive en Cloudflare, no en este repo
+
+## 12. Notas importantes
 
 - este modo separa el despliegue Ubuntu/LAN del `compose.dev.yml`
 - el backend ya sirve `/django-admin/` y archivos estaticos detras del `caddy` interno de SysLab

@@ -16,6 +16,7 @@ Topologia validada:
 3. [Servidor Ubuntu con multiples proyectos](./multiples-proyectos.md): convivencia con otros proyectos.
 4. [AWS runtime y AssumeRole](./aws-runtime-assumerole.md): como se resuelven credenciales AWS desde el backend.
 5. [Playbook de Key Pairs y Acceso SSH en AWS](../../tesis/validacion/aws-key-pairs-ssh-playbook.md): escenarios probados para acceso SSH de estudiantes despues del deploy.
+6. En la misma guia de `Deploy LAN con Caddy` ya quedo registrado como habilitar una URL temporal o estable con Cloudflare.
 
 ## Mapa mental
 
