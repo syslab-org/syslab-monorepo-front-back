@@ -266,6 +266,7 @@ class Lab(models.Model):
     cidr_block = models.CharField(max_length=64, blank=True, default="")
     prefix_length = models.IntegerField(null=True, blank=True)
     region = models.CharField(max_length=32, blank=True, default="")
+    notes = models.TextField(blank=True, default="")
     narrative = models.CharField(max_length=32, blank=True, default="advanced")
     lab_template = models.CharField(max_length=128, blank=True, default="")
     legacy_canvas_id = models.CharField(

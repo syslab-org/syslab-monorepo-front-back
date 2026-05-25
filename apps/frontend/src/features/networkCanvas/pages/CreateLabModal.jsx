@@ -77,7 +77,7 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
 
   const handleCreateVPC = async (vpcData) => {
     setLoadingFlow(true)
-    const { vlanName, cloudProvider, cidrBlock, prefixLength, region, type, course_id, labTemplate, cloud_connection_id } = vpcData
+    const { vlanName, cloudProvider, cidrBlock, prefixLength, region, type, course_id, labTemplate, cloud_connection_id, notes } = vpcData
     const targetProvider = normalizeProviderValue(cloudProvider) || 'aws'
     const providerCapability = getCapability(targetProvider)
     const enabledFeatures = Object.entries(providerCapability.features || {})
@@ -94,6 +94,7 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
           cidr_block: cidrBlock,
           prefix_length: prefixLength,
           region,
+          notes: notes || '',
           narrative: wizardMode ? 'wizard' : 'advanced',
           lab_template: labTemplate || '',
           flow: templateFlow || {},

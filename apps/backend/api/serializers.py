@@ -820,6 +820,7 @@ class LabSerializer(serializers.ModelSerializer):
             "cidr_block",
             "prefix_length",
             "region",
+            "notes",
             "narrative",
             "lab_template",
             "plan_canvas_hash",
@@ -854,6 +855,7 @@ class LabCreateSerializer(serializers.Serializer):
     cidr_block = serializers.CharField(required=False, allow_blank=True, default="")
     prefix_length = serializers.IntegerField(required=False, allow_null=True)
     region = serializers.CharField(required=False, allow_blank=True, default="")
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
     narrative = serializers.CharField(required=False, allow_blank=True, default="advanced")
     lab_template = serializers.CharField(required=False, allow_blank=True, default="")
     flow = serializers.JSONField(required=False)
@@ -876,6 +878,7 @@ class LabUpdateSerializer(serializers.Serializer):
     cidr_block = serializers.CharField(required=False, allow_blank=True)
     prefix_length = serializers.IntegerField(required=False, allow_null=True)
     region = serializers.CharField(required=False, allow_blank=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
     narrative = serializers.CharField(required=False, allow_blank=True)
     lab_template = serializers.CharField(required=False, allow_blank=True)
     flow = serializers.JSONField(required=False)

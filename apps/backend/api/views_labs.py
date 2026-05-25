@@ -107,6 +107,7 @@ class LabViewSet(viewsets.ViewSet):
             cidr_block=data.get("cidr_block", ""),
             prefix_length=data.get("prefix_length"),
             region=data.get("region", ""),
+            notes=data.get("notes", ""),
             narrative=data.get("narrative", "advanced"),
             lab_template=data.get("lab_template", ""),
         )
@@ -156,6 +157,7 @@ class LabViewSet(viewsets.ViewSet):
             "cidr_block",
             "prefix_length",
             "region",
+            "notes",
             "narrative",
             "lab_template",
             "visibility_scope",

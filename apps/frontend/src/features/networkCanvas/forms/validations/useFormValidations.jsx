@@ -77,6 +77,11 @@ export const useFormValidationSchema = (
           .required('Cloud Provider is required'),
 
         region: yup.string().required('Region is required'),
+
+        labNotes: yup
+          .string()
+          .max(4000, 'La descripción debe tener como máximo 4000 caracteres')
+          .optional(),
       });
 
     /* ================= VPC (legacy) ================= */
