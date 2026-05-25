@@ -31,6 +31,7 @@ services:
       - ../../apps/backend:/app
       - tfstate:/tfstate
       - tfwork:/tfwork
+      - tfplugincache:/tfplugin-cache
       - ${HOME}/.aws:/home/app/.aws:ro
     env_file:
       - ../../.env
@@ -46,6 +47,7 @@ services:
       - AWS_SDK_LOAD_CONFIG=1
       - AWS_PROFILE=${AWS_PROFILE:-tesis}
       - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - TF_PLUGIN_CACHE_DIR=/tfplugin-cache
       # ✅ Habilita apply/destroy real en local (tasks.py lo exige)
       - ALLOW_LOCAL_APPLY=${ALLOW_LOCAL_APPLY:-1}
     ports:
@@ -76,6 +78,7 @@ services:
       - ../../apps/backend:/app
       - tfstate:/tfstate
       - tfwork:/tfwork
+      - tfplugincache:/tfplugin-cache
       - ${HOME}/.aws:/home/app/.aws:ro
     env_file:
       - ../../.env
@@ -89,6 +92,7 @@ services:
       - AWS_SDK_LOAD_CONFIG=1
       - AWS_PROFILE=${AWS_PROFILE:-tesis}
       - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - TF_PLUGIN_CACHE_DIR=/tfplugin-cache
       - ALLOW_LOCAL_APPLY=${ALLOW_LOCAL_APPLY:-1}
       - KEEP_TF_DIRS=${KEEP_TF_DIRS:-1} # Evita que celery borre los directorios temporales de terraform
     depends_on:
@@ -163,6 +167,7 @@ volumes:
   pgdata:
   tfstate:
   tfwork:
+  tfplugincache:
 
 networks:
   appnet:
