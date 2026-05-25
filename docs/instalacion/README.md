@@ -30,7 +30,7 @@ En `servidor Ubuntu` hay una regla importante para AWS:
 - `AWS_PROFILE` del backend define la identidad base real del runtime
 - una `Cloud Connection` en modo `AssumeRole` no reemplaza esa identidad base; la usa para asumir el role configurado
 
-En `AWS`, `infra/terraform/` despliega la plataforma operativa:
+En `AWS`, `infra/terraform/` define una arquitectura de despliegue de plataforma:
 
 - VPC y subnets
 - ALB
@@ -40,6 +40,8 @@ En `AWS`, `infra/terraform/` despliega la plataforma operativa:
 - ECR para imagenes Docker
 - S3 para planes
 - Secrets Manager para `DATABASE_URL`
+
+Esta capa de infraestructura existe en el repositorio como opcion de despliegue administrado en AWS. Sin embargo, la ruta operativa validada del proyecto sigue siendo Docker Compose en `local` y `servidor Ubuntu`, por lo que conviene verificar el estado real del entorno AWS antes de asumir que dichos recursos se encuentran activos.
 
 ## Requisitos comunes
 

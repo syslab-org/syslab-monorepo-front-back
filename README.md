@@ -154,6 +154,8 @@ Se creó un `Makefile` para simplificar comandos:
 
 ## 8. Deploy en AWS ECS
 
+Esta seccion describe la arquitectura AWS soportada por el repositorio y el flujo previsto para desplegarla. No implica que esos recursos se encuentren activos en todo momento; su estado real debe verificarse antes de asumir que la plataforma esta corriendo sobre ECS.
+
 Terraform define:
 
 - **ECS Cluster** (`tesis-dev-cluster`).
@@ -269,7 +271,7 @@ Documento:
 
 # Despliegue en AWS con Terraform, ECS y ALB
 
-Este proyecto utiliza **Terraform** para provisionar la infraestructura en AWS y **Docker/ECS** para desplegar los servicios del backend y Celery. A continuación se detalla el flujo de despliegue y validación.
+Este proyecto utiliza **Terraform** para provisionar una arquitectura de plataforma en AWS y **Docker/ECS** como mecanismo previsto para desplegar los servicios del backend y Celery en ese entorno. A continuación se detalla el flujo de despliegue y validación.
 
 ## Flujo de Despliegue
 
@@ -346,10 +348,10 @@ Este proyecto utiliza **Terraform** para provisionar la infraestructura en AWS y
 
 ✅ Con estos pasos:
 
-- El backend y Celery quedaron desplegados en ECS.
-- La base de datos RDS y Redis están accesibles desde los contenedores.
+- Si la aplicacion de Terraform y el despliegue se completan correctamente, el backend y Celery quedan desplegados en ECS.
+- La base de datos RDS y Redis quedan accesibles desde los contenedores del entorno AWS.
 - El ALB expone el backend públicamente y responde correctamente.
-- Se confirmó que el despliegue es funcional mediante healthchecks y smoke tests.
+- El despliegue puede validarse mediante healthchecks y smoke tests.
 
 ## Próximos pasos
 

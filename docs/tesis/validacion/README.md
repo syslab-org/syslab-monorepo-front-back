@@ -4,6 +4,23 @@ Esta carpeta reúne la evidencia técnica más útil para redactar la documentac
 
 ## Qué contiene
 
+### 0. Catalogo maestro de pruebas
+
+Documento de entrada recomendado:
+- [Catalogo Maestro de Casos de Prueba para Canvas y Deploy](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/tesis/validacion/canvas-deploy-test-catalog.md)
+
+Que resume:
+- checklist previa de `cloud connections` y `key pairs`
+- escenarios positivos de canvas con `deploy` exitoso
+- escenarios negativos que deben bloquearse antes del deploy
+- casos de permisos `personal` vs `course_shared`
+- casos de `redeploy` y `destroy`
+
+Util para:
+- preparar la defensa final
+- convertir la validacion tecnica en una bateria ordenada de pruebas
+- decidir que casos correr en vivo y cuales dejar como evidencia capturada
+
 ### 1. Redeploy sobre AWS
 
 Documento fuente principal:
