@@ -7,6 +7,7 @@
 COMPOSE       = docker compose -f tools/docker/compose.dev.yml
 COMPOSE_PUBLIC = docker compose -f tools/docker/compose.dev.yml -f tools/docker/compose.public.yml
 COMPOSE_SERVER = docker compose -f tools/docker/compose.server.yml
+BASE_TF_IMAGE = base-tf:latest
 SVC_FRONTEND  = frontend
 SVC_BACKEND   = backend
 SVC_CELERY    = celery
@@ -62,7 +63,7 @@ SLEEP             ?= 5
   server-tunnel-up server-tunnel-down server-tunnel-logs \
   public-up public-down public-restart public-logs public-ps tunnel-up tunnel-down tunnel-logs quick-tunnel-up quick-tunnel-down quick-tunnel-logs \
   logs-backend logs-frontend logs-celery logs-flower logs-redis \
-  rm-stopped ps-paused unpause build build-nc pull prune nuke \
+  rm-stopped ps-paused unpause build-base-tf build build-nc pull prune nuke \
   setup lint test migrate makemigrations-api migrate-all migrate-api createsuperuser sh-backend sh-frontend sh-celery sh-flower sh-redis \
   dbshell psql plan-outputs \
   ecr-login check-images build-backend build-celery tag-backend tag-celery push-backend push-celery push \
@@ -116,14 +117,14 @@ help:
 # =============================================================================
 # RUNBOOK A · DESARROLLO LOCAL (docker compose)
 # =============================================================================
-up:        ## Levanta dev stack (build si hace falta)
+up: build-base-tf       ## Levanta dev stack (build si hace falta)
 	$(COMPOSE) up -d --build
 
 down:      ## Baja dev stack
 	$(COMPOSE) down
 
 
-restart:   ## Reinicia dev stack (con build)
+restart: build-base-tf   ## Reinicia dev stack (con build)
 	$(COMPOSE) down
 	$(COMPOSE) up -d --build
 
@@ -266,10 +267,13 @@ unpause:
 	@docker ps --filter status=paused -q | xargs -r docker unpause
 	@echo "✅ Listo."
 
-build:
+build-base-tf:
+	docker build -f tools/docker/base.terraform.Dockerfile -t $(BASE_TF_IMAGE) .
+
+build: build-base-tf
 	$(COMPOSE) build
 
-build-nc:
+build-nc: build-base-tf
 	$(COMPOSE) build --no-cache
 
 pull:
