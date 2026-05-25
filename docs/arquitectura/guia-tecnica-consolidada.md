@@ -83,14 +83,15 @@ Tecnologias principales:
 
 ### Infra y runtime
 
-- Docker Compose para entorno local
-- AWS ECS/Fargate para runtime de backend y celery
-- AWS ALB
-- AWS RDS Postgres
-- AWS ElastiCache Redis
-- AWS ECR
-- AWS S3
-- AWS IAM / STS / AssumeRole
+- Docker Compose como ruta operativa validada para entorno local y servidor Ubuntu
+- Arquitectura AWS definida en Terraform para una posible operacion administrada:
+  - AWS ECS/Fargate para backend y celery
+  - AWS ALB
+  - AWS RDS Postgres
+  - AWS ElastiCache Redis
+  - AWS ECR
+  - AWS S3
+  - AWS IAM / STS / AssumeRole
 - Terraform
 
 ## 4. Modelo conceptual del sistema
