@@ -22,6 +22,7 @@ import {
   Typography,
 } from '@mui/material'
 import { EditOutlined, PersonAddAlt1Outlined, PersonRemoveOutlined } from '@mui/icons-material'
+import { useTranslation } from 'react-i18next'
 
 import { LoadingFlowContext } from '@/app/providers/LoadingFlowContext'
 import { useAuth } from '@/app/providers/AuthContext'
@@ -37,68 +38,73 @@ const EMPTY_FORM = {
   is_active: true,
 }
 
-const CourseForm = ({ form, setForm, teachers, canAssignTeacher, isEditing, onSubmit, onCancel }) => (
-  <Box component="form" onSubmit={onSubmit}>
-    <Stack spacing={2}>
-      <Typography variant="h6" fontWeight={700}>
-        {isEditing ? 'Editar curso' : 'Crear curso'}
-      </Typography>
+const CourseForm = ({ form, setForm, teachers, canAssignTeacher, isEditing, onSubmit, onCancel }) => {
+  const { t } = useTranslation()
 
-      <TextField
-        label="Nombre"
-        value={form.name}
-        onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-        required
-        fullWidth
-      />
-
-      <TextField
-        label="Código"
-        value={form.code}
-        onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value }))}
-        fullWidth
-      />
-
-      {canAssignTeacher && (
-        <FormControl fullWidth>
-          <InputLabel id="course-teacher-label">Profesor</InputLabel>
-          <Select
-            labelId="course-teacher-label"
-            label="Profesor"
-            value={form.teacher_id}
-            onChange={(event) => setForm((prev) => ({ ...prev, teacher_id: event.target.value }))}
-          >
-            <MenuItem value="">Sin reasignar</MenuItem>
-            {teachers.map((teacher) => (
-              <MenuItem key={teacher.id} value={teacher.id}>
-                {teacher.display_name || teacher.email}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      )}
-
-      <Stack direction="row" spacing={1.5} alignItems="center">
-        <Switch
-          checked={!!form.is_active}
-          onChange={(event) => setForm((prev) => ({ ...prev, is_active: event.target.checked }))}
-        />
-        <Typography variant="body2">
-          Curso activo
+  return (
+    <Box component="form" onSubmit={onSubmit}>
+      <Stack spacing={2}>
+        <Typography variant="h6" fontWeight={700}>
+          {isEditing ? t('settings.courses.editTitle') : t('settings.courses.createTitle')}
         </Typography>
-      </Stack>
 
-      <Stack direction="row" spacing={1.5} justifyContent="flex-end">
-        <Button onClick={onCancel}>Cancelar</Button>
-        <Button type="submit" variant="contained">
-          {isEditing ? 'Guardar cambios' : 'Crear curso'}
-        </Button>
+        <TextField
+          label={t('labels.name')}
+          value={form.name}
+          onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+          required
+          fullWidth
+        />
+
+        <TextField
+          label={t('labels.code')}
+          value={form.code}
+          onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value }))}
+          fullWidth
+        />
+
+        {canAssignTeacher && (
+          <FormControl fullWidth>
+            <InputLabel id="course-teacher-label">{t('settings.courses.teacher')}</InputLabel>
+            <Select
+              labelId="course-teacher-label"
+              label={t('settings.courses.teacher')}
+              value={form.teacher_id}
+              onChange={(event) => setForm((prev) => ({ ...prev, teacher_id: event.target.value }))}
+            >
+              <MenuItem value="">{t('settings.courses.noReassign')}</MenuItem>
+              {teachers.map((teacher) => (
+                <MenuItem key={teacher.id} value={teacher.id}>
+                  {teacher.display_name || teacher.email}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
+
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <Switch
+            checked={!!form.is_active}
+            onChange={(event) => setForm((prev) => ({ ...prev, is_active: event.target.checked }))}
+          />
+          <Typography variant="body2">
+            {t('settings.courses.activeCourse')}
+          </Typography>
+        </Stack>
+
+        <Stack direction="row" spacing={1.5} justifyContent="flex-end">
+          <Button onClick={onCancel}>{t('actions.cancel')}</Button>
+          <Button type="submit" variant="contained">
+            {isEditing ? t('actions.saveChanges') : t('actions.createCourse')}
+          </Button>
+        </Stack>
       </Stack>
-    </Stack>
-  </Box>
-)
+    </Box>
+  )
+}
 
 export const CoursesManagement = () => {
+  const { t } = useTranslation()
   const { setLoadingFlow } = useContext(LoadingFlowContext)
   const { user } = useAuth()
 
@@ -124,11 +130,11 @@ export const CoursesManagement = () => {
       setUsers(Array.isArray(usersResponse) ? usersResponse : [])
     } catch (error) {
       console.error('Error loading courses/users:', error)
-      alert(error?.message || 'No se pudieron cargar los cursos.')
+      alert(error?.message || t('settings.courses.loadError'))
     } finally {
       setLoadingFlow(false)
     }
-  }, [setLoadingFlow])
+  }, [setLoadingFlow, t])
 
   useEffect(() => {
     fetchData()
@@ -192,7 +198,7 @@ export const CoursesManagement = () => {
     event.preventDefault()
 
     if (!form.name.trim()) {
-      alert('Debes indicar un nombre para el curso.')
+      alert(t('settings.courses.missingName'))
       return
     }
 
@@ -217,7 +223,7 @@ export const CoursesManagement = () => {
       closeModal()
     } catch (error) {
       console.error('Error saving course:', error)
-      alert(error?.message || 'No se pudo guardar el curso.')
+      alert(error?.message || t('settings.courses.saveError'))
     } finally {
       setLoadingFlow(false)
     }
@@ -225,7 +231,7 @@ export const CoursesManagement = () => {
 
   const handleEnrollStudent = async () => {
     if (!selectedCourseId || !selectedStudentId) {
-      alert('Selecciona un curso y un alumno.')
+      alert(t('settings.courses.selectCourseAndStudent'))
       return
     }
 
@@ -236,7 +242,7 @@ export const CoursesManagement = () => {
       await fetchData()
     } catch (error) {
       console.error('Error enrolling student:', error)
-      alert(error?.message || 'No se pudo asignar el alumno al curso.')
+      alert(error?.message || t('settings.courses.enrollError'))
     } finally {
       setLoadingFlow(false)
     }
@@ -251,7 +257,7 @@ export const CoursesManagement = () => {
       await fetchData()
     } catch (error) {
       console.error('Error removing student:', error)
-      alert(error?.message || 'No se pudo remover el alumno del curso.')
+      alert(error?.message || t('settings.courses.removeError'))
     } finally {
       setLoadingFlow(false)
     }
@@ -260,11 +266,11 @@ export const CoursesManagement = () => {
   return (
     <Box>
       <PageHeader
-        title="Gestión de Cursos"
-        subtitle="Administra cursos, profesores responsables y asignación de alumnos según el modelo académico del laboratorio."
+        title={t('settings.courses.title')}
+        subtitle={t('settings.courses.subtitle')}
         actions={
           <Button variant="contained" onClick={openCreateModal}>
-            Crear curso
+            {t('actions.createCourse')}
           </Button>
         }
       />
@@ -275,12 +281,12 @@ export const CoursesManagement = () => {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Curso</TableCell>
-                  <TableCell>Código</TableCell>
-                  <TableCell>Profesor</TableCell>
-                  <TableCell>Estado</TableCell>
-                  <TableCell>Alumnos</TableCell>
-                  <TableCell align="right">Acciones</TableCell>
+                  <TableCell>{t('labels.course')}</TableCell>
+                  <TableCell>{t('labels.code')}</TableCell>
+                  <TableCell>{t('settings.courses.teacher')}</TableCell>
+                  <TableCell>{t('labels.state')}</TableCell>
+                  <TableCell>{t('settings.courses.students')}</TableCell>
+                  <TableCell align="right">{t('labels.actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -301,7 +307,7 @@ export const CoursesManagement = () => {
                         <Chip
                           size="small"
                           color={course.is_active ? 'success' : 'default'}
-                          label={course.is_active ? 'Activo' : 'Inactivo'}
+                          label={course.is_active ? t('labels.active') : t('settings.courses.inactive')}
                         />
                       </TableCell>
                       <TableCell>{totalStudents}</TableCell>
@@ -314,7 +320,7 @@ export const CoursesManagement = () => {
                             openEditModal(course)
                           }}
                         >
-                          Editar
+                          {t('actions.edit')}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -330,33 +336,33 @@ export const CoursesManagement = () => {
             <Stack spacing={2.5}>
               <Box>
                 <Typography variant="h6" fontWeight={700}>
-                  Roster del curso
+                  {t('settings.courses.rosterTitle')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {selectedCourse.name} · {selectedCourse.teacher_email || 'Sin profesor visible'}
+                  {selectedCourse.name} · {selectedCourse.teacher_email || t('settings.courses.noVisibleTeacher')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                  Aquí puedes asignar alumnos sin curso o mover alumnos desde otros cursos hacia este roster.
+                  {t('settings.courses.rosterHelp')}
                 </Typography>
               </Box>
 
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }}>
                 <FormControl fullWidth>
-                  <InputLabel id="enroll-student-label">Alumno disponible para asignar</InputLabel>
+                  <InputLabel id="enroll-student-label">{t('settings.courses.availableStudent')}</InputLabel>
                   <Select
                     labelId="enroll-student-label"
-                    label="Alumno disponible para asignar"
+                    label={t('settings.courses.availableStudent')}
                     value={selectedStudentId}
                     onChange={(event) => setSelectedStudentId(event.target.value)}
                   >
                     {availableStudents.length === 0 && (
                       <MenuItem value="" disabled>
-                        No hay alumnos sin curso ni alumnos de otros cursos para mover
+                        {t('settings.courses.noAvailableStudents')}
                       </MenuItem>
                     )}
                     {availableStudents.map((student) => (
                       <MenuItem key={student.id} value={student.id}>
-                        {student.display_name || student.email} · {student.course?.name || 'Sin curso'}
+                        {student.display_name || student.email} · {student.course?.name || t('common.noCourse')}
                       </MenuItem>
                     ))}
                   </Select>
@@ -368,21 +374,21 @@ export const CoursesManagement = () => {
                   onClick={handleEnrollStudent}
                   disabled={!selectedStudentId}
                 >
-                  Asignar alumno
+                  {t('actions.assignStudent')}
                 </Button>
               </Stack>
 
               {selectedCourseStudents.length === 0 ? (
-                <Alert severity="info">Este curso todavía no tiene alumnos asignados.</Alert>
+                <Alert severity="info">{t('settings.courses.noStudentsAssigned')}</Alert>
               ) : (
                 <TableContainer>
                   <Table>
                     <TableHead>
                       <TableRow>
-                        <TableCell>Alumno</TableCell>
-                        <TableCell>Email</TableCell>
-                        <TableCell>Estado</TableCell>
-                        <TableCell align="right">Acción</TableCell>
+                        <TableCell>{t('settings.courses.studentLabel')}</TableCell>
+                        <TableCell>{t('labels.email')}</TableCell>
+                        <TableCell>{t('labels.state')}</TableCell>
+                        <TableCell align="right">{t('settings.courses.actionLabel')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -398,7 +404,7 @@ export const CoursesManagement = () => {
                               startIcon={<PersonRemoveOutlined />}
                               onClick={() => handleRemoveStudent(student.id)}
                             >
-                              Remover
+                              {t('actions.remove')}
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -410,7 +416,7 @@ export const CoursesManagement = () => {
             </Stack>
           </Paper>
         ) : (
-          <Alert severity="info">Aún no hay cursos disponibles para gestionar.</Alert>
+          <Alert severity="info">{t('settings.courses.noCourses')}</Alert>
         )}
       </Stack>
 

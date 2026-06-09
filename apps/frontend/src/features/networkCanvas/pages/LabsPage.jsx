@@ -29,6 +29,7 @@ import {
   Tooltip,
 } from "@mui/material";
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext.jsx";
@@ -40,27 +41,19 @@ import CreateLabModal from "./CreateLabModal";
 import { PageHeader } from '@/shared/ui/layouts/MainLayout';
 import { api } from "@/infrastructure/http/api";
 
-const parseAndValidateCidr = (raw) => {
+const parseAndValidateCidr = (raw, t) => {
   const value = String(raw || "").trim();
   if (!value.includes("/")) {
-    return { ok: false, message: "Usa formato CIDR, ej: 10.0.0.0/16" };
+    return { ok: false, message: t('labs.cidrErrors.format') };
   }
   const [base, prefixStr] = value.split("/");
   const prefix = Number(prefixStr);
 
   if (Number.isNaN(prefix) || prefix < 8 || prefix > 30) {
-    return { ok: false, message: "Prefijo invalido (esperado /8 a /30)" };
+    return { ok: false, message: t('labs.cidrErrors.prefix') };
   }
 
   return { ok: true, base: base.trim(), prefix };
-};
-
-const executionSourceLabels = {
-  lab_explicit: 'Fijada en el lab',
-  owner_personal_auto: 'Auto -> cuenta personal',
-  course_shared_auto: 'Auto -> cuenta del curso',
-  environment: 'Credenciales del servidor',
-  unresolved: 'Sin resolver',
 };
 
 const useFetchLabs = (setLoadingFlow) => {
@@ -86,6 +79,7 @@ const useFetchLabs = (setLoadingFlow) => {
 }
 
 const LabsPage = () => {
+  const { t } = useTranslation();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [vpcToDelete, setVpcToDelete] = useState(null);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
@@ -107,6 +101,13 @@ const LabsPage = () => {
   const { setLoadingFlow } = useContext(LoadingFlowContext)
   const { setMasterCidrBlock, setPrefixLength, setLabName, setLabRegion } = useCanvasLabStore();
   const { startTourIfNeeded, restartTour } = useOnboardingTour();
+  const executionSourceLabels = useMemo(() => ({
+    lab_explicit: t('labs.executionSourceLabels.lab_explicit'),
+    owner_personal_auto: t('labs.executionSourceLabels.owner_personal_auto'),
+    course_shared_auto: t('labs.executionSourceLabels.course_shared_auto'),
+    environment: t('labs.executionSourceLabels.environment'),
+    unresolved: t('labs.executionSourceLabels.unresolved'),
+  }), [t]);
 
   const { vpcs, fetchVPCs } = useFetchLabs(setLoadingFlow)
   const { start, finish, setStep } = useWizard()
@@ -137,7 +138,7 @@ const LabsPage = () => {
     try {
       setLoadingFlow(true);
       await api.createLab({
-        name: `${vpc.name || "Laboratorio"} (copia)`,
+        name: `${vpc.name || t('labs.defaultLabName')} (${t('labs.copySuffix')})`,
         target_provider: vpc.target_provider || 'aws',
         cidr_block: vpc.cidr_block || '',
         prefix_length: vpc.prefix_length,
@@ -157,7 +158,7 @@ const LabsPage = () => {
       await fetchVPCs();
     } catch (error) {
       console.error("Error duplicating VPC:", error);
-      alert("No se pudo duplicar el laboratorio.");
+      alert(t('labs.duplicateError'));
     } finally {
       setLoadingFlow(false);
     }
@@ -194,7 +195,7 @@ const LabsPage = () => {
       closeDeleteDialog();
     } catch (error) {
       console.error("Error deleting VPC:", error);
-      alert("No se pudo eliminar. Revisa consola.");
+      alert(t('labs.deleteError'));
     } finally {
       setLoadingFlow(false);
     }
@@ -290,7 +291,7 @@ const LabsPage = () => {
 
   const handleRename = async () => {
     if (!vpcToRename?.id || !newName.trim()) return;
-    const cidrCheck = parseAndValidateCidr(editCidr);
+    const cidrCheck = parseAndValidateCidr(editCidr, t);
     if (!cidrCheck.ok) {
       alert(cidrCheck.message);
       return;
@@ -309,7 +310,7 @@ const LabsPage = () => {
       closeRenameDialog();
     } catch (error) {
       console.error('Error updating lab:', error);
-      alert('No se pudo actualizar el laboratorio.');
+      alert(t('labs.updateError'));
     } finally {
       setLoadingFlow(false);
     }
@@ -319,8 +320,8 @@ const LabsPage = () => {
     <Box sx={{ p: 3 }}>
       <Box data-tour="labs-page-header">
         <PageHeader
-          title="Laboratorios"
-          subtitle="Gestiona tus laboratorios y abre el canvas para editar topologías, validar intención y preparar despliegues."
+          title={t('labs.title')}
+          subtitle={t('labs.subtitle')}
           actions={
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
               <Button
@@ -329,7 +330,7 @@ const LabsPage = () => {
                 onClick={handleCreateGuideLab}
                 data-tour="labs-create-guided-button"
               >
-                Crear guiado
+                {t('labs.createGuided')}
               </Button>
               <Button
                 variant="contained"
@@ -337,7 +338,7 @@ const LabsPage = () => {
                 onClick={handleCreateLab}
                 data-tour="labs-create-lab-button"
               >
-                Crear laboratorio
+                {t('labs.createLab')}
               </Button>
             </Stack>
           }
@@ -349,23 +350,23 @@ const LabsPage = () => {
           <TextField
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            label="Buscar"
-            placeholder="Por nombre o id…"
+            label={t('labels.search')}
+            placeholder={t('labs.searchPlaceholder')}
             size="small"
             fullWidth
           />
 
           <FormControl size="small" sx={{ minWidth: 180 }}>
-            <InputLabel id="type-filter-label">Modo</InputLabel>
+            <InputLabel id="type-filter-label">{t('labels.mode')}</InputLabel>
             <Select
               labelId="type-filter-label"
               value={typeFilter}
-              label="Modo"
+              label={t('labels.mode')}
               onChange={(e) => setTypeFilter(e.target.value)}
             >
-              <MenuItem value="ALL">Todos</MenuItem>
-              <MenuItem value="GUIDED">Guiados</MenuItem>
-              <MenuItem value="ADVANCED">Avanzados</MenuItem>
+              <MenuItem value="ALL">{t('common.all')}</MenuItem>
+              <MenuItem value="GUIDED">{t('labs.guided')}</MenuItem>
+              <MenuItem value="ADVANCED">{t('labs.advanced')}</MenuItem>
             </Select>
           </FormControl>
 
@@ -386,13 +387,13 @@ const LabsPage = () => {
             tableLayout: 'fixed',
           }}
         >
-          <TableHead>
+            <TableHead>
             <TableRow>
-              <TableCell>Laboratorio</TableCell>
-              <TableCell>Pertenencia</TableCell>
-              <TableCell>Ejecución</TableCell>
-              <TableCell>Actualizado</TableCell>
-              <TableCell align="right">Acciones</TableCell>
+              <TableCell>{t('labels.name')}</TableCell>
+              <TableCell>{t('labs.ownership')}</TableCell>
+              <TableCell>{t('labs.execution')}</TableCell>
+              <TableCell>{t('labels.updated')}</TableCell>
+              <TableCell align="right">{t('labels.actions')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -423,7 +424,7 @@ const LabsPage = () => {
                         variant="outlined"
                       />
                       {vpc.narrative === 'wizard' && (
-                        <Chip label="Guiado" size="small" color="primary" variant="outlined" />
+                        <Chip label={t('labs.guidedChip')} size="small" color="primary" variant="outlined" />
                       )}
                     </Stack>
                   </Stack>
@@ -431,7 +432,7 @@ const LabsPage = () => {
                 <TableCell sx={{ width: '22%' }}>
                   <Stack spacing={0.5}>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {vpc.owner_user?.display_name || vpc.owner_user?.email || 'Sin owner'}
+                      {vpc.owner_user?.display_name || vpc.owner_user?.email || t('labs.noOwner')}
                     </Typography>
                     {vpc.owner_user?.email && (
                       <Typography variant="caption" color="text.secondary">
@@ -439,24 +440,24 @@ const LabsPage = () => {
                       </Typography>
                     )}
                     <Typography variant="caption" color="text.secondary">
-                      Curso: {vpc.course?.name || 'Sin curso'}
+                      {t('labs.coursePrefix', { value: vpc.course?.name || t('common.noCourse') })}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Visibilidad: {vpc.visibility_scope || '-'}
+                      {t('labs.visibilityPrefix', { value: vpc.visibility_scope || '-' })}
                     </Typography>
                   </Stack>
                 </TableCell>
                 <TableCell sx={{ width: '24%' }}>
                   <Stack spacing={0.5}>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {vpc.resolved_execution_target?.name || vpc.cloud_connection?.name || 'Sin conexión resuelta'}
+                      {vpc.resolved_execution_target?.name || vpc.cloud_connection?.name || t('labs.unresolvedConnection')}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {executionSourceLabels[vpc.resolved_execution_target?.source] || 'Auto'}
+                      {executionSourceLabels[vpc.resolved_execution_target?.source] || t('common.auto')}
                     </Typography>
                     {vpc.resolved_execution_target?.account_id && (
                       <Typography variant="caption" color="text.secondary">
-                        Cuenta AWS: {vpc.resolved_execution_target.account_id}
+                        {t('labs.awsAccountPrefix', { value: vpc.resolved_execution_target.account_id })}
                       </Typography>
                     )}
                   </Stack>
@@ -466,12 +467,12 @@ const LabsPage = () => {
                 </TableCell>
                 <TableCell align="right" sx={{ width: '14%' }}>
                   <Stack direction="row" spacing={1} justifyContent="flex-end">
-                    <Tooltip title="Abrir laboratorio">
+                    <Tooltip title={t('labs.openLab')}>
                       <IconButton onClick={() => handleLinkToFlow(vpc)} color="primary">
                         <OpenInNewOutlined />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="Acciones del laboratorio">
+                    <Tooltip title={t('labs.labActions')}>
                       <IconButton onClick={(event) => openActionsMenu(event, vpc)} color="primary">
                         <MoreVert />
                       </IconButton>
@@ -501,7 +502,7 @@ const LabsPage = () => {
           <ListItemIcon>
             <ModeEditOutlined fontSize="small" />
           </ListItemIcon>
-          <ListItemText>Editar</ListItemText>
+          <ListItemText>{t('actions.edit')}</ListItemText>
         </MenuItem>
         <MenuItem
           onClick={async () => {
@@ -514,7 +515,7 @@ const LabsPage = () => {
           <ListItemIcon>
             <ContentCopy fontSize="small" />
           </ListItemIcon>
-          <ListItemText>Duplicar</ListItemText>
+          <ListItemText>{t('actions.duplicate')}</ListItemText>
         </MenuItem>
         <MenuItem
           onClick={() => {
@@ -526,47 +527,47 @@ const LabsPage = () => {
           <ListItemIcon>
             <DeleteOutline fontSize="small" color="error" />
           </ListItemIcon>
-          <ListItemText>Eliminar</ListItemText>
+          <ListItemText>{t('actions.delete')}</ListItemText>
         </MenuItem>
       </Menu>
 
       <Dialog open={deleteDialogOpen} onClose={closeDeleteDialog}>
-        <DialogTitle>Eliminar laboratorio</DialogTitle>
+        <DialogTitle>{t('labs.deleteTitle')}</DialogTitle>
         <DialogContent>
-          ¿Seguro que quieres eliminar <b>{vpcToDelete?.name}</b>?
+          {t('labs.deleteConfirm', { name: vpcToDelete?.name || '' })}
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeDeleteDialog}>Cancelar</Button>
-          <Button color="error" onClick={deleteLabOnly}>Eliminar</Button>
+          <Button onClick={closeDeleteDialog}>{t('actions.cancel')}</Button>
+          <Button color="error" onClick={deleteLabOnly}>{t('actions.delete')}</Button>
         </DialogActions>
       </Dialog>
 
       <Dialog open={renameDialogOpen} onClose={closeRenameDialog}>
-        <DialogTitle>Editar laboratorio</DialogTitle>
+        <DialogTitle>{t('labs.editTitle')}</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
             margin="dense"
-            label="Nombre"
+            label={t('labels.name')}
             fullWidth
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
           />
           <TextField
             margin="dense"
-            label="CIDR padre"
+            label={t('labs.parentCidr')}
             fullWidth
             value={editCidr}
             onChange={(e) => setEditCidr(e.target.value)}
-            placeholder="10.64.0.0/12"
-            helperText="Formato CIDR. Este es el rango padre del laboratorio."
+            placeholder={t('labs.cidrPlaceholder')}
+            helperText={t('labs.cidrHelp')}
           />
           <FormControl fullWidth margin="dense">
-            <InputLabel id="edit-region-label">Región</InputLabel>
+            <InputLabel id="edit-region-label">{t('labs.region')}</InputLabel>
             <Select
               labelId="edit-region-label"
               value={editRegion}
-              label="Región"
+              label={t('labs.region')}
               onChange={(e) => setEditRegion(e.target.value)}
             >
               <MenuItem value="us-east-1">US East (N. Virginia)</MenuItem>
@@ -575,42 +576,42 @@ const LabsPage = () => {
             </Select>
           </FormControl>
           <FormControl fullWidth margin="dense">
-            <InputLabel id="edit-connection-label">Conexión cloud</InputLabel>
+            <InputLabel id="edit-connection-label">{t('labs.cloudConnection')}</InputLabel>
             <Select
               labelId="edit-connection-label"
               value={editCloudConnectionId}
-              label="Conexión cloud"
+              label={t('labs.cloudConnection')}
               onChange={(e) => setEditCloudConnectionId(e.target.value)}
             >
-              <MenuItem value="">Auto-seleccionar por owner/curso</MenuItem>
+              <MenuItem value="">{t('labs.autoSelectOwnerCourse')}</MenuItem>
               {cloudConnections.map((connection) => (
                 <MenuItem key={connection.id} value={connection.id}>
-                  {connection.name} · {connection.scope === 'course_shared' ? 'curso' : 'personal'}
+                  {connection.name} · {connection.scope === 'course_shared' ? t('labs.connectionScopeCourse') : t('labs.connectionScopePersonal')}
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
           <TextField
             margin="dense"
-            label="Descripción, observaciones o notas"
+            label={t('labs.notesLabel')}
             fullWidth
             multiline
             minRows={3}
             value={editNotes}
             onChange={(e) => setEditNotes(e.target.value)}
-            helperText="Opcional. Sirve para documentar el objetivo del laboratorio o dejar notas operativas."
+            helperText={t('labs.notesHelp')}
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeRenameDialog}>Cancelar</Button>
-          <Button onClick={handleRename}>Guardar</Button>
+          <Button onClick={closeRenameDialog}>{t('actions.cancel')}</Button>
+          <Button onClick={handleRename}>{t('actions.save')}</Button>
         </DialogActions>
       </Dialog>
 
       <CreateLabModal open={isCreateLabModalOpen} onClose={handleCreateLabModalClose} wizardMode={wizardMode} />
       <TourLauncherButton
         onClick={() => restartTour("labs-overview")}
-        label="Ver tour de laboratorios"
+        label={t('labs.tourLabel')}
       />
     </Box>
   )
