@@ -31,11 +31,11 @@ jobs:
         with:
           node-version: "20"
           cache: "pnpm"
-      - name: PNPM
+      - name: Enable corepack
         run: |
-          npm i -g pnpm
+          corepack enable
       - name: Front deps + lint
-        working-directory: frontend
+        working-directory: apps/frontend
         run: |
-          pnpm install
+          pnpm install --frozen-lockfile
           pnpm lint

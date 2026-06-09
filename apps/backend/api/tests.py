@@ -107,6 +107,26 @@ class ValidateNetworkPlanTests(SimpleTestCase):
         ):
             validate_network_plan(payload)
 
+    def test_rejects_invalid_payload_in_english(self):
+        with self.assertRaisesMessage(
+            ValueError,
+            "Invalid payload: it must be a JSON object.",
+        ):
+            validate_network_plan([], language="en")
+
+
+class AuthI18nTests(APITestCase):
+    def test_login_with_invalid_credentials_respects_accept_language(self):
+        response = self.client.post(
+            "/api/auth/login/",
+            {"email": "nobody@example.com", "password": "bad-password"},
+            format="json",
+            HTTP_ACCEPT_LANGUAGE="en",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["detail"], "Invalid credentials.")
+
 
 class NatCleanupTargetTests(SimpleTestCase):
     def test_build_nat_cleanup_targets_marks_generated_eip_as_releasable(self):

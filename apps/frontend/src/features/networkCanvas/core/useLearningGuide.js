@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from 'react-i18next';
 import {
   TYPE_COMPUTER_NODE,
   TYPE_PRINTER_NODE,
@@ -45,7 +46,7 @@ const pairKey = (a, b) => (a < b ? `${a}::${b}` : `${b}::${a}`);
 
 const makeBadge = (label, tone = "default") => ({ label, tone });
 
-const resolveNodeLabel = (node) =>
+const resolveNodeLabel = (node, fallbackLabel) =>
   node?.data?.vpcName ||
   node?.data?.subnetName ||
   node?.data?.name ||
@@ -53,12 +54,12 @@ const resolveNodeLabel = (node) =>
   node?.data?.label ||
   node?.label ||
   node?.id ||
-  "Elemento";
+  fallbackLabel;
 
-const buildFocusedGuide = ({ selectedNode, nodes, edges }) => {
+const buildFocusedGuide = ({ selectedNode, nodes, edges, t }) => {
   if (!selectedNode) return null;
 
-  const label = resolveNodeLabel(selectedNode);
+  const label = resolveNodeLabel(selectedNode, t('canvas.learningGuide.focus.element'));
 
   if (selectedNode.type === TYPE_VPC_NODE) {
     const subnets = nodes.filter((node) => node.parentId === selectedNode.id);
@@ -73,40 +74,41 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges }) => {
     const sshCidr = String(selectedNode.data?.allowedSshCidr || "").trim();
 
     return {
-      title: `Network Segment: ${label}`,
-      subtitle: "Qué significa en el modelo neutral y cómo se traduce en AWS.",
+      title: t('canvas.learningGuide.focus.segmentTitle', { label }),
+      subtitle: t('canvas.learningGuide.focus.segmentSubtitle'),
       badges: [
         makeBadge(`CIDR ${selectedNode.data?.cidrBlock || "n/a"}/${selectedNode.data?.prefixLength || "?"}`),
-        makeBadge(hasIgw ? "Internet edge activo" : "Sin internet edge", hasIgw ? "success" : "default"),
-        makeBadge(hasNat ? "Managed egress activo" : "Sin managed egress", hasNat ? "warning" : "default"),
-        makeBadge(sshCidr ? "SSH desde IP definida" : "SSH no expuesto", sshCidr ? "info" : "default"),
+        makeBadge(hasIgw ? t('canvas.learningGuide.focus.internetEdgeOn') : t('canvas.learningGuide.focus.internetEdgeOff'), hasIgw ? "success" : "default"),
+        makeBadge(hasNat ? t('canvas.learningGuide.focus.managedEgressOn') : t('canvas.learningGuide.focus.managedEgressOff'), hasNat ? "warning" : "default"),
+        makeBadge(sshCidr ? t('canvas.learningGuide.focus.sshExposed') : t('canvas.learningGuide.focus.sshHidden'), sshCidr ? "info" : "default"),
       ],
       labLines: [
-        `Este segmento representa un dominio principal de red dentro del laboratorio.`,
+        t('canvas.learningGuide.focus.segmentLabDomain'),
         publicSubnets > 0
-          ? `Tienes ${publicSubnets} zona(s) pública(s): sirven para bastions o servicios con salida directa.`
-          : "No hay zonas públicas; este segmento no está pensado para exposición directa.",
+          ? t('canvas.learningGuide.focus.publicZones', { count: publicSubnets })
+          : t('canvas.learningGuide.focus.noPublicZones'),
         privateSubnets > 0
-          ? `Tienes ${privateSubnets} zona(s) privada(s): sirven para workloads internos.`
-          : "No hay zonas privadas; toda la práctica está concentrada en areas públicas o no definidas.",
+          ? t('canvas.learningGuide.focus.privateZones', { count: privateSubnets })
+          : t('canvas.learningGuide.focus.noPrivateZones'),
       ],
       awsLines: [
-        `AWS creará 1 VPC real en ${selectedNode.data?.region || "us-east-1"} con el CIDR indicado.`,
+        t('canvas.learningGuide.focus.segmentAwsVpc', {
+          region: selectedNode.data?.region || "us-east-1",
+        }),
         hasIgw
-          ? "Se creará y adjuntará un Internet Gateway para permitir salida/entrada pública donde existan rutas y SGs."
-          : "Sin Internet Gateway, la VPC no tendrá salida pública directa.",
+          ? t('canvas.learningGuide.focus.igwCreated')
+          : t('canvas.learningGuide.focus.igwMissing'),
         hasNat
-          ? "Se creará 1 NAT Gateway: tus redes privadas podrán salir a Internet, pero no recibir tráfico entrante."
-          : "Sin NAT Gateway, las subnets privadas tampoco tendrán salida pública a menos que exista otro camino.",
+          ? t('canvas.learningGuide.focus.natCreated')
+          : t('canvas.learningGuide.focus.natMissing'),
         hasNat
-          ? "Si asignas una Elastic IP al NAT, debe ser un Allocation ID existente de AWS (por ejemplo `eipalloc-...`), no la IP pública visible."
-          : "Si luego habilitas NAT y quieres fijar su EIP, usa un Allocation ID real de AWS.",
+          ? t('canvas.learningGuide.focus.natEipDefined')
+          : t('canvas.learningGuide.focus.natEipLater'),
         sshCidr
-          ? `El Security Group abrirá TCP/22 desde ${sshCidr}.`
-          : "No se abrirá SSH administrativo desde Internet salvo que lo habilites explícitamente.",
+          ? t('canvas.learningGuide.focus.sshRule', { value: sshCidr })
+          : t('canvas.learningGuide.focus.noSshRule'),
       ],
-      whyItMatters:
-        "Este segmento define el limite principal del laboratorio. A partir de aqui se decide segmentacion, exposicion y conectividad hacia otras redes.",
+      whyItMatters: t('canvas.learningGuide.focus.segmentWhy'),
     };
   }
 
@@ -133,30 +135,29 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges }) => {
     ).length;
 
     return {
-      title: `Connectivity Policy: ${label}`,
-      subtitle: mode === "tgw" ? "Hub central de conectividad" : "Conectividad directa entre pares",
+      title: t('canvas.learningGuide.focus.routerTitle', { label }),
+      subtitle: mode === "tgw" ? t('canvas.learningGuide.focus.routerHub') : t('canvas.learningGuide.focus.routerDirect'),
       badges: [
-        makeBadge(mode === "tgw" ? "Modo hub routing" : "Modo direct links", mode === "tgw" ? "primary" : "secondary"),
-        makeBadge(`${connectedVpcs.size} segmento(s) conectados`),
-        makeBadge(`${routeTable.length} policy(s) declaradas`),
-        makeBadge(oneWayRoutes > 0 ? `${oneWayRoutes} retorno(s) faltante(s)` : "Policies ida/vuelta coherentes", oneWayRoutes > 0 ? "warning" : "success"),
+        makeBadge(mode === "tgw" ? t('canvas.learningGuide.focus.routerHubMode') : t('canvas.learningGuide.focus.routerDirectMode'), mode === "tgw" ? "primary" : "secondary"),
+        makeBadge(t('canvas.learningGuide.focus.connectedSegments', { count: connectedVpcs.size })),
+        makeBadge(t('canvas.learningGuide.focus.declaredPolicies', { count: routeTable.length })),
+        makeBadge(oneWayRoutes > 0 ? t('canvas.learningGuide.focus.missingReturns', { count: oneWayRoutes }) : t('canvas.learningGuide.focus.roundTripPolicies'), oneWayRoutes > 0 ? "warning" : "success"),
       ],
       labLines: [
         mode === "tgw"
-          ? "En el laboratorio este nodo actua como un hub: los segmentos envian trafico al nodo para alcanzar otras redes."
-          : "En el laboratorio este nodo representa enlaces directos por pares: cada segmento necesita policies explicitas hacia el otro.",
-        "Las filas de policy no son decorativas: determinan quien puede hablar con quien.",
+          ? t('canvas.learningGuide.focus.routerHubLab')
+          : t('canvas.learningGuide.focus.routerDirectLab'),
+        t('canvas.learningGuide.focus.policyRows'),
       ],
       awsLines: [
         mode === "tgw"
-          ? `AWS implementará 1 Transit Gateway y ${connectedVpcs.size} attachment(s) para los segmentos conectados.`
-          : "AWS implementará conexiones VPC Peering entre los pares que realmente queden declarados por policies.",
+          ? t('canvas.learningGuide.focus.routerHubAws', { count: connectedVpcs.size })
+          : t('canvas.learningGuide.focus.routerPeeringAws'),
         mode === "tgw"
-          ? "Cada policy hacia TGW enviara trafico al hub central; luego el hub lo reencamina hacia el segmento destino."
-          : "En peering no existe tránsito implícito: A↔B y B↔C no conectan automáticamente A↔C.",
+          ? t('canvas.learningGuide.focus.routerHubRoute')
+          : t('canvas.learningGuide.focus.routerPeeringRoute'),
       ],
-      whyItMatters:
-        "Aquí se define la diferencia entre una topología punto a punto y una topología centralizada. Ese cambio altera tanto la escalabilidad como la forma de razonar el tráfico.",
+      whyItMatters: t('canvas.learningGuide.focus.routerWhy'),
     };
   }
 
@@ -164,26 +165,25 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges }) => {
     const subnetType = String(selectedNode.data?.subnetType || "").toLowerCase();
     const routeTable = selectedNode.data?.routeTable || "main";
     return {
-      title: `Zone Segment: ${label}`,
-      subtitle: "Zona interna dentro de un segmento principal.",
+      title: t('canvas.learningGuide.focus.zoneTitle', { label }),
+      subtitle: t('canvas.learningGuide.focus.zoneSubtitle'),
       badges: [
-        makeBadge(subnetType === "public" ? "Pública" : "Privada", subnetType === "public" ? "success" : "default"),
+        makeBadge(subnetType === "public" ? t('canvas.learningGuide.focus.publicZone') : t('canvas.learningGuide.focus.privateZone'), subnetType === "public" ? "success" : "default"),
         makeBadge(`CIDR ${selectedNode.data?.cidrBlock || "n/a"}`),
-        makeBadge(`Tabla ${routeTable}`),
+        makeBadge(t('canvas.learningGuide.focus.routeTable', { value: routeTable })),
       ],
       labLines: [
         subnetType === "public"
-          ? "En el laboratorio esta zona esta pensada para bastions o workloads con salida directa."
-          : "En el laboratorio esta zona esta pensada para workloads internos o menos expuestos.",
+          ? t('canvas.learningGuide.focus.publicZoneLab')
+          : t('canvas.learningGuide.focus.privateZoneLab'),
       ],
       awsLines: [
-        "AWS creará 1 aws_subnet con el CIDR indicado y la asociará a una route table.",
+        t('canvas.learningGuide.focus.subnetAws'),
         subnetType === "public"
-          ? "Será pública solo si su route table apunta a un Internet Gateway."
-          : "Será privada mientras no tenga ruta pública directa.",
+          ? t('canvas.learningGuide.focus.subnetPublicRule')
+          : t('canvas.learningGuide.focus.subnetPrivateRule'),
       ],
-      whyItMatters:
-        "La subnet no define conectividad por sí sola; la combinación de route table y Security Group determina su comportamiento real.",
+      whyItMatters: t('canvas.learningGuide.focus.zoneWhy'),
     };
   }
 
@@ -195,32 +195,31 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges }) => {
     const hasPublicIp = Boolean(selectedNode.data?.associatePublicIp);
     const keyPair = selectedNode.data?.ssh_access || selectedNode.data?.sshAccess || "n/a";
     return {
-      title: `Workload: ${label}`,
-      subtitle: "Host desde donde se materializa la práctica.",
+      title: t('canvas.learningGuide.focus.workloadTitle', { label }),
+      subtitle: t('canvas.learningGuide.focus.workloadSubtitle'),
       badges: [
         makeBadge(selectedNode.data?.instance_type || "tipo n/a"),
-        makeBadge(hasPublicIp ? "Con IP pública" : "Solo IP privada", hasPublicIp ? "info" : "default"),
+        makeBadge(hasPublicIp ? t('canvas.learningGuide.focus.publicIp') : t('canvas.learningGuide.focus.privateOnly'), hasPublicIp ? "info" : "default"),
         makeBadge(`Key ${keyPair}`),
       ],
       labLines: [
-        "En el laboratorio este nodo representa el equipo final sobre el que harás pruebas o desplegarás servicios.",
+        t('canvas.learningGuide.focus.workloadLab'),
       ],
       awsLines: [
-        "AWS creará 1 instancia EC2 con la AMI, tipo y key pair definidos.",
+        t('canvas.learningGuide.focus.workloadAws'),
         hasPublicIp
-          ? "Podrás administrarla desde fuera si la ruta pública y el SG lo permiten."
-          : "Solo será alcanzable desde dentro de la red o mediante saltos intermedios.",
+          ? t('canvas.learningGuide.focus.workloadPublicAccess')
+          : t('canvas.learningGuide.focus.workloadPrivateAccess'),
       ],
-      whyItMatters:
-        "Las pruebas de ping y acceso SSH terminan ocurriendo aqui. Si el workload esta mal ubicado o mal protegido, el laboratorio no sera verificable.",
+      whyItMatters: t('canvas.learningGuide.focus.workloadWhy'),
     };
   }
 
   return {
     title: label,
-    subtitle: "Explicación contextual del elemento seleccionado.",
+    subtitle: t('canvas.learningGuide.focus.defaultSubtitle'),
     badges: [],
-    labLines: ["Selecciona un elemento principal del canvas para ver una lectura pedagógica más precisa."],
+    labLines: [t('canvas.learningGuide.focus.defaultLine')],
     awsLines: [],
     whyItMatters: "",
   };
@@ -234,6 +233,7 @@ export function useLearningGuide({
   canvasPlanInfo,
   selectedNode,
 }) {
+  const { t, i18n } = useTranslation();
   return useMemo(() => {
     const vpcs = nodes.filter((n) => n.type === TYPE_VPC_NODE);
     const subnets = nodes.filter((n) => n.type === TYPE_SUBNETWORK_NODE);
@@ -306,41 +306,41 @@ export function useLearningGuide({
     const steps = [
       {
         id: "vpc_base",
-        title: "Crear segmento base",
-        description: "Define el contenedor principal del laboratorio.",
+        title: t('canvas.learningGuide.steps.segment.title'),
+        description: t('canvas.learningGuide.steps.segment.description'),
         completed: vpcs.length >= 1,
       },
       {
         id: "subnet_segment",
-        title: "Definir zonas",
-        description: "Crea al menos una zona publica y una privada.",
+        title: t('canvas.learningGuide.steps.zones.title'),
+        description: t('canvas.learningGuide.steps.zones.description'),
         completed:
           subnets.length >= 2 && publicSubnetCount >= 1 && privateSubnetCount >= 1,
       },
       {
         id: "workload",
-        title: "Agregar workload",
-        description: "Añade al menos una instancia para probar conectividad.",
+        title: t('canvas.learningGuide.steps.workload.title'),
+        description: t('canvas.learningGuide.steps.workload.description'),
         completed: instances.length >= 1,
       },
       {
         id: "router",
-        title: "Conectividad entre segmentos",
+        title: t('canvas.learningGuide.steps.connectivity.title'),
         description: needsRouter
-          ? "Conecta los segmentos con un nodo de conectividad y sus enlaces."
-          : "Opcional en laboratorio de un solo segmento.",
+          ? t('canvas.learningGuide.steps.connectivity.description')
+          : t('canvas.learningGuide.steps.connectivity.optional'),
         completed: !needsRouter || (routers.length >= 1 && hasVpcRouterConnection),
       },
       {
         id: "validate",
-        title: "Validar topologia",
-        description: "Ejecuta simulacion (Terraform plan) antes del despliegue.",
+        title: t('canvas.learningGuide.steps.validate.title'),
+        description: t('canvas.learningGuide.steps.validate.description'),
         completed: isValidated,
       },
       {
         id: "deploy",
-        title: "Desplegar en AWS",
-        description: "Aplica infraestructura real cuando el laboratorio este validado.",
+        title: t('canvas.learningGuide.steps.deploy.title'),
+        description: t('canvas.learningGuide.steps.deploy.description'),
         completed: appliedReal,
         optional: true,
       },
@@ -354,64 +354,61 @@ export function useLearningGuide({
     const progress = Math.round((completed / steps.length) * 100);
     const nextStep = steps.find((step) => !step.completed) || null;
 
-    let nextAction = "Laboratorio completado. Puedes revisar outputs y logs.";
+    let nextAction = t('canvas.learningGuide.nextAction.completed');
     if (isPlanRunning) {
-      nextAction = "Hay una ejecucion en curso. Espera el resultado antes de seguir.";
+      nextAction = t('canvas.learningGuide.nextAction.running');
     } else if (topology.errors.length > 0) {
-      nextAction =
-        "Corrige primero los errores de topologia para continuar con la validacion.";
+      nextAction = t('canvas.learningGuide.nextAction.fixTopology');
     } else if (nextStep?.id === "validate") {
-      nextAction =
-        "Ejecuta Validar para simular la topologia y revisar el plan antes de aplicar.";
+      nextAction = t('canvas.learningGuide.nextAction.validate');
     } else if (nextStep?.id === "deploy") {
-      nextAction =
-        "Cuando estes conforme con la simulacion, ejecuta Desplegar para crear recursos en AWS.";
+      nextAction = t('canvas.learningGuide.nextAction.deploy');
     } else if (nextStep) {
-      nextAction = `Siguiente paso: ${nextStep.title}.`;
+      nextAction = t('canvas.learningGuide.nextAction.nextStep', { title: nextStep.title });
     }
 
     const vlanLines = [
-      `Estas modelando ${subnets.length} zona(s) de red dentro de un laboratorio logico.`,
+      t('canvas.learningGuide.contrast.vlanLines.subnets', { count: subnets.length }),
       needsRouter
-        ? "Tu practica requiere enrutar entre multiples segmentos de red."
-        : "Tu practica puede resolverse en un dominio principal.",
+        ? t('canvas.learningGuide.contrast.vlanLines.needsRouter')
+        : t('canvas.learningGuide.contrast.vlanLines.singleDomain'),
       routersWithRoutes > 0
-        ? "Ya definiste rutas entre segmentos para analizar conectividad."
-        : "Aun no definiste rutas explicitas entre segmentos.",
+        ? t('canvas.learningGuide.contrast.vlanLines.routesReady')
+        : t('canvas.learningGuide.contrast.vlanLines.routesMissing'),
     ];
 
     const awsLines = [
-      `Esto se traduce a ${vpcs.length} VPC(s) y ${subnets.length} subnet(s) en AWS.`,
-      `Conectividad de salida: IGW ${igwCount} / NAT ${natCount}.`,
-      `Routers en modo AWS: Peering ${peeringRouters} / TGW ${tgwRouters}.`,
+      t('canvas.learningGuide.contrast.awsLines.vpcs', { vpcs: vpcs.length, subnets: subnets.length }),
+      t('canvas.learningGuide.contrast.awsLines.egress', { igw: igwCount, nat: natCount }),
+      t('canvas.learningGuide.contrast.awsLines.routers', { peering: peeringRouters, tgw: tgwRouters }),
       routersWithRoutes > 0
-        ? "Las rutas definidas se transforman en route tables y enlaces entre VPCs."
-        : "Sin rutas explicitas, AWS solo aplicara conectividad local por VPC.",
+        ? t('canvas.learningGuide.contrast.awsLines.routesReady')
+        : t('canvas.learningGuide.contrast.awsLines.routesMissing'),
       oneWayPairs > 0
-        ? `Detectamos ${oneWayPairs} par(es) con ruta de solo ida; revisa retorno para pruebas bidireccionales.`
-        : "No se detectan pares con rutas solo de ida.",
+        ? t('canvas.learningGuide.contrast.awsLines.oneWayPairs', { count: oneWayPairs })
+        : t('canvas.learningGuide.contrast.awsLines.noOneWayPairs'),
     ];
 
     const conceptMap = [
       {
-        concept: "Segmentacion",
-        vlanView: "Segmentos y zonas logicas para practica",
-        awsView: "VPC y subnets con CIDR reales",
+        concept: t('canvas.learningGuide.concepts.segmentation.concept'),
+        vlanView: t('canvas.learningGuide.concepts.segmentation.vlan'),
+        awsView: t('canvas.learningGuide.concepts.segmentation.aws'),
       },
       {
-        concept: "Gateway",
-        vlanView: "Nodo de conectividad del laboratorio",
-        awsView: "Route tables + IGW/NAT/TGW/Peering",
+        concept: t('canvas.learningGuide.concepts.gateway.concept'),
+        vlanView: t('canvas.learningGuide.concepts.gateway.vlan'),
+        awsView: t('canvas.learningGuide.concepts.gateway.aws'),
       },
       {
-        concept: "Hosts",
-        vlanView: "Equipos/servicios en la topologia",
-        awsView: "Instancias EC2 y sus interfaces",
+        concept: t('canvas.learningGuide.concepts.hosts.concept'),
+        vlanView: t('canvas.learningGuide.concepts.hosts.vlan'),
+        awsView: t('canvas.learningGuide.concepts.hosts.aws'),
       },
       {
-        concept: "Validacion",
-        vlanView: "Comprobacion de reglas de topologia",
-        awsView: "Terraform plan antes de apply",
+        concept: t('canvas.learningGuide.concepts.validation.concept'),
+        vlanView: t('canvas.learningGuide.concepts.validation.vlan'),
+        awsView: t('canvas.learningGuide.concepts.validation.aws'),
       },
     ];
 
@@ -448,9 +445,9 @@ export function useLearningGuide({
         awsLines,
         conceptMap,
       },
-      focused: buildFocusedGuide({ selectedNode, nodes, edges }),
+      focused: buildFocusedGuide({ selectedNode, nodes, edges, t }),
     };
-  }, [nodes, edges, validationState, canvasState, canvasPlanInfo, selectedNode]);
+  }, [nodes, edges, validationState, canvasState, canvasPlanInfo, selectedNode, t, i18n.resolvedLanguage]);
 }
 
 export default useLearningGuide;

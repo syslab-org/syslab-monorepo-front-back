@@ -1,17 +1,18 @@
 from rest_framework import serializers
 
+from .i18n import tr
 from .domain.network_intent import normalize_network_intent
 from .providers import get_provider_adapter
 
 
 
-def validate_network_plan(payload: dict) -> dict:
+def validate_network_plan(payload: dict, *, request=None, language=None) -> dict:
     """
     Valida el payload del front a traves del adapter del provider.
     Devuelve el payload compilado para el runner actual de Terraform.
     """
     if not isinstance(payload, dict):
-        raise ValueError("Payload invalido: debe ser un objeto JSON.")
+        raise ValueError(tr("payload_invalid_object", request=request, language=language))
 
     intent = normalize_network_intent(payload)
     name = (
@@ -19,7 +20,7 @@ def validate_network_plan(payload: dict) -> dict:
         or str((intent.get("metadata") or {}).get("name") or "").strip()
     )
     if not name:
-        raise ValueError("Falta clave requerida: name")
+        raise ValueError(tr("missing_name", request=request, language=language))
 
     provider = intent["target_provider"]
 

@@ -85,6 +85,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.locale.LocaleMiddleware',
 
     'corsheaders.middleware.CorsMiddleware',
 
@@ -152,7 +153,14 @@ DATABASES = {
 # =========================
 # Internacionalización
 # =========================
-LANGUAGE_CODE = config('LANGUAGE_CODE', default='en-us')
+LANGUAGE_CODE = config('LANGUAGE_CODE', default='es')
+LANGUAGES = [
+    ('es', 'Spanish'),
+    ('en', 'English'),
+]
+LOCALE_PATHS = [
+    BASE_DIR / 'locale',
+]
 TIME_ZONE = config('TIME_ZONE', default='UTC')
 USE_I18N = True
 USE_TZ = True

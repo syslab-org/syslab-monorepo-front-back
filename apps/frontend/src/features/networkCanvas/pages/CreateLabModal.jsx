@@ -1,5 +1,6 @@
 import { Box, Modal } from '@mui/material';
 import { useContext, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/app/providers/AuthContext';
 import { LoadingFlowContext } from '@/app/providers/LoadingFlowContext';
@@ -45,6 +46,7 @@ const normalizeProviderValue = (raw) => {
 }
 
 const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
+  const { t } = useTranslation();
   const { setLoadingFlow } = useContext(LoadingFlowContext)
   const { user } = useAuth()
   const { active, currentStep, steps } = useWizard()
@@ -120,7 +122,7 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
         )
       } catch (error) {
         console.error('Error creating lab:', error)
-        alert(error?.message || 'No se pudo crear el laboratorio.')
+        alert(error?.message || t('canvas.createLab.error'))
         setLoadingFlow(false)
       }
     } else {
@@ -131,19 +133,19 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
 
   const isWizardActive = wizardMode && active;
 
-  let title = 'Crear laboratorio de red';
-  let subtitle = 'Crea un laboratorio para modelar topologías de red y dejarlo listo para validación y despliegue. Define nombre, región y CIDR maestro.';
+  let title = t('canvas.createLab.networkTitle');
+  let subtitle = t('canvas.createLab.networkSubtitle');
   let stepLabel = '';
 
   if (wizardMode) {
-    title = 'Crear laboratorio';
-    subtitle = 'Crea un laboratorio educativo guiado: modela topologías de red paso a paso y déjalo listo para una ejecución real.';
+    title = t('canvas.createLab.guidedTitle');
+    subtitle = t('canvas.createLab.guidedSubtitle');
     if (isWizardActive && Array.isArray(steps) && steps.length > 0) {
       const idx = steps.indexOf(currentStep);
       const stepNumber = idx >= 0 ? idx + 1 : 1;
-      stepLabel = `Paso ${stepNumber} de ${steps.length}`;
+      stepLabel = t('canvas.createLab.stepLabel', { current: stepNumber, total: steps.length });
     } else {
-      stepLabel = 'Laboratorio guiado';
+      stepLabel = t('canvas.createLab.guidedEyebrow');
     }
   }
 

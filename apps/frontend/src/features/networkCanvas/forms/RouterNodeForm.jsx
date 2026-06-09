@@ -15,6 +15,7 @@ import {
 } from "@mui/material";
 import DeleteOutline from "@mui/icons-material/DeleteOutline";
 import { Netmask } from "netmask";
+import { useTranslation } from "react-i18next";
 
 /* ========================= Helpers ========================= */
 
@@ -92,26 +93,26 @@ const isUnidirectional = (route, routes, connectedVpcs) => {
  * - no‑transitiva: source y destVpc (si se elige) deben formar parte de connectedVpcs
  * - duplicada
  */
-const routeError = (r, idx, routes, connectedVpcs) => {
-  if (!r.sourceVpcId) return "Selecciona el segmento de origen";
+const routeError = (r, idx, routes, connectedVpcs, t) => {
+  if (!r.sourceVpcId) return t("canvas.routerForm.validation.selectSource");
 
   const srcVpc = findVpcById(connectedVpcs, r.sourceVpcId);
-  if (!srcVpc) return "El segmento de origen no está conectado a esta policy";
+  if (!srcVpc) return t("canvas.routerForm.validation.sourceNotConnected");
 
   const dest = normalizeCidr(r.destCidr);
-  if (!dest) return "El CIDR destino es requerido";
-  if (!isValidCidr(dest)) return "El CIDR destino es inválido";
+  if (!dest) return t("canvas.routerForm.validation.destRequired");
+  if (!isValidCidr(dest)) return t("canvas.routerForm.validation.destInvalid");
 
   if (r.destVpcId) {
     const dstVpc = findVpcById(connectedVpcs, r.destVpcId);
-    if (!dstVpc) return "El segmento destino no está conectado a esta policy";
+    if (!dstVpc) return t("canvas.routerForm.validation.destNotConnected");
     const vpcCidr = normalizeCidr(dstVpc.cidr || "");
     if (vpcCidr && !(dest === vpcCidr || cidrWithin(dest, vpcCidr))) {
-      return `El CIDR destino debe ser ${vpcCidr} o estar contenido en ese segmento`;
+      return t("canvas.routerForm.validation.destWithinSegment", { value: vpcCidr });
     }
   }
 
-  if (isDuplicate(routes, idx)) return "Ruta duplicada (mismo origen y CIDR destino)";
+  if (isDuplicate(routes, idx)) return t("canvas.routerForm.validation.duplicateRoute");
 
   return null;
 };
@@ -126,6 +127,7 @@ export default function RouterNodeForm({
   connectedVpcs = [],
   vlanRegion = "us-east-1",
 }) {
+  const { t } = useTranslation();
   // Rutas persistidas previamente
   const [routes, setRoutes] = useState(() =>
     Array.isArray(nodeData.routeTable) ? nodeData.routeTable : []
@@ -157,34 +159,31 @@ export default function RouterNodeForm({
   // =========================
   // Conceptual explanation (UI guidance only)
   // =========================
-  const academicMode = (() => {
+  const academicMode = useMemo(() => {
     const count = connectedVpcs.length;
 
     if (count < 2) {
       return {
         type: "info",
-        title: "Sin conectividad entre segmentos",
-        message:
-          "Este nodo necesita al menos 2 segmentos conectados para poder modelar tráfico entre ellos.",
+        title: t("canvas.routerForm.academic.noConnectivity.title"),
+        message: t("canvas.routerForm.academic.noConnectivity.message"),
       };
     }
 
     if (count === 2) {
       return {
         type: "success",
-        title: "Topología punto a punto",
-        message:
-          "Con 2 segmentos conectados, este nodo actuará como un intermediario simple. Solo habrá comunicación si defines policies explícitas.",
+        title: t("canvas.routerForm.academic.pointToPoint.title"),
+        message: t("canvas.routerForm.academic.pointToPoint.message"),
       };
     }
 
     return {
       type: "warning",
-      title: "Topología multipunto",
-      message:
-        "Con más de 2 segmentos conectados, este nodo centraliza la conectividad. Debes definir policies claras para controlar qué segmento puede comunicarse con cuál.",
+      title: t("canvas.routerForm.academic.multiPoint.title"),
+      message: t("canvas.routerForm.academic.multiPoint.message"),
     };
-  })();
+  }, [connectedVpcs.length, t]);
 
   const addRoute = () => {
     if (!canAdd) return;
@@ -227,8 +226,8 @@ export default function RouterNodeForm({
 
   // Errores por fila
   const rowErrors = useMemo(
-    () => routes.map((r, i) => routeError(r, i, routes, connectedVpcs)),
-    [routes, connectedVpcs]
+    () => routes.map((r, i) => routeError(r, i, routes, connectedVpcs, t)),
+    [routes, connectedVpcs, t]
   );
 
   const routePairStats = useMemo(() => {
@@ -289,29 +288,29 @@ export default function RouterNodeForm({
     if (normalizedMode === "tgw") {
       return {
         severity: connectedVpcCount >= 3 ? "success" : "warning",
-        title: "Hub routing",
+        title: t("canvas.routerForm.modeSummary.tgw.title"),
         detail:
           connectedVpcCount >= 3
-            ? `La topología se implementará como un hub central con ${connectedVpcCount} attachment(s).`
-            : "Con pocos segmentos, el modo hub puede ser más complejo que un enlace directo.",
+            ? t("canvas.routerForm.modeSummary.tgw.detailLarge", { count: connectedVpcCount })
+            : t("canvas.routerForm.modeSummary.tgw.detailSmall"),
         bullets: [
-          "Traducción AWS: 1 Transit Gateway + 1 attachment por segmento conectado.",
-          "El tráfico pasa por el hub central; no existe una malla de enlaces directos entre pares.",
-          "Para ping bidireccional, define rutas de ida y vuelta en la tabla del router.",
+          t("canvas.routerForm.modeSummary.tgw.bulletAws"),
+          t("canvas.routerForm.modeSummary.tgw.bulletTraffic"),
+          t("canvas.routerForm.modeSummary.tgw.bulletPing"),
         ],
       };
     }
 
     return {
       severity: hasPendingReverseForPeering ? "warning" : "info",
-      title: "Direct links",
-      detail: `Con tu topología actual, el máximo son ${potentialPairs} enlace(s) directos entre pares.`,
+      title: t("canvas.routerForm.modeSummary.peering.title"),
+      detail: t("canvas.routerForm.modeSummary.peering.detail", { count: potentialPairs }),
       bullets: [
-        "Traducción AWS: 1 conexión peering por par con rutas declaradas en ambos sentidos.",
-        "No es transitivo: A↔B y B↔C no habilita A↔C automáticamente.",
+        t("canvas.routerForm.modeSummary.peering.bulletAws"),
+        t("canvas.routerForm.modeSummary.peering.bulletTransit"),
         connectedVpcCount > 2
-          ? "Con varios segmentos aumenta el número de pares y el mantenimiento de rutas."
-          : "Es ideal para laboratorios pequeños y directos.",
+          ? t("canvas.routerForm.modeSummary.peering.bulletManySegments")
+          : t("canvas.routerForm.modeSummary.peering.bulletSmallLabs"),
       ],
     };
   }, [
@@ -319,35 +318,32 @@ export default function RouterNodeForm({
     connectedVpcCount,
     potentialPairs,
     hasPendingReverseForPeering,
+    t,
   ]);
 
   const routingCopy = useMemo(() => {
     if (normalizedMode === "tgw") {
       return {
-        sectionTitle: "Policies toward the hub",
-        intro:
-          "Cada fila indica qué tráfico sale desde un segmento y se envía al hub para alcanzar otra red conectada.",
-        explainer:
-          "Aquí no defines un enlace directo entre pares. Defines qué destinos deben enviarse al hub central.",
-        sourceLabel: "Segmento que envía al hub",
-        destVpcLabel: "Segmento alcanzado vía hub",
-        destCidrLabel: "CIDR enviado al hub",
-        oneWayLabel: "Falta retorno",
+        sectionTitle: t("canvas.routerForm.routingCopy.tgw.sectionTitle"),
+        intro: t("canvas.routerForm.routingCopy.tgw.intro"),
+        explainer: t("canvas.routerForm.routingCopy.tgw.explainer"),
+        sourceLabel: t("canvas.routerForm.routingCopy.tgw.sourceLabel"),
+        destVpcLabel: t("canvas.routerForm.routingCopy.tgw.destVpcLabel"),
+        destCidrLabel: t("canvas.routerForm.routingCopy.tgw.destCidrLabel"),
+        oneWayLabel: t("canvas.routerForm.routingCopy.tgw.oneWayLabel"),
       };
     }
 
     return {
-      sectionTitle: "Policies between direct peers",
-      intro:
-        "Cada fila representa un destino directo entre segmentos. En enlaces directos, el par solo queda operativo cuando declaras ida y vuelta.",
-      explainer:
-        "Aquí sí estás modelando conectividad directa entre dos segmentos específicos.",
-      sourceLabel: "Segmento de origen",
-      destVpcLabel: "Segmento destino directo",
-      destCidrLabel: "CIDR destino",
-      oneWayLabel: "Solo ida",
+      sectionTitle: t("canvas.routerForm.routingCopy.peering.sectionTitle"),
+      intro: t("canvas.routerForm.routingCopy.peering.intro"),
+      explainer: t("canvas.routerForm.routingCopy.peering.explainer"),
+      sourceLabel: t("canvas.routerForm.routingCopy.peering.sourceLabel"),
+      destVpcLabel: t("canvas.routerForm.routingCopy.peering.destVpcLabel"),
+      destCidrLabel: t("canvas.routerForm.routingCopy.peering.destCidrLabel"),
+      oneWayLabel: t("canvas.routerForm.routingCopy.peering.oneWayLabel"),
     };
-  }, [normalizedMode]);
+  }, [normalizedMode, t]);
 
   const hasErrors = rowErrors.some(Boolean);
   const disableSave = hasErrors || hasPendingReverseForPeering;
@@ -369,16 +365,16 @@ export default function RouterNodeForm({
   return (
     <Box sx={{ minWidth: 560 }} className="pt-node-form">
       <Box className="pt-node-form__header">
-        <Typography className="pt-node-form__eyebrow">connectivity node</Typography>
-        <Typography className="pt-node-form__title">Connectivity Policy</Typography>
+        <Typography className="pt-node-form__eyebrow">{t("canvas.routerForm.headerEyebrow")}</Typography>
+        <Typography className="pt-node-form__title">{t("canvas.routerForm.headerTitle")}</Typography>
         <Typography className="pt-node-form__subtitle">
-          Define connectivity mode and traffic policies between connected network segments.
+          {t("canvas.routerForm.headerSubtitle")}
         </Typography>
       </Box>
 
       <TextField
         fullWidth
-        label="Identificador"
+        label={t("canvas.routerForm.identifier")}
         value={identifier}
         onChange={(e) => setIdentifier(e.target.value)}
         sx={{ mb: 2 }}
@@ -386,20 +382,20 @@ export default function RouterNodeForm({
 
       <Box sx={{ mb: 1 }}>
         <Typography variant="body2" sx={{ mb: 1 }}>
-          Segmentos conectados a este nodo:
+          {t("canvas.routerForm.connectedSegments")}
         </Typography>
         <Stack direction="row" gap={1} flexWrap="wrap">
           {connectedVpcs.map((v) => (
             <Chip
               key={v.id}
               size="small"
-              label={`${v.name} • ${v.cidr || "CIDR n/a"}`}
+              label={`${v.name} • ${v.cidr || t("canvas.routerForm.cidrNa")}`}
               variant="outlined"
             />
           ))}
           {!connectedVpcs.length && (
             <Typography variant="body2" color="text.secondary">
-              (ninguno)
+              {t("canvas.routerForm.none")}
             </Typography>
           )}
         </Stack>
@@ -418,7 +414,7 @@ export default function RouterNodeForm({
       {/* Selector de modo real de despliegue */}
       <Box sx={{ mb: 2 }}>
         <Typography variant="body2" sx={{ mb: 0.5 }}>
-          Connectivity model
+          {t("canvas.routerForm.connectivityModel")}
         </Typography>
         <Select
           size="small"
@@ -427,16 +423,15 @@ export default function RouterNodeForm({
           onChange={(e) => setMode(e.target.value)}
         >
           <MenuItem value="peering">
-            Direct links (AWS: Peering)
+            {t("canvas.routerForm.modeOptions.peering")}
           </MenuItem>
           <MenuItem value="tgw">
-            Hub routing (AWS: Transit Gateway)
+            {t("canvas.routerForm.modeOptions.tgw")}
           </MenuItem>
         </Select>
 
         <Typography variant="caption" color="text.secondary">
-          Este selector define el modelo neutral de conectividad. La traducción AWS puede ser peering por pares o un Transit Gateway central.
-          La conectividad final depende de las policies que declares.
+          {t("canvas.routerForm.modeHelp")}
         </Typography>
       </Box>
 
@@ -459,7 +454,7 @@ export default function RouterNodeForm({
       <Stack direction="row" gap={1} flexWrap="wrap" sx={{ mb: 2 }}>
         <Chip
           size="small"
-          label={normalizedMode === "tgw" ? "AWS: 1 hub central" : "AWS: enlaces directos por pares"}
+          label={normalizedMode === "tgw" ? t("canvas.routerForm.chips.awsHub") : t("canvas.routerForm.chips.awsDirect")}
           color={normalizedMode === "tgw" ? "primary" : "secondary"}
           variant="filled"
         />
@@ -467,8 +462,8 @@ export default function RouterNodeForm({
           size="small"
           label={
             normalizedMode === "tgw"
-              ? "Lectura: el tráfico pasa por el hub"
-              : "Lectura: el tráfico va directo entre segmentos"
+              ? t("canvas.routerForm.chips.readingHub")
+              : t("canvas.routerForm.chips.readingDirect")
           }
           variant="outlined"
         />
@@ -476,8 +471,8 @@ export default function RouterNodeForm({
           size="small"
           label={
             normalizedMode === "tgw"
-              ? "Escala mejor con varios segmentos"
-              : "Más simple para laboratorios pequeños"
+              ? t("canvas.routerForm.chips.scales")
+              : t("canvas.routerForm.chips.simple")
           }
           color={normalizedMode === "tgw" ? "success" : "default"}
           variant={normalizedMode === "tgw" ? "filled" : "outlined"}
@@ -487,19 +482,19 @@ export default function RouterNodeForm({
       <Stack direction="row" gap={1} flexWrap="wrap" sx={{ mb: 2 }}>
         <Chip
           size="small"
-          label={`Pares con rutas: ${routePairStats.totalPairsWithRoutes}`}
+          label={t("canvas.routerForm.stats.pairs", { count: routePairStats.totalPairsWithRoutes })}
           variant="outlined"
         />
         <Chip
           size="small"
           color="success"
-          label={`Bidireccionales: ${routePairStats.bidirectional}`}
+          label={t("canvas.routerForm.stats.bidirectional", { count: routePairStats.bidirectional })}
           variant={routePairStats.bidirectional > 0 ? "filled" : "outlined"}
         />
         <Chip
           size="small"
           color={routePairStats.oneWay > 0 ? "warning" : "default"}
-          label={`Solo ida: ${routePairStats.oneWay}`}
+          label={t("canvas.routerForm.stats.oneWay", { count: routePairStats.oneWay })}
           variant={routePairStats.oneWay > 0 ? "filled" : "outlined"}
         />
         <Chip
@@ -507,8 +502,12 @@ export default function RouterNodeForm({
           color={hasEffectiveConnectivity ? "success" : "warning"}
           label={
             hasEffectiveConnectivity
-              ? `Payload efectivo: ${normalizedMode === "tgw" ? "hub routing activo" : "direct links activos"}`
-              : "Payload efectivo: aislado"
+              ? (
+                normalizedMode === "tgw"
+                  ? t("canvas.routerForm.stats.effectiveHub")
+                  : t("canvas.routerForm.stats.effectiveDirect")
+              )
+              : t("canvas.routerForm.stats.isolated")
           }
           variant="filled"
         />
@@ -516,19 +515,19 @@ export default function RouterNodeForm({
 
       {hasPendingReverseForPeering && (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          En modo <b>Direct links</b> necesitas rutas de ida y vuelta por cada par de segmentos para que ese enlace se materialice.
+          {t("canvas.routerForm.alerts.pendingReverse.before")} <b>{t("canvas.routerForm.modeOptions.peering")}</b> {t("canvas.routerForm.alerts.pendingReverse.after")}
         </Alert>
       )}
 
       {!hasExplicitPolicies && connectedVpcCount >= 2 && (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          Hay segmentos conectados visualmente a este nodo, pero no has definido policies. Si despliegas así, el payload saldrá <b>aislado</b> aunque el edge hacia el router siga visible en el canvas.
+          {t("canvas.routerForm.alerts.noPolicies.before")} <b>{t("canvas.routerForm.alerts.noPolicies.isolated")}</b> {t("canvas.routerForm.alerts.noPolicies.after")}
         </Alert>
       )}
 
       {hasExplicitPolicies && !hasEffectiveConnectivity && connectedVpcCount >= 2 && (
         <Alert severity="info" sx={{ mb: 2 }}>
-          El nodo ya tiene policies, pero todavía no generan conectividad efectiva. En peering eso suele significar que falta la ruta de retorno del otro segmento.
+          {t("canvas.routerForm.alerts.notEffective")}
         </Alert>
       )}
 
@@ -547,24 +546,24 @@ export default function RouterNodeForm({
       </Alert>
 
       <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
-        Los edges del canvas solo indican qué segmentos están conectados a este nodo de políticas. La conectividad que realmente se traducirá a AWS sale de las rutas/policies definidas abajo.
+        {t("canvas.routerForm.table.edgesMeaning")}
       </Alert>
 
       <Alert severity="info" sx={{ mb: 2 }}>
         <Typography variant="body2" sx={{ fontWeight: 600 }}>
-          Cómo leer esta tabla
+          {t("canvas.routerForm.table.title")}
         </Typography>
         <Typography variant="caption" display="block" sx={{ mt: 0.4 }}>
-          - Origen: segmento desde el que sale el tráfico.
+          {t("canvas.routerForm.table.origin")}
         </Typography>
         <Typography variant="caption" display="block">
-          - Destino: red que quieres alcanzar.
+          {t("canvas.routerForm.table.destination")}
         </Typography>
         <Typography variant="caption" display="block">
-          - En direct links modelas conectividad directa entre pares.
+          {t("canvas.routerForm.table.peering")}
         </Typography>
         <Typography variant="caption" display="block">
-          - En hub routing modelas qué destinos deben enviarse al hub central.
+          {t("canvas.routerForm.table.tgw")}
         </Typography>
       </Alert>
 
@@ -608,13 +607,13 @@ export default function RouterNodeForm({
                 fullWidth
               >
                 <MenuItem value="">
-                  <em>— Ninguno —</em>
+                  <em>{t("canvas.routerForm.noneOption")}</em>
                 </MenuItem>
                 {connectedVpcs
                   .filter((v) => v.id !== r.sourceVpcId)
                   .map((v) => (
                     <MenuItem key={v.id} value={v.id}>
-                      {v.name} • {v.cidr || "CIDR n/a"}
+                      {v.name} • {v.cidr || t("canvas.routerForm.cidrNa")}
                     </MenuItem>
                   ))}
               </Select>
@@ -641,7 +640,7 @@ export default function RouterNodeForm({
               />
             )}
             <Box sx={{ pt: "26px" }}>
-              <IconButton aria-label="delete" onClick={() => removeRoute(idx)}>
+              <IconButton aria-label={t("canvas.routerForm.actions.deleteRoute")} onClick={() => removeRoute(idx)}>
                 <DeleteOutline />
               </IconButton>
             </Box>
@@ -651,14 +650,14 @@ export default function RouterNodeForm({
 
       <Stack direction="row" gap={1} sx={{ mt: 1 }} className="pt-node-form__actions">
         <Button variant="outlined" onClick={addRoute} disabled={!canAdd}>
-          + Ruta
+          {t("canvas.routerForm.actions.addRoute")}
         </Button>
         <Box sx={{ flex: 1 }} />
         <Button variant="contained" onClick={handleSave} disabled={disableSave}>
-          Guardar
+          {t("canvas.routerForm.actions.save")}
         </Button>
         <Button color="error" onClick={deleteNode}>
-          Eliminar nodo
+          {t("canvas.routerForm.actions.deleteNode")}
         </Button>
       </Stack>
     </Box>

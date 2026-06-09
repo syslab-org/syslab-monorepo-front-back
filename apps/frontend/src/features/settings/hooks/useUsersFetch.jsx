@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 
 import { api } from '@/infrastructure/http/api'
+import { translate } from '@/shared/i18n'
 
 export const useUsersFetch = (setLoadingFlow) => {
     const [usersList, setUsersList] = useState([])
@@ -38,7 +39,7 @@ export const useUsersFetch = (setLoadingFlow) => {
             await fetchUsers()
         } catch (error) {
             console.error('Error adding user:', error)
-            alert(error?.message || 'No se pudo crear el usuario.')
+            alert(error?.message || translate('settings.users.createUserError'))
         } finally {
             setLoadingFlow(false)
         }
@@ -51,7 +52,7 @@ export const useUsersFetch = (setLoadingFlow) => {
             await fetchUsers()
         } catch (error) {
             console.error('Error updating user: ', error)
-            alert(error?.message || 'No se pudo actualizar el usuario.')
+            alert(error?.message || translate('settings.users.updateUserError'))
         } finally {
             setLoadingFlow(false)
         }

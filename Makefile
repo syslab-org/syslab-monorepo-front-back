@@ -287,7 +287,7 @@ nuke:      ## Baja todo y borra volúmenes del proyecto
 	$(COMPOSE) down -v --remove-orphans
 
 setup:     ## Instala deps (frontend/backend) dentro de contenedores
-	$(COMPOSE) exec -T $(SVC_FRONTEND) pnpm install || true
+	$(COMPOSE) exec -T $(SVC_FRONTEND) pnpm install --frozen-lockfile || true
 	$(COMPOSE) exec -T $(SVC_BACKEND) pip install -r requirements.txt || true
 
 lint:

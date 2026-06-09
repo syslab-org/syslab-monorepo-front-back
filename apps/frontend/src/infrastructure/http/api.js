@@ -1,4 +1,5 @@
 import { emitLoadingFlowEnd, emitLoadingFlowStart } from "@/app/providers/loadingFlowEvents";
+import { getCurrentLanguage, translate } from "@/shared/i18n";
 
 const BASE_URL = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 
@@ -24,17 +25,17 @@ function inferLoadingMessage(method, path) {
   const normalizedMethod = String(method || "GET").toUpperCase();
   const normalizedPath = String(path || "").toLowerCase();
 
-  if (normalizedPath.includes("/login")) return "Iniciando sesión...";
-  if (normalizedPath.includes("/register")) return "Guardando cuenta...";
-  if (normalizedPath.includes("/logout")) return "Cerrando sesión...";
-  if (normalizedPath.includes("/deploy/")) return "Ejecutando despliegue...";
-  if (normalizedPath.includes("/destroy/")) return "Destruyendo infraestructura...";
-  if (normalizedPath.includes("/test/")) return "Probando conexión...";
-  if (normalizedMethod === "DELETE") return "Eliminando datos...";
+  if (normalizedPath.includes("/login")) return translate("loading.messages.login");
+  if (normalizedPath.includes("/register")) return translate("loading.messages.register");
+  if (normalizedPath.includes("/logout")) return translate("loading.messages.logout");
+  if (normalizedPath.includes("/deploy/")) return translate("loading.messages.deploy");
+  if (normalizedPath.includes("/destroy/")) return translate("loading.messages.destroy");
+  if (normalizedPath.includes("/test/")) return translate("loading.messages.test");
+  if (normalizedMethod === "DELETE") return translate("loading.messages.delete");
   if (normalizedMethod === "POST" || normalizedMethod === "PATCH" || normalizedMethod === "PUT") {
-    return "Guardando cambios...";
+    return translate("loading.messages.save");
   }
-  return "Procesando...";
+  return translate("loading.messages.processing");
 }
 
 async function jsonFetch(path, options = {}) {
@@ -46,6 +47,10 @@ async function jsonFetch(path, options = {}) {
     ...(options.body ? { "Content-Type": "application/json" } : {}),
     ...(options.headers || {}),
   };
+
+  if (!headers["Accept-Language"]) {
+    headers["Accept-Language"] = getCurrentLanguage();
+  }
 
   if (token && !headers.Authorization) {
     headers.Authorization = `Token ${token}`;

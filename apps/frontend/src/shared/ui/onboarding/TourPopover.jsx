@@ -1,4 +1,5 @@
 import { Box, Button, Paper, Stack, Typography } from "@mui/material";
+import { useTranslation } from "react-i18next";
 
 export default function TourPopover({
   step,
@@ -12,6 +13,8 @@ export default function TourPopover({
   isLastStep,
   targetFound,
 }) {
+  const { t } = useTranslation();
+
   return (
     <Paper
       elevation={14}
@@ -37,7 +40,7 @@ export default function TourPopover({
 
       <Stack spacing={1.5} sx={{ p: 2 }}>
         <Typography variant="overline" sx={{ letterSpacing: "0.12em", color: "text.secondary" }}>
-          Paso {stepIndex + 1} de {totalSteps}
+          {t("onboarding.stepCounter", { current: stepIndex + 1, total: totalSteps })}
         </Typography>
 
         <Box>
@@ -51,21 +54,21 @@ export default function TourPopover({
 
         {!targetFound && (
           <Typography variant="caption" color="warning.main">
-            Estamos esperando que el elemento aparezca en pantalla para destacarlo.
+            {t("onboarding.waitingTarget")}
           </Typography>
         )}
 
         <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center">
           <Button color="inherit" onClick={onSkip}>
-            Omitir
+            {t("actions.skip")}
           </Button>
 
           <Stack direction="row" spacing={1}>
             <Button variant="text" onClick={onBack} disabled={!canGoBack}>
-              Atrás
+              {t("actions.back")}
             </Button>
             <Button variant="contained" onClick={onNext}>
-              {isLastStep ? "Finalizar" : "Siguiente"}
+              {isLastStep ? t("actions.finish") : t("actions.next")}
             </Button>
           </Stack>
         </Stack>

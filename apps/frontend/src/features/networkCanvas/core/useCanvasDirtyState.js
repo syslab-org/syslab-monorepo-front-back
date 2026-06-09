@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   computeInfraHash,
   computeLegacyInfraHash,
@@ -20,6 +21,7 @@ export function useCanvasDirtyState({
   isCanvasLocked,
   setCanvasUiError,
 }) {
+  const { t } = useTranslation();
   const [isCanvasDirty, setIsCanvasDirty] = useState(false);
   const [editGuardOpen, setEditGuardOpen] = useState(false);
   const [ignoreDirtyGuard, setIgnoreDirtyGuard] = useState(false);
@@ -94,7 +96,7 @@ export function useCanvasDirtyState({
 
   const guardBeforeEdit = (
     fn,
-    msgLocked = "Hay un plan ejecutándose. Revisa el plan antes de editar el canvas.",
+    msgLocked = t("canvas.feedback.planRunningLock"),
   ) => {
     return (...args) => {
       if (isCanvasLocked) {

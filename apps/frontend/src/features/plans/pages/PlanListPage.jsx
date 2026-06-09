@@ -31,6 +31,7 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import DataObjectOutlinedIcon from '@mui/icons-material/DataObjectOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { api } from '@/infrastructure/http/api';
@@ -53,28 +54,28 @@ const statusChipColor = (status) => {
   }
 };
 
-const lifecycleMeta = (p) => {
+const lifecycleMeta = (p, t) => {
   const simulate = !!p?.simulate_only;
   const last = (p?.last_action || '').toLowerCase();
   const applied = !!p?.applied;
 
   // PREVIEW: nunca tocó AWS
-  if (simulate) return { label: 'PREVIEW', color: 'warning', variant: 'filled' };
+  if (simulate) return { label: t('plans.list.lifecycle.preview'), color: 'warning', variant: 'filled' };
 
   // DESTROYED: se aplicó en algún momento, pero el último action fue destroy
-  if (last === 'destroy') return { label: 'DESTROYED', color: 'default', variant: 'outlined' };
+  if (last === 'destroy') return { label: t('plans.list.lifecycle.destroyed'), color: 'default', variant: 'outlined' };
 
   // ACTIVE: aplicado real y no destruido
-  if (applied) return { label: 'ACTIVE', color: 'primary', variant: 'filled' };
+  if (applied) return { label: t('plans.list.lifecycle.active'), color: 'primary', variant: 'filled' };
 
   // CREATED: existe el plan, pero no hay evidencia de apply real
-  return { label: 'CREATED', color: 'default', variant: 'filled' };
+  return { label: t('plans.list.lifecycle.created'), color: 'default', variant: 'filled' };
 };
 
-const modeMeta = (p) =>
+const modeMeta = (p, t) =>
   p?.simulate_only
-    ? { label: 'SIMULATED', color: 'warning', variant: 'outlined' }
-    : { label: 'REAL', color: 'success', variant: 'outlined' };
+    ? { label: t('plans.list.mode.simulated'), color: 'warning', variant: 'outlined' }
+    : { label: t('plans.list.mode.real'), color: 'success', variant: 'outlined' };
 
 const formatDateTime = (iso) => {
   if (!iso) return '-';
@@ -86,6 +87,7 @@ const formatDateTime = (iso) => {
 };
 
 export default function PlanListPage() {
+  const { t } = useTranslation();
   const [items, setItems] = useState([]);
   const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -104,7 +106,7 @@ export default function PlanListPage() {
       const list = Array.isArray(res) ? res : Array.isArray(res?.results) ? res.results : [];
       setItems(list);
     } catch (e) {
-      setErr(e?.message || 'Error cargando planes');
+      setErr(e?.message || t('plans.list.loadingError'));
     } finally {
       setLoading(false);
     }
@@ -153,7 +155,7 @@ export default function PlanListPage() {
 
     const label = plan?.name || plan?.id;
     const ok = window.confirm(
-      `¿Destruir "${label}"? Esto eliminará recursos en AWS asociados a este plan.\n\nSugerencia: valida primero los Outputs.`
+      t('plans.list.destroyConfirm', { label })
     );
     if (!ok) return;
 
@@ -163,7 +165,7 @@ export default function PlanListPage() {
       await api.destroyPlan(plan.id);
       await load();
     } catch (e) {
-      setErr(e?.message || 'Error al destruir el plan');
+      setErr(e?.message || t('plans.list.destroyError'));
     } finally {
       setLoading(false);
     }
@@ -187,19 +189,11 @@ export default function PlanListPage() {
     >
       <Box data-tour="plans-list-header">
         <PageHeader
-          title="Ejecuciones de infraestructura"
-          subtitle={
-            <>
-              Lista de ejecuciones (simulación y reales). Usa{" "}
-              <Box component="span" sx={{ fontFamily: "monospace" }}>
-                Outputs
-              </Box>{" "}
-              para depurar sin ir a la consola de AWS.
-            </>
-          }
+          title={t('plans.list.title')}
+          subtitle={t('plans.list.subtitle')}
           actions={
             <Button variant="outlined" onClick={load} disabled={loading}>
-              {loading ? "Actualizando…" : "Refrescar"}
+              {loading ? t('plans.list.refreshing') : t('plans.list.refresh')}
             </Button>
           }
         />
@@ -225,21 +219,21 @@ export default function PlanListPage() {
           <TextField
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            label="Buscar"
-            placeholder="Por nombre o plan_id…"
+            label={t('labels.search')}
+            placeholder={t('plans.list.searchPlaceholder')}
             size="small"
             fullWidth
           />
 
           <FormControl size="small" sx={{ minWidth: 180 }}>
-            <InputLabel id="status-filter-label">Estado</InputLabel>
+            <InputLabel id="status-filter-label">{t('plans.list.statusFilter')}</InputLabel>
             <Select
               labelId="status-filter-label"
               value={statusFilter}
-              label="Estado"
+              label={t('plans.list.statusFilter')}
               onChange={(e) => setStatusFilter(e.target.value)}
             >
-              <MenuItem value="ALL">Todos</MenuItem>
+              <MenuItem value="ALL">{t('common.all')}</MenuItem>
               <MenuItem value="PENDING">PENDING</MenuItem>
               <MenuItem value="RUNNING">RUNNING</MenuItem>
               <MenuItem value="SUCCESS">SUCCESS</MenuItem>
@@ -285,11 +279,11 @@ export default function PlanListPage() {
                 borderBottom: `1px solid ${theme.palette.divider}`,
               })}
             >
-              <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Plan</TableCell>
-              <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Pertenece a</TableCell>
-              <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Estado</TableCell>
-              <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>Actualizado</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 700, color: "text.primary" }}>Acciones</TableCell>
+              <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>{t('plans.list.columns.plan')}</TableCell>
+              <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>{t('plans.list.columns.ownership')}</TableCell>
+              <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>{t('plans.list.columns.status')}</TableCell>
+              <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>{t('plans.list.columns.updated')}</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 700, color: "text.primary" }}>{t('plans.list.columns.actions')}</TableCell>
             </TableRow>
           </TableHead>
 
@@ -299,7 +293,7 @@ export default function PlanListPage() {
                 <TableCell colSpan={5}>
                   <Stack direction="row" spacing={1.5} alignItems="center" sx={{ py: 1 }}>
                     <CircularProgress size={18} />
-                    <Typography variant="body2" color="text.secondary">Cargando…</Typography>
+                    <Typography variant="body2" color="text.secondary">{t('plans.status.loading')}</Typography>
                   </Stack>
                 </TableCell>
               </TableRow>
@@ -309,7 +303,7 @@ export default function PlanListPage() {
               <TableRow>
                 <TableCell colSpan={5}>
                   <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
-                    No hay planes para mostrar.
+                    {t('plans.list.empty')}
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -317,8 +311,8 @@ export default function PlanListPage() {
 
             {!loading &&
               filtered.map((p) => {
-                const lifecycle = lifecycleMeta(p);
-                const mode = modeMeta(p);
+                const lifecycle = lifecycleMeta(p, t);
+                const mode = modeMeta(p, t);
 
                 return (
                   <TableRow
@@ -341,7 +335,7 @@ export default function PlanListPage() {
                   >
                     <TableCell sx={{ width: '30%' }}>
                       <Typography variant="body2" fontWeight={700} noWrap>
-                        {p.name || 'Sin nombre'}
+                        {p.name || t('labels.name')}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
                         {p.id}
@@ -352,7 +346,7 @@ export default function PlanListPage() {
                           color="text.secondary"
                           sx={{ display: 'block', fontFamily: 'monospace' }}
                         >
-                          canvas: {p.canvas_id}
+                          {t('plans.list.canvasPrefix', { value: p.canvas_id })}
                         </Typography>
                       )}
                     </TableCell>
@@ -360,7 +354,7 @@ export default function PlanListPage() {
                     <TableCell sx={{ width: '24%' }}>
                       <Stack spacing={0.5}>
                         <Typography variant="body2" fontWeight={600}>
-                          {p.owner_user?.display_name || p.owner_user?.email || p.lab?.owner_user?.display_name || p.lab?.owner_user?.email || 'Owner no disponible'}
+                          {p.owner_user?.display_name || p.owner_user?.email || p.lab?.owner_user?.display_name || p.lab?.owner_user?.email || t('plans.list.ownerUnavailable')}
                         </Typography>
                         {(p.owner_user?.email || p.lab?.owner_user?.email) && (
                           <Typography variant="caption" color="text.secondary">
@@ -368,10 +362,10 @@ export default function PlanListPage() {
                           </Typography>
                         )}
                         <Typography variant="caption" color="text.secondary">
-                          Lab: {p.lab?.name || 'Sin laboratorio'}
+                          Lab: {p.lab?.name || t('plans.list.noLab')}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          Curso: {p.course?.name || p.lab?.course?.name || 'Sin curso'}
+                          Curso: {p.course?.name || p.lab?.course?.name || t('plans.list.noCourse')}
                         </Typography>
                       </Stack>
                     </TableCell>
@@ -379,7 +373,7 @@ export default function PlanListPage() {
                     <TableCell sx={{ width: '22%' }}>
                       <Stack spacing={0.75}>
                         <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
-                          <Tooltip title="Resultado del job de Terraform">
+                          <Tooltip title={t('plans.list.resultTooltip')}>
                             <Chip
                               label={p.status}
                               size="small"
@@ -387,7 +381,7 @@ export default function PlanListPage() {
                               variant="filled"
                             />
                           </Tooltip>
-                          <Tooltip title="Estado lógico actual del plan">
+                          <Tooltip title={t('plans.list.lifecycleTooltip')}>
                             <Chip
                               label={lifecycle.label}
                               size="small"
@@ -395,7 +389,7 @@ export default function PlanListPage() {
                               variant={lifecycle.variant}
                             />
                           </Tooltip>
-                          <Tooltip title="Simulada (plan) o ejecución real en AWS">
+                          <Tooltip title={t('plans.list.modeTooltip')}>
                             <Chip
                               label={mode.label}
                               size="small"
@@ -407,12 +401,12 @@ export default function PlanListPage() {
 
                         {p.last_action && (
                           <Typography variant="caption" color="text.secondary">
-                            Última acción: {p.last_action}
+                            {t('plans.list.lastAction', { value: p.last_action })}
                           </Typography>
                         )}
                         {p.lab?.visibility_scope && (
                           <Typography variant="caption" color="text.secondary">
-                            Visibilidad: {p.lab.visibility_scope}
+                            {t('plans.list.visibility', { value: p.lab.visibility_scope })}
                           </Typography>
                         )}
                       </Stack>
@@ -426,20 +420,20 @@ export default function PlanListPage() {
 
                     <TableCell align="right" sx={{ width: '12%' }}>
                       <Stack direction="row" spacing={1} justifyContent="flex-end">
-                        <Tooltip title="Ver detalle">
+                        <Tooltip title={t('plans.list.detail')}>
                           <IconButton
                             size="small"
                             onClick={() => navigate(`/admin/plans/${p.id}`)}
-                            aria-label={`Ver detalle de ${p.name || p.id}`}
+                            aria-label={`${t('plans.list.detail')}: ${p.name || p.id}`}
                           >
                             <VisibilityOutlinedIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Acciones">
+                        <Tooltip title={t('plans.list.actionMenu')}>
                           <IconButton
                             size="small"
                             onClick={(event) => openActionsMenu(event, p)}
-                            aria-label={`Acciones para ${p.name || p.id}`}
+                            aria-label={`${t('plans.list.actionMenu')}: ${p.name || p.id}`}
                           >
                             <MoreVertIcon fontSize="small" />
                           </IconButton>
@@ -470,7 +464,7 @@ export default function PlanListPage() {
           <ListItemIcon>
             <DataObjectOutlinedIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>Outputs</ListItemText>
+          <ListItemText>{t('plans.list.outputs')}</ListItemText>
         </MenuItem>
         <MenuItem
           disabled={!selectedPlan?.can_destroy || loading}
@@ -484,18 +478,18 @@ export default function PlanListPage() {
           <ListItemIcon>
             <DeleteOutlineIcon fontSize="small" color={selectedPlan?.can_destroy ? 'error' : 'disabled'} />
           </ListItemIcon>
-          <ListItemText>Destroy</ListItemText>
+          <ListItemText>{t('plans.list.destroy')}</ListItemText>
         </MenuItem>
       </Menu>
 
       <Divider sx={{ my: 2 }} />
 
       <Typography variant="caption" color="text.secondary">
-        Nota: el botón <Box component="span" sx={{ fontFamily: 'monospace' }}>Destroy</Box> se habilita solo cuando el plan es destruible, pero el backend vuelve a validar la regla.
+        {t('plans.list.destroyNote')}
       </Typography>
       <TourLauncherButton
         onClick={() => restartTour('plans-list-overview')}
-        label="Ver tour de planes"
+        label={t('plans.list.tourLabel')}
       />
     </Box>
   );

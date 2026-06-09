@@ -16,13 +16,14 @@ import {
 } from "@mui/material";
 import { useEffect, useMemo } from 'react';
 import { Controller, useForm } from "react-hook-form";
+import { useTranslation } from 'react-i18next';
 import CidrLearningGuideButton from '@/features/networkCanvas/ui/CidrLearningGuideButton';
 import { TYPE_SUBNETWORK_NODE } from "../utils/constants";
 import { useFormValidationSchema } from './validations/useFormValidations';
 
 const SUBNET_TYPE_OPTIONS = [
-  { value: 'public', label: 'Public' },
-  { value: 'private', label: 'Private' },
+  { value: 'public', labelKey: 'canvas.subnetForm.type.public' },
+  { value: 'private', labelKey: 'canvas.subnetForm.type.private' },
 ];
 
 const SubNetworkNodeForm = ({
@@ -34,6 +35,7 @@ const SubNetworkNodeForm = ({
   siblingSubnetNames = [],          // (opcional) para nombre único
   region = "us-east-1",
 }) => {
+  const { t } = useTranslation();
   // Descomponer CIDR de la VPC para el schema
   let vpcBase = null, vpcPrefix = null;
   if (/^\d+\.\d+\.\d+\.\d+\/\d+$/.test(parentVpcCidr || '')) {
@@ -133,40 +135,39 @@ const SubNetworkNodeForm = ({
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="pt-node-form">
       <Box className="pt-node-form__header">
-        <Typography className="pt-node-form__eyebrow">network zone</Typography>
-        <Typography className="pt-node-form__title">Zone Segment</Typography>
+        <Typography className="pt-node-form__eyebrow">{t("canvas.subnetForm.headerEyebrow")}</Typography>
+        <Typography className="pt-node-form__title">{t("canvas.subnetForm.headerTitle")}</Typography>
         <Typography className="pt-node-form__subtitle">
-          Define traffic behavior and addressing inside the parent network segment. AWS translation: subnet.
+          {t("canvas.subnetForm.headerSubtitle")}
         </Typography>
       </Box>
 
       <Alert severity="info" variant="outlined" sx={{ mb: 0.5 }}>
         <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.35 }}>
-          Qué significa esta zona
+          {t("canvas.subnetForm.info.title")}
         </Typography>
         <Typography variant="caption" display="block">
-          - La zona debe vivir dentro del CIDR del segmento padre.
+          {t("canvas.subnetForm.info.parentCidr")}
         </Typography>
         <Typography variant="caption" display="block">
-          - Las zonas no deben solaparse entre sí dentro del mismo segmento.
+          {t("canvas.subnetForm.info.noOverlap")}
         </Typography>
         <Typography variant="caption" display="block">
-          - Public zone allows broader ingress/egress by route policy. Private zone keeps traffic internal by default.
+          {t("canvas.subnetForm.info.publicVsPrivate")}
         </Typography>
         <Box sx={{ mt: 1.25 }}>
-          <CidrLearningGuideButton buttonLabel="Ayuda con CIDR e IPs" />
+          <CidrLearningGuideButton buttonLabel={t("canvas.cidrGuide.button")} />
         </Box>
       </Alert>
 
       {watch("subnetType") === "private" && (
         <Alert severity="info" sx={{ mb: 1.5 }}>
-          Esta zona es privada. Si después necesitas salida a Internet sin exponerla públicamente,
-          habilita <b>managed egress</b> desde el <b>Network Segment</b> padre.
+          {t("canvas.subnetForm.alerts.privateZoneBefore")} <b>{t("canvas.subnetForm.alerts.managedEgressLabel")}</b> {t("canvas.subnetForm.alerts.privateZoneAfter")} <b>{t("canvas.subnetForm.alerts.parentSegmentLabel")}</b>.
         </Alert>
       )}
 
       <TextField
-        label="Zone Name"
+        label={t("canvas.subnetForm.fields.name")}
         {...register("subnetName")}
         error={!!errors.subnetName}
         helperText={errors.subnetName?.message}
@@ -175,24 +176,24 @@ const SubNetworkNodeForm = ({
       />
 
       <TextField
-        label={`Zone CIDR Block (inside ${parentVpcCidr || 'segment'})`}
+        label={t("canvas.subnetForm.fields.cidr", { parent: parentVpcCidr || t("canvas.subnetForm.segmentFallback") })}
         {...register("cidrBlock")}
         error={!!errors.cidrBlock}
         helperText={errors.cidrBlock?.message}
-        placeholder="10.10.0.0/24"
+        placeholder={t("canvas.subnetForm.fields.cidrPlaceholder")}
         fullWidth
         margin="normal"
       />
 
       <FormControl fullWidth margin="normal" error={!!errors.availabilityZone}>
-        <InputLabel id="az-label">Availability Zone</InputLabel>
+        <InputLabel id="az-label">{t("canvas.subnetForm.fields.availabilityZone")}</InputLabel>
         <Controller
           name="availabilityZone"
           control={control}
           render={({ field }) => (
             <Select
               labelId="az-label"
-              label="Availability Zone"
+              label={t("canvas.subnetForm.fields.availabilityZone")}
               {...field}
               value={field.value || (azOptions[0] || `${region}a`)}
             >
@@ -208,20 +209,20 @@ const SubNetworkNodeForm = ({
       </FormControl>
 
       <FormControl fullWidth margin="normal" error={!!errors.subnetType}>
-        <InputLabel id="subnet-type-label">Zone Type</InputLabel>
+        <InputLabel id="subnet-type-label">{t("canvas.subnetForm.fields.type")}</InputLabel>
         <Controller
           name="subnetType"
           control={control}
           render={({ field }) => (
             <Select
               labelId="subnet-type-label"
-              label="Zone Type"
+              label={t("canvas.subnetForm.fields.type")}
               {...field}
               value={field.value || "public"}
             >
               {SUBNET_TYPE_OPTIONS.map(opt => (
                 <MenuItem key={opt.value} value={opt.value}>
-                  {opt.label}
+                  {t(opt.labelKey)}
                 </MenuItem>
               ))}
             </Select>
@@ -248,7 +249,7 @@ const SubNetworkNodeForm = ({
             )}
           />
         }
-        label="Auto-assign public IPv4 (recommended for public zones)"
+        label={t("canvas.subnetForm.fields.autoAssignPublicIp")}
       />
       {errors.map_public_ip_on_launch && (
         <FormHelperText error>{errors.map_public_ip_on_launch.message}</FormHelperText>
@@ -256,10 +257,10 @@ const SubNetworkNodeForm = ({
 
       <Box className="pt-node-form__actions">
         <Button type="submit" variant="contained" color="primary">
-          Registrar Configuración
+          {t("canvas.subnetForm.actions.save")}
         </Button>
         <Button onClick={deleteNode} color="error">
-          Delete Node
+          {t("canvas.subnetForm.actions.delete")}
         </Button>
       </Box>
     </form>
