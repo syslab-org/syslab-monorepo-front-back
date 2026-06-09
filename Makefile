@@ -57,8 +57,8 @@ SLEEP             ?= 5
 
 .PHONY: \
   help \
-  up down restart restart-frontend start stop up-nobuild recreate ps ps-healthy logs \
-  server-up server-down server-restart server-logs server-ps \
+  up down restart restart-frontend frontend-reset-deps start stop up-nobuild recreate ps ps-healthy logs \
+  server-up server-down server-restart server-frontend-reset-deps server-logs server-ps \
   server-quick-tunnel-up server-quick-tunnel-down server-quick-tunnel-logs \
   server-tunnel-up server-tunnel-down server-tunnel-logs \
   public-up public-down public-restart public-logs public-ps tunnel-up tunnel-down tunnel-logs quick-tunnel-up quick-tunnel-down quick-tunnel-logs \
@@ -91,8 +91,10 @@ help:
 	@echo "  make plan-outputs PLAN_ID=<uuid> # imprime Plan.outputs desde la DB local"
 	@echo "  make smoke-local   # healthz + tarea Celery + /api/network/plan"
 	@echo "  make logs          # logs de todos los servicios"
+	@echo "  make frontend-reset-deps # recrea node_modules del frontend local"
 	@echo "  make public-up     # expone la app por Caddy en :80"
 	@echo "  make server-up     # despliegue Ubuntu compartido, publicado solo en localhost para proxy central"
+	@echo "  make server-frontend-reset-deps # recrea node_modules del frontend del stack server"
 	@echo "  make server-quick-tunnel-up # URL temporal trycloudflare.com para el stack server"
 	@echo "  make server-tunnel-up # Cloudflare Tunnel estable para el stack server (requiere .env.public)"
 	@echo "  make quick-tunnel-up # publica la app con URL temporal trycloudflare.com"
@@ -130,6 +132,12 @@ restart: build-base-tf   ## Reinicia dev stack (con build)
 
 restart-frontend: ## Reinicia SOLO el servicio frontend
 	$(COMPOSE) restart $(SVC_FRONTEND)
+
+frontend-reset-deps: ## Reinstala dependencias del frontend local recreando su volumen node_modules
+	$(COMPOSE) stop $(SVC_FRONTEND) || true
+	$(COMPOSE) rm -f $(SVC_FRONTEND) || true
+	docker volume rm tesis-container_frontend_node_modules || true
+	$(COMPOSE) up -d --build $(SVC_FRONTEND)
 
 start:     ## Arranca contenedores existentes (sin build); si no existen, los crea con up -d
 	@if [ -n "$$($(COMPOSE) ps -a -q 2>/dev/null)" ]; then \
@@ -170,6 +178,12 @@ server-down: ## Baja stack Ubuntu
 server-restart: ## Reinicia stack Ubuntu
 	$(COMPOSE_SERVER) down
 	$(COMPOSE_SERVER) up -d --build
+
+server-frontend-reset-deps: ## Reinstala dependencias del frontend del stack server recreando su volumen node_modules
+	$(COMPOSE_SERVER) stop $(SVC_FRONTEND) || true
+	$(COMPOSE_SERVER) rm -f $(SVC_FRONTEND) || true
+	docker volume rm tesis-server_frontend_node_modules || true
+	$(COMPOSE_SERVER) up -d --build $(SVC_FRONTEND)
 
 server-logs: ## Logs del stack Ubuntu
 	$(COMPOSE_SERVER) logs -f
