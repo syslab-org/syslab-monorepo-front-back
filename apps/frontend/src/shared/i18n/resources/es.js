@@ -1041,6 +1041,155 @@ const es = {
         delete: "Eliminar nodo",
       },
     },
+    routerForm: {
+      headerEyebrow: "nodo de conectividad",
+      headerTitle: "Política de Conectividad",
+      headerSubtitle:
+        "Define el modo de conectividad y las policies de tráfico entre segmentos de red conectados.",
+      identifier: "Identificador",
+      connectedSegments: "Segmentos conectados a este nodo:",
+      cidrNa: "CIDR n/a",
+      none: "(ninguno)",
+      noneOption: "— Ninguno —",
+      connectivityModel: "Modelo de conectividad",
+      modeOptions: {
+        peering: "Direct links (AWS: Peering)",
+        tgw: "Hub routing (AWS: Transit Gateway)",
+      },
+      modeHelp:
+        "Este selector define el modelo neutral de conectividad. La traducción AWS puede ser peering por pares o un Transit Gateway central. La conectividad final depende de las policies que declares.",
+      academic: {
+        noConnectivity: {
+          title: "Sin conectividad entre segmentos",
+          message:
+            "Este nodo necesita al menos 2 segmentos conectados para poder modelar tráfico entre ellos.",
+        },
+        pointToPoint: {
+          title: "Topología punto a punto",
+          message:
+            "Con 2 segmentos conectados, este nodo actuará como un intermediario simple. Solo habrá comunicación si defines policies explícitas.",
+        },
+        multiPoint: {
+          title: "Topología multipunto",
+          message:
+            "Con más de 2 segmentos conectados, este nodo centraliza la conectividad. Debes definir policies claras para controlar qué segmento puede comunicarse con cuál.",
+        },
+      },
+      modeSummary: {
+        tgw: {
+          title: "Hub routing",
+          detailLarge:
+            "La topología se implementará como un hub central con {{count}} attachment(s).",
+          detailSmall:
+            "Con pocos segmentos, el modo hub puede ser más complejo que un enlace directo.",
+          bulletAws:
+            "Traducción AWS: 1 Transit Gateway + 1 attachment por segmento conectado.",
+          bulletTraffic:
+            "El tráfico pasa por el hub central; no existe una malla de enlaces directos entre pares.",
+          bulletPing:
+            "Para ping bidireccional, define rutas de ida y vuelta en la tabla del router.",
+        },
+        peering: {
+          title: "Direct links",
+          detail:
+            "Con tu topología actual, el máximo son {{count}} enlace(s) directos entre pares.",
+          bulletAws:
+            "Traducción AWS: 1 conexión peering por par con rutas declaradas en ambos sentidos.",
+          bulletTransit:
+            "No es transitivo: A↔B y B↔C no habilita A↔C automáticamente.",
+          bulletManySegments:
+            "Con varios segmentos aumenta el número de pares y el mantenimiento de rutas.",
+          bulletSmallLabs:
+            "Es ideal para laboratorios pequeños y directos.",
+        },
+      },
+      chips: {
+        awsHub: "AWS: 1 hub central",
+        awsDirect: "AWS: enlaces directos por pares",
+        readingHub: "Lectura: el tráfico pasa por el hub",
+        readingDirect: "Lectura: el tráfico va directo entre segmentos",
+        scales: "Escala mejor con varios segmentos",
+        simple: "Más simple para laboratorios pequeños",
+      },
+      stats: {
+        pairs: "Pares con rutas: {{count}}",
+        bidirectional: "Bidireccionales: {{count}}",
+        oneWay: "Solo ida: {{count}}",
+        effectiveHub: "Payload efectivo: hub routing activo",
+        effectiveDirect: "Payload efectivo: direct links activos",
+        isolated: "Payload efectivo: aislado",
+      },
+      alerts: {
+        pendingReverse: {
+          before: "En modo",
+          after:
+            "necesitas rutas de ida y vuelta por cada par de segmentos para que ese enlace se materialice.",
+        },
+        noPolicies: {
+          before:
+            "Hay segmentos conectados visualmente a este nodo, pero no has definido policies. Si despliegas así, el payload saldrá",
+          isolated: "aislado",
+          after:
+            "aunque el edge hacia el router siga visible en el canvas.",
+        },
+        notEffective:
+          "El nodo ya tiene policies, pero todavía no generan conectividad efectiva. En peering eso suele significar que falta la ruta de retorno del otro segmento.",
+      },
+      routingCopy: {
+        tgw: {
+          sectionTitle: "Policies toward the hub",
+          intro:
+            "Cada fila indica qué tráfico sale desde un segmento y se envía al hub para alcanzar otra red conectada.",
+          explainer:
+            "Aquí no defines un enlace directo entre pares. Defines qué destinos deben enviarse al hub central.",
+          sourceLabel: "Segmento que envía al hub",
+          destVpcLabel: "Segmento alcanzado vía hub",
+          destCidrLabel: "CIDR enviado al hub",
+          oneWayLabel: "Falta retorno",
+        },
+        peering: {
+          sectionTitle: "Policies between direct peers",
+          intro:
+            "Cada fila representa un destino directo entre segmentos. En enlaces directos, el par solo queda operativo cuando declaras ida y vuelta.",
+          explainer:
+            "Aquí sí estás modelando conectividad directa entre dos segmentos específicos.",
+          sourceLabel: "Segmento de origen",
+          destVpcLabel: "Segmento destino directo",
+          destCidrLabel: "CIDR destino",
+          oneWayLabel: "Solo ida",
+        },
+      },
+      table: {
+        edgesMeaning:
+          "Los edges del canvas solo indican qué segmentos están conectados a este nodo de policies. La conectividad que realmente se traducirá a AWS sale de las rutas/policies definidas abajo.",
+        title: "Cómo leer esta tabla",
+        origin: "- Origen: segmento desde el que sale el tráfico.",
+        destination: "- Destino: red que quieres alcanzar.",
+        peering:
+          "- En direct links modelas conectividad directa entre pares.",
+        tgw:
+          "- En hub routing modelas qué destinos deben enviarse al hub central.",
+      },
+      validation: {
+        selectSource: "Selecciona el segmento de origen",
+        sourceNotConnected:
+          "El segmento de origen no está conectado a esta policy",
+        destRequired: "El CIDR destino es requerido",
+        destInvalid: "El CIDR destino es inválido",
+        destNotConnected:
+          "El segmento destino no está conectado a esta policy",
+        destWithinSegment:
+          "El CIDR destino debe ser {{value}} o estar contenido en ese segmento",
+        duplicateRoute:
+          "Ruta duplicada (mismo origen y CIDR destino)",
+      },
+      actions: {
+        addRoute: "+ Ruta",
+        save: "Guardar",
+        deleteNode: "Eliminar nodo",
+        deleteRoute: "Eliminar ruta",
+      },
+    },
     deployDialog: {
       exportError: "No se pudo exportar el plan. Revisa la consola.",
       title: "Confirmar infraestructura",
