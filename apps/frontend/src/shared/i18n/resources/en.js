@@ -88,6 +88,22 @@ const en = {
     userManagement: "User management",
     courseManagement: "Course management",
   },
+  admin: {
+    dashboard: {
+      title: "Dashboard",
+      subtitle: "General summary of the lab and execution environment.",
+      createLab: "Create lab",
+      loading: "Loading dashboard...",
+      loadingValue: "...",
+      activityRecorded: "Recorded activity",
+      noRecentExecutions: "No recent executions",
+      cards: {
+        labs: "Labs",
+        executions: "Executions",
+        lastActivity: "Last activity",
+      },
+    },
+  },
   loading: {
     title: "SysLab in progress",
     description:

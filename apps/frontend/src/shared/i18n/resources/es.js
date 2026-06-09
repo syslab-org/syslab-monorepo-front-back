@@ -88,6 +88,22 @@ const es = {
     userManagement: "Gestión de usuarios",
     courseManagement: "Gestión de cursos",
   },
+  admin: {
+    dashboard: {
+      title: "Dashboard",
+      subtitle: "Resumen general del entorno de laboratorios y ejecuciones.",
+      createLab: "Crear laboratorio",
+      loading: "Cargando dashboard...",
+      loadingValue: "...",
+      activityRecorded: "Actividad registrada",
+      noRecentExecutions: "Sin ejecuciones recientes",
+      cards: {
+        labs: "Laboratorios",
+        executions: "Ejecuciones",
+        lastActivity: "Ultima actividad",
+      },
+    },
+  },
   loading: {
     title: "SysLab en progreso",
     description:
