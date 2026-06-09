@@ -1,10 +1,12 @@
+import { translate as tr } from "@/shared/i18n";
+
 export const LOADING_FLOW_EVENT = "syslab:loading-flow";
 
 export function emitLoadingFlowStart(message) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(
     new CustomEvent(LOADING_FLOW_EVENT, {
-      detail: { type: "start", message: message || "Procesando..." },
+      detail: { type: "start", message: message || tr("canvas.loading.processing") },
     }),
   );
 }

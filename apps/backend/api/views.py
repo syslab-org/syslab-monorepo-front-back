@@ -17,6 +17,7 @@ from .cloud_connections import (
     resolve_lab_cloud_connection_with_source,
 )
 from .helpers import ensure_lab_for_canvas, visible_plans_queryset
+from .i18n import tr
 from .models import Plan, PlanExecutionRecord
 from .permissions import can_execute_plan, get_active_execution_delegation
 from .serializers import serialize_cloud_target_state
@@ -29,13 +30,13 @@ TERMINAL_TASK_STATES = {"SUCCESS", "FAILURE", "REVOKED"}
 
 
 
-def _sanitize_payload_for_storage(payload: dict, fallback_canvas_id=None) -> dict:
+def _sanitize_payload_for_storage(payload: dict, fallback_canvas_id=None, request=None) -> dict:
     """Valida y persiste payloads usando `canvas_id` como identificador canónico.
 
     Se aceptan aliases legacy (`firestore_vpc_id`, `vpcId`, `vlan.id`) solo
     para compatibilidad con clientes y datos históricos.
     """
-    sanitized = validate_network_plan(payload)
+    sanitized = validate_network_plan(payload, request=request)
     raw = payload if isinstance(payload, dict) else {}
     out = dict(sanitized)
 
@@ -256,7 +257,7 @@ def run_prueba(request):
 def task_status(request, task_id: str):
     plan = visible_plans_queryset(request.user).filter(task_id=task_id).first()
     if not plan:
-        return Response({"detail": "Task not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"detail": tr("task_not_found", request=request)}, status=status.HTTP_404_NOT_FOUND)
     res = AsyncResult(task_id)
     payload = {"task_id": task_id, "state": res.state, "plan_id": str(plan.id)}
     if res.state == "SUCCESS":
@@ -272,7 +273,7 @@ def network_plan_create(request):
     payload = request.data or {}
 
     try:
-        sanitized_payload = _sanitize_payload_for_storage(payload)
+        sanitized_payload = _sanitize_payload_for_storage(payload, request=request)
     except Exception as e:
         return Response({"ok": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -287,7 +288,7 @@ def network_plan_create(request):
         return Response(
             {
                 "ok": False,
-                "error": "canvas_id es requerido para mantener 1 Canvas = 1 Plan.",
+                "error": tr("missing_canvas_id", request=request),
                 "code": "MISSING_CANVAS_ID",
             },
             status=status.HTTP_400_BAD_REQUEST,
@@ -344,7 +345,7 @@ def network_plan_create(request):
 def deploy_plan(request, plan_id: UUID):
     plan = _get_visible_plan_or_404(request, plan_id)
     if not plan:
-        return Response({"ok": False, "error": "Plan not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"ok": False, "error": tr("plan_not_found", request=request)}, status=status.HTTP_404_NOT_FOUND)
 
     if _is_running(plan):
         return _plan_running_conflict(plan)
@@ -385,7 +386,7 @@ def deploy_plan(request, plan_id: UUID):
 
     raw_payload = dict(plan.payload or {})
     try:
-        sanitized_payload = _sanitize_payload_for_storage(raw_payload, fallback_canvas_id=plan.canvas_id)
+        sanitized_payload = _sanitize_payload_for_storage(raw_payload, fallback_canvas_id=plan.canvas_id, request=request)
     except Exception as e:
         plan.status = Plan.Status.FAILURE
         plan.error = str(e)
@@ -468,7 +469,7 @@ def deploy_plan(request, plan_id: UUID):
 def destroy_plan(request, plan_id: UUID):
     plan = _get_visible_plan_or_404(request, plan_id)
     if not plan:
-        return Response({"ok": False, "error": "Plan not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"ok": False, "error": tr("plan_not_found", request=request)}, status=status.HTTP_404_NOT_FOUND)
     return _start_destroy_for_plan(request.user, plan)
 
 

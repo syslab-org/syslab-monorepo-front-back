@@ -1,5 +1,6 @@
 // apps/frontend/src/components/flow/flow-hooks/useDeployNetwork.js
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { RouterPolicy } from "@/features/networkCanvas/utils/networking";
 import { useAuth } from "@/app/providers/AuthContext";
@@ -295,6 +296,7 @@ const useDeployNetwork = ({
   canvasPlanId,
   validatedPlanHash,
 }) => {
+  const { t } = useTranslation();
   const resolvedCanvasId = canvasId || labId;
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -431,7 +433,7 @@ const useDeployNetwork = ({
     const { errors, warnings } = validateTopology(nodes, edges);
     if (errors.length > 0) {
       setErrorMessage(
-        "No se puede desplegar. Corrige estos errores:\n" +
+        `${t("canvas.deployRuntime.cannotDeployWithErrors")}\n` +
           errors.map((e) => `• ${e}`).join("\n"),
       );
       return;
@@ -442,7 +444,7 @@ const useDeployNetwork = ({
 
     const vpcNodes = nodes.filter((n) => n.type === TYPE_VPC_NODE);
     if (!vpcNodes.length) {
-      setErrorMessage("No hay VPC en el canvas.");
+      setErrorMessage(t("canvas.deployRuntime.noVpcInCanvas"));
       return;
     }
 
@@ -712,7 +714,7 @@ const useDeployNetwork = ({
       if (st && st !== "RUNNING" && st !== "PENDING") return plan;
       await new Promise((r) => setTimeout(r, intervalMs));
     }
-    throw new Error("Timeout esperando resultado del plan");
+    throw new Error(t("canvas.deployRuntime.timeoutPlan"));
   };
 
   const handleValidatePlan = async () => {
@@ -725,13 +727,13 @@ const useDeployNetwork = ({
       if (!transformedData) {
         setLoadingFlow(false);
         setValidationState(PLAN_STATES.ERROR);
-        setValidationError("No hay datos transformados para validar.");
-        setErrorMessage("No hay datos transformados para validar.");
+        setValidationError(t("canvas.deployRuntime.noDataToValidate"));
+        setErrorMessage(t("canvas.deployRuntime.noDataToValidate"));
         return;
       }
 
       if (providerCapability?.status !== "ready") {
-        const message = "La configuración actual del laboratorio no está disponible para validación y despliegue.";
+        const message = t("canvas.deployRuntime.providerUnavailable");
         setLoadingFlow(false);
         setValidationState(PLAN_STATES.ERROR);
         setValidationError(message);
@@ -755,7 +757,7 @@ const useDeployNetwork = ({
 
       const planId = syncRes?.plan_id;
 
-      if (!planId) throw new Error("sync-from-canvas no devolvió plan_id");
+      if (!planId) throw new Error(t("canvas.deployRuntime.syncWithoutPlanId"));
       await persistPlanIdToCanvas({
         canvasId: resolvedCanvasId,
         planId,
@@ -783,7 +785,7 @@ const useDeployNetwork = ({
 
       if (finalStatus === "SUCCESS") {
         setValidationState(PLAN_STATES.SUCCESS);
-        setSuccessMessage("Validación OK (Terraform plan)");
+        setSuccessMessage(t("canvas.deployRuntime.validationOk"));
         setValidationResult({
           plan_id: planId,
           created: !!syncRes?.created,
@@ -798,7 +800,7 @@ const useDeployNetwork = ({
           validationOk: true,
         });
       } else {
-        const msg = finalPlan?.error || "Validación fallida";
+        const msg = finalPlan?.error || t("canvas.deployRuntime.validationFailed");
         setValidationState(PLAN_STATES.ERROR);
         setValidationError(msg);
         setErrorMessage(msg);
@@ -822,8 +824,8 @@ const useDeployNetwork = ({
       const code = error?.data?.code;
       const msg =
         code === "PLAN_ALREADY_APPLIED"
-          ? "El plan ya está aplicado y no aceptó redeploy. Revisa el estado del plan."
-          : error?.message || "Error desconocido";
+          ? t("canvas.deployRuntime.planAlreadyApplied")
+          : error?.message || t("canvas.deployRuntime.unknownError");
       setLoadingFlow(false);
       setValidationState(PLAN_STATES.ERROR);
       setValidationError(msg);
@@ -843,7 +845,7 @@ const useDeployNetwork = ({
 
     if (!isValidationReady) {
       setErrorMessage(
-        "Primero valida la topologia en modo simulacion antes de desplegar en AWS.",
+        t("canvas.deployRuntime.validateBeforeDeploy"),
       );
       return;
     }
@@ -851,29 +853,29 @@ const useDeployNetwork = ({
     const recheck = validateTopology(nodes, edges);
     if (recheck.errors.length > 0) {
       setErrorMessage(
-        "El canvas tiene errores de topologia. Corrigelos y vuelve a validar antes del deploy real.",
+        t("canvas.deployRuntime.topologyErrorsBeforeDeploy"),
       );
       return;
     }
 
     const planId = validationResult?.plan_id || canvasPlanId;
     if (!planId) {
-      setErrorMessage("Primero valida el plan.");
+      setErrorMessage(t("canvas.deployRuntime.validatePlanFirst"));
       return;
     }
 
     if (!transformedData) {
-      setErrorMessage("No hay datos transformados para aplicar.");
+      setErrorMessage(t("canvas.deployRuntime.noDataToApply"));
       return;
     }
 
     const confirmationWord = validationResult?.is_redeploy_preview ? "REDEPLOY" : "DEPLOY";
     const confirmationPrompt = validationResult?.is_redeploy_preview
-      ? "Vas a aplicar cambios sobre infraestructura AWS ya activa. Para confirmar escribe: REDEPLOY"
-      : "Para confirmar escribe: DEPLOY";
+      ? t("canvas.deployRuntime.redeployPrompt")
+      : t("canvas.deployRuntime.deployPrompt");
     const txt = window.prompt(confirmationPrompt);
     if (txt !== confirmationWord) {
-      setErrorMessage("Deploy cancelado por el usuario.");
+      setErrorMessage(t("canvas.deployRuntime.deployCancelled"));
       return;
     }
 
@@ -906,17 +908,17 @@ const useDeployNetwork = ({
       if (error?.status === 403 && code === "PLAN_EXECUTION_FORBIDDEN") {
         setErrorMessage(
           error?.data?.error ||
-            "El deploy real o destroy solo está permitido al owner, al platform admin o al docente cuando la conexión efectiva del laboratorio es course_shared.",
+            t("canvas.deployRuntime.executionForbidden"),
         );
         return;
       }
       if (code === "PLAN_ALREADY_APPLIED") {
         setErrorMessage(
-          "El backend rechazó el redeploy de este plan. Revisa el estado y vuelve a intentar.",
+          t("canvas.deployRuntime.backendRejectedRedeploy"),
         );
         return;
       }
-      setErrorMessage(error?.message || "Error desconocido");
+      setErrorMessage(error?.message || t("canvas.deployRuntime.unknownError"));
     }
   };
 

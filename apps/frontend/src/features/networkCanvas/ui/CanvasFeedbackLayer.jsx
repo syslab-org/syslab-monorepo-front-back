@@ -8,6 +8,7 @@ import {
     Button,
     Typography
 } from "@mui/material";
+import { useTranslation } from 'react-i18next';
 
 import ConfirmDeployDialog from "@/features/networkCanvas/modals/ConfirmDeployDialog";
 
@@ -37,6 +38,8 @@ export default function CanvasFeedbackLayer({
     errorMessage,
     handleCloseSnackbar
 }) {
+    const { t } = useTranslation();
+
     return (
         <>
             <Snackbar
@@ -59,13 +62,11 @@ export default function CanvasFeedbackLayer({
                 maxWidth="sm"
                 fullWidth
             >
-                <DialogTitle>Canvas desactualizado respecto al plan</DialogTitle>
+                <DialogTitle>{t('canvas.feedback.outdatedTitle')}</DialogTitle>
 
                 <DialogContent>
                     <Typography variant="body2" color="text.secondary">
-                        Este canvas cambió desde la última validación asociada al plan.
-                        Si sigues editando, el plan dejará de representar exactamente lo
-                        que estás viendo en pantalla.
+                        {t('canvas.feedback.outdatedDescription')}
                     </Typography>
                 </DialogContent>
 
@@ -76,7 +77,7 @@ export default function CanvasFeedbackLayer({
                             if (canvasPlanId) navigate(`/admin/plans/${canvasPlanId}`);
                         }}
                     >
-                        Ver plan
+                        {t('canvas.feedback.viewPlan')}
                     </Button>
 
                     <Button
@@ -86,7 +87,7 @@ export default function CanvasFeedbackLayer({
                             processJsonToCloud();
                         }}
                     >
-                        Revalidar
+                        {t('canvas.feedback.revalidate')}
                     </Button>
 
                     <Button
@@ -97,7 +98,7 @@ export default function CanvasFeedbackLayer({
                             editGuardRef.current = { fn: null, args: null };
                         }}
                     >
-                        Seguir editando
+                        {t('canvas.feedback.keepEditing')}
                     </Button>
                 </DialogActions>
             </Dialog>

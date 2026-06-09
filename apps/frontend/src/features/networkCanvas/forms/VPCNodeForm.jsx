@@ -20,6 +20,7 @@ import {
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
+import { useTranslation } from "react-i18next";
 
 import { VPC_CHILD_FORM, } from "@/features/networkCanvas/utils/constants";
 import CidrLearningGuideButton from '@/features/networkCanvas/ui/CidrLearningGuideButton';
@@ -35,6 +36,7 @@ const VPCNodeForm = ({
   publicSubnetNames = [], // nombres de subnets públicas en esta VPC
   privateSubnetNames = [], // nombres de subnets privadas en esta VPC
 }) => {
+  const { t } = useTranslation();
   const validationSchema = useFormValidationSchema(
     VPC_CHILD_FORM,
     null,
@@ -120,24 +122,20 @@ const VPCNodeForm = ({
       const auto = publicSubnetNames[0];
       setValue("natGatewayPublicSubnet", auto, { shouldValidate: true });
       setSnackMsg(
-        `Se seleccionó automáticamente la subnet pública “${auto}” para el NAT.`
+        t("canvas.vpcForm.snackbar.autoSelectNatSubnet", { value: auto })
       );
       setSnackSeverity("info");
       setSnackOpen(true);
     }
 
     if (enableNat && !hasPublicSubnets) {
-      setSnackMsg(
-        "No hay subnets públicas disponibles para asignar NAT Gateway."
-      );
+      setSnackMsg(t("canvas.vpcForm.snackbar.noPublicSubnetsForNat"));
       setSnackSeverity("warning");
       setSnackOpen(true);
     }
 
     if (enableNat && hasPublicSubnets && !hasPrivateSubnets) {
-      setSnackMsg(
-        "Managed egress está activo, pero todavía no hay zonas privadas que aprovechen ese NAT."
-      );
+      setSnackMsg(t("canvas.vpcForm.snackbar.natWithoutPrivateZones"));
       setSnackSeverity("info");
       setSnackOpen(true);
     }
@@ -148,14 +146,13 @@ const VPCNodeForm = ({
     natSubnet,
     publicSubnetNames,
     setValue,
+    t,
   ]);
 
   const onSubmit = (data) => {
     // Bloqueo extra por UX: si NAT está activo, exige subnet pública
     if (data.enableNatGateway && (!hasPublicSubnets || !data.natGatewayPublicSubnet)) {
-      setSnackMsg(
-        "Debes seleccionar una subnet pública para el NAT antes de guardar."
-      );
+      setSnackMsg(t("canvas.vpcForm.snackbar.selectNatPublicZoneBeforeSave"));
       setSnackSeverity("warning");
       setSnackOpen(true);
       return;
@@ -194,10 +191,10 @@ const VPCNodeForm = ({
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="pt-node-form">
       <Box className="pt-node-form__header">
-        <Typography className="pt-node-form__eyebrow">network segment</Typography>
-        <Typography className="pt-node-form__title">Network Segment</Typography>
+        <Typography className="pt-node-form__eyebrow">{t("canvas.vpcForm.headerEyebrow")}</Typography>
+        <Typography className="pt-node-form__title">{t("canvas.vpcForm.headerTitle")}</Typography>
         <Typography className="pt-node-form__subtitle">
-          Define address space, internet exposure and egress behavior for this segment. AWS translation: VPC.
+          {t("canvas.vpcForm.headerSubtitle")}
         </Typography>
       </Box>
       {/* Snackbar vistoso */}
@@ -219,7 +216,7 @@ const VPCNodeForm = ({
 
       {/* Segment Name */}
       <TextField
-        label="Segment Name"
+        label={t("canvas.vpcForm.fields.segmentName")}
         {...register("vpcName")}
         error={!!errors.vpcName}
         helperText={errors.vpcName?.message}
@@ -229,22 +226,22 @@ const VPCNodeForm = ({
 
       {/* Segment CIDR */}
       <TextField
-        label={`Segment CIDR Block (inside ${vlanCidr || "network"})`}
+        label={t("canvas.vpcForm.fields.segmentCidr", { parent: vlanCidr || t("canvas.vpcForm.networkFallback") })}
         {...register("cidrBlock")}
         error={!!errors.cidrBlock}
         helperText={errors.cidrBlock?.message}
-        placeholder="10.30.0.0/20"
+        placeholder={t("canvas.vpcForm.fields.segmentCidrPlaceholder")}
         fullWidth
         margin="normal"
       />
 
       {/* Region */}
       <FormControl fullWidth margin="normal">
-        <InputLabel id="vpc-region-label">Region</InputLabel>
+        <InputLabel id="vpc-region-label">{t("canvas.vpcForm.fields.region")}</InputLabel>
         <Select
           labelId="vpc-region-label"
           {...register("region")}
-          label="Region"
+          label={t("canvas.vpcForm.fields.region")}
           defaultValue={defaultRegion}
         >
           <MenuItem value="us-east-1">US East (N. Virginia)</MenuItem>
@@ -258,15 +255,15 @@ const VPCNodeForm = ({
 
       {/* Internet Edge */}
       <FormControl fullWidth margin="normal">
-        <InputLabel id="igw-label">Internet Edge</InputLabel>
+        <InputLabel id="igw-label">{t("canvas.vpcForm.fields.internetEdge")}</InputLabel>
         <Select
           labelId="igw-label"
-          label="Internet Edge"
+          label={t("canvas.vpcForm.fields.internetEdge")}
           {...register("internetGateway")}
           defaultValue={nodeData?.internetGateway ?? false}
         >
-          <MenuItem value={true}>Enabled</MenuItem>
-          <MenuItem value={false}>Disabled</MenuItem>
+          <MenuItem value={true}>{t("canvas.vpcForm.fields.enabled")}</MenuItem>
+          <MenuItem value={false}>{t("canvas.vpcForm.fields.disabled")}</MenuItem>
         </Select>
         {errors.internetGateway && (
           <FormHelperText error>
@@ -277,50 +274,54 @@ const VPCNodeForm = ({
 
       <Alert severity="info" variant="outlined" sx={{ mt: 1, mb: 1.5 }}>
         <Typography variant="body2" sx={{ fontWeight: 600 }}>
-          Qué significa este segmento
+          {t("canvas.vpcForm.info.title")}
         </Typography>
         <Typography variant="caption" display="block" sx={{ mt: 0.4 }}>
-          - El CIDR define el rango principal del segmento.
+          {t("canvas.vpcForm.info.cidr")}
         </Typography>
         <Typography variant="caption" display="block">
-          - Internet edge habilita salida pública directa donde existan rutas adecuadas.
+          {t("canvas.vpcForm.info.internetEdge")}
         </Typography>
         <Typography variant="caption" display="block">
-          - Managed egress da salida a zonas privadas, pero no acceso entrante desde Internet.
+          {t("canvas.vpcForm.info.managedEgress")}
         </Typography>
         <Typography variant="caption" display="block">
-          - En AWS, si defines una Elastic IP para egress, debe ser un Allocation ID real (`eipalloc-...`), no una IP pública.
+          {t("canvas.vpcForm.info.elasticIp")}
         </Typography>
         <Typography variant="caption" display="block">
-          - Allowed SSH CIDR abre TCP/22 solo desde la IP o red que indiques.
+          {t("canvas.vpcForm.info.allowedSsh")}
         </Typography>
         <Box sx={{ mt: 1.25 }}>
-          <CidrLearningGuideButton buttonLabel="Ayuda con CIDR e IPs" />
+          <CidrLearningGuideButton buttonLabel={t("canvas.cidrGuide.button")} />
         </Box>
       </Alert>
 
       <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 1 }}>
         <Chip
           size="small"
-          label={internetGatewayEnabled ? "AWS: crea Internet Gateway" : "AWS: sin Internet Gateway"}
+          label={
+            internetGatewayEnabled
+              ? t("canvas.vpcForm.chips.igwEnabled")
+              : t("canvas.vpcForm.chips.igwDisabled")
+          }
           color={internetGatewayEnabled ? "primary" : "default"}
           variant={internetGatewayEnabled ? "filled" : "outlined"}
         />
         <Chip
           size="small"
-          label={enableNat ? "AWS: crea NAT Gateway" : "AWS: sin NAT Gateway"}
+          label={enableNat ? t("canvas.vpcForm.chips.natEnabled") : t("canvas.vpcForm.chips.natDisabled")}
           color={enableNat ? "warning" : "default"}
           variant={enableNat ? "filled" : "outlined"}
         />
         <Chip
           size="small"
-          label={`Zonas privadas: ${privateSubnetNames.length}`}
+          label={t("canvas.vpcForm.chips.privateZones", { count: privateSubnetNames.length })}
           color={hasPrivateSubnets ? "success" : "default"}
           variant={hasPrivateSubnets ? "filled" : "outlined"}
         />
         <Chip
           size="small"
-          label={allowedSshCidr ? "Seguridad: SSH expuesto a CIDR" : "Seguridad: sin SSH externo"}
+          label={allowedSshCidr ? t("canvas.vpcForm.chips.sshExposed") : t("canvas.vpcForm.chips.sshHidden")}
           color={allowedSshCidr ? "info" : "default"}
           variant={allowedSshCidr ? "filled" : "outlined"}
         />
@@ -330,29 +331,25 @@ const VPCNodeForm = ({
       <Box sx={{ mt: 1.5, mb: 0.5 }}>
         {!hasPublicSubnets && (
           <Alert severity="warning" sx={{ mb: 1 }}>
-            No hay subnets públicas en esta VPC. Crea una para poder habilitar
-            la salida gestionada.
+            {t("canvas.vpcForm.alerts.noPublicZones")}
           </Alert>
         )}
 
         {!enableNat && hasPublicSubnets && hasPrivateSubnets && (
           <Alert severity="info" sx={{ mb: 1 }}>
-            Ya tienes una topología apta para salida privada: una zona pública y una privada.
-            Si quieres que las zonas privadas salgan a Internet sin volverse públicas, activa
-            <b> Enable managed egress</b>.
+            {t("canvas.vpcForm.alerts.topologyReady")}<b> {t("canvas.vpcForm.switchLabel")}</b>.
           </Alert>
         )}
 
         {enableNat && hasPublicSubnets && !hasPrivateSubnets && (
           <Alert severity="info" sx={{ mb: 1 }}>
-            Managed egress está activo, pero esta VPC no tiene zonas privadas. El NAT se podrá crear,
-            pero no estarás resolviendo el caso pedagógico principal de salida privada controlada.
+            {t("canvas.vpcForm.alerts.natWithoutPrivateZones")}
           </Alert>
         )}
 
         {enableNat && hasPublicSubnets && hasPrivateSubnets && (
           <Alert severity="success" sx={{ mb: 1 }}>
-            Buen caso para demo: el NAT vivirá en una zona pública y podrá dar salida a las zonas privadas de esta VPC.
+            {t("canvas.vpcForm.alerts.demoCase")}
           </Alert>
         )}
 
@@ -371,7 +368,7 @@ const VPCNodeForm = ({
                 placement="top"
                 title={
                   willBlockTurnOn
-                    ? "Crea primero una zona pública para habilitar salida gestionada."
+                    ? t("canvas.vpcForm.tooltip.enableNatBlocked")
                     : ""
                 }
               >
@@ -383,9 +380,7 @@ const VPCNodeForm = ({
                         onChange={(_, checked) => {
                           // Bloquea encendido si no hay públicas (salvo feature flag)
                           if (willBlockTurnOn && checked) {
-                            setSnackMsg(
-                              "Primero crea una zona pública para habilitar salida gestionada."
-                            );
+                            setSnackMsg(t("canvas.vpcForm.snackbar.createPublicZoneFirst"));
                             setSnackSeverity("warning");
                             setSnackOpen(true);
                             return;
@@ -395,7 +390,7 @@ const VPCNodeForm = ({
                         disabled={willBlockTurnOn}
                       />
                     }
-                    label="Enable managed egress"
+                    label={t("canvas.vpcForm.switchLabel")}
                   />
                 </span>
               </Tooltip>
@@ -411,19 +406,19 @@ const VPCNodeForm = ({
         disabled={!enableNat || !hasPublicSubnets}
         error={!!errors.natGatewayPublicSubnet}
       >
-        <InputLabel id="nat-subnet-label">Public Zone for Egress</InputLabel>
+        <InputLabel id="nat-subnet-label">{t("canvas.vpcForm.fields.publicZoneForEgress")}</InputLabel>
         <Controller
           name="natGatewayPublicSubnet"
           control={control}
           render={({ field }) => (
             <Select
               labelId="nat-subnet-label"
-              label="Public Zone for Egress"
+              label={t("canvas.vpcForm.fields.publicZoneForEgress")}
               {...field}
               value={field.value || ""}
             >
               <MenuItem value="">
-                <em>Select a public zone</em>
+                <em>{t("canvas.vpcForm.fields.selectPublicZone")}</em>
               </MenuItem>
               {publicSubnetNames.map((name) => (
                 <MenuItem key={name} value={name}>
@@ -435,7 +430,7 @@ const VPCNodeForm = ({
         />
         {!hasPublicSubnets && (
           <FormHelperText>
-            Crea primero una zona pública dentro de este segmento para alojar la salida gestionada.
+            {t("canvas.vpcForm.fields.publicZoneHelp")}
           </FormHelperText>
         )}
         {errors.natGatewayPublicSubnet && (
@@ -445,13 +440,13 @@ const VPCNodeForm = ({
 
       {/* EIP opcional */}
       <TextField
-        label="Elastic IP Allocation ID (optional, AWS)"
+        label={t("canvas.vpcForm.fields.natEip")}
         {...register("natGatewayElasticIp")}
-        placeholder="eipalloc-0123456789abcdef0"
+        placeholder={t("canvas.vpcForm.fields.natEipPlaceholder")}
         helperText={
           enableNat
-            ? "Si la dejas vacía, AWS asignará una Elastic IP nueva. Si ya tienes una reservada, ingresa su Allocation ID real (`eipalloc-...`), no la IP pública."
-            : "Solo aplica si habilitas salida gestionada."
+            ? t("canvas.vpcForm.fields.natEipHelpEnabled")
+            : t("canvas.vpcForm.fields.natEipHelpDisabled")
         }
         fullWidth
         margin="normal"
@@ -460,14 +455,14 @@ const VPCNodeForm = ({
 
       {/* Allowed SSH */}
       <TextField
-        label="Allowed SSH CIDR (opcional)"
+        label={t("canvas.vpcForm.fields.allowedSsh")}
         {...register("allowedSshCidr")}
         error={!!errors.allowedSshCidr}
         helperText={
           errors.allowedSshCidr?.message ||
-          "Ej: 203.0.113.5/32. Esto crea una regla del Security Group para permitir SSH desde tu IP pública."
+          t("canvas.vpcForm.fields.allowedSshHelp")
         }
-        placeholder="203.0.113.5/32"
+        placeholder={t("canvas.vpcForm.fields.allowedSshPlaceholder")}
         fullWidth
         margin="normal"
       />
@@ -479,7 +474,7 @@ const VPCNodeForm = ({
           disableHoverListener={!disableSubmitForNat}
           title={
             disableSubmitForNat
-              ? "Selecciona una zona pública para la salida gestionada antes de guardar."
+              ? t("canvas.vpcForm.tooltip.saveBlocked")
               : ""
           }
         >
@@ -490,19 +485,19 @@ const VPCNodeForm = ({
               color="primary"
               disabled={disableSubmitForNat}
             >
-              Registrar Configuración
+              {t("canvas.vpcForm.actions.save")}
             </Button>
           </span>
         </Tooltip>
 
         <Button onClick={deleteNode} color="error">
-          Delete Node
+          {t("canvas.vpcForm.actions.delete")}
         </Button>
 
         {/* Pista visual pequeña cuando el botón está deshabilitado */}
         {disableSubmitForNat && (
           <Typography variant="caption" sx={{ color: "warning.main", ml: 1.5 }}>
-            Debes seleccionar una zona pública para la salida gestionada.
+            {t("canvas.vpcForm.actions.saveHint")}
           </Typography>
         )}
       </Box>

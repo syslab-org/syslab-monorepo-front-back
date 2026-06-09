@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { api, clearAuthToken, setAuthToken } from "@/infrastructure/http/api";
+import { translate } from "@/shared/i18n";
 
 export const loginWithEmail = async (email, password) => {
   const res = await api.loginWithEmail({ email, password });
@@ -42,7 +43,7 @@ export const useUserRegistration = (inviteToken) => {
         setError("");
       } catch (err) {
         if (!alive) return;
-        setError(err?.message || "No se pudo validar la invitacion.");
+        setError(err?.message || translate("auth.register.validateInvitationError"));
         setIsLinkValid(false);
       } finally {
         if (alive) setIsCheckingLink(false);
@@ -54,7 +55,7 @@ export const useUserRegistration = (inviteToken) => {
     } else {
       setIsCheckingLink(false);
       setIsLinkValid(false);
-      setError("Invitacion invalida.");
+      setError(translate("auth.register.invalidInvitation"));
     }
 
     return () => {
@@ -66,10 +67,10 @@ export const useUserRegistration = (inviteToken) => {
     try {
       const res = await api.registerWithPassword(inviteToken, { email, password });
       setAuthToken(res?.token || "");
-      setSuccessMessage("Cuenta activada correctamente.");
+      setSuccessMessage(translate("auth.register.success"));
       return true;
     } catch (err) {
-      setError(err?.message || "No se pudo completar el registro.");
+      setError(err?.message || translate("auth.register.defaultError"));
       return false;
     }
   };

@@ -1,3 +1,5 @@
+import { translate as tr } from "@/shared/i18n";
+
 export function computePlanActionState(planStatus, canvasState, validationState) {
   const status = String(planStatus?.status || "").toUpperCase();
   const lastAction = String(
@@ -11,42 +13,41 @@ export function computePlanActionState(planStatus, canvasState, validationState)
 
   if (isRunning) {
     return {
-      actionLabel: "Plan en ejecución",
-      actionTooltip: "Hay una ejecución en curso. Espera a que termine para seguir trabajando.",
+      actionLabel: tr("canvas.planAction.running.actionLabel"),
+      actionTooltip: tr("canvas.planAction.running.actionTooltip"),
       actionColor: "inherit",
-      helper:
-        "Hay una ejecución en curso. El canvas queda bloqueado hasta que termine.",
+      helper: tr("canvas.planAction.running.helper"),
       helperSeverity: "warning",
-      workspaceTitle: "Ejecución en curso",
-      workspaceDetail:
-        "Mientras Terraform está trabajando, el canvas queda en modo lectura para evitar que el plan se desalineé.",
+      workspaceTitle: tr("canvas.planAction.running.workspaceTitle"),
+      workspaceDetail: tr("canvas.planAction.running.workspaceDetail"),
       workspaceSeverity: "warning",
-      chips: [{ label: "Acción principal: ESPERAR", color: "warning", variant: "filled" }],
+      chips: [{ label: tr("canvas.planAction.running.chip"), color: "warning", variant: "filled" }],
     };
   }
 
   if (applied) {
     return {
-      actionLabel: "Preparar redeploy",
-      actionTooltip:
-        "Abrir la validación del redeploy para revisar cambios sobre la infraestructura ya activa.",
+      actionLabel: tr("canvas.planAction.applied.actionLabel"),
+      actionTooltip: tr("canvas.planAction.applied.actionTooltip"),
       actionColor: "warning",
       helper:
         canvasState === "PLAN_OUTDATED"
-          ? "Hay infraestructura activa y el canvas cambió. Revalida para preparar un redeploy sobre el mismo stack."
-          : "Hay infraestructura activa. Desde aquí prepararás un redeploy sobre el mismo stack.",
+          ? tr("canvas.planAction.applied.helperOutdated")
+          : tr("canvas.planAction.applied.helper"),
       helperSeverity: canvasState === "PLAN_OUTDATED" ? "warning" : "info",
       workspaceTitle:
-        canvasState === "PLAN_OUTDATED" ? "Canvas desactualizado frente al stack activo" : "Infraestructura activa en AWS",
+        canvasState === "PLAN_OUTDATED"
+          ? tr("canvas.planAction.applied.workspaceTitleOutdated")
+          : tr("canvas.planAction.applied.workspaceTitle"),
       workspaceDetail:
         canvasState === "PLAN_OUTDATED"
-          ? "El canvas ya no coincide con la última validación. Revalida antes de intentar actualizar el stack."
-          : "Puedes revisar el plan, validar cambios y luego aplicar un redeploy sobre la infraestructura existente.",
+          ? tr("canvas.planAction.applied.workspaceDetailOutdated")
+          : tr("canvas.planAction.applied.workspaceDetail"),
       workspaceSeverity: canvasState === "PLAN_OUTDATED" ? "warning" : "info",
       chips: [
-        { label: "Acción principal: REDEPLOY", color: "warning", variant: "filled" },
+        { label: tr("canvas.planAction.applied.chipRedeploy"), color: "warning", variant: "filled" },
         {
-          label: canDestroy ? "Destroy disponible" : "Destroy no disponible",
+          label: canDestroy ? tr("canvas.planAction.applied.chipDestroyAvailable") : tr("canvas.planAction.applied.chipDestroyUnavailable"),
           color: canDestroy ? "error" : "default",
           variant: "outlined",
         },
@@ -56,21 +57,18 @@ export function computePlanActionState(planStatus, canvasState, validationState)
 
   if (normalizedValidation === "SUCCESS" || canvasState === "PLAN_VALIDATED") {
     return {
-      actionLabel: "Preparar deploy",
-      actionTooltip:
-        "Abrir la validación final antes del primer deploy sobre AWS.",
+      actionLabel: tr("canvas.planAction.validated.actionLabel"),
+      actionTooltip: tr("canvas.planAction.validated.actionTooltip"),
       actionColor: "success",
-      helper:
-        "El canvas ya fue validado y no hay infraestructura activa. El siguiente paso es el primer deploy.",
+      helper: tr("canvas.planAction.validated.helper"),
       helperSeverity: "success",
-      workspaceTitle: "Canvas validado y listo para deploy",
-      workspaceDetail:
-        "La topología ya pasó por validación. Si estás conforme con el plan, el siguiente paso es crear la infraestructura real.",
+      workspaceTitle: tr("canvas.planAction.validated.workspaceTitle"),
+      workspaceDetail: tr("canvas.planAction.validated.workspaceDetail"),
       workspaceSeverity: "success",
       chips: [
-        { label: "Acción principal: DEPLOY", color: "primary", variant: "filled" },
+        { label: tr("canvas.planAction.validated.chipDeploy"), color: "primary", variant: "filled" },
         {
-          label: "Destroy no aplica todavía",
+          label: tr("canvas.planAction.validated.chipDestroyUnavailable"),
           color: "default",
           variant: "outlined",
         },
@@ -80,33 +78,27 @@ export function computePlanActionState(planStatus, canvasState, validationState)
 
   if (canvasState === "PLAN_OUTDATED") {
     return {
-      actionLabel: "Revalidar canvas",
-      actionTooltip:
-        "Regenerar el plan para que vuelva a coincidir con el estado actual del canvas.",
+      actionLabel: tr("canvas.planAction.outdated.actionLabel"),
+      actionTooltip: tr("canvas.planAction.outdated.actionTooltip"),
       actionColor: "warning",
-      helper:
-        "El canvas cambió desde la última validación. Antes de desplegar, revalida para actualizar el plan.",
+      helper: tr("canvas.planAction.outdated.helper"),
       helperSeverity: "warning",
-      workspaceTitle: "Canvas modificado desde la última validación",
-      workspaceDetail:
-        "Tienes cambios locales pendientes de validar. Revalida para que el plan vuelva a representar exactamente lo que ves.",
+      workspaceTitle: tr("canvas.planAction.outdated.workspaceTitle"),
+      workspaceDetail: tr("canvas.planAction.outdated.workspaceDetail"),
       workspaceSeverity: "warning",
-      chips: [{ label: "Acción principal: REVALIDAR", color: "warning", variant: "filled" }],
+      chips: [{ label: tr("canvas.planAction.outdated.chip"), color: "warning", variant: "filled" }],
     };
   }
 
   return {
-    actionLabel: "Validar canvas",
-    actionTooltip:
-      "Validar la topología actual para ver su traducción a AWS antes de crear recursos.",
+    actionLabel: tr("canvas.planAction.default.actionLabel"),
+    actionTooltip: tr("canvas.planAction.default.actionTooltip"),
     actionColor: "success",
-    helper:
-      "Todavía no hay un plan validado ni infraestructura activa. Empieza validando el canvas.",
+    helper: tr("canvas.planAction.default.helper"),
     helperSeverity: "info",
-    workspaceTitle: "Canvas listo para validar",
-    workspaceDetail:
-      "Empieza validando la topología para ver su traducción a AWS antes de crear recursos reales.",
+    workspaceTitle: tr("canvas.planAction.default.workspaceTitle"),
+    workspaceDetail: tr("canvas.planAction.default.workspaceDetail"),
     workspaceSeverity: "info",
-    chips: [{ label: "Acción principal: VALIDAR", color: "info", variant: "filled" }],
+    chips: [{ label: tr("canvas.planAction.default.chip"), color: "info", variant: "filled" }],
   };
 }

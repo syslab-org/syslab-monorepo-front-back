@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react'
 import { yupResolver } from '@hookform/resolvers/yup'
 import { Alert, Button, FormControl, FormHelperText, InputLabel, MenuItem, Select, Stack, TextField, Typography } from '@mui/material'
 import { Controller, useForm } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 
 import { useAuth } from '@/app/providers/AuthContext'
 import { useInviteUserFormValidation } from '@/features/auth/hooks/useInviteUserFormValidation'
@@ -16,6 +17,7 @@ import {
 } from '@/shared/constants'
 
 const InviteUserForm = ({ closeModal, userData, courses = [] }) => {
+    const { t } = useTranslation()
     const validationSchema = useInviteUserFormValidation()
     const { user } = useAuth()
     const canEditRole = user?.role === USER_ROL_SUPER_ADMIN
@@ -23,16 +25,16 @@ const InviteUserForm = ({ closeModal, userData, courses = [] }) => {
     const statusUser = USER_STATUS_ARRAY
 
     const roleLabels = useMemo(() => ({
-        platform_admin: 'Admin principal',
-        teacher: 'Profesor',
-        student: 'Alumno',
-    }), [])
+        platform_admin: t('labels.adminPrimary'),
+        teacher: t('labels.teacher'),
+        student: t('labels.student'),
+    }), [t])
 
     const statusLabels = useMemo(() => ({
-        active: 'Activo',
-        pending: 'Pendiente',
-        deactivated: 'Desactivado',
-    }), [])
+        active: t('labels.active'),
+        pending: t('labels.pending'),
+        deactivated: t('labels.deactivated'),
+    }), [t])
 
     const {
         control,
@@ -91,40 +93,40 @@ const InviteUserForm = ({ closeModal, userData, courses = [] }) => {
         <form onSubmit={handleSubmit(onSubmit)}>
             <Stack spacing={2}>
                 <Typography variant="h6" fontWeight={700}>
-                    {userData ? 'Editar usuario' : 'Invitar usuario'}
+                    {userData ? t('inviteUser.editTitle') : t('inviteUser.inviteTitle')}
                 </Typography>
 
                 <Alert severity="info">
                     {userData
-                        ? 'Actualiza rol, estado, nombre y curso desde este panel.'
-                        : 'La invitacion crea el acceso pendiente. La persona definira su contrasena desde el enlace de registro.'}
+                        ? t('inviteUser.editInfo')
+                        : t('inviteUser.inviteInfo')}
                 </Alert>
 
                 <TextField
-                    label="Correo"
+                    label={t('labels.email')}
                     {...register('email')}
                     disabled={!!userData}
-                    placeholder="usuario@dominio.com"
+                    placeholder={t('inviteUser.emailPlaceholder')}
                     error={!!errors.email}
                     helperText={errors.email?.message}
                 />
 
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
                     <TextField
-                        label="Nombre"
+                        label={t('labels.name')}
                         {...register('first_name')}
-                        placeholder="Nombre"
+                        placeholder={t('inviteUser.firstNamePlaceholder')}
                         error={!!errors.first_name}
-                        helperText={errors.first_name?.message || 'Opcional'}
+                        helperText={errors.first_name?.message || t('common.optional')}
                         fullWidth
                     />
 
                     <TextField
-                        label="Apellido"
+                        label={t('labels.lastName')}
                         {...register('last_name')}
-                        placeholder="Apellido"
+                        placeholder={t('inviteUser.lastNamePlaceholder')}
                         error={!!errors.last_name}
-                        helperText={errors.last_name?.message || 'Opcional'}
+                        helperText={errors.last_name?.message || t('common.optional')}
                         fullWidth
                     />
                 </Stack>
@@ -134,11 +136,11 @@ const InviteUserForm = ({ closeModal, userData, courses = [] }) => {
                     control={control}
                     render={({ field }) => (
                         <FormControl fullWidth error={!!errors.role}>
-                            <InputLabel id="roles-select-label">Rol</InputLabel>
+                            <InputLabel id="roles-select-label">{t('labels.role')}</InputLabel>
                             <Select
                                 {...field}
                                 labelId="roles-select-label"
-                                label="Rol"
+                                label={t('labels.role')}
                                 disabled={!!userData && !canEditRole}
                             >
                                 {rolesUser.map((roleItem) => (
@@ -147,7 +149,7 @@ const InviteUserForm = ({ closeModal, userData, courses = [] }) => {
                                     </MenuItem>
                                 ))}
                             </Select>
-                            <FormHelperText>{errors.role?.message || 'Define el tipo de acceso para esta cuenta.'}</FormHelperText>
+                            <FormHelperText>{errors.role?.message || t('inviteUser.roleHelper')}</FormHelperText>
                         </FormControl>
                     )}
                 />
@@ -157,11 +159,11 @@ const InviteUserForm = ({ closeModal, userData, courses = [] }) => {
                     control={control}
                     render={({ field }) => (
                         <FormControl fullWidth error={!!errors.status}>
-                            <InputLabel id="status-select-label">Estado</InputLabel>
+                            <InputLabel id="status-select-label">{t('labels.state')}</InputLabel>
                             <Select
                                 {...field}
                                 labelId="status-select-label"
-                                label="Estado"
+                                label={t('labels.state')}
                             >
                                 {statusUser.map((statusItem) => (
                                     <MenuItem key={statusItem} value={statusItem}>
@@ -169,7 +171,7 @@ const InviteUserForm = ({ closeModal, userData, courses = [] }) => {
                                     </MenuItem>
                                 ))}
                             </Select>
-                            <FormHelperText>{errors.status?.message || 'Pendiente deja la cuenta lista para aprobacion o registro.'}</FormHelperText>
+                            <FormHelperText>{errors.status?.message || t('inviteUser.statusHelper')}</FormHelperText>
                         </FormControl>
                     )}
                 />
@@ -180,13 +182,13 @@ const InviteUserForm = ({ closeModal, userData, courses = [] }) => {
                         control={control}
                         render={({ field }) => (
                             <FormControl fullWidth error={!!errors.course_id}>
-                                <InputLabel id="course-select-label">Curso</InputLabel>
+                                <InputLabel id="course-select-label">{t('labels.course')}</InputLabel>
                                 <Select
                                     {...field}
                                     labelId="course-select-label"
-                                    label="Curso"
+                                    label={t('labels.course')}
                                 >
-                                    <MenuItem value="">Asignar más tarde</MenuItem>
+                                    <MenuItem value="">{t('inviteUser.assignLater')}</MenuItem>
                                     {courses.map((course) => (
                                         <MenuItem key={course.id} value={course.id}>
                                             {course.name}
@@ -194,7 +196,7 @@ const InviteUserForm = ({ closeModal, userData, courses = [] }) => {
                                     ))}
                                 </Select>
                                 <FormHelperText>
-                                    {errors.course_id?.message || 'Opcional. Puedes asignarlo o moverlo después desde Gestión de cursos.'}
+                                    {errors.course_id?.message || t('inviteUser.courseHelper')}
                                 </FormHelperText>
                             </FormControl>
                         )}
@@ -202,7 +204,7 @@ const InviteUserForm = ({ closeModal, userData, courses = [] }) => {
                 )}
 
                 <Button type="submit" variant="contained" fullWidth>
-                    {userData ? 'Guardar cambios' : 'Crear invitación'}
+                    {userData ? t('actions.saveChanges') : t('actions.createInvitation')}
                 </Button>
             </Stack>
         </form>

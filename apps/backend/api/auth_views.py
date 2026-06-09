@@ -8,6 +8,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from .i18n import tr
 from .models import ROLE_PLATFORM_ADMIN, STATUS_ACTIVE, STATUS_DEACTIVATED, UserProfile
 from .permissions import canonical_role, is_platform_admin
 from .serializers import (
@@ -17,9 +18,6 @@ from .serializers import (
     ProfileUpdateSerializer,
     RegistrationSerializer,
 )
-
-
-INVITATION_EXPIRED_MESSAGE = "La invitacion es invalida o ya expiro."
 
 
 
@@ -65,15 +63,15 @@ def login_with_email(request):
 
     user = _get_user_by_email(email)
     if not user:
-        return Response({"detail": "Credenciales invalidas."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"detail": tr("invalid_credentials", request=request)}, status=status.HTTP_400_BAD_REQUEST)
 
     auth_user = authenticate(username=user.username, password=password)
     if not auth_user:
-        return Response({"detail": "Credenciales invalidas."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"detail": tr("invalid_credentials", request=request)}, status=status.HTTP_400_BAD_REQUEST)
 
     profile = _ensure_active_profile(auth_user)
     if profile.status != STATUS_ACTIVE:
-        return Response({"detail": "Tu cuenta no esta activa."}, status=status.HTTP_403_FORBIDDEN)
+        return Response({"detail": tr("account_not_active", request=request)}, status=status.HTTP_403_FORBIDDEN)
 
     return Response(_build_auth_payload(auth_user))
 
@@ -93,7 +91,7 @@ def login_with_google(request):
         from google.oauth2 import id_token
     except Exception:
         return Response(
-            {"detail": "Google login is not configured on the server."},
+            {"detail": tr("google_login_not_configured", request=request)},
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 
@@ -104,21 +102,24 @@ def login_with_google(request):
             audience=client_id or None,
         )
     except Exception as exc:
-        return Response({"detail": f"Google token invalido: {exc}"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"detail": tr("google_token_invalid", request=request, error=exc)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     email = _normalize_email(payload.get("email"))
     if not email:
-        return Response({"detail": "Google token sin email."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"detail": tr("google_token_missing_email", request=request)}, status=status.HTTP_400_BAD_REQUEST)
 
     user = _get_user_by_email(email)
     if not user:
-        return Response({"detail": "No existe una cuenta invitada para este email."}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"detail": tr("invited_account_not_found", request=request)}, status=status.HTTP_404_NOT_FOUND)
 
     profile = _ensure_active_profile(user)
     if profile.status == STATUS_DEACTIVATED:
-        return Response({"detail": "La cuenta esta desactivada."}, status=status.HTTP_403_FORBIDDEN)
+        return Response({"detail": tr("account_deactivated", request=request)}, status=status.HTTP_403_FORBIDDEN)
     if profile.status != STATUS_ACTIVE:
-        return Response({"detail": "La cuenta aun no esta activa. Completa el registro con el equipo administrador."}, status=status.HTTP_403_FORBIDDEN)
+        return Response({"detail": tr("account_not_yet_active", request=request)}, status=status.HTTP_403_FORBIDDEN)
 
     profile.google_sub = str(payload.get("sub") or "")
     profile.photo_url = str(payload.get("picture") or profile.photo_url or "")
@@ -162,7 +163,7 @@ def me_view(request):
     if "email" in data:
         normalized_email = _normalize_email(data["email"])
         if User.objects.exclude(id=user.id).filter(email__iexact=normalized_email).exists():
-            return Response({"detail": "Ese email ya esta en uso."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": tr("email_already_in_use", request=request)}, status=status.HTTP_400_BAD_REQUEST)
         user.email = normalized_email
         user.username = normalized_email
     user.save(update_fields=["first_name", "last_name", "email", "username"])
@@ -188,7 +189,7 @@ def me_view(request):
 def registration_view(request, invite_token):
     profile = UserProfile.objects.select_related("user").filter(invite_token=invite_token).first()
     if not profile or not profile.is_invitation_valid():
-        return Response({"detail": INVITATION_EXPIRED_MESSAGE}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"detail": tr("invalid_invitation", request=request)}, status=status.HTTP_404_NOT_FOUND)
 
     if request.method == "GET":
         return Response(
@@ -205,7 +206,7 @@ def registration_view(request, invite_token):
 
     email = _normalize_email(serializer.validated_data["email"])
     if email != _normalize_email(profile.user.email):
-        return Response({"detail": "El email no coincide con la invitacion."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"detail": tr("invitation_email_mismatch", request=request)}, status=status.HTTP_400_BAD_REQUEST)
 
     with transaction.atomic():
         user = profile.user

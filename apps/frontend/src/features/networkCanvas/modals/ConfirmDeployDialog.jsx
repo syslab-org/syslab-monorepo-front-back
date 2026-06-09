@@ -12,6 +12,9 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+import { useTranslation } from 'react-i18next';
+
+import { translate as tr } from '@/shared/i18n';
 
 function normalizePlanSummary(transformedData) {
   const topology =
@@ -78,8 +81,8 @@ function exportPlanToJson(transformedData, planName = "plan-export") {
     a.click();
     URL.revokeObjectURL(url);
   } catch (error) {
-    console.error("Error exportando el plan:", error);
-    alert("No se pudo exportar el plan. Revisa la consola.");
+    console.error("Error exporting the plan:", error);
+    alert(tr('canvas.deployDialog.exportError'));
   }
 }
 
@@ -96,6 +99,7 @@ const ConfirmDeployDialog = ({
   onViewPlan,
   loadingFlow,
 }) => {
+  const { t } = useTranslation();
   const hasActiveInfra = planStatus?.applied === true;
   const hasReusablePlanId = Boolean(validationResult?.plan_id || planStatus?.id);
   const hasSuccessfulPlanSnapshot =
@@ -133,8 +137,12 @@ const ConfirmDeployDialog = ({
   );
   const planRiskSummary = validationResult?.plan_risk_summary || null;
   const riskSeverity = planRiskSummary?.severity || 'none';
-  const primaryActionLabel = isRedeployPreview ? "Redeploy en AWS" : "Deploy en AWS";
-  const secondaryActionLabel = isRedeployPreview ? "Revalidar redeploy" : "Validar deploy";
+  const primaryActionLabel = isRedeployPreview
+    ? t('canvas.deployDialog.primaryRedeploy')
+    : t('canvas.deployDialog.primaryDeploy');
+  const secondaryActionLabel = isRedeployPreview
+    ? t('canvas.deployDialog.revalidateRedeploy')
+    : t('canvas.deployDialog.validateDeploy');
   const isBusy = Boolean(loadingFlow || isSyncing);
 
   const riskAlertSeverity =
@@ -146,13 +154,13 @@ const ConfirmDeployDialog = ({
 
   const renderBanner = () => {
     if (isSyncing) {
-      return <Alert severity="info">Validando infraestructura...</Alert>;
+      return <Alert severity="info">{t('canvas.deployDialog.validatingInfra')}</Alert>;
     }
 
     if (isValidated) {
       return (
         <Alert severity="success">
-          Infraestructura validada correctamente. Puedes desplegar o revisar el plan.
+          {t('canvas.deployDialog.validatedSuccess')}
         </Alert>
       );
     }
@@ -160,7 +168,7 @@ const ConfirmDeployDialog = ({
     if (hasError) {
       return (
         <Alert severity="error">
-          Error durante la validación. Revisa los detalles antes de continuar.
+          {t('canvas.deployDialog.validationError')}
         </Alert>
       );
     }
@@ -169,7 +177,7 @@ const ConfirmDeployDialog = ({
     if (canvasState === "PLAN_OUTDATED") {
       return (
         <Alert severity="warning">
-          El canvas cambió desde la última validación. Debes validar nuevamente.
+          {t('canvas.deployDialog.canvasOutdated')}
         </Alert>
       );
     }
@@ -228,24 +236,62 @@ const ConfirmDeployDialog = ({
     (segment) => String(segment?.internet_access || "").toLowerCase() === "isolated",
   ).length;
   const neutralInterpretation = [
-    `La red base contiene ${segments.length} segmento(s), ${summary.totalZones} zona(s) y ${summary.totalWorkloads} workload(s).`,
-    `Exposición del diseño: ${publicExposure} segmento(s) públicos, ${privateExposure} privados y ${mixedExposure} mixtos.`,
+    t('canvas.deployDialog.neutral.baseNetwork', {
+      segments: segments.length,
+      zones: summary.totalZones,
+      workloads: summary.totalWorkloads,
+    }),
+    t('canvas.deployDialog.neutral.exposure', {
+      publicExposure,
+      privateExposure,
+      mixedExposure,
+    }),
     hubRouters > 0
-      ? `Conectividad modelada como ${hubRouters} hub(s) central(es) con ${hubAttachments} attachment(s).`
-      : `Conectividad modelada con ${directLinks} enlace(s) directo(s) entre pares de segmentos.`,
+      ? t('canvas.deployDialog.neutral.hubs', {
+        hubs: hubRouters,
+        attachments: hubAttachments,
+      })
+      : t('canvas.deployDialog.neutral.directLinks', {
+        directLinks,
+      }),
     vpcsWithSshButNoPublicZones > 0
-      ? `Acceso y salida: SSH externo declarado en ${vpcsWithSsh} segmento(s), pero ${vpcsWithSshButNoPublicZones} no tiene(n) zona pública para exponerlo. Además, ${isolatedExposure} segmento(s) no declara(n) salida a internet.`
-      : `Acceso y salida: SSH externo utilizable en ${vpcsWithEffectivePublicSsh} segmento(s) y ${isolatedExposure} segmento(s) sin salida a internet declarada.`,
+      ? t('canvas.deployDialog.neutral.sshWarning', {
+        vpcsWithSsh,
+        vpcsWithSshButNoPublicZones,
+        isolatedExposure,
+      })
+      : t('canvas.deployDialog.neutral.sshReady', {
+        vpcsWithEffectivePublicSsh,
+        isolatedExposure,
+      }),
   ];
   const awsInterpretation = [
-    `AWS creará ${segments.length} VPC(s), ${summary.totalZones} subnet(s) y ${summary.totalWorkloads} instancia(s).`,
+    t('canvas.deployDialog.aws.created', {
+      segments: segments.length,
+      zones: summary.totalZones,
+      workloads: summary.totalWorkloads,
+    }),
     publicSubnets > 0
-      ? `Exposición pública efectiva: IGW en ${vpcsWithIgw} VPC(s), ${publicSubnets} subnet(s) pública(s) y SSH externo utilizable en ${vpcsWithEffectivePublicSsh} VPC(s).`
-      : `Internet edge declarado en ${vpcsWithIgw} VPC(s), pero no hay subnet(s) pública(s) para exponer workloads ni usar SSH externo directamente.`,
-    `Salida privada: NAT Gateway en ${vpcsWithNat} VPC(s) para ${privateSubnets} subnet(s) potencialmente privadas.`,
+      ? t('canvas.deployDialog.aws.publicExposure', {
+        vpcsWithIgw,
+        publicSubnets,
+        vpcsWithEffectivePublicSsh,
+      })
+      : t('canvas.deployDialog.aws.noPublicSubnets', {
+        vpcsWithIgw,
+      }),
+    t('canvas.deployDialog.aws.privateEgress', {
+      vpcsWithNat,
+      privateSubnets,
+    }),
     hubRouters > 0
-      ? `Enrutamiento central: ${hubRouters} hub(s) y ${hubAttachments} attachment(s).`
-      : `Enrutamiento por enlaces directos: ${directLinks} enlace(s) declarados.`,
+      ? t('canvas.deployDialog.aws.centralRouting', {
+        hubRouters,
+        hubAttachments,
+      })
+      : t('canvas.deployDialog.aws.directRouting', {
+        directLinks,
+      }),
   ];
 
   return (
@@ -260,7 +306,7 @@ const ConfirmDeployDialog = ({
       maxWidth="md"
       fullWidth
     >
-      <DialogTitle>Confirmar infraestructura</DialogTitle>
+      <DialogTitle>{t('canvas.deployDialog.title')}</DialogTitle>
       <DialogContent dividers>
         <Box sx={{ position: "relative" }}>
           {isBusy && (
@@ -291,11 +337,11 @@ const ConfirmDeployDialog = ({
                 <CircularProgress size={28} />
                 <Typography variant="subtitle2">
                   {isSyncing
-                    ? "Validando infraestructura. Espera un momento..."
-                    : "Procesando la operación. No cierres este modal todavía."}
+                    ? t('canvas.deployDialog.busyValidating')
+                    : t('canvas.deployDialog.busyProcessing')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" textAlign="center">
-                  Mientras corre esta acción, se ha bloqueamos el modal para evitar estados inconsistentes.
+                  {t('canvas.deployDialog.busyDescription')}
                 </Typography>
               </Stack>
             </Box>
@@ -304,19 +350,19 @@ const ConfirmDeployDialog = ({
 
           {isRedeployPreview && (
             <Alert severity="warning" sx={{ mt: 2 }}>
-              Esta validación se hizo sobre infraestructura ya activa. Si despliegas ahora, Terraform actualizará el stack existente en AWS y algunos cambios podrían reemplazar o eliminar recursos.
+              {t('canvas.deployDialog.redeployWarning')}
             </Alert>
           )}
 
           <Box mt={2}>
             <Stack direction="row" spacing={1} flexWrap="wrap">
               <Chip
-                label={isRedeployPreview ? "Acción principal: REDEPLOY" : "Acción principal: DEPLOY"}
+                label={isRedeployPreview ? t('canvas.deployDialog.chips.mainRedeploy') : t('canvas.deployDialog.chips.mainDeploy')}
                 color={isRedeployPreview ? "warning" : "primary"}
                 variant="filled"
               />
               <Chip
-                label={isRedeployPreview ? "Destroy disponible si el plan sigue activo" : "Destroy no aplica hasta crear recursos"}
+                label={isRedeployPreview ? t('canvas.deployDialog.chips.destroyAvailable') : t('canvas.deployDialog.chips.destroyUnavailable')}
                 color={isRedeployPreview ? "error" : "default"}
                 variant={isRedeployPreview ? "outlined" : "outlined"}
               />
@@ -327,10 +373,10 @@ const ConfirmDeployDialog = ({
             <Box mt={2}>
               <Alert severity={riskAlertSeverity}>
                 {riskSeverity === 'destructive'
-                  ? 'Terraform detectó cambios potencialmente destructivos o con reemplazo de recursos.'
+                  ? t('canvas.deployDialog.risk.destructive')
                   : riskSeverity === 'caution'
-                    ? 'Terraform detectó actualizaciones sobre recursos existentes.'
-                    : 'Terraform detectó cambios aditivos sobre la infraestructura.'}
+                    ? t('canvas.deployDialog.risk.caution')
+                    : t('canvas.deployDialog.risk.safe')}
               </Alert>
               <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1.5 }}>
                 <Chip label={`Add: ${planRiskSummary.add}`} size="small" />
@@ -341,7 +387,7 @@ const ConfirmDeployDialog = ({
               {Array.isArray(planRiskSummary.examples) && planRiskSummary.examples.length > 0 && (
                 <Box mt={1}>
                   <Typography variant="body2" color="text.secondary">
-                    Recursos sensibles detectados:
+                    {t('canvas.deployDialog.risk.sensitiveResources')}
                   </Typography>
                   <Stack spacing={0.5} sx={{ mt: 0.75 }}>
                     {planRiskSummary.examples.map((item) => (
@@ -357,25 +403,25 @@ const ConfirmDeployDialog = ({
 
           <Box mt={3}>
             <Typography variant="subtitle1" gutterBottom>
-              Resumen
+              {t('canvas.deployDialog.summaryTitle')}
             </Typography>
             <Stack direction="row" spacing={1} flexWrap="wrap">
-              <Chip label={`Provider: ${String(summary.provider || "aws").toUpperCase()}`} />
-              <Chip label={`Segments: ${segments.length}`} />
-              <Chip label={`Zones: ${summary.totalZones}`} />
-              <Chip label={`Workloads: ${summary.totalWorkloads}`} />
+              <Chip label={t('canvas.deployDialog.summary.provider', { value: String(summary.provider || "aws").toUpperCase() })} />
+              <Chip label={t('canvas.deployDialog.summary.segments', { count: segments.length })} />
+              <Chip label={t('canvas.deployDialog.summary.zones', { count: summary.totalZones })} />
+              <Chip label={t('canvas.deployDialog.summary.workloads', { count: summary.totalWorkloads })} />
               <Chip
-                label={`Direct links: ${directLinks}`}
+                label={t('canvas.deployDialog.summary.directLinks', { count: directLinks })}
                 color={directLinks > 0 ? "secondary" : "default"}
                 variant={directLinks > 0 ? "filled" : "outlined"}
               />
               <Chip
-                label={`Hubs: ${hubRouters}`}
+                label={t('canvas.deployDialog.summary.hubs', { count: hubRouters })}
                 color={hubRouters > 0 ? "primary" : "default"}
                 variant={hubRouters > 0 ? "filled" : "outlined"}
               />
               <Chip
-                label={`Hub attachments: ${hubAttachments}`}
+                label={t('canvas.deployDialog.summary.attachments', { count: hubAttachments })}
                 color={hubAttachments > 0 ? "primary" : "default"}
                 variant={hubAttachments > 0 ? "filled" : "outlined"}
               />
@@ -383,12 +429,12 @@ const ConfirmDeployDialog = ({
           </Box>
 
           <Alert severity="info" sx={{ mt: 2 }}>
-            Después del deploy, valida conectividad en <b>Plan Detail → Pruebas</b> con comandos de ping guiados entre segmentos.
+            {t('canvas.deployDialog.postDeployHint')}
           </Alert>
 
           <Box mt={3}>
             <Typography variant="subtitle1" gutterBottom>
-              Intención neutral del laboratorio
+              {t('canvas.deployDialog.neutralTitle')}
             </Typography>
             <Stack spacing={1}>
               {neutralInterpretation.map((line) => (
@@ -401,7 +447,7 @@ const ConfirmDeployDialog = ({
 
           <Box mt={3}>
             <Typography variant="subtitle1" gutterBottom>
-              Traducción AWS
+              {t('canvas.deployDialog.awsTitle')}
             </Typography>
             <Stack spacing={1}>
               {awsInterpretation.map((line) => (
@@ -425,27 +471,31 @@ const ConfirmDeployDialog = ({
                 >
                   <Typography variant="subtitle2">{segment.name}</Typography>
                   <Stack direction="row" spacing={1} mt={1} flexWrap="wrap">
-                    <Chip label={`CIDR: ${segment.cidr || segment.cidr_block}`} size="small" />
-                    <Chip label={`Región: ${segment.region}`} size="small" />
+                    <Chip label={t('canvas.deployDialog.segment.cidr', { value: segment.cidr || segment.cidr_block })} size="small" />
+                    <Chip label={t('canvas.deployDialog.segment.region', { value: segment.region })} size="small" />
                     <Chip
-                      label={`Modelo: ${String(segment.exposure || "internal").replace(/_/g, " ")}`}
+                      label={t('canvas.deployDialog.segment.model', {
+                        value: String(segment.exposure || "internal").replace(/_/g, " "),
+                      })}
                       size="small"
                       variant="outlined"
                     />
                     <Chip
-                      label={`AWS: VPC`}
+                      label={t('canvas.deployDialog.segment.awsVpc')}
                       size="small"
                       variant="outlined"
                     />
                     {aws.internet_gateway && (
-                      <Chip label="IGW" size="small" color="primary" />
+                      <Chip label={t('canvas.deployDialog.segment.igw')} size="small" color="primary" />
                     )}
                     {aws.nat_gateway?.enabled && (
-                      <Chip label="NAT" size="small" color="secondary" />
+                      <Chip label={t('canvas.deployDialog.segment.nat')} size="small" color="secondary" />
                     )}
                     {aws.nat_gateway?.enabled && aws.nat_gateway?.elastic_ip && (
                       <Chip
-                        label={`NAT EIP: ${aws.nat_gateway.elastic_ip}`}
+                        label={t('canvas.deployDialog.segment.natEip', {
+                          value: aws.nat_gateway.elastic_ip,
+                        })}
                         size="small"
                         color="warning"
                       />
@@ -453,7 +503,7 @@ const ConfirmDeployDialog = ({
                   </Stack>
                   {aws.nat_gateway?.enabled && (
                     <Typography variant="caption" color="text.secondary" display="block" mt={1}>
-                      Si defines una EIP para el NAT, debe ser un Allocation ID real de AWS (`eipalloc-...`), no una IP pública.
+                      {t('canvas.deployDialog.segment.natHelp')}
                     </Typography>
                   )}
                 </Box>
@@ -463,7 +513,7 @@ const ConfirmDeployDialog = ({
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={isBusy}>Cancelar</Button>
+        <Button onClick={onClose} disabled={isBusy}>{t('actions.cancel')}</Button>
         <Button
           variant="contained"
           onClick={onValidate}
@@ -476,14 +526,14 @@ const ConfirmDeployDialog = ({
           onClick={() => exportPlanToJson(transformedData, transformedData?.name || "plan")}
           disabled={!transformedData || isBusy}
         >
-          Exportar JSON
+          {t('canvas.deployDialog.exportJson')}
         </Button>
         <Button
           variant="outlined"
           onClick={onViewPlan}
           disabled={!hasReusablePlanId || isBusy}
         >
-          Ver plan
+          {t('canvas.deployDialog.viewPlan')}
         </Button>
         <Button
           variant="contained"
@@ -491,7 +541,7 @@ const ConfirmDeployDialog = ({
           onClick={onDeploy}
           disabled={!isValidated || !hasReusablePlanId || isBusy}
         >
-          {isRedeployPreview ? 'Aplicar redeploy' : 'Desplegar'}
+          {isRedeployPreview ? t('canvas.deployDialog.applyRedeploy') : t('canvas.deployDialog.deploy')}
         </Button>
       </DialogActions>
     </Dialog>

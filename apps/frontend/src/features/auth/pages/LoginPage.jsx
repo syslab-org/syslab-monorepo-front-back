@@ -5,8 +5,11 @@ import { useAuth } from '@/app/providers/AuthContext'
 import { Avatar, Box, Button, Checkbox, CssBaseline, FormControlLabel, Grid, Link, Paper, TextField, Typography } from '@mui/material'
 import { LockClockOutlined } from '@mui/icons-material'
 import { GoogleLogin } from '@react-oauth/google';
+import { useTranslation } from 'react-i18next';
+import LanguageSwitcher from '@/shared/ui/i18n/LanguageSwitcher';
 
 const LoginPage = () => {
+    const { t } = useTranslation()
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [error, setError] = useState('')
@@ -21,7 +24,7 @@ const LoginPage = () => {
             await completeLogin(authPayload)
             navigate('/')
         } catch (error) {
-            setError(error?.message || 'No se pudo iniciar sesion.')
+            setError(error?.message || t('auth.login.defaultError'))
         }
     }
 
@@ -31,7 +34,7 @@ const LoginPage = () => {
             await completeLogin(authPayload)
             navigate('/')
         } catch (error) {
-            setError(error?.message || 'No se pudo iniciar sesion con Google.')
+            setError(error?.message || t('auth.login.googleError'))
         }
     }
 
@@ -62,11 +65,14 @@ const LoginPage = () => {
                         alignItems: 'center',
                     }}
                 >
+                    <Box sx={{ width: '100%', display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+                        <LanguageSwitcher />
+                    </Box>
                     <Avatar sx={{ m: 1, bgcolor: 'secondary.main' }}>
                         <LockClockOutlined />
                     </Avatar>
                     <Typography component="h1" variant="h5">
-                        Sign In
+                        {t('auth.login.title')}
                     </Typography>
                     <Box component="form" noValidate onSubmit={handleLogin} sx={{ mt: 1 }}>
                         {error && (
@@ -79,7 +85,7 @@ const LoginPage = () => {
                             required
                             fullWidth
                             id="email"
-                            label="Email Address"
+                            label={t('auth.login.emailLabel')}
                             name="email"
                             autoComplete="email"
                             autoFocus
@@ -90,7 +96,7 @@ const LoginPage = () => {
                             required
                             fullWidth
                             name="password"
-                            label="Password"
+                            label={t('auth.login.passwordLabel')}
                             type="password"
                             id="password"
                             autoComplete="current-password"
@@ -99,7 +105,7 @@ const LoginPage = () => {
 
                         <FormControlLabel
                             control={<Checkbox value="remember" color="primary" />}
-                            label="Remember me"
+                            label={t('auth.login.rememberMe')}
                         />
 
                         <Button
@@ -108,13 +114,13 @@ const LoginPage = () => {
                             variant="contained"
                             sx={{ mt: 3, mb: 2 }}
                         >
-                            Login
+                            {t('auth.login.submit')}
                         </Button>
                         {googleClientId && (
                             <Box sx={{ mt: 1, mb: 2 }}>
                                 <GoogleLogin
                                     onSuccess={handleGoogleSuccess}
-                                    onError={() => setError('No se pudo iniciar sesion con Google.')}
+                                    onError={() => setError(t('auth.login.googleError'))}
                                     useOneTap={false}
                                 />
                             </Box>
@@ -123,12 +129,12 @@ const LoginPage = () => {
                         <Grid container>
                             <Grid item xs>
                                 <Link href="#" variant="body2">
-                                    Forgot password?
+                                    {t('auth.login.forgotPassword')}
                                 </Link>
                             </Grid>
                             <Grid item>
                                 <Link href="#" variant="body2">
-                                    {"Don't have an account? Sign Up"}
+                                    {t('auth.login.signUpPrompt')}
                                 </Link>
                             </Grid>
                         </Grid>
@@ -141,17 +147,17 @@ const LoginPage = () => {
         // <div>
 
 
-        //     <h1>Login</h1>
+        //     <h1>{t('auth.login.submit')}</h1>
         //     <form onSubmit={handleLogin}>
         //         <div>
         //             <label htmlFor="">Email:</label>
         //             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         //         </div>
         //         <div>
-        //             <label htmlFor="">Password:</label>
+        //             <label htmlFor="">{t('auth.login.passwordLabel')}:</label>
         //             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         //         </div>
-        //         <button type="submit">Login</button>
+        //         <button type="submit">{t('auth.login.submit')}</button>
         //     </form>
         //     <button onClick={handleGoogleLogin}>Login with Google</button>
 
