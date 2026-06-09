@@ -4,12 +4,14 @@ import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
 import HistoryIcon from "@mui/icons-material/History";
 import { useContext, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 import { api } from "@/infrastructure/http/api";
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
 import { PageHeader } from '@/shared/ui/layouts/MainLayout';
 
 function Dashboard() {
+  const { t, i18n } = useTranslation();
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [totalLaboratorios, setTotalLaboratorios] = useState(0);
@@ -20,7 +22,7 @@ function Dashboard() {
 
     async function loadData() {
       try {
-        showLoading("Cargando dashboard...");
+        showLoading(t("admin.dashboard.loading"));
         const [plansData, labsData] = await Promise.all([
           api.listPlans(),
           api.listLabs(),
@@ -55,12 +57,12 @@ function Dashboard() {
   const totalEjecuciones = sortedPlans.length;
   const ultimaActividad =
     sortedPlans.length > 0
-      ? sortedPlans[0]?.updated_at || sortedPlans[0]?.created_at || "Actividad registrada"
-      : "Sin ejecuciones recientes";
+      ? sortedPlans[0]?.updated_at || sortedPlans[0]?.created_at || t("admin.dashboard.activityRecorded")
+      : t("admin.dashboard.noRecentExecutions");
 
   const formattedUltimaActividad =
-    ultimaActividad && ultimaActividad !== "Sin ejecuciones recientes"
-      ? new Intl.DateTimeFormat("es-CL", {
+    ultimaActividad && ultimaActividad !== t("admin.dashboard.noRecentExecutions")
+      ? new Intl.DateTimeFormat(i18n.resolvedLanguage === "es" ? "es-CL" : "en-US", {
           dateStyle: "medium",
           timeStyle: "short",
         }).format(new Date(ultimaActividad))
@@ -69,11 +71,11 @@ function Dashboard() {
   return (
     <Box>
       <PageHeader
-        title="Dashboard"
-        subtitle="Resumen general del entorno de laboratorios y ejecuciones."
+        title={t("admin.dashboard.title")}
+        subtitle={t("admin.dashboard.subtitle")}
         actions={
           <Button component={Link} to="/admin/labs" variant="contained">
-            Crear laboratorio
+            {t("admin.dashboard.createLab")}
           </Button>
         }
       />
@@ -85,10 +87,10 @@ function Dashboard() {
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Box>
                   <Typography variant="subtitle2" color="text.secondary">
-                    Laboratorios
+                    {t("admin.dashboard.cards.labs")}
                   </Typography>
                   <Typography variant="h3" fontWeight={700}>
-                    {loading ? "..." : totalLaboratorios}
+                    {loading ? t("admin.dashboard.loadingValue") : totalLaboratorios}
                   </Typography>
                 </Box>
                 <CloudQueueIcon color="primary" sx={{ fontSize: 36 }} />
@@ -103,10 +105,10 @@ function Dashboard() {
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Box>
                   <Typography variant="subtitle2" color="text.secondary">
-                    Ejecuciones
+                    {t("admin.dashboard.cards.executions")}
                   </Typography>
                   <Typography variant="h3" fontWeight={700}>
-                    {loading ? "..." : totalEjecuciones}
+                    {loading ? t("admin.dashboard.loadingValue") : totalEjecuciones}
                   </Typography>
                 </Box>
                 <PlayCircleOutlineIcon color="secondary" sx={{ fontSize: 36 }} />
@@ -121,10 +123,10 @@ function Dashboard() {
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Box>
                   <Typography variant="subtitle2" color="text.secondary">
-                    Última actividad
+                    {t("admin.dashboard.cards.lastActivity")}
                   </Typography>
                   <Typography variant="body1" fontWeight={500}>
-                    {loading ? "Cargando..." : formattedUltimaActividad}
+                    {loading ? t("admin.dashboard.loading") : formattedUltimaActividad}
                   </Typography>
                 </Box>
                 <HistoryIcon color="success" sx={{ fontSize: 36, opacity: 0.6 }} />
