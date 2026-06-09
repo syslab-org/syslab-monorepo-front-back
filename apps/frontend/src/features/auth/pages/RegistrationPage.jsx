@@ -6,8 +6,11 @@ import { useForm } from "react-hook-form";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import { useUserRegistration } from '@/features/auth/services/authService';
 import { useRegistrationUserFormValidation } from '@/features/auth/hooks/useRegistrationUserFormValidation';
+import { useTranslation } from "react-i18next";
+import LanguageSwitcher from "@/shared/ui/i18n/LanguageSwitcher";
 
 const RegistrationPage = () => {
+    const { t } = useTranslation()
     const { userId } = useParams();
     const { successMessage, isCheckingLink, isLinkValid, setError, error, registerWithEmailPassword } = useUserRegistration(userId);
     const validationSchema = useRegistrationUserFormValidation();
@@ -76,16 +79,19 @@ const RegistrationPage = () => {
 
             <Grid item xs={12} sm={8} md={5} component={Paper} elevation={6} square>
                 <Box sx={{ my: 8, mx: 4, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <Box sx={{ width: "100%", display: "flex", justifyContent: "flex-end", mb: 2 }}>
+                        <LanguageSwitcher />
+                    </Box>
                     <Avatar sx={{ m: 1, bgcolor: "secondary.main" }}>
                         <LockClockOutlined />
                     </Avatar>
-                    <Typography>Sign Up</Typography>
+                    <Typography component="h1" variant="h5">{t('auth.register.title')}</Typography>
                     {isLinkValid && !isCheckingLink && (
                         <Box component="form" noValidate sx={{ mt: 1 }} onSubmit={handleSubmit(handleSignUpWithEmailAndPassword)}>
                             <TextField
-                                label="Email Address"
+                                label={t('auth.login.emailLabel')}
                                 {...register('email')}
-                                placeholder="Set Email"
+                                placeholder={t('auth.register.emailPlaceholder')}
                                 error={!!errors.email}
                                 helperText={errors.email?.message}
                                 margin="normal"
@@ -93,9 +99,9 @@ const RegistrationPage = () => {
                                 autoFocus
                             />
                             <TextField
-                                label="Password"
+                                label={t('auth.login.passwordLabel')}
                                 {...register('password')}
-                                placeholder="Set Password"
+                                placeholder={t('auth.register.passwordPlaceholder')}
                                 error={!!errors.password}
                                 helperText={errors.password?.message}
                                 margin="normal"
@@ -103,12 +109,12 @@ const RegistrationPage = () => {
                                 type="password"
                             />
                             <Button type="submit" fullWidth variant="contained" sx={{ mt: 3, mb: 2 }}>
-                                Sign Up
+                                {t('auth.register.submit')}
                             </Button>
                                 <Grid container>
                                     <Grid item>
                                     <Link component={RouterLink} to="/login" variant="body2">
-                                        {"Sign In"}
+                                        {t('auth.register.signIn')}
                                     </Link>
                                 </Grid>
                             </Grid>
@@ -116,7 +122,7 @@ const RegistrationPage = () => {
                     )}
                     {!isLinkValid && !isCheckingLink && (
                         <Typography color="error" variant="h6">
-                            El enlace ha caducado
+                            {t('auth.register.expiredLink')}
                         </Typography>
                     )}
                 </Box>
