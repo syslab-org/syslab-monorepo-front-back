@@ -1,4 +1,5 @@
 import { createContext, useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import TourOverlay from "@/shared/ui/onboarding/TourOverlay";
 import { getTourDefinition } from "@/shared/ui/onboarding/tourRegistry";
@@ -7,6 +8,7 @@ import { isTourCompleted, markTourCompleted } from "@/shared/ui/onboarding/tourS
 export const OnboardingTourContext = createContext(null);
 
 export function OnboardingTourProvider({ children }) {
+  useTranslation();
   const [activeTourId, setActiveTourId] = useState(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
 
