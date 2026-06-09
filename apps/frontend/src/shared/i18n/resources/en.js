@@ -739,6 +739,294 @@ const en = {
       tourLabel: "View plan tour",
     },
   },
+  canvas: {
+    feedback: {
+      outdatedTitle: "Canvas out of date with respect to the plan",
+      outdatedDescription:
+        "This canvas changed since the last validation associated with the plan. If you keep editing, the plan will no longer represent exactly what you see on screen.",
+      viewPlan: "View plan",
+      revalidate: "Revalidate",
+      keepEditing: "Keep editing",
+    },
+    createLab: {
+      error: "Could not create the lab.",
+      networkTitle: "Create network lab",
+      networkSubtitle:
+        "Create a lab to model network topologies and leave it ready for validation and deployment. Define name, region, and the parent CIDR.",
+      guidedTitle: "Create lab",
+      guidedSubtitle:
+        "Create a guided educational lab: model network topologies step by step and leave it ready for a real execution.",
+      stepLabel: "Step {{current}} of {{total}}",
+      guidedEyebrow: "Guided lab",
+    },
+    form: {
+      courseRequired: "You must select a course.",
+      stepOneTitle: "Step 1: Configure the lab",
+      stepOneDescription:
+        "Define the name, region, and parent range (CIDR). With that we can guide the rest of the flow (segments, zones, workloads, and tests).",
+      cidrTip:
+        "Tip: use a /16 range so you have comfortable space for subnets (/24) without fighting the IP plan.",
+      awsOnlyInfo:
+        "In this MVP, real deployment is enabled for AWS. Other providers are shown as roadmap references, but they are not available for execution yet.",
+      cloudProvider: "Cloud provider",
+      useAwsHint:
+        "For this MVP, use AWS if you want to deploy real infrastructure.",
+      labTemplate: "Lab template",
+      chooseTemplate: "Choose the use case you want to build step by step.",
+      useRecommendedCidr: "Use recommended CIDR ({{value}})",
+      templateCanvasHint:
+        "When you create the lab, this template will load an initial canvas coherent with the chosen case.",
+      customTemplateWarning:
+        "This template was prepared on the suggested CIDR {{value}}. If you change the parent range, later review segment CIDRs, subnets, and fixed IPs in the canvas to adjust them manually if needed.",
+      labName: "Lab name",
+      labNameWizardPlaceholder: "Ex: Lab-Routing-1",
+      labNamePlaceholder: "Ex: Peering-Lab-1",
+      labNameHelp:
+        "This name will appear in the list and will be the main reference for the lab.",
+      notesPlaceholder:
+        "Ex: Lab to validate a public VPC with bastion, SSH tests, and evidence for the defense.",
+      courseSelectionRequired:
+        "Select the course to which the lab will be shared.",
+      courseOptional: "Optional for administrators.",
+      cloudConnectionHelp:
+        "You can pin a specific AWS connection or let the backend resolve the owner's personal one and then the course shared one.",
+      accountLabel: "account",
+      executionPreviewResolved:
+        "Planned execution: {{name}}{{account}}. {{helper}}",
+      awsOnlyExecution:
+        "In this MVP, only AWS can resolve a real executable connection.",
+      executionSource: {
+        explicit: "The explicitly selected connection will be used.",
+        ownerPersonalAuto:
+          "Auto will resolve the owner's personal account first.",
+        courseSharedAuto:
+          "Auto will resolve the course shared account.",
+        unresolved: "There is no resolved executable connection yet.",
+      },
+      masterCidr: "Parent range (CIDR)",
+      masterCidrWizardPlaceholder: "Ex: 10.20.0.0/16",
+      masterCidrPlaceholder: "10.30.0.0/20",
+      masterCidrWizardHelp:
+        "This will be the parent block. If you use a template and change it, later review the preloaded addressing in the canvas.",
+      masterCidrHelp:
+        "Parent range from which segments and zones will be derived.",
+      selectedRegion: "Selected region: {{value}}",
+      continue: "Continue",
+      providerStatus: {
+        ready: "Ready for validation and deploy",
+        planned: "Coming soon",
+        unknown: "Availability not confirmed",
+      },
+    },
+    deployDialog: {
+      exportError: "Could not export the plan. Check the console.",
+      title: "Confirm infrastructure",
+      primaryRedeploy: "Redeploy on AWS",
+      primaryDeploy: "Deploy on AWS",
+      revalidateRedeploy: "Revalidate redeploy",
+      validateDeploy: "Validate deploy",
+      validatingInfra: "Validating infrastructure...",
+      validatedSuccess:
+        "Infrastructure validated successfully. You can deploy or review the plan.",
+      validationError:
+        "Validation error. Review the details before continuing.",
+      canvasOutdated:
+        "The canvas changed since the last validation. You must validate again.",
+      busyValidating: "Validating infrastructure. Please wait a moment...",
+      busyProcessing: "Processing the operation. Do not close this modal yet.",
+      busyDescription:
+        "While this action runs, the modal is locked to avoid inconsistent states.",
+      redeployWarning:
+        "This validation was performed over already active infrastructure. If you deploy now, Terraform will update the existing stack in AWS and some changes may replace or remove resources.",
+      chips: {
+        mainRedeploy: "Main action: REDEPLOY",
+        mainDeploy: "Main action: DEPLOY",
+        destroyAvailable: "Destroy available if the plan remains active",
+        destroyUnavailable: "Destroy does not apply until resources are created",
+      },
+      risk: {
+        destructive:
+          "Terraform detected potentially destructive changes or resource replacements.",
+        caution:
+          "Terraform detected updates over existing resources.",
+        safe: "Terraform detected additive changes over the infrastructure.",
+        sensitiveResources: "Sensitive resources detected:",
+      },
+      summaryTitle: "Summary",
+      summary: {
+        provider: "Provider: {{value}}",
+        segments: "Segments: {{count}}",
+        zones: "Zones: {{count}}",
+        workloads: "Workloads: {{count}}",
+        directLinks: "Direct links: {{count}}",
+        hubs: "Hubs: {{count}}",
+        attachments: "Hub attachments: {{count}}",
+      },
+      postDeployHint:
+        "After deploy, validate connectivity in Plan Detail -> Tests using guided ping commands between segments.",
+      neutralTitle: "Neutral lab intent",
+      neutral: {
+        baseNetwork:
+          "The base network contains {{segments}} segment(s), {{zones}} zone(s), and {{workloads}} workload(s).",
+        exposure:
+          "Design exposure: {{publicExposure}} public segment(s), {{privateExposure}} private, and {{mixedExposure}} mixed.",
+        hubs:
+          "Connectivity is modeled as {{hubs}} central hub(s) with {{attachments}} attachment(s).",
+        directLinks:
+          "Connectivity is modeled with {{directLinks}} direct link(s) between segment pairs.",
+        sshWarning:
+          "Access and egress: external SSH declared on {{vpcsWithSsh}} segment(s), but {{vpcsWithSshButNoPublicZones}} do not have a public zone to expose it. In addition, {{isolatedExposure}} segment(s) do not declare Internet egress.",
+        sshReady:
+          "Access and egress: external SSH usable on {{vpcsWithEffectivePublicSsh}} segment(s) and {{isolatedExposure}} segment(s) without declared Internet egress.",
+      },
+      awsTitle: "AWS translation",
+      aws: {
+        created:
+          "AWS will create {{segments}} VPC(s), {{zones}} subnet(s), and {{workloads}} instance(s).",
+        publicExposure:
+          "Effective public exposure: IGW on {{vpcsWithIgw}} VPC(s), {{publicSubnets}} public subnet(s), and usable external SSH on {{vpcsWithEffectivePublicSsh}} VPC(s).",
+        noPublicSubnets:
+          "Internet edge declared on {{vpcsWithIgw}} VPC(s), but there are no public subnets to expose workloads or use direct external SSH.",
+        privateEgress:
+          "Private egress: NAT Gateway on {{vpcsWithNat}} VPC(s) for {{privateSubnets}} potentially private subnet(s).",
+        centralRouting:
+          "Central routing: {{hubRouters}} hub(s) and {{hubAttachments}} attachment(s).",
+        directRouting:
+          "Routing through direct links: {{directLinks}} declared link(s).",
+      },
+      segment: {
+        cidr: "CIDR: {{value}}",
+        region: "Region: {{value}}",
+        model: "Model: {{value}}",
+        awsVpc: "AWS: VPC",
+        igw: "IGW",
+        nat: "NAT",
+        natEip: "NAT EIP: {{value}}",
+        natHelp:
+          "If you define an EIP for the NAT, it must be a real AWS Allocation ID (`eipalloc-...`), not a public IP.",
+      },
+      exportJson: "Export JSON",
+      viewPlan: "View plan",
+      applyRedeploy: "Apply redeploy",
+      deploy: "Deploy",
+    },
+    learningGuide: {
+      panel: {
+        title: "Modeling guide",
+        subtitle:
+          "Follow the steps to build and understand the topology before validating or deploying.",
+        progress: "Progress {{completed}}/{{total}}",
+        stats: {
+          segments: "Segments: {{count}}",
+          zones: "Zones: {{count}}",
+          routers: "Connectivity nodes: {{count}}",
+          directLinks: "Direct links: {{count}}",
+          hubRouting: "Hub routing: {{count}}",
+          workloads: "Workloads: {{count}}",
+        },
+        selectedElement: "Selected element",
+        neutralReading: "Neutral reading",
+        awsReading: "AWS translation",
+        conceptComparison: "Concept comparison",
+        neutralView: "Neutral view",
+        awsView: "AWS implementation view",
+        neutralLabel: "Neutral:",
+        awsLabel: "AWS:",
+        blockers: "Detected blockers",
+        openValidation: "Open validation",
+        openDeploy: "Open deploy",
+      },
+      steps: {
+        segment: { title: "Create base segment", description: "Define the main container of the lab." },
+        zones: { title: "Define zones", description: "Create at least one public and one private zone." },
+        workload: { title: "Add workload", description: "Add at least one instance to test connectivity." },
+        connectivity: {
+          title: "Connectivity between segments",
+          description: "Connect the segments with a connectivity node and its links.",
+          optional: "Optional in a single-segment lab.",
+        },
+        validate: { title: "Validate topology", description: "Run the simulation (Terraform plan) before deployment." },
+        deploy: { title: "Deploy on AWS", description: "Apply real infrastructure when the lab is validated." },
+      },
+      nextAction: {
+        completed: "Lab completed. You can review outputs and logs.",
+        running: "There is an execution in progress. Wait for the result before continuing.",
+        fixTopology: "Fix topology errors first to continue with validation.",
+        validate: "Run Validate to simulate the topology and review the plan before applying.",
+        deploy: "When you are satisfied with the simulation, run Deploy to create resources in AWS.",
+        nextStep: "Next step: {{title}}.",
+      },
+      contrast: {
+        vlanLines: {
+          subnets: "You are modeling {{count}} network zone(s) inside a logical lab.",
+          needsRouter: "Your lab requires routing between multiple network segments.",
+          singleDomain: "Your lab can be solved within a main domain.",
+          routesReady: "You already defined routes between segments to analyze connectivity.",
+          routesMissing: "You still have not defined explicit routes between segments.",
+        },
+        awsLines: {
+          vpcs: "This translates into {{vpcs}} VPC(s) and {{subnets}} subnet(s) in AWS.",
+          egress: "Egress connectivity: IGW {{igw}} / NAT {{nat}}.",
+          routers: "Routers in AWS mode: Peering {{peering}} / TGW {{tgw}}.",
+          routesReady: "Defined routes are transformed into route tables and links between VPCs.",
+          routesMissing: "Without explicit routes, AWS will only apply local connectivity per VPC.",
+          oneWayPairs:
+            "We detected {{count}} pair(s) with one-way routes; review the return path for bidirectional tests.",
+          noOneWayPairs: "No pairs with one-way routes were detected.",
+        },
+      },
+      concepts: {
+        segmentation: {
+          concept: "Segmentation",
+          vlan: "Logical segments and zones for practice",
+          aws: "VPCs and subnets with real CIDRs",
+        },
+        gateway: {
+          concept: "Gateway",
+          vlan: "Connectivity node of the lab",
+          aws: "Route tables + IGW/NAT/TGW/Peering",
+        },
+        hosts: {
+          concept: "Hosts",
+          vlan: "Machines/services in the topology",
+          aws: "EC2 instances and their interfaces",
+        },
+        validation: {
+          concept: "Validation",
+          vlan: "Topology rule verification",
+          aws: "Terraform plan before apply",
+        },
+      },
+      focus: {
+        element: "Element",
+        segmentSubtitle: "What it means in the neutral model and how it translates to AWS.",
+        internetEdgeOn: "Internet edge enabled",
+        internetEdgeOff: "No Internet edge",
+        managedEgressOn: "Managed egress enabled",
+        managedEgressOff: "No managed egress",
+        sshExposed: "SSH from a defined IP",
+        sshHidden: "SSH not exposed",
+        routerHub: "Central connectivity hub",
+        routerDirect: "Direct connectivity between pairs",
+        routerHubMode: "Hub routing mode",
+        routerDirectMode: "Direct links mode",
+        connectedSegments: "{{count}} connected segment(s)",
+        declaredPolicies: "{{count}} declared polic(y/ies)",
+        missingReturns: "{{count}} missing return(s)",
+        roundTripPolicies: "Round-trip policies consistent",
+        zoneSubtitle: "Internal zone inside a main segment.",
+        publicZone: "Public",
+        privateZone: "Private",
+        routeTable: "Table {{value}}",
+        workloadSubtitle: "Host where the practice materializes.",
+        publicIp: "With public IP",
+        privateOnly: "Private IP only",
+        defaultSubtitle: "Contextual explanation of the selected element.",
+        defaultLine:
+          "Select a main canvas element to see a more precise pedagogical reading.",
+      },
+    },
+  },
   onboarding: {
     waitingTarget:
       "Waiting for the element to appear on screen so we can highlight it.",
