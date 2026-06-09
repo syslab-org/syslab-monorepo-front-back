@@ -739,6 +739,294 @@ const es = {
       tourLabel: "Ver tour del plan",
     },
   },
+  canvas: {
+    feedback: {
+      outdatedTitle: "Canvas desactualizado respecto al plan",
+      outdatedDescription:
+        "Este canvas cambió desde la última validación asociada al plan. Si sigues editando, el plan dejará de representar exactamente lo que estás viendo en pantalla.",
+      viewPlan: "Ver plan",
+      revalidate: "Revalidar",
+      keepEditing: "Seguir editando",
+    },
+    createLab: {
+      error: "No se pudo crear el laboratorio.",
+      networkTitle: "Crear laboratorio de red",
+      networkSubtitle:
+        "Crea un laboratorio para modelar topologías de red y dejarlo listo para validación y despliegue. Define nombre, región y CIDR maestro.",
+      guidedTitle: "Crear laboratorio",
+      guidedSubtitle:
+        "Crea un laboratorio educativo guiado: modela topologías de red paso a paso y déjalo listo para una ejecución real.",
+      stepLabel: "Paso {{current}} de {{total}}",
+      guidedEyebrow: "Laboratorio guiado",
+    },
+    form: {
+      courseRequired: "Debes seleccionar un curso.",
+      stepOneTitle: "Paso 1: Configura el laboratorio",
+      stepOneDescription:
+        "Define el nombre, la región y el rango padre (CIDR). Con esto podremos guiar el resto del flujo (segmentos, zonas, workloads y pruebas).",
+      cidrTip:
+        "Consejo: usa un rango /16 para que tengas espacio cómodo para subredes (/24) sin pelearte con el IP plan.",
+      awsOnlyInfo:
+        "En este MVP el deploy real está habilitado para AWS. Otros providers se muestran como referencia de roadmap, pero aún no están disponibles para ejecución.",
+      cloudProvider: "Cloud provider",
+      useAwsHint:
+        "Para este MVP usa AWS si quieres desplegar infraestructura real.",
+      labTemplate: "Plantilla de laboratorio",
+      chooseTemplate: "Elige el caso de uso que quieres construir paso a paso.",
+      useRecommendedCidr: "Usar CIDR recomendado ({{value}})",
+      templateCanvasHint:
+        "Al crear el laboratorio, esta plantilla cargará un canvas inicial coherente con el caso elegido.",
+      customTemplateWarning:
+        "Esta plantilla fue preparada sobre el CIDR sugerido {{value}}. Si cambias el rango maestro, luego revisa en el canvas los CIDR de segmentos, subredes e IPs fijas para ajustarlos manualmente si hace falta.",
+      labName: "Nombre del laboratorio",
+      labNameWizardPlaceholder: "Ej: Lab-Ruteo-1",
+      labNamePlaceholder: "Ej: Laboratorio-Peering-1",
+      labNameHelp:
+        "Este nombre se verá en la lista y será la referencia principal del laboratorio.",
+      notesPlaceholder:
+        "Ej: Laboratorio para validar una VPC pública con bastion, pruebas SSH y evidencias para la defensa.",
+      courseSelectionRequired:
+        "Selecciona el curso al que se compartirá el laboratorio.",
+      courseOptional: "Opcional para administradores.",
+      cloudConnectionHelp:
+        "Puedes fijar una conexión AWS específica o dejar que el backend resuelva la personal del owner y luego la compartida del curso.",
+      accountLabel: "cuenta",
+      executionPreviewResolved:
+        "Ejecución prevista: {{name}}{{account}}. {{helper}}",
+      awsOnlyExecution:
+        "En este MVP solo AWS puede resolver una conexión ejecutable real.",
+      executionSource: {
+        explicit: "Se usará la conexión seleccionada explícitamente.",
+        ownerPersonalAuto:
+          "Auto resolverá primero la cuenta personal del owner.",
+        courseSharedAuto:
+          "Auto resolverá la cuenta compartida del curso.",
+        unresolved: "No hay una conexión ejecutable resuelta todavía.",
+      },
+      masterCidr: "Rango maestro (CIDR)",
+      masterCidrWizardPlaceholder: "Ej: 10.20.0.0/16",
+      masterCidrPlaceholder: "10.30.0.0/20",
+      masterCidrWizardHelp:
+        "Este será el bloque padre. Si usas plantilla y lo cambias, revisa luego el direccionamiento precargado en el canvas.",
+      masterCidrHelp:
+        "Rango padre del que se derivarán los segmentos y zonas.",
+      selectedRegion: "Región seleccionada: {{value}}",
+      continue: "Continuar",
+      providerStatus: {
+        ready: "Listo para validación y deploy",
+        planned: "Próximamente",
+        unknown: "Disponibilidad no confirmada",
+      },
+    },
+    deployDialog: {
+      exportError: "No se pudo exportar el plan. Revisa la consola.",
+      title: "Confirmar infraestructura",
+      primaryRedeploy: "Redeploy en AWS",
+      primaryDeploy: "Deploy en AWS",
+      revalidateRedeploy: "Revalidar redeploy",
+      validateDeploy: "Validar deploy",
+      validatingInfra: "Validando infraestructura...",
+      validatedSuccess:
+        "Infraestructura validada correctamente. Puedes desplegar o revisar el plan.",
+      validationError:
+        "Error durante la validación. Revisa los detalles antes de continuar.",
+      canvasOutdated:
+        "El canvas cambió desde la última validación. Debes validar nuevamente.",
+      busyValidating: "Validando infraestructura. Espera un momento...",
+      busyProcessing: "Procesando la operación. No cierres este modal todavía.",
+      busyDescription:
+        "Mientras corre esta acción, el modal queda bloqueado para evitar estados inconsistentes.",
+      redeployWarning:
+        "Esta validación se hizo sobre infraestructura ya activa. Si despliegas ahora, Terraform actualizará el stack existente en AWS y algunos cambios podrían reemplazar o eliminar recursos.",
+      chips: {
+        mainRedeploy: "Acción principal: REDEPLOY",
+        mainDeploy: "Acción principal: DEPLOY",
+        destroyAvailable: "Destroy disponible si el plan sigue activo",
+        destroyUnavailable: "Destroy no aplica hasta crear recursos",
+      },
+      risk: {
+        destructive:
+          "Terraform detectó cambios potencialmente destructivos o con reemplazo de recursos.",
+        caution:
+          "Terraform detectó actualizaciones sobre recursos existentes.",
+        safe: "Terraform detectó cambios aditivos sobre la infraestructura.",
+        sensitiveResources: "Recursos sensibles detectados:",
+      },
+      summaryTitle: "Resumen",
+      summary: {
+        provider: "Provider: {{value}}",
+        segments: "Segments: {{count}}",
+        zones: "Zones: {{count}}",
+        workloads: "Workloads: {{count}}",
+        directLinks: "Direct links: {{count}}",
+        hubs: "Hubs: {{count}}",
+        attachments: "Hub attachments: {{count}}",
+      },
+      postDeployHint:
+        "Después del deploy, valida conectividad en Plan Detail -> Pruebas con comandos de ping guiados entre segmentos.",
+      neutralTitle: "Intención neutral del laboratorio",
+      neutral: {
+        baseNetwork:
+          "La red base contiene {{segments}} segmento(s), {{zones}} zona(s) y {{workloads}} workload(s).",
+        exposure:
+          "Exposición del diseño: {{publicExposure}} segmento(s) públicos, {{privateExposure}} privados y {{mixedExposure}} mixtos.",
+        hubs:
+          "Conectividad modelada como {{hubs}} hub(s) central(es) con {{attachments}} attachment(s).",
+        directLinks:
+          "Conectividad modelada con {{directLinks}} enlace(s) directo(s) entre pares de segmentos.",
+        sshWarning:
+          "Acceso y salida: SSH externo declarado en {{vpcsWithSsh}} segmento(s), pero {{vpcsWithSshButNoPublicZones}} no tiene(n) zona pública para exponerlo. Además, {{isolatedExposure}} segmento(s) no declara(n) salida a internet.",
+        sshReady:
+          "Acceso y salida: SSH externo utilizable en {{vpcsWithEffectivePublicSsh}} segmento(s) y {{isolatedExposure}} segmento(s) sin salida a internet declarada.",
+      },
+      awsTitle: "Traducción AWS",
+      aws: {
+        created:
+          "AWS creará {{segments}} VPC(s), {{zones}} subnet(s) y {{workloads}} instancia(s).",
+        publicExposure:
+          "Exposición pública efectiva: IGW en {{vpcsWithIgw}} VPC(s), {{publicSubnets}} subnet(s) pública(s) y SSH externo utilizable en {{vpcsWithEffectivePublicSsh}} VPC(s).",
+        noPublicSubnets:
+          "Internet edge declarado en {{vpcsWithIgw}} VPC(s), pero no hay subnet(s) pública(s) para exponer workloads ni usar SSH externo directamente.",
+        privateEgress:
+          "Salida privada: NAT Gateway en {{vpcsWithNat}} VPC(s) para {{privateSubnets}} subnet(s) potencialmente privadas.",
+        centralRouting:
+          "Enrutamiento central: {{hubRouters}} hub(s) y {{hubAttachments}} attachment(s).",
+        directRouting:
+          "Enrutamiento por enlaces directos: {{directLinks}} enlace(s) declarados.",
+      },
+      segment: {
+        cidr: "CIDR: {{value}}",
+        region: "Región: {{value}}",
+        model: "Modelo: {{value}}",
+        awsVpc: "AWS: VPC",
+        igw: "IGW",
+        nat: "NAT",
+        natEip: "NAT EIP: {{value}}",
+        natHelp:
+          "Si defines una EIP para el NAT, debe ser un Allocation ID real de AWS (`eipalloc-...`), no una IP pública.",
+      },
+      exportJson: "Exportar JSON",
+      viewPlan: "Ver plan",
+      applyRedeploy: "Aplicar redeploy",
+      deploy: "Desplegar",
+    },
+    learningGuide: {
+      panel: {
+        title: "Guía de modelado",
+        subtitle:
+          "Sigue los pasos para construir y entender la topología antes de validar o desplegar.",
+        progress: "Progreso {{completed}}/{{total}}",
+        stats: {
+          segments: "Segmentos: {{count}}",
+          zones: "Zonas: {{count}}",
+          routers: "Nodos de conectividad: {{count}}",
+          directLinks: "Direct links: {{count}}",
+          hubRouting: "Hub routing: {{count}}",
+          workloads: "Workloads: {{count}}",
+        },
+        selectedElement: "Elemento seleccionado",
+        neutralReading: "Lectura neutral",
+        awsReading: "Traducción AWS",
+        conceptComparison: "Comparación conceptual",
+        neutralView: "Vista neutral",
+        awsView: "Vista implementación AWS",
+        neutralLabel: "Neutral:",
+        awsLabel: "AWS:",
+        blockers: "Bloqueos detectados",
+        openValidation: "Abrir validación",
+        openDeploy: "Abrir despliegue",
+      },
+      steps: {
+        segment: { title: "Crear segmento base", description: "Define el contenedor principal del laboratorio." },
+        zones: { title: "Definir zonas", description: "Crea al menos una zona pública y una privada." },
+        workload: { title: "Agregar workload", description: "Añade al menos una instancia para probar conectividad." },
+        connectivity: {
+          title: "Conectividad entre segmentos",
+          description: "Conecta los segmentos con un nodo de conectividad y sus enlaces.",
+          optional: "Opcional en laboratorio de un solo segmento.",
+        },
+        validate: { title: "Validar topología", description: "Ejecuta simulación (Terraform plan) antes del despliegue." },
+        deploy: { title: "Desplegar en AWS", description: "Aplica infraestructura real cuando el laboratorio esté validado." },
+      },
+      nextAction: {
+        completed: "Laboratorio completado. Puedes revisar outputs y logs.",
+        running: "Hay una ejecución en curso. Espera el resultado antes de seguir.",
+        fixTopology: "Corrige primero los errores de topología para continuar con la validación.",
+        validate: "Ejecuta Validar para simular la topología y revisar el plan antes de aplicar.",
+        deploy: "Cuando estés conforme con la simulación, ejecuta Desplegar para crear recursos en AWS.",
+        nextStep: "Siguiente paso: {{title}}.",
+      },
+      contrast: {
+        vlanLines: {
+          subnets: "Estás modelando {{count}} zona(s) de red dentro de un laboratorio lógico.",
+          needsRouter: "Tu práctica requiere enrutar entre múltiples segmentos de red.",
+          singleDomain: "Tu práctica puede resolverse en un dominio principal.",
+          routesReady: "Ya definiste rutas entre segmentos para analizar conectividad.",
+          routesMissing: "Aún no definiste rutas explícitas entre segmentos.",
+        },
+        awsLines: {
+          vpcs: "Esto se traduce a {{vpcs}} VPC(s) y {{subnets}} subnet(s) en AWS.",
+          egress: "Conectividad de salida: IGW {{igw}} / NAT {{nat}}.",
+          routers: "Routers en modo AWS: Peering {{peering}} / TGW {{tgw}}.",
+          routesReady: "Las rutas definidas se transforman en route tables y enlaces entre VPCs.",
+          routesMissing: "Sin rutas explícitas, AWS solo aplicará conectividad local por VPC.",
+          oneWayPairs:
+            "Detectamos {{count}} par(es) con ruta de solo ida; revisa retorno para pruebas bidireccionales.",
+          noOneWayPairs: "No se detectan pares con rutas solo de ida.",
+        },
+      },
+      concepts: {
+        segmentation: {
+          concept: "Segmentación",
+          vlan: "Segmentos y zonas lógicas para práctica",
+          aws: "VPC y subnets con CIDR reales",
+        },
+        gateway: {
+          concept: "Gateway",
+          vlan: "Nodo de conectividad del laboratorio",
+          aws: "Route tables + IGW/NAT/TGW/Peering",
+        },
+        hosts: {
+          concept: "Hosts",
+          vlan: "Equipos/servicios en la topología",
+          aws: "Instancias EC2 y sus interfaces",
+        },
+        validation: {
+          concept: "Validación",
+          vlan: "Comprobación de reglas de topología",
+          aws: "Terraform plan antes de apply",
+        },
+      },
+      focus: {
+        element: "Elemento",
+        segmentSubtitle: "Qué significa en el modelo neutral y cómo se traduce en AWS.",
+        internetEdgeOn: "Internet edge activo",
+        internetEdgeOff: "Sin internet edge",
+        managedEgressOn: "Managed egress activo",
+        managedEgressOff: "Sin managed egress",
+        sshExposed: "SSH desde IP definida",
+        sshHidden: "SSH no expuesto",
+        routerHub: "Hub central de conectividad",
+        routerDirect: "Conectividad directa entre pares",
+        routerHubMode: "Modo hub routing",
+        routerDirectMode: "Modo direct links",
+        connectedSegments: "{{count}} segmento(s) conectados",
+        declaredPolicies: "{{count}} policy(s) declaradas",
+        missingReturns: "{{count}} retorno(s) faltante(s)",
+        roundTripPolicies: "Policies ida/vuelta coherentes",
+        zoneSubtitle: "Zona interna dentro de un segmento principal.",
+        publicZone: "Pública",
+        privateZone: "Privada",
+        routeTable: "Tabla {{value}}",
+        workloadSubtitle: "Host desde donde se materializa la práctica.",
+        publicIp: "Con IP pública",
+        privateOnly: "Solo IP privada",
+        defaultSubtitle: "Explicación contextual del elemento seleccionado.",
+        defaultLine:
+          "Selecciona un elemento principal del canvas para ver una lectura pedagógica más precisa.",
+      },
+    },
+  },
   onboarding: {
     waitingTarget:
       "Estamos esperando que el elemento aparezca en pantalla para destacarlo.",

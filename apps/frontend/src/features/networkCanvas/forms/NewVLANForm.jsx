@@ -15,9 +15,11 @@ import {
 } from '@mui/material';
 import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 import { VLAN_FORM } from "@/features/networkCanvas/utils/constants";
 import { LAB_TEMPLATES } from '@/features/networkCanvas/utils/labTemplates';
 import { CLOUD_AWS_VALUE } from '@/shared/constants';
+import { translate as tr } from '@/shared/i18n';
 import CidrLearningGuideButton from '@/features/networkCanvas/ui/CidrLearningGuideButton';
 import { useFormValidationSchema } from './validations/useFormValidations';
 
@@ -44,13 +46,13 @@ const normalizeProviderValue = (raw) => {
 const parseAndValidateCidr = (raw) => {
   const value = String(raw || '').trim();
   if (!value.includes('/')) {
-    return { ok: false, message: 'Usa formato CIDR, ej: 10.0.0.0/16' };
+    return { ok: false, message: tr('labs.cidrErrors.format') };
   }
   const [base, prefixStr] = value.split('/');
   const prefix = Number(prefixStr);
 
   if (Number.isNaN(prefix) || prefix < 8 || prefix > 30) {
-    return { ok: false, message: 'Prefijo inválido (esperado /8 a /30)' };
+    return { ok: false, message: tr('labs.cidrErrors.prefix') };
   }
 
   return { ok: true, base: base.trim(), prefix };
@@ -64,16 +66,16 @@ const providerLabels = {
 }
 
 const providerStatusLabels = {
-  ready: 'Listo para validación y deploy',
-  planned: 'Próximamente',
-  unknown: 'Disponibilidad no confirmada',
+  ready: 'canvas.form.providerStatus.ready',
+  planned: 'canvas.form.providerStatus.planned',
+  unknown: 'canvas.form.providerStatus.unknown',
 }
 
 const executionSourceLabels = {
-  explicit: 'Se usará la conexión seleccionada explícitamente.',
-  owner_personal_auto: 'Auto resolverá primero la cuenta personal del owner.',
-  course_shared_auto: 'Auto resolverá la cuenta compartida del curso.',
-  unresolved: 'No hay una conexión ejecutable resuelta todavía.',
+  explicit: 'canvas.form.executionSource.explicit',
+  owner_personal_auto: 'canvas.form.executionSource.ownerPersonalAuto',
+  course_shared_auto: 'canvas.form.executionSource.courseSharedAuto',
+  unresolved: 'canvas.form.executionSource.unresolved',
 };
 
 // eslint-disable-next-line react/prop-types
@@ -88,6 +90,7 @@ const NewVLANForm = ({
   providerCapabilities = [],
   defaultProvider = CLOUD_AWS_VALUE,
 }) => {
+  const { t } = useTranslation();
   const validationSchema = useFormValidationSchema(VLAN_FORM, null, null, {}, true);
 
   const defaultCidr = useMemo(() => {
@@ -195,7 +198,7 @@ const NewVLANForm = ({
         status: 'missing',
         name: '',
         accountId: '',
-        helper: 'En este MVP solo AWS puede resolver una conexión ejecutable real.',
+        helper: 'canvas.form.awsOnlyExecution',
       };
     }
 
@@ -246,7 +249,7 @@ const NewVLANForm = ({
 
   const onSubmit = (data) => {
     if (requireCourseSelection && !data.courseId) {
-      setError('courseId', { type: 'manual', message: 'Debes seleccionar un curso.' });
+      setError('courseId', { type: 'manual', message: t('canvas.form.courseRequired') });
       return;
     }
     const cidrCheck = parseAndValidateCidr(data.cidrBlock);
@@ -297,11 +300,10 @@ const NewVLANForm = ({
         {wizardMode && (
           <Box>
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-              Paso 1: Configura el laboratorio
+              {t('canvas.form.stepOneTitle')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Define el nombre, la región y el rango padre (CIDR). Con esto podremos guiar el resto del flujo
-              (segmentos, zonas, workloads y pruebas).
+              {t('canvas.form.stepOneDescription')}
             </Typography>
           </Box>
         )}
@@ -314,27 +316,24 @@ const NewVLANForm = ({
               <CidrLearningGuideButton buttonSx={{ whiteSpace: 'nowrap' }} />
             )}
           >
-            Consejo: usa un rango /16 para que tengas espacio cómodo para subredes (/24) sin pelearte con el IP plan.
+            {t('canvas.form.cidrTip')}
           </Alert>
         )}
 
         {wizardMode && (
           <Alert severity="info" sx={{ alignItems: 'center' }}>
-            En este MVP el deploy real está habilitado para
-            {' '}
-            <b>AWS</b>
-            . Otros providers se muestran como referencia de roadmap, pero aún no están disponibles para ejecución.
+            {t('canvas.form.awsOnlyInfo')}
           </Alert>
         )}
 
         {/* Cloud Provider */}
         <FormControl fullWidth>
-          <InputLabel id="select-cloud-label">Cloud Provider</InputLabel>
+          <InputLabel id="select-cloud-label">{t('canvas.form.cloudProvider')}</InputLabel>
           <Select
             labelId="select-cloud-label"
             id="select-cloud"
             {...register('cloudProvider')}
-            label="Cloud Provider"
+            label={t('canvas.form.cloudProvider')}
             defaultValue={CLOUD_AWS_VALUE}
           >
             {normalizedProviderCapabilities.map((providerCapability) => (
@@ -345,26 +344,26 @@ const NewVLANForm = ({
               >
                 {providerLabels[providerCapability.provider] || providerCapability.provider.toUpperCase()}
                 {' '}
-                {providerCapability.status !== 'ready' ? `(Próximamente)` : ''}
+                {providerCapability.status !== 'ready' ? `(${t('canvas.form.providerStatus.planned')})` : ''}
               </MenuItem>
             ))}
           </Select>
           <FormHelperText>
             {selectedProviderCapability.status === 'ready'
-              ? `${providerLabels[selectedProviderCapability.provider] || selectedProviderCapability.provider.toUpperCase()}: ${providerStatusLabels[selectedProviderCapability.status]}.`
-              : `${providerLabels[selectedProviderCapability.provider] || selectedProviderCapability.provider.toUpperCase()}: ${providerStatusLabels[selectedProviderCapability.status]}. Para este MVP usa AWS si quieres desplegar infraestructura real.`}
+              ? `${providerLabels[selectedProviderCapability.provider] || selectedProviderCapability.provider.toUpperCase()}: ${t(providerStatusLabels[selectedProviderCapability.status])}.`
+              : `${providerLabels[selectedProviderCapability.provider] || selectedProviderCapability.provider.toUpperCase()}: ${t(providerStatusLabels[selectedProviderCapability.status])}. ${t('canvas.form.useAwsHint')}`}
           </FormHelperText>
         </FormControl>
 
         {/* Template only in wizard */}
         {wizardMode && (
           <FormControl fullWidth>
-            <InputLabel id="lab-template-label">Plantilla de laboratorio</InputLabel>
+            <InputLabel id="lab-template-label">{t('canvas.form.labTemplate')}</InputLabel>
             <Select
               labelId="lab-template-label"
               id="lab-template"
               {...register('labTemplate')}
-              label="Plantilla de laboratorio"
+              label={t('canvas.form.labTemplate')}
               defaultValue="mvp1-single-vpc-bastion-private"
             >
               {LAB_TEMPLATES.map(t => (
@@ -374,53 +373,51 @@ const NewVLANForm = ({
               ))}
             </Select>
             <FormHelperText>
-              {selectedTemplate?.desc || 'Elige el caso de uso que quieres construir paso a paso.'}
+              {selectedTemplate?.desc || t('canvas.form.chooseTemplate')}
             </FormHelperText>
 
             {selectedTemplate?.recommendedCidr && (
               <Box sx={{ mt: 1 }}>
                 <Button size="small" variant="outlined" onClick={applyTemplateCidr}>
-                  Usar CIDR recomendado ({selectedTemplate.recommendedCidr})
+                  {t('canvas.form.useRecommendedCidr', { value: selectedTemplate.recommendedCidr })}
                 </Button>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-                  Al crear el laboratorio, esta plantilla cargará un canvas inicial coherente con el caso elegido.
+                  {t('canvas.form.templateCanvasHint')}
                 </Typography>
               </Box>
             )}
 
             {hasCustomTemplateCidr && (
               <Alert severity="warning" sx={{ mt: 1.25 }}>
-                Esta plantilla fue preparada sobre el CIDR sugerido
-                {' '}
-                <b>{selectedTemplate.recommendedCidr}</b>
-                . Si cambias el rango maestro, luego revisa en el canvas los CIDR de segmentos,
-                subredes e IPs fijas para ajustarlos manualmente si hace falta.
+                {t('canvas.form.customTemplateWarning', {
+                  value: selectedTemplate.recommendedCidr,
+                })}
               </Alert>
             )}
           </FormControl>
         )}
 
         <TextField
-          label="Nombre del laboratorio"
-          placeholder={wizardMode ? 'Ej: Lab-Ruteo-1' : 'Ej: Laboratorio-Peering-1'}
+          label={t('canvas.form.labName')}
+          placeholder={wizardMode ? t('canvas.form.labNameWizardPlaceholder') : t('canvas.form.labNamePlaceholder')}
           {...register('vlanName')}
           error={!!errors.vlanName}
           helperText={
             errors.vlanName?.message ||
-            'Este nombre se verá en la lista y será la referencia principal del laboratorio.'
+            t('canvas.form.labNameHelp')
           }
           fullWidth
           autoComplete="off"
         />
 
         <TextField
-          label="Descripción, observaciones o notas"
-          placeholder="Ej: Laboratorio para validar una VPC pública con bastion, pruebas SSH y evidencias para la defensa."
+          label={t('labs.notesLabel')}
+          placeholder={t('canvas.form.notesPlaceholder')}
           {...register('labNotes')}
           error={!!errors.labNotes}
           helperText={
             errors.labNotes?.message ||
-            'Opcional. Úsalo para explicar el objetivo del laboratorio, dejar observaciones operativas o anotar cualquier detalle importante.'
+            t('labs.notesHelp')
           }
           fullWidth
           multiline
@@ -430,15 +427,15 @@ const NewVLANForm = ({
 
         {availableCourses.length > 0 && (
           <FormControl fullWidth error={requireCourseSelection && !watch('courseId')}>
-            <InputLabel id="course-select-label">Curso</InputLabel>
+            <InputLabel id="course-select-label">{t('labels.course')}</InputLabel>
             <Select
               labelId="course-select-label"
               id="course-select"
               {...register('courseId')}
-              label="Curso"
+              label={t('labels.course')}
               defaultValue=""
             >
-              {!requireCourseSelection && <MenuItem value="">Sin curso</MenuItem>}
+              {!requireCourseSelection && <MenuItem value="">{t('common.noCourse')}</MenuItem>}
               {availableCourses.map((course) => (
                 <MenuItem key={course.id} value={course.id}>
                   {course.name}
@@ -447,31 +444,31 @@ const NewVLANForm = ({
             </Select>
             <FormHelperText>
               {requireCourseSelection
-                ? 'Selecciona el curso al que se compartirá el laboratorio.'
-                : 'Opcional para administradores.'}
+                ? t('canvas.form.courseSelectionRequired')
+                : t('canvas.form.courseOptional')}
             </FormHelperText>
           </FormControl>
         )}
 
         {availableCloudConnections.length > 0 && (
           <FormControl fullWidth>
-            <InputLabel id="cloud-connection-label">Conexión cloud</InputLabel>
+            <InputLabel id="cloud-connection-label">{t('labs.cloudConnection')}</InputLabel>
             <Select
               labelId="cloud-connection-label"
               id="cloud-connection"
               {...register('cloudConnectionId')}
-              label="Conexión cloud"
+              label={t('labs.cloudConnection')}
               defaultValue=""
             >
-              <MenuItem value="">Auto-seleccionar por owner/curso</MenuItem>
+              <MenuItem value="">{t('labs.autoSelectOwnerCourse')}</MenuItem>
               {filteredCloudConnections.map((connection) => (
                 <MenuItem key={connection.id} value={connection.id}>
-                  {connection.name} · {connection.scope === 'course_shared' ? 'curso' : 'personal'}
+                  {connection.name} · {connection.scope === 'course_shared' ? t('labs.connectionScopeCourse') : t('labs.connectionScopePersonal')}
                 </MenuItem>
               ))}
             </Select>
             <FormHelperText>
-              Puedes fijar una conexión AWS específica o dejar que el backend resuelva la personal del owner y luego la compartida del curso.
+              {t('canvas.form.cloudConnectionHelp')}
             </FormHelperText>
           </FormControl>
         )}
@@ -481,20 +478,24 @@ const NewVLANForm = ({
           variant="outlined"
         >
           {executionPreview.status === 'resolved'
-            ? `Ejecución prevista: ${executionPreview.name}${executionPreview.accountId ? ` · cuenta ${executionPreview.accountId}` : ''}. ${executionPreview.helper}`
-            : executionPreview.helper}
+            ? t('canvas.form.executionPreviewResolved', {
+              name: executionPreview.name,
+              account: executionPreview.accountId ? ` · ${t('canvas.form.accountLabel')} ${executionPreview.accountId}` : '',
+              helper: t(executionPreview.helper),
+            })
+            : t(executionPreview.helper)}
         </Alert>
 
         <TextField
-          label="Rango maestro (CIDR)"
-          placeholder={wizardMode ? 'Ej: 10.20.0.0/16' : '10.30.0.0/20'}
+          label={t('canvas.form.masterCidr')}
+          placeholder={wizardMode ? t('canvas.form.masterCidrWizardPlaceholder') : t('canvas.form.masterCidrPlaceholder')}
           {...register('cidrBlock')}
           error={!!errors.cidrBlock}
           helperText={
             errors.cidrBlock?.message ||
             (wizardMode
-              ? 'Este será el bloque padre. Si usas plantilla y lo cambias, revisa luego el direccionamiento precargado en el canvas.'
-              : 'Rango padre del que se derivarán los segmentos y zonas')
+              ? t('canvas.form.masterCidrWizardHelp')
+              : t('canvas.form.masterCidrHelp'))
           }
           fullWidth
           autoComplete="off"
@@ -502,12 +503,12 @@ const NewVLANForm = ({
 
         {/* Region */}
         <FormControl fullWidth>
-          <InputLabel id="select-region-label">Región</InputLabel>
+          <InputLabel id="select-region-label">{t('labs.region')}</InputLabel>
           <Select
             labelId="select-region-label"
             id="select-region"
             {...register('region')}
-            label="Región"
+            label={t('labs.region')}
             defaultValue="us-east-1"
           >
             <MenuItem value="us-east-1">US East (N. Virginia)</MenuItem>
@@ -515,12 +516,12 @@ const NewVLANForm = ({
             <MenuItem value="eu-west-1">EU (Ireland)</MenuItem>
           </Select>
           <FormHelperText>
-            Región seleccionada: <b>{region}</b>
+            {t('canvas.form.selectedRegion', { value: region })}
           </FormHelperText>
         </FormControl>
 
         <Button type="submit" variant="contained" color="primary">
-          {wizardMode ? 'Continuar' : 'Crear laboratorio'}
+          {wizardMode ? t('canvas.form.continue') : t('labs.createLab')}
         </Button>
       </Stack>
 
