@@ -1127,6 +1127,7 @@ export default function PlanDetailPage() {
     plan?.payload?.canvasId ||
     plan?.lab?.id ||
     null;
+  const labNotes = String(plan?.lab?.notes || '').trim();
   const resolvedExecutionTarget = safeObject(plan?.resolved_execution_target);
   const hasResolvedExecutionTarget = Object.keys(resolvedExecutionTarget).length > 0;
   const lastApplyContext = safeObject(plan?.last_apply_context);
@@ -1840,6 +1841,25 @@ export default function PlanDetailPage() {
             <Alert severity={actionAvailability.severity} sx={{ mt: 2 }}>
               {actionAvailability.text}
             </Alert>
+          )}
+
+          {labNotes && (
+            <Paper
+              variant="outlined"
+              sx={{
+                mt: 2,
+                p: 2,
+                borderRadius: 3,
+                bgcolor: 'rgba(255,255,255,0.72)',
+              }}
+            >
+              <Typography variant="subtitle2" sx={{ mb: 0.75, fontWeight: 700 }}>
+                Notas del laboratorio
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                {labNotes}
+              </Typography>
+            </Paper>
           )}
 
           {isRunning && (

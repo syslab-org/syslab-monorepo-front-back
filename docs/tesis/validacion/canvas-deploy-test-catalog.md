@@ -85,6 +85,7 @@ Este flujo se repite en casi todos los casos.
 3. Define:
    - `Cloud Provider`: `AWS`
    - `Nombre del laboratorio`
+   - `Descripcion, observaciones o notas`, usando el texto sugerido del caso cuando exista
    - `Curso`, si el caso es academico
    - `Conexión cloud`, preferiblemente explicita para la prueba
    - `Rango maestro (CIDR)`
@@ -231,6 +232,12 @@ Resultado esperado:
 Objetivo:
 - demostrar el caso minimo con una sola VPC, una zona publica y un bastion.
 
+Nombre sugerido del laboratorio:
+- `lab-single-public`
+
+Descripcion sugerida del laboratorio:
+- Laboratorio base con una VPC publica, una subnet publica y un bastion EC2 para validar el flujo minimo de modelado, validacion y deploy en AWS.
+
 Configuracion recomendada:
 - actor: alumno
 - conexion: `personal`
@@ -276,6 +283,12 @@ Evidencia clave:
 
 Objetivo:
 - demostrar separacion entre bastion publica, workload privada y salida gestionada.
+
+Nombre sugerido del laboratorio:
+- `lab-single-nat`
+
+Descripcion sugerida del laboratorio:
+- Laboratorio con una VPC que combina subnet publica, subnet privada y NAT Gateway para demostrar salida gestionada desde workloads privados.
 
 Configuracion recomendada:
 - actor: alumno o docente
@@ -329,6 +342,12 @@ Evidencia clave:
 Objetivo:
 - tener una linea base con dos segmentos sin conectividad entre si.
 
+Nombre sugerido del laboratorio:
+- `lab-two-vpcs-isolated`
+
+Descripcion sugerida del laboratorio:
+- Laboratorio con dos VPCs independientes y sin conectividad entre ellas, usado como linea base para comparar escenarios con peering o TGW.
+
 Configuracion recomendada:
 - actor: alumno o docente
 - conexion: cualquiera valida
@@ -359,6 +378,12 @@ Resultado esperado:
 
 Objetivo:
 - demostrar conectividad `direct links` correcta entre dos segmentos.
+
+Nombre sugerido del laboratorio:
+- `lab-peering-valid`
+
+Descripcion sugerida del laboratorio:
+- Laboratorio con dos VPCs unidas por peering bidireccional para validar rutas de ida y vuelta y conectividad entre bastiones.
 
 Configuracion recomendada:
 - actor: alumno
@@ -393,6 +418,12 @@ Resultado esperado:
 
 Objetivo:
 - mostrar que algunos pares pueden quedar conectados y otros aislados.
+
+Nombre sugerido del laboratorio:
+- `lab-peering-partial`
+
+Descripcion sugerida del laboratorio:
+- Laboratorio con tres VPCs y conectividad parcial por peering, donde algunos pares se comunican y otros permanecen aislados.
 
 Configuracion recomendada:
 - actor: docente o alumno
@@ -432,6 +463,12 @@ Resultado esperado:
 Objetivo:
 - demostrar un caso multipunto con `Transit Gateway`.
 
+Nombre sugerido del laboratorio:
+- `lab-tgw-full-mesh`
+
+Descripcion sugerida del laboratorio:
+- Laboratorio multipunto con tres VPCs conectadas mediante Transit Gateway para demostrar hub routing y alcance entre todos los segmentos.
+
 Configuracion recomendada:
 - actor: docente
 - conexion: `course_shared`
@@ -469,6 +506,12 @@ Resultado esperado:
 Objetivo:
 - demostrar un caso tecnicamente valido pero pedagogicamente debil.
 
+Nombre sugerido del laboratorio:
+- `lab-public-only-nat`
+
+Descripcion sugerida del laboratorio:
+- Laboratorio con una VPC publica y NAT habilitado sin subnets privadas, util para mostrar un caso valido pero poco recomendable en terminos de diseno.
+
 Paso a paso:
 1. Crea un lab con una sola VPC.
 2. Configura el segmento con:
@@ -489,6 +532,12 @@ Resultado esperado:
 Objetivo:
 - comprobar que la plataforma detecta solapamiento de CIDR dentro de una misma VPC.
 
+Nombre sugerido del laboratorio:
+- `lab-overlap-invalid`
+
+Descripcion sugerida del laboratorio:
+- Laboratorio de validacion negativa para comprobar que el sistema bloquea subnets solapadas dentro de una misma VPC antes del deploy.
+
 Paso a paso:
 1. Crea un lab con `CIDR = 10.80.0.0/16`.
 2. Crea `VPC-A = 10.80.0.0/16`.
@@ -505,6 +554,12 @@ Resultado esperado:
 Objetivo:
 - comprobar que un peering directo exige ida y vuelta.
 
+Nombre sugerido del laboratorio:
+- `lab-peering-one-way-invalid`
+
+Descripcion sugerida del laboratorio:
+- Laboratorio de validacion negativa para demostrar que un peering directo incompleto, sin ruta de retorno, no debe permitirse.
+
 Paso a paso:
 1. Construye el caso C-04.
 2. En el router, deja solo una ruta:
@@ -519,6 +574,12 @@ Resultado esperado:
 
 Objetivo:
 - comprobar que no se pueda activar NAT sin una subnet publica donde alojarlo.
+
+Nombre sugerido del laboratorio:
+- `lab-private-only-egress-invalid`
+
+Descripcion sugerida del laboratorio:
+- Laboratorio de validacion negativa para verificar que no se puede activar managed egress cuando la VPC no tiene una subnet publica apta para NAT.
 
 Paso a paso:
 1. Crea una sola VPC.
@@ -535,6 +596,12 @@ Resultado esperado:
 
 Objetivo:
 - demostrar separacion entre revision academica y autoridad cloud real.
+
+Nombre sugerido del laboratorio:
+- `lab-student-personal-blocked-for-teacher`
+
+Descripcion sugerida del laboratorio:
+- Laboratorio de permisos donde un alumno usa una conexion personal y el docente solo puede validar, pero no ejecutar apply ni destroy.
 
 Preparacion:
 - alumno con conexion `personal`
@@ -554,6 +621,12 @@ Resultado esperado:
 
 Objetivo:
 - demostrar que el docente si puede operar sobre infraestructura del curso.
+
+Nombre sugerido del laboratorio:
+- `lab-course-shared-teacher-apply`
+
+Descripcion sugerida del laboratorio:
+- Laboratorio de permisos con conexion course_shared, preparado para demostrar que el docente si puede operar infraestructura asociada al curso.
 
 Preparacion:
 - curso con conexion `course_shared` valida
@@ -578,6 +651,12 @@ Usa preferiblemente C-04 como laboratorio base para estos cambios, porque ya exi
 Cambio:
 - `VPC-A -> VPC-A-V2`
 
+Laboratorio base sugerido:
+- `lab-peering-valid`
+
+Descripcion sugerida del laboratorio base:
+- Laboratorio con dos VPCs y peering bidireccional, reutilizado como base para probar cambios seguros y redeploys controlados sin rehacer el escenario completo.
+
 Resultado esperado:
 - `safe`
 - sin reemplazo destructivo de SG ni instancias
@@ -587,6 +666,12 @@ Resultado esperado:
 Cambio:
 - sustituir la IP publica autorizada por otra `/32`
 
+Laboratorio base sugerido:
+- `lab-peering-valid`
+
+Descripcion sugerida del laboratorio base:
+- Laboratorio con dos VPCs y peering bidireccional, reutilizado como base para probar cambios seguros y redeploys controlados sin rehacer el escenario completo.
+
 Resultado esperado:
 - `safe`
 - cambios `in-place` sobre `Security Groups`
@@ -595,6 +680,12 @@ Resultado esperado:
 
 Cambio:
 - `t2.micro -> t2.small`
+
+Laboratorio base sugerido:
+- `lab-peering-valid`
+
+Descripcion sugerida del laboratorio base:
+- Laboratorio con dos VPCs y peering bidireccional, reutilizado como base para probar cambios seguros y redeploys controlados sin rehacer el escenario completo.
 
 Resultado esperado:
 - `safe con impacto operativo`
@@ -606,6 +697,12 @@ Resultado esperado:
 Cambio:
 - por ejemplo `10.40.1.10 -> 10.40.1.20`
 
+Laboratorio base sugerido:
+- `lab-peering-valid`
+
+Descripcion sugerida del laboratorio base:
+- Laboratorio con dos VPCs y peering bidireccional, reutilizado como base para probar cambios seguros y redeploys controlados sin rehacer el escenario completo.
+
 Resultado esperado:
 - reemplazo de la instancia
 - nuevo `instance_id`
@@ -615,6 +712,12 @@ Resultado esperado:
 
 Cambio:
 - por ejemplo `10.40.1.0/24 -> 10.40.2.0/24`
+
+Laboratorio base sugerido:
+- `lab-peering-valid`
+
+Descripcion sugerida del laboratorio base:
+- Laboratorio con dos VPCs y peering bidireccional, reutilizado como base para probar cambios seguros y redeploys controlados sin rehacer el escenario completo.
 
 Resultado esperado:
 - reemplazo de subnet
@@ -626,6 +729,12 @@ Resultado esperado:
 Cambio:
 - reemplazar `Direct links` por `Hub routing`
 
+Laboratorio base sugerido:
+- `lab-peering-valid`
+
+Descripcion sugerida del laboratorio base:
+- Laboratorio con dos VPCs y peering bidireccional, reutilizado como base para probar cambios seguros y redeploys controlados sin rehacer el escenario completo.
+
 Resultado esperado:
 - destruccion solo de conectividad anterior
 - creacion de `TGW`, attachments y rutas
@@ -636,6 +745,12 @@ Resultado esperado:
 Cambio:
 - eliminar el router o dejar `links = []`
 
+Laboratorio base sugerido:
+- `lab-peering-valid`
+
+Descripcion sugerida del laboratorio base:
+- Laboratorio con dos VPCs y peering bidireccional, reutilizado como base para probar cambios seguros y redeploys controlados sin rehacer el escenario completo.
+
 Resultado esperado:
 - eliminacion de `TGW` y rutas
 - infraestructura base conservada
@@ -644,6 +759,12 @@ Resultado esperado:
 
 Objetivo:
 - demostrar que el laboratorio no deja costo abierto.
+
+Laboratorio base sugerido:
+- `lab-peering-valid`
+
+Descripcion sugerida del laboratorio base:
+- Laboratorio con dos VPCs y peering bidireccional, reutilizado como base para probar cambios seguros y redeploys controlados sin rehacer el escenario completo.
 
 Pasos:
 1. Abre `Plan Detail` del laboratorio activo.

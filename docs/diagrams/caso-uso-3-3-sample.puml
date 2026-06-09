@@ -1,0 +1,42 @@
+@startuml
+left to right direction
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+actor Usuario
+
+rectangle "Capa de presentación" {
+  component "Frontend\nReact + Vite\nCanvas visual" as FRONTEND
+}
+
+rectangle "Capa lógica" {
+  component "Backend API\nDjango + DRF" as BACKEND
+  component "Gestión de laboratorios,\nplanes, usuarios y\nconexiones cloud" as LOGIC
+  component "Compilación a\npayload AWS" as COMPILER
+  database "PostgreSQL" as DB
+  collections "Redis" as REDIS
+}
+
+rectangle "Capa de aprovisionamiento" {
+  component "Celery" as CELERY
+  component "Terraform" as TF
+  cloud "AWS" as AWS
+}
+
+Usuario --> FRONTEND : Diseña y consulta
+FRONTEND --> BACKEND : Envía laboratorio /\nsolicita validación y despliegue
+
+BACKEND --> LOGIC : Validación y control
+LOGIC --> DB : Persistencia
+BACKEND --> COMPILER : Preparación de ejecución
+BACKEND --> REDIS : Encola tareas
+
+REDIS <--> CELERY : Cola de tareas
+CELERY --> TF : plan / apply / destroy
+TF --> AWS : Aprovisiona infraestructura
+
+CELERY --> BACKEND : Estado, logs y outputs
+BACKEND --> FRONTEND : Resultados y seguimiento
+
+@enduml

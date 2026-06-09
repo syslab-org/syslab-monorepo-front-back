@@ -246,6 +246,7 @@ class PlanListSerializer(serializers.ModelSerializer):
         return {
             "id": str(obj.lab_id),
             "name": obj.lab.name,
+            "notes": obj.lab.notes,
             "owner_user": UserSummarySerializer(obj.lab.owner_user).data if getattr(obj.lab, "owner_user", None) else None,
             "course": CourseSummarySerializer(obj.lab.course).data if getattr(obj.lab, "course", None) else None,
             "visibility_scope": obj.lab.visibility_scope,
@@ -336,6 +337,7 @@ class PlanDetailSerializer(serializers.ModelSerializer):
         return {
             "id": str(obj.lab_id),
             "name": obj.lab.name,
+            "notes": obj.lab.notes,
             "owner_user": UserSummarySerializer(obj.lab.owner_user).data if getattr(obj.lab, "owner_user", None) else None,
             "course": CourseSummarySerializer(obj.lab.course).data if getattr(obj.lab, "course", None) else None,
             "visibility_scope": obj.lab.visibility_scope,

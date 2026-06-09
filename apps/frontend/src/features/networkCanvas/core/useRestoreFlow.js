@@ -44,6 +44,7 @@ const normalizeFetchedLab = (labData) => {
     prefixLength: labData.prefix_length ?? labData.metadata?.prefixLength ?? null,
     planId: labData.metadata?.planId || null,
     labName: labData.name || null,
+    labNotes: labData.notes || "",
     labRegion: labData.region || null,
     targetProvider: labData.target_provider || 'aws',
     resolvedExecutionTarget: labData.resolved_execution_target || null,
@@ -66,6 +67,7 @@ const useRestoreFlow = ({
     setMasterCidrBlock,
     setPrefixLength,
     setLabName,
+    setLabNotes,
     setLabRegion,
     setTargetProvider,
     setResolvedExecutionTarget,
@@ -85,10 +87,11 @@ const useRestoreFlow = ({
         return;
       }
 
-      const { flow: fetchedFlow, cidrBlock, prefixLength, planId, labName, labRegion, targetProvider, resolvedExecutionTarget } = normalized;
+      const { flow: fetchedFlow, cidrBlock, prefixLength, planId, labName, labNotes, labRegion, targetProvider, resolvedExecutionTarget } = normalized;
       if (cidrBlock) setMasterCidrBlock(cidrBlock);
       if (prefixLength !== undefined && prefixLength !== null) setPrefixLength(prefixLength || "");
       if (labName) setLabName(labName);
+      setLabNotes(labNotes || "");
       if (labRegion) setLabRegion(labRegion);
       if (targetProvider) setTargetProvider(targetProvider);
       setResolvedExecutionTarget(resolvedExecutionTarget || null);
@@ -132,7 +135,7 @@ const useRestoreFlow = ({
     } finally {
       setLoadingFlow(false);
     }
-  }, [flowKey, getId, resolvedLabId, setCanvasPlanId, setEdges, setLabName, setLabRegion, setLoadingFlow, setMasterCidrBlock, setNodes, setPrefixLength, setResolvedExecutionTarget, setTargetProvider, setViewport]);
+  }, [flowKey, getId, resolvedLabId, setCanvasPlanId, setEdges, setLabName, setLabNotes, setLabRegion, setLoadingFlow, setMasterCidrBlock, setNodes, setPrefixLength, setResolvedExecutionTarget, setTargetProvider, setViewport]);
 
   return restoreFlow;
 };
