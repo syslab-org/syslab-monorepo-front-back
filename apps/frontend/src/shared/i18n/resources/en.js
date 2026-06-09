@@ -744,6 +744,8 @@ const en = {
       outdatedTitle: "Canvas out of date with respect to the plan",
       outdatedDescription:
         "This canvas changed since the last validation associated with the plan. If you keep editing, the plan will no longer represent exactly what you see on screen.",
+      planRunningLock:
+        "There is a plan running. Review the plan before editing the canvas.",
       viewPlan: "View plan",
       revalidate: "Revalidate",
       keepEditing: "Keep editing",
@@ -1187,6 +1189,174 @@ const en = {
         save: "Save",
         deleteNode: "Delete node",
         deleteRoute: "Delete route",
+      },
+    },
+    loading: {
+      processing: "Processing...",
+    },
+    saveFlow: {
+      saving: "Saving canvas...",
+      savedRecently: "Saved just now",
+      error: "Could not save the canvas",
+    },
+    deployRuntime: {
+      cannotDeployWithErrors: "Cannot deploy. Fix these errors:",
+      noVpcInCanvas: "There is no VPC on the canvas.",
+      timeoutPlan: "Timed out waiting for the plan result",
+      noDataToValidate: "There is no transformed data to validate.",
+      providerUnavailable:
+        "The current lab configuration is not available for validation and deploy.",
+      syncWithoutPlanId: "sync-from-canvas did not return plan_id",
+      validationOk: "Validation OK (Terraform plan)",
+      validationFailed: "Validation failed",
+      planAlreadyApplied:
+        "The plan is already applied and did not accept redeploy. Review the plan state.",
+      unknownError: "Unknown error",
+      validateBeforeDeploy:
+        "Validate the topology in simulation mode before deploying to AWS.",
+      topologyErrorsBeforeDeploy:
+        "The canvas has topology errors. Fix them and validate again before the real deploy.",
+      validatePlanFirst: "Validate the plan first.",
+      noDataToApply: "There is no transformed data to apply.",
+      redeployPrompt:
+        "You are about to apply changes over already active AWS infrastructure. To confirm, type: REDEPLOY",
+      deployPrompt: "To confirm, type: DEPLOY",
+      deployCancelled: "Deploy cancelled by the user.",
+      executionForbidden:
+        "Real deploy or destroy is only allowed for the owner, the platform admin, or the teacher when the lab effective connection is course_shared.",
+      backendRejectedRedeploy:
+        "The backend rejected redeploy for this plan. Review the state and try again.",
+    },
+    toolbar: {
+      defaultTitle: "Logical Topology",
+      chips: {
+        validated: "VALIDATED",
+        validating: "VALIDATING...",
+        error: "ERROR",
+        activeInfra: "ACTIVE INFRA",
+        outdated: "OUTDATED",
+      },
+      canvasState: {
+        planRunning: "Plan running",
+        outdated: "Outdated canvas",
+        validated: "Validated canvas",
+        synced: "Synced canvas",
+        noPlan: "No linked plan",
+      },
+      statusGuide: {
+        validated:
+          "The canvas has already passed validation and the current topology matches the last validated plan.",
+        planSuccess:
+          "The last plan execution finished successfully in the backend.",
+        activeInfra:
+          "There is active real AWS infrastructure associated with this lab.",
+        outdated:
+          "The canvas changed after the last validation and should be revalidated before deploy.",
+        validating:
+          "The system is generating or syncing a plan to reflect the current canvas state.",
+        error:
+          "There was a problem validating or syncing the plan and you need to review the associated message.",
+        openTooltip: "See the meaning of the canvas states",
+        title: "Canvas states",
+        description:
+          "This help summarizes what the chips in the lab header mean.",
+        currentDetail: "Current internal state: {{value}}",
+        currentState: "Current state",
+      },
+      saveChip: {
+        saving: "Saving...",
+        saved: "Saved",
+        savedAt: "Saved {{value}}",
+        error: "Save error",
+      },
+      palette: {
+        label: "Tools",
+        show: "Show modeling tools",
+        hide: "Hide modeling tools",
+      },
+      guide: {
+        label: "Guide",
+        show: "Show modeling guide",
+        hide: "Hide modeling guide",
+      },
+      zoomIn: "Zoom in",
+      zoomOut: "Zoom out",
+      fitView: "Fit view",
+      actions: {
+        saveTooltip: "Save the current canvas state to the API",
+        saving: "Saving…",
+        save: "Save",
+        restoreTooltip: "Restore the last saved version from the API",
+        restore: "Restore",
+        restoreInitialTooltip: "Reset canvas to the initial template state",
+        restoreInitial: "Restore initial",
+        routesTooltip: "Generate and review the routing plan without applying changes",
+        viewRoutes: "View routing",
+      },
+    },
+    planAction: {
+      running: {
+        actionLabel: "Plan running",
+        actionTooltip:
+          "There is an execution in progress. Wait for it to finish before continuing.",
+        helper:
+          "There is an execution in progress. The canvas remains locked until it finishes.",
+        workspaceTitle: "Execution in progress",
+        workspaceDetail:
+          "While Terraform is working, the canvas remains in read-only mode to avoid plan drift.",
+        chip: "Main action: WAIT",
+      },
+      applied: {
+        actionLabel: "Prepare redeploy",
+        actionTooltip:
+          "Open redeploy validation to review changes over already active infrastructure.",
+        helper:
+          "There is active infrastructure. From here you will prepare a redeploy over the same stack.",
+        helperOutdated:
+          "There is active infrastructure and the canvas changed. Revalidate to prepare a redeploy over the same stack.",
+        workspaceTitle: "Active infrastructure in AWS",
+        workspaceTitleOutdated: "Outdated canvas compared to the active stack",
+        workspaceDetail:
+          "You can review the plan, validate changes, and then apply a redeploy over the existing infrastructure.",
+        workspaceDetailOutdated:
+          "The canvas no longer matches the last validation. Revalidate before trying to update the stack.",
+        chipRedeploy: "Main action: REDEPLOY",
+        chipDestroyAvailable: "Destroy available",
+        chipDestroyUnavailable: "Destroy unavailable",
+      },
+      validated: {
+        actionLabel: "Prepare deploy",
+        actionTooltip:
+          "Open the final validation before the first deploy to AWS.",
+        helper:
+          "The canvas is already validated and there is no active infrastructure. The next step is the first deploy.",
+        workspaceTitle: "Validated canvas ready for deploy",
+        workspaceDetail:
+          "The topology already passed validation. If you are satisfied with the plan, the next step is to create the real infrastructure.",
+        chipDeploy: "Main action: DEPLOY",
+        chipDestroyUnavailable: "Destroy does not apply yet",
+      },
+      outdated: {
+        actionLabel: "Revalidate canvas",
+        actionTooltip:
+          "Regenerate the plan so it matches the current canvas state again.",
+        helper:
+          "The canvas changed since the last validation. Before deploying, revalidate to update the plan.",
+        workspaceTitle: "Canvas modified since the last validation",
+        workspaceDetail:
+          "You have local changes pending validation. Revalidate so the plan once again represents exactly what you see.",
+        chip: "Main action: REVALIDATE",
+      },
+      default: {
+        actionLabel: "Validate canvas",
+        actionTooltip:
+          "Validate the current topology to see its AWS translation before creating resources.",
+        helper:
+          "There is still no validated plan or active infrastructure. Start by validating the canvas.",
+        workspaceTitle: "Canvas ready to validate",
+        workspaceDetail:
+          "Start by validating the topology to see its AWS translation before creating real resources.",
+        chip: "Main action: VALIDATE",
       },
     },
     deployDialog: {

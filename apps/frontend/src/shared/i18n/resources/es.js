@@ -288,7 +288,7 @@ const es = {
       empty: "No hay planes para mostrar.",
       loadingError: "Error cargando planes",
       destroyConfirm:
-        "¿Destruir \"{{label}}\"? Esto eliminará recursos en AWS asociados a este plan.\n\nSugerencia: valida primero los Outputs.",
+        '¿Destruir "{{label}}"? Esto eliminará recursos en AWS asociados a este plan.\n\nSugerencia: valida primero los Outputs.',
       destroyError: "Error al destruir el plan",
       ownerUnavailable: "Owner no disponible",
       noLab: "Sin laboratorio",
@@ -297,14 +297,14 @@ const es = {
       visibility: "Visibilidad: {{value}}",
       canvasPrefix: "canvas: {{value}}",
       outputs: "Outputs",
-      destroy: "Destroy",
+      destroy: "Destruir",
       detail: "Ver detalle",
       actionMenu: "Acciones",
       resultTooltip: "Resultado del job de Terraform",
       lifecycleTooltip: "Estado lógico actual del plan",
       modeTooltip: "Simulada (plan) o ejecución real en AWS",
       destroyNote:
-        "Nota: el botón Destroy se habilita solo cuando el plan es destruible, pero el backend vuelve a validar la regla.",
+        "Nota: el botón Destruir se habilita solo cuando el plan es destruible, pero el backend vuelve a validar la regla.",
       tourLabel: "Ver tour de planes",
       mode: {
         preview: "PREVIEW",
@@ -313,7 +313,7 @@ const es = {
       },
       lifecycle: {
         preview: "PREVIEW",
-        destroyed: "DESTROYED",
+        destroyed: "DESTRUIDO",
         active: "ACTIVE",
         created: "CREATED",
       },
@@ -327,9 +327,10 @@ const es = {
       cloudMismatchApply:
         "La conexión cloud actual ya no coincide con la usada en el último APPLY real. Revisa la cuenta actual antes de ejecutar infraestructura real.",
       realExecutionForbidden:
-        "El APPLY real y el Destroy solo están permitidos al owner, al platform admin o al docente cuando la conexión efectiva del laboratorio es course_shared. Puedes seguir usando PLAN para revisión.",
-      deployStarted: "Deploy {{mode}} iniciado.{{task}} (actualizando estado…)",
-      deployFailed: "Fallo al iniciar deploy: {{error}}",
+        "El APPLY real y el Destruir solo están permitidos al owner, al platform admin o al docente cuando la conexión efectiva del laboratorio es course_shared. Puedes seguir usando PLAN para revisión.",
+      deployStarted:
+        "Despliegue {{mode}} iniciado.{{task}} (actualizando estado…)",
+      deployFailed: "Fallo al iniciar despliegue: {{error}}",
       finishedStatus: "Terminó: {{status}}{{error}}",
       outputsLoadError: "No pude cargar outputs: {{error}}",
       logReadError: "No se pudo leer el log: {{error}}",
@@ -340,20 +341,21 @@ const es = {
         "La conexión cloud actual ya no coincide con la usada en el último APPLY real. Destroy real se bloquea para evitar operar en una cuenta equivocada.",
       destroyConfirm:
         "Esto destruirá los recursos en AWS asociados a ESTE plan.\n\n¿Continuar?",
-      destroyQueued: "Destroy encolado{{task}}. Revisa Logs para ver el progreso.",
-      destroyFailed: "Fallo al iniciar destroy: {{error}}",
+      destroyQueued:
+        "Destruir encolado{{task}}. Revisa Logs para ver el progreso.",
+      destroyFailed: "Fallo al iniciar destrucción: {{error}}",
       noDestroyPermission:
         "No tienes permiso para destruir infraestructura real en este laboratorio.",
-      redeployApply: "Redeploy (APPLY)",
-      redeployPlan: "Redeploy (PLAN)",
-      deployApply: "Deploy (APPLY)",
-      deployPlan: "Deploy (PLAN)",
+      redeployApply: "Redespliegue (APPLY)",
+      redeployPlan: "Redespliegue (PLAN)",
+      deployApply: "Despliegue (APPLY)",
+      deployPlan: "Despliegue (PLAN)",
       applyMode: "Modo APPLY (real)",
       planMode: "Modo PLAN (preview)",
       launching: "Lanzando…",
       destroying: "Destruyendo…",
       canvasUpdatedAlert:
-        "Plan actualizado desde canvas. Hay cambios pendientes; ejecuta Deploy para aplicar la nueva infraestructura.",
+        "Plan actualizado desde canvas. Hay cambios pendientes; ejecuta Despliegue para aplicar la nueva infraestructura.",
       cloudMismatchAlert:
         "La conexión cloud actual ya no coincide con la usada en el último APPLY real.",
       executionControl: "Control de ejecución",
@@ -367,15 +369,15 @@ const es = {
       controlTitle: "Control de ejecución",
       labNotes: "Notas del laboratorio",
       lifecycleHelper: {
-        destroying: "Destroy en ejecución: eliminando infraestructura en AWS.",
-        deploying: "Deploy en ejecución: aplicando cambios en AWS.",
+        destroying: "Destruir en ejecución: eliminando infraestructura en AWS.",
+        deploying: "Despliegue en ejecución: aplicando cambios en AWS.",
         activePreview:
           "Infraestructura activa en AWS. El último plan fue una previsualización sobre el stack existente; el próximo apply actualizará recursos en el mismo despliegue.",
         active: "Infraestructura activa en AWS.",
         destroyed: "Infraestructura eliminada en AWS.",
         preview: "Simulado: nunca se aplicó en AWS.",
         recovery:
-          "El apply real falló. Puede haber recursos parciales en AWS: ejecuta Destroy antes de reintentar.",
+          "El apply real falló. Puede haber recursos parciales en AWS: ejecuta Destruir antes de reintentar.",
         notAppliedCanvas:
           "Cambios detectados desde el canvas: listo para aplicar en AWS.",
         notApplied: "Plan real aún no aplicado.",
@@ -388,7 +390,7 @@ const es = {
           "Si quieres detalle técnico, abre la pestaña Logs y sigue el progreso del apply.",
         destroyTitle: "Eliminando infraestructura en AWS",
         destroyDescription:
-          "El destroy está desmontando el stack actual. Durante esta fase bloqueamos nuevas acciones para evitar estados inconsistentes.",
+          "El destruir está desmontando el stack actual. Durante esta fase bloqueamos nuevas acciones para evitar estados inconsistentes.",
         destroyNext:
           "Cuando termine, revisa Outputs y Logs para confirmar que no quedaron recursos activos.",
         planTitle: "Generando previsualización del plan",
@@ -406,17 +408,17 @@ const es = {
       hero: {
         activeTitle: "Infraestructura activa en AWS",
         activeDescription:
-          "El stack está desplegado y listo para seguir validando, actualizarse con un redeploy o destruirse cuando quieras limpiar el laboratorio.",
+          "El stack está desplegado y listo para seguir validando, actualizarse con un redespliegue o destruirse cuando quieras limpiar el laboratorio.",
         destroyedTitle: "Infraestructura eliminada",
         destroyedDescription:
-          "El último destroy terminó correctamente. Este plan queda como historial operativo y puedes volver a lanzar un deploy real cuando lo necesites.",
+          "El último destruir terminó correctamente. Este plan queda como historial operativo y puedes volver a lanzar un deploy real cuando lo necesites.",
         previewTitle: "Plan listo para validación",
         previewDescription:
           "Todavía no hay infraestructura real en AWS. Puedes seguir revisando el preview o convertirlo en un APPLY real cuando estés conforme.",
         recoveryTitle: "Recuperación recomendada",
         recoveryDescription:
           "El apply real falló y podría haber recursos parciales. La siguiente acción recomendada es limpiar el stack antes de reintentar.",
-        firstDeployTitle: "Listo para primer deploy",
+        firstDeployTitle: "Listo para primer despliegue",
         firstDeployDescription:
           "El plan está preparado pero aún no ha sido aplicado en AWS. Puedes lanzar un preview o el primer APPLY real según el caso.",
         defaultTitle: "Estado operativo del plan",
@@ -425,15 +427,15 @@ const es = {
         running:
           "Hay una ejecución en curso. Espera a que termine para lanzar otra acción.",
         applyForbidden:
-          "Este plan es visible para revisión. El APPLY real y el Destroy solo están permitidos al owner, al platform admin o al docente cuando la conexión efectiva es course_shared.",
+          "Este plan es visible para revisión. El APPLY real y el Destruir solo están permitidos al owner, al platform admin o al docente cuando la conexión efectiva es course_shared.",
         activeInfra:
-          "Infraestructura activa: puedes revalidar, redeployar sobre el mismo stack o destruirlo.",
+          "Infraestructura activa: puedes revalidar, redesplieguear sobre el mismo stack o destruirlo.",
         firstDeploy:
-          "Plan listo para su primer deploy. Destroy no aplica todavía porque no hay infraestructura activa.",
+          "Plan listo para su primer despliegue. Destruir no aplica todavía porque no hay infraestructura activa.",
         preview:
-          "Plan en modo preview: puedes seguir validando o lanzar el primer deploy real.",
+          "Plan en modo preview: puedes seguir validando o lanzar el primer despliegue real.",
         recoverable:
-          "Hay recursos o estado recuperable: destroy está disponible para limpiar el stack.",
+          "Hay recursos o estado recuperable: destruir está disponible para limpiar el stack.",
       },
       tabs: {
         summary: "Resumen",
@@ -447,7 +449,7 @@ const es = {
         sectionSubtitle:
           "Lectura rápida del resultado reciente y del estado operativo actual.",
         intro:
-          "Este detalle sirve para entender qué pasó (status), qué existe hoy (lifecycle) y qué acciones son válidas (deploy/destroy).",
+          "Este detalle sirve para entender qué pasó (status), qué existe hoy (lifecycle) y qué acciones son válidas (despliegue/destruir).",
         introCaption:
           "El estado indica la última ejecución; el lifecycle indica qué existe hoy en AWS.",
         lastExecution: "Última ejecución",
@@ -476,7 +478,7 @@ const es = {
         advisoryCaption:
           "Este bloque se calcula desde el payload, los outputs cargados y el estado actual del plan.",
         advisoryCost: "1. Costo potencial",
-        advisoryResidual: "2. Qué puede quedar tras Destroy",
+        advisoryResidual: "2. Qué puede quedar tras Destruir",
         advisoryPedagogy: "3. Lectura pedagógica y técnica",
         advisoriesText: {
           realApply:
@@ -487,26 +489,24 @@ const es = {
             "El stack principal figura destruido. Si no dejaste recursos externos o residuales, este plan ya no debería seguir generando costo principal.",
           instances:
             "{{count}} instancia(s) EC2 declarada(s): generan costo de compute y, normalmente, de almacenamiento mientras existan.",
-          nat:
-            "{{count}} NAT Gateway(s): AWS cobra por hora aprovisionada y por tráfico procesado mientras estén activos.",
+          nat: "{{count}} NAT Gateway(s): AWS cobra por hora aprovisionada y por tráfico procesado mientras estén activos.",
           publicIpv4:
             "{{count}} IPv4 pública(s) en uso según outputs: AWS cobra las IPv4 públicas en uso.",
-          tgw:
-            "{{routers}} TGW router(s) y {{attachments}} attachment(s): Transit Gateway agrega cobro por attachment/hora y por tráfico procesado.",
+          tgw: "{{routers}} TGW router(s) y {{attachments}} attachment(s): Transit Gateway agrega cobro por attachment/hora y por tráfico procesado.",
           peering:
             "{{count}} peering link(s): crear el peering no agrega cargo fijo, pero el tráfico por peering puede generar cobros según el patrón de transferencia.",
           vpcBase:
             "La VPC en sí no tiene cargo adicional por existir, pero algunos componentes asociados sí lo tienen.",
           providedEips:
-            "{{count}} EIP(s) fue/fueron aportada(s) manualmente al NAT. Destroy no las libera por seguridad; pueden seguir generando cobro por IPv4 pública mientras permanezcan reservadas en tu cuenta.",
+            "{{count}} EIP(s) fue/fueron aportada(s) manualmente al NAT. Destruir no las libera por seguridad; pueden seguir generando cobro por IPv4 pública mientras permanezcan reservadas en tu cuenta.",
           autoEip:
-            "Si el NAT usó una EIP autogenerada por el stack, Destroy intenta eliminar tanto el NAT como esa EIP. Si aún ves una Elastic IP, revisa si pertenece a otro recurso o a un deploy previo.",
+            "Si el NAT usó una EIP autogenerada por el stack, Destruir intenta eliminar tanto el NAT como esa EIP. Si aún ves una Elastic IP, revisa si pertenece a otro recurso o a un despliegue previo.",
           outputsHistorical:
             "Los outputs guardados en esta página son históricos para auditoría/debug. No son recursos vivos en AWS y no generan costo por sí mismos.",
           dhcpDefault:
             "AWS mantiene un DHCP option set por defecto por región. Este proyecto no crea uno dedicado, así que verlo en consola no implica que el destroy haya dejado un residuo de este stack.",
           failedApply:
-            "Si un APPLY real falla, puede quedar infraestructura parcial. En ese estado debes ejecutar Destroy y revisar logs antes de volver a aplicar.",
+            "Si un APPLY real falla, puede quedar infraestructura parcial. En ese estado debes ejecutar Destruir y revisar logs antes de volver a aplicar.",
           natPrivate:
             "Pedagógicamente, este laboratorio separa salida y exposición: NAT permite salida desde subnets privadas, pero no acceso entrante desde Internet.",
           publicPrivateMix:
@@ -582,8 +582,7 @@ const es = {
         activePeerings: "Peerings activos: {{count}}",
         activeTgw: "TGW activos: {{count}}",
         attachments: "{{count}} attachment(s) TGW",
-        declaredPeeringsTgw:
-          "Declarados: peerings {{peerings}}, TGW {{tgw}}.",
+        declaredPeeringsTgw: "Declarados: peerings {{peerings}}, TGW {{tgw}}.",
         vpcInfra: "Infraestructura destacada por VPC",
         vpcInfraCaption:
           "Aquí ves solo los identificadores más útiles de cada segmento en AWS.",
@@ -596,23 +595,19 @@ const es = {
         logicalRouter: "Router lógico: {{value}}",
         attachment: "Attachment",
         awsGuideConnectivity: {
-          mode:
-            "Modo declarado: el modelo de conectividad que el canvas está pidiendo. Puede ser Aislado, Peering o Transit Gateway.",
+          mode: "Modo declarado: el modelo de conectividad que el canvas está pidiendo. Puede ser Aislado, Peering o Transit Gateway.",
           expectedPairs:
             "Pares conectados esperados: cuántos pares de segmentos deberían poder comunicarse según el payload y las rutas definidas.",
           peerings:
             "Peerings activos: cantidad de conexiones VPC Peering realmente creadas en AWS.",
-          tgws:
-            "TGW activos: cantidad de Transit Gateways realmente creados en AWS.",
+          tgws: "TGW activos: cantidad de Transit Gateways realmente creados en AWS.",
           attachments:
             "Attachments TGW: uniones entre una VPC y el Transit Gateway. Sin attachment, la VPC no entra al hub.",
         },
         awsGuideVpc: {
           vpc: "VPC: red virtual principal del segmento en AWS.",
-          igw:
-            "IGW: Internet Gateway. Permite salida/entrada a internet para subredes públicas con rutas adecuadas.",
-          nat:
-            "NAT: NAT Gateway. Permite que subredes privadas salgan a internet sin volverse públicas.",
+          igw: "IGW: Internet Gateway. Permite salida/entrada a internet para subredes públicas con rutas adecuadas.",
+          nat: "NAT: NAT Gateway. Permite que subredes privadas salgan a internet sin volverse públicas.",
           natEip: "NAT EIP: Elastic IP asociada al NAT Gateway.",
         },
         awsGuideTgw: {
@@ -620,14 +615,15 @@ const es = {
             "Router lógico: identificador del nodo del canvas. Sirve para relacionar el diseño con los recursos AWS.",
           tgw: "TGW: Transit Gateway de AWS. Actúa como hub central de conectividad.",
           routeTable: "TGW RT: tabla de rutas interna del Transit Gateway.",
-          attachment: "Attachment: conexión física/lógica entre una VPC y el TGW.",
+          attachment:
+            "Attachment: conexión física/lógica entre una VPC y el TGW.",
         },
         backendStatus: "backend_status: {{value}}",
         appliedTrue: "APPLIED: true",
         appliedFalse: "APPLIED: false",
       },
       tests: {
-        title: "Guía de pruebas post-deploy",
+        title: "Guía de pruebas post-despliegue",
         subtitle:
           "Define pruebas de conectividad entre VPCs, validaciones guiadas para una VPC con NAT o comprobaciones básicas de acceso directo a una bastion pública.",
         loadOutputs: "Cargar outputs para pruebas",
@@ -691,7 +687,7 @@ const es = {
       logs: {
         title: "Logs del plan",
         subtitle:
-          "El log corresponde siempre a la última ejecución, sea deploy o destroy.",
+          "El log corresponde siempre a la última ejecución, sea despliegue o destruir.",
         streaming: "Streaming activo",
         viewLog: "Ver log del plan",
         empty:
@@ -701,7 +697,7 @@ const es = {
         autoScroll:
           "El visor baja automáticamente al final mientras la ejecución sigue activa.",
         terraformSummary:
-          "Resumen Terraform: {{add}} add, {{change}} change, {{destroy}} destroy, {{replace}} replace.",
+          "Resumen Terraform: {{add}} add, {{change}} change, {{destroy}} destruir, {{replace}} replace.",
         newLines: "Se resaltan las líneas nuevas recién agregadas al log.",
       },
       payload: {
@@ -717,7 +713,8 @@ const es = {
         step1Text:
           "Necesitas aws CLI, acceso a la clave privada asociada a la key pair con la que desplegaste la instancia y que tu IP pública esté permitida en Allowed SSH CIDR.",
         step2: "2. Bastions detectadas en este laboratorio",
-        step3: "3. Si ya tienes la clave privada correspondiente, conéctate por SSH",
+        step3:
+          "3. Si ya tienes la clave privada correspondiente, conéctate por SSH",
         step3Text:
           "Si AWS generó la key pair, normalmente usarás un archivo .pem. Si importaste una public key desde tu computador, usa la clave privada local asociada, aunque no tenga extensión .pem.",
         step4: "4. Si no tienes la llave privada, usa EC2 Instance Connect",
@@ -725,9 +722,9 @@ const es = {
           "AWS no permite descargar la private key de una key pair existente. En ese caso, puedes inyectar una clave pública temporal y entrar con una llave efímera.",
         step5: "5. Ejecuta las comprobaciones desde la bastion",
         instanceLabel: "Instancia: {{name}} · instance_id: {{value}}",
-        publicPrivateIp:
-          "IP pública: {{publicIp}} · IP privada: {{privateIp}}",
-        regionAzKeyPair: "Región/AZ: {{region}} / {{az}} · Key pair: {{keyPair}}",
+        publicPrivateIp: "IP pública: {{publicIp}} · IP privada: {{privateIp}}",
+        regionAzKeyPair:
+          "Región/AZ: {{region}} / {{az}} · Key pair: {{keyPair}}",
         consoleExpected:
           "Resultado esperado: cada par conectado debería responder ping en ida y retorno. En un laboratorio con NAT, la bastion debe alcanzar la workload privada y esta no debería tener IP pública. Si el laboratorio solo tiene zona pública, la comprobación útil es confirmar acceso a la bastion y entender que el NAT quedó desplegado pero no está aportando salida a una subnet privada. Si algo falla, revisa route tables, Security Groups, key pair y Allowed SSH CIDR.",
         connectivityTitle: "Conectividad",
@@ -744,6 +741,8 @@ const es = {
       outdatedTitle: "Canvas desactualizado respecto al plan",
       outdatedDescription:
         "Este canvas cambió desde la última validación asociada al plan. Si sigues editando, el plan dejará de representar exactamente lo que estás viendo en pantalla.",
+      planRunningLock:
+        "Hay un plan ejecutándose. Revisa el plan antes de editar el canvas.",
       viewPlan: "Ver plan",
       revalidate: "Revalidar",
       keepEditing: "Seguir editando",
@@ -767,7 +766,7 @@ const es = {
       cidrTip:
         "Consejo: usa un rango /16 para que tengas espacio cómodo para subredes (/24) sin pelearte con el IP plan.",
       awsOnlyInfo:
-        "En este MVP el deploy real está habilitado para AWS. Otros providers se muestran como referencia de roadmap, pero aún no están disponibles para ejecución.",
+        "En este MVP el despliegue real está habilitado para AWS. Otros providers se muestran como referencia de roadmap, pero aún no están disponibles para ejecución.",
       cloudProvider: "Cloud provider",
       useAwsHint:
         "Para este MVP usa AWS si quieres desplegar infraestructura real.",
@@ -799,8 +798,7 @@ const es = {
         explicit: "Se usará la conexión seleccionada explícitamente.",
         ownerPersonalAuto:
           "Auto resolverá primero la cuenta personal del owner.",
-        courseSharedAuto:
-          "Auto resolverá la cuenta compartida del curso.",
+        courseSharedAuto: "Auto resolverá la cuenta compartida del curso.",
         unresolved: "No hay una conexión ejecutable resuelta todavía.",
       },
       masterCidr: "Rango maestro (CIDR)",
@@ -808,12 +806,11 @@ const es = {
       masterCidrPlaceholder: "10.30.0.0/20",
       masterCidrWizardHelp:
         "Este será el bloque padre. Si usas plantilla y lo cambias, revisa luego el direccionamiento precargado en el canvas.",
-      masterCidrHelp:
-        "Rango padre del que se derivarán los segmentos y zonas.",
+      masterCidrHelp: "Rango padre del que se derivarán los segmentos y zonas.",
       selectedRegion: "Región seleccionada: {{value}}",
       continue: "Continuar",
       providerStatus: {
-        ready: "Listo para validación y deploy",
+        ready: "Listo para validación y despliegue",
         planned: "Próximamente",
         unknown: "Disponibilidad no confirmada",
       },
@@ -825,7 +822,8 @@ const es = {
         "Define el espacio de direcciones, la exposición a internet y el comportamiento de salida para este segmento. Traducción AWS: VPC.",
       networkFallback: "red",
       snackbar: {
-        autoSelectNatSubnet: 'Se seleccionó automáticamente la zona pública "{{value}}" para el NAT.',
+        autoSelectNatSubnet:
+          'Se seleccionó automáticamente la zona pública "{{value}}" para el NAT.',
         noPublicSubnetsForNat:
           "No hay zonas públicas disponibles para alojar el NAT Gateway.",
         natWithoutPrivateZones:
@@ -898,7 +896,8 @@ const es = {
       actions: {
         save: "Registrar configuración",
         delete: "Eliminar nodo",
-        saveHint: "Debes seleccionar una zona pública para la salida gestionada.",
+        saveHint:
+          "Debes seleccionar una zona pública para la salida gestionada.",
       },
     },
     instanceForm: {
@@ -930,7 +929,8 @@ const es = {
       fields: {
         name: "Nombre de la instancia",
         privateIp: "IP privada (dentro de {{subnet}})",
-        privateIpHelp: 'Déjala vacía o escribe "auto" para asignación automática.',
+        privateIpHelp:
+          'Déjala vacía o escribe "auto" para asignación automática.',
         privateIpPlaceholder: "10.10.0.10  •  o escribe: auto",
         ami: "AMI",
         useDefaultAmi: "Usar AMI por defecto",
@@ -949,7 +949,7 @@ const es = {
         privateIp:
           "La private IP debe pertenecer a la subred padre. Si usas auto, el provider asignará una IP disponible.",
         publicIp:
-          "La IP pública no reemplaza la private IP: depende de la subred y de la política del deploy.",
+          "La IP pública no reemplaza la private IP: depende de la subred y de la política del despliegue.",
       },
       scope: {
         courseShared: "Curso compartido",
@@ -960,7 +960,7 @@ const es = {
         scopeMismatch:
           "La key pair seleccionada es {{scope}}, pero este laboratorio desplegará con una conexión {{executionScope}}.",
         connectionMismatch:
-          "La key pair seleccionada está vinculada a otra conexión cloud. Verifica que exista en la cuenta efectiva del deploy.",
+          "La key pair seleccionada está vinculada a otra conexión cloud. Verifica que exista en la cuenta efectiva del despliegue.",
       },
       compatibility: {
         scopeReason: "scope {{value}}",
@@ -985,7 +985,7 @@ const es = {
           middle:
             "pero este laboratorio está resolviendo una conexión cloud de tipo",
           after:
-            "Puede que AWS no encuentre esa key pair en la cuenta efectiva del deploy.",
+            "Puede que AWS no encuentre esa key pair en la cuenta efectiva del despliegue.",
         },
         connectionMismatch:
           "La key pair seleccionada está vinculada a otra conexión cloud. Verifica que exista también en la cuenta que este laboratorio usará realmente para desplegar.",
@@ -993,9 +993,8 @@ const es = {
       systemValidation: {
         title: "Qué valida el sistema",
         deploy:
-          "El deploy valida que esa key pair exista en la cuenta y región efectivas.",
-        ssh:
-          "El acceso SSH posterior sigue dependiendo de que tengas el archivo .pem fuera de la plataforma, en el equipo desde el que te conectarás.",
+          "El despliegue valida que esa key pair exista en la cuenta y región efectivas.",
+        ssh: "El acceso SSH posterior sigue dependiendo de que tengas el archivo .pem fuera de la plataforma, en el equipo desde el que te conectarás.",
       },
       actions: {
         save: "Registrar configuración",
@@ -1099,8 +1098,7 @@ const es = {
             "No es transitivo: A↔B y B↔C no habilita A↔C automáticamente.",
           bulletManySegments:
             "Con varios segmentos aumenta el número de pares y el mantenimiento de rutas.",
-          bulletSmallLabs:
-            "Es ideal para laboratorios pequeños y directos.",
+          bulletSmallLabs: "Es ideal para laboratorios pequeños y directos.",
         },
       },
       chips: {
@@ -1129,8 +1127,7 @@ const es = {
           before:
             "Hay segmentos conectados visualmente a este nodo, pero no has definido policies. Si despliegas así, el payload saldrá",
           isolated: "aislado",
-          after:
-            "aunque el edge hacia el router siga visible en el canvas.",
+          after: "aunque el edge hacia el router siga visible en el canvas.",
         },
         notEffective:
           "El nodo ya tiene policies, pero todavía no generan conectividad efectiva. En peering eso suele significar que falta la ruta de retorno del otro segmento.",
@@ -1165,10 +1162,8 @@ const es = {
         title: "Cómo leer esta tabla",
         origin: "- Origen: segmento desde el que sale el tráfico.",
         destination: "- Destino: red que quieres alcanzar.",
-        peering:
-          "- En direct links modelas conectividad directa entre pares.",
-        tgw:
-          "- En hub routing modelas qué destinos deben enviarse al hub central.",
+        peering: "- En direct links modelas conectividad directa entre pares.",
+        tgw: "- En hub routing modelas qué destinos deben enviarse al hub central.",
       },
       validation: {
         selectSource: "Selecciona el segmento de origen",
@@ -1176,12 +1171,10 @@ const es = {
           "El segmento de origen no está conectado a esta policy",
         destRequired: "El CIDR destino es requerido",
         destInvalid: "El CIDR destino es inválido",
-        destNotConnected:
-          "El segmento destino no está conectado a esta policy",
+        destNotConnected: "El segmento destino no está conectado a esta policy",
         destWithinSegment:
           "El CIDR destino debe ser {{value}} o estar contenido en ese segmento",
-        duplicateRoute:
-          "Ruta duplicada (mismo origen y CIDR destino)",
+        duplicateRoute: "Ruta duplicada (mismo origen y CIDR destino)",
       },
       actions: {
         addRoute: "+ Ruta",
@@ -1190,13 +1183,182 @@ const es = {
         deleteRoute: "Eliminar ruta",
       },
     },
+    loading: {
+      processing: "Procesando...",
+    },
+    saveFlow: {
+      saving: "Guardando canvas...",
+      savedRecently: "Guardado hace un momento",
+      error: "No se pudo guardar el canvas",
+    },
+    deployRuntime: {
+      cannotDeployWithErrors: "No se puede desplegar. Corrige estos errores:",
+      noVpcInCanvas: "No hay VPC en el canvas.",
+      timeoutPlan: "Timeout esperando resultado del plan",
+      noDataToValidate: "No hay datos transformados para validar.",
+      providerUnavailable:
+        "La configuración actual del laboratorio no está disponible para validación y despliegue.",
+      syncWithoutPlanId: "sync-from-canvas no devolvió plan_id",
+      validationOk: "Validación OK (Terraform plan)",
+      validationFailed: "Validación fallida",
+      planAlreadyApplied:
+        "El plan ya está aplicado y no aceptó redespliegue. Revisa el estado del plan.",
+      unknownError: "Error desconocido",
+      validateBeforeDeploy:
+        "Primero valida la topología en modo simulación antes de desplegar en AWS.",
+      topologyErrorsBeforeDeploy:
+        "El canvas tiene errores de topología. Corrígelos y vuelve a validar antes del deploy real.",
+      validatePlanFirst: "Primero valida el plan.",
+      noDataToApply: "No hay datos transformados para aplicar.",
+      redeployPrompt:
+        "Vas a aplicar cambios sobre infraestructura AWS ya activa. Para confirmar escribe: REDEPLOY",
+      deployPrompt: "Para confirmar escribe: DESPLIEGUE",
+      deployCancelled: "Despliegue cancelado por el usuario.",
+      executionForbidden:
+        "El despliegue real o destruir solo está permitido al owner, al platform admin o al docente cuando la conexión efectiva del laboratorio es course_shared.",
+      backendRejectedRedeploy:
+        "El backend rechazó el redespliegue de este plan. Revisa el estado y vuelve a intentar.",
+    },
+    toolbar: {
+      defaultTitle: "Topología Lógica",
+      chips: {
+        validated: "VALIDADO",
+        validating: "VALIDANDO...",
+        error: "ERROR",
+        activeInfra: "INFRA ACTIVA",
+        outdated: "DESACTUALIZADO",
+      },
+      canvasState: {
+        planRunning: "Plan en ejecución",
+        outdated: "Canvas desactualizado",
+        validated: "Canvas validado",
+        synced: "Canvas sincronizado",
+        noPlan: "Sin plan asociado",
+      },
+      statusGuide: {
+        validated:
+          "El canvas ya pasó validación y la topología actual coincide con el último plan validado.",
+        planSuccess:
+          "La última ejecución del plan terminó correctamente en backend.",
+        activeInfra:
+          "Existe infraestructura real activa en AWS asociada a este laboratorio.",
+        outdated:
+          "El canvas cambió después de la última validación y conviene revalidar antes de desplegar.",
+        validating:
+          "El sistema está generando o sincronizando un plan para reflejar el estado actual del canvas.",
+        error:
+          "Hubo un problema al validar o sincronizar el plan y necesitas revisar el mensaje asociado.",
+        openTooltip: "Ver significado de los estados del canvas",
+        title: "Estados del canvas",
+        description:
+          "Esta ayuda resume qué significan los chips que ves en la cabecera del laboratorio.",
+        currentDetail: "Estado interno actual: {{value}}",
+        currentState: "Estado actual",
+      },
+      saveChip: {
+        saving: "Guardando...",
+        saved: "Guardado",
+        savedAt: "Guardado {{value}}",
+        error: "Error al guardar",
+      },
+      palette: {
+        label: "Herramientas",
+        show: "Mostrar herramientas para modelar",
+        hide: "Ocultar herramientas para modelar",
+      },
+      guide: {
+        label: "Guía",
+        show: "Mostrar guía de modelado",
+        hide: "Ocultar guía de modelado",
+      },
+      zoomIn: "Acercar",
+      zoomOut: "Alejar",
+      fitView: "Ajustar vista",
+      actions: {
+        saveTooltip: "Guardar estado actual del canvas en la API",
+        saving: "Guardando…",
+        save: "Guardar",
+        restoreTooltip: "Restaurar última versión guardada desde la API",
+        restore: "Restaurar",
+        restoreInitialTooltip:
+          "Restablecer canvas al estado inicial de la plantilla",
+        restoreInitial: "Restaurar inicial",
+        routesTooltip: "Generar y revisar el plan de ruteo sin aplicar cambios",
+        viewRoutes: "Ver ruteo",
+      },
+    },
+    planAction: {
+      running: {
+        actionLabel: "Plan en ejecución",
+        actionTooltip:
+          "Hay una ejecución en curso. Espera a que termine para seguir trabajando.",
+        helper:
+          "Hay una ejecución en curso. El canvas queda bloqueado hasta que termine.",
+        workspaceTitle: "Ejecución en curso",
+        workspaceDetail:
+          "Mientras Terraform está trabajando, el canvas queda en modo lectura para evitar que el plan se desalinee.",
+        chip: "Acción principal: ESPERAR",
+      },
+      applied: {
+        actionLabel: "Preparar redespliegue",
+        actionTooltip:
+          "Abrir la validación del redespliegue para revisar cambios sobre la infraestructura ya activa.",
+        helper:
+          "Hay infraestructura activa. Desde aquí prepararás un redespliegue sobre el mismo stack.",
+        helperOutdated:
+          "Hay infraestructura activa y el canvas cambió. Revalida para preparar un redespliegue sobre el mismo stack.",
+        workspaceTitle: "Infraestructura activa en AWS",
+        workspaceTitleOutdated: "Canvas desactualizado frente al stack activo",
+        workspaceDetail:
+          "Puedes revisar el plan, validar cambios y luego aplicar un redespliegue sobre la infraestructura existente.",
+        workspaceDetailOutdated:
+          "El canvas ya no coincide con la última validación. Revalida antes de intentar actualizar el stack.",
+        chipRedeploy: "Acción principal: REDESPLIEGUE",
+        chipDestroyAvailable: "Destruir disponible",
+        chipDestroyUnavailable: "Destruir no disponible",
+      },
+      validated: {
+        actionLabel: "Preparar despliegue",
+        actionTooltip:
+          "Abrir la validación final antes del primer despliegue sobre AWS.",
+        helper:
+          "El canvas ya fue validado y no hay infraestructura activa. El siguiente paso es el primer despliegue.",
+        workspaceTitle: "Canvas validado y listo para despliegue",
+        workspaceDetail:
+          "La topología ya pasó por validación. Si estás conforme con el plan, el siguiente paso es crear la infraestructura real.",
+        chipDeploy: "Acción principal: DESPLIEGUE",
+        chipDestroyUnavailable: "Destruir no aplica todavía",
+      },
+      outdated: {
+        actionLabel: "Revalidar canvas",
+        actionTooltip:
+          "Regenerar el plan para que vuelva a coincidir con el estado actual del canvas.",
+        helper:
+          "El canvas cambió desde la última validación. Antes de desplegar, revalida para actualizar el plan.",
+        workspaceTitle: "Canvas modificado desde la última validación",
+        workspaceDetail:
+          "Tienes cambios locales pendientes de validar. Revalida para que el plan vuelva a representar exactamente lo que ves.",
+        chip: "Acción principal: REVALIDAR",
+      },
+      default: {
+        actionLabel: "Validar canvas",
+        actionTooltip:
+          "Validar la topología actual para ver su traducción a AWS antes de crear recursos.",
+        helper:
+          "Todavía no hay un plan validado ni infraestructura activa. Empieza validando el canvas.",
+        workspaceTitle: "Canvas listo para validar",
+        workspaceDetail:
+          "Empieza validando la topología para ver su traducción a AWS antes de crear recursos reales.",
+        chip: "Acción principal: VALIDAR",
+      },
+    },
     deployDialog: {
       exportError: "No se pudo exportar el plan. Revisa la consola.",
       title: "Confirmar infraestructura",
-      primaryRedeploy: "Redeploy en AWS",
-      primaryDeploy: "Deploy en AWS",
-      revalidateRedeploy: "Revalidar redeploy",
-      validateDeploy: "Validar deploy",
+      primaryRedeploy: "Redespliegue en AWS",
+      primaryDeploy: "Despliegue en AWS",
+      revalidateRedeploy: "Revalidar redespliegue",
+      validateDeploy: "Validar despliegue",
       validatingInfra: "Validando infraestructura...",
       validatedSuccess:
         "Infraestructura validada correctamente. Puedes desplegar o revisar el plan.",
@@ -1211,16 +1373,15 @@ const es = {
       redeployWarning:
         "Esta validación se hizo sobre infraestructura ya activa. Si despliegas ahora, Terraform actualizará el stack existente en AWS y algunos cambios podrían reemplazar o eliminar recursos.",
       chips: {
-        mainRedeploy: "Acción principal: REDEPLOY",
-        mainDeploy: "Acción principal: DEPLOY",
-        destroyAvailable: "Destroy disponible si el plan sigue activo",
-        destroyUnavailable: "Destroy no aplica hasta crear recursos",
+        mainRedeploy: "Acción principal: REDESPLIEGUE",
+        mainDeploy: "Acción principal: DESPLIEGUE",
+        destroyAvailable: "Destruir disponible si el plan sigue activo",
+        destroyUnavailable: "Destruir no aplica hasta crear recursos",
       },
       risk: {
         destructive:
           "Terraform detectó cambios potencialmente destructivos o con reemplazo de recursos.",
-        caution:
-          "Terraform detectó actualizaciones sobre recursos existentes.",
+        caution: "Terraform detectó actualizaciones sobre recursos existentes.",
         safe: "Terraform detectó cambios aditivos sobre la infraestructura.",
         sensitiveResources: "Recursos sensibles detectados:",
       },
@@ -1235,15 +1396,14 @@ const es = {
         attachments: "Hub attachments: {{count}}",
       },
       postDeployHint:
-        "Después del deploy, valida conectividad en Plan Detail -> Pruebas con comandos de ping guiados entre segmentos.",
+        "Después del despliegue, valida conectividad en Plan Detail -> Pruebas con comandos de ping guiados entre segmentos.",
       neutralTitle: "Intención neutral del laboratorio",
       neutral: {
         baseNetwork:
           "La red base contiene {{segments}} segmento(s), {{zones}} zona(s) y {{workloads}} workload(s).",
         exposure:
           "Exposición del diseño: {{publicExposure}} segmento(s) públicos, {{privateExposure}} privados y {{mixedExposure}} mixtos.",
-        hubs:
-          "Conectividad modelada como {{hubs}} hub(s) central(es) con {{attachments}} attachment(s).",
+        hubs: "Conectividad modelada como {{hubs}} hub(s) central(es) con {{attachments}} attachment(s).",
         directLinks:
           "Conectividad modelada con {{directLinks}} enlace(s) directo(s) entre pares de segmentos.",
         sshWarning:
@@ -1279,7 +1439,7 @@ const es = {
       },
       exportJson: "Exportar JSON",
       viewPlan: "Ver plan",
-      applyRedeploy: "Aplicar redeploy",
+      applyRedeploy: "Aplicar redespliegue",
       deploy: "Desplegar",
     },
     learningGuide: {
@@ -1310,39 +1470,66 @@ const es = {
         openDeploy: "Abrir despliegue",
       },
       steps: {
-        segment: { title: "Crear segmento base", description: "Define el contenedor principal del laboratorio." },
-        zones: { title: "Definir zonas", description: "Crea al menos una zona pública y una privada." },
-        workload: { title: "Agregar workload", description: "Añade al menos una instancia para probar conectividad." },
+        segment: {
+          title: "Crear segmento base",
+          description: "Define el contenedor principal del laboratorio.",
+        },
+        zones: {
+          title: "Definir zonas",
+          description: "Crea al menos una zona pública y una privada.",
+        },
+        workload: {
+          title: "Agregar workload",
+          description: "Añade al menos una instancia para probar conectividad.",
+        },
         connectivity: {
           title: "Conectividad entre segmentos",
-          description: "Conecta los segmentos con un nodo de conectividad y sus enlaces.",
+          description:
+            "Conecta los segmentos con un nodo de conectividad y sus enlaces.",
           optional: "Opcional en laboratorio de un solo segmento.",
         },
-        validate: { title: "Validar topología", description: "Ejecuta simulación (Terraform plan) antes del despliegue." },
-        deploy: { title: "Desplegar en AWS", description: "Aplica infraestructura real cuando el laboratorio esté validado." },
+        validate: {
+          title: "Validar topología",
+          description:
+            "Ejecuta simulación (Terraform plan) antes del despliegue.",
+        },
+        deploy: {
+          title: "Desplegar en AWS",
+          description:
+            "Aplica infraestructura real cuando el laboratorio esté validado.",
+        },
       },
       nextAction: {
         completed: "Laboratorio completado. Puedes revisar outputs y logs.",
-        running: "Hay una ejecución en curso. Espera el resultado antes de seguir.",
-        fixTopology: "Corrige primero los errores de topología para continuar con la validación.",
-        validate: "Ejecuta Validar para simular la topología y revisar el plan antes de aplicar.",
-        deploy: "Cuando estés conforme con la simulación, ejecuta Desplegar para crear recursos en AWS.",
+        running:
+          "Hay una ejecución en curso. Espera el resultado antes de seguir.",
+        fixTopology:
+          "Corrige primero los errores de topología para continuar con la validación.",
+        validate:
+          "Ejecuta Validar para simular la topología y revisar el plan antes de aplicar.",
+        deploy:
+          "Cuando estés conforme con la simulación, ejecuta Desplegar para crear recursos en AWS.",
         nextStep: "Siguiente paso: {{title}}.",
       },
       contrast: {
         vlanLines: {
-          subnets: "Estás modelando {{count}} zona(s) de red dentro de un laboratorio lógico.",
-          needsRouter: "Tu práctica requiere enrutar entre múltiples segmentos de red.",
+          subnets:
+            "Estás modelando {{count}} zona(s) de red dentro de un laboratorio lógico.",
+          needsRouter:
+            "Tu práctica requiere enrutar entre múltiples segmentos de red.",
           singleDomain: "Tu práctica puede resolverse en un dominio principal.",
-          routesReady: "Ya definiste rutas entre segmentos para analizar conectividad.",
+          routesReady:
+            "Ya definiste rutas entre segmentos para analizar conectividad.",
           routesMissing: "Aún no definiste rutas explícitas entre segmentos.",
         },
         awsLines: {
           vpcs: "Esto se traduce a {{vpcs}} VPC(s) y {{subnets}} subnet(s) en AWS.",
           egress: "Conectividad de salida: IGW {{igw}} / NAT {{nat}}.",
           routers: "Routers en modo AWS: Peering {{peering}} / TGW {{tgw}}.",
-          routesReady: "Las rutas definidas se transforman en route tables y enlaces entre VPCs.",
-          routesMissing: "Sin rutas explícitas, AWS solo aplicará conectividad local por VPC.",
+          routesReady:
+            "Las rutas definidas se transforman en route tables y enlaces entre VPCs.",
+          routesMissing:
+            "Sin rutas explícitas, AWS solo aplicará conectividad local por VPC.",
           oneWayPairs:
             "Detectamos {{count}} par(es) con ruta de solo ida; revisa retorno para pruebas bidireccionales.",
           noOneWayPairs: "No se detectan pares con rutas solo de ida.",
@@ -1372,7 +1559,8 @@ const es = {
       },
       focus: {
         element: "Elemento",
-        segmentSubtitle: "Qué significa en el modelo neutral y cómo se traduce en AWS.",
+        segmentSubtitle:
+          "Qué significa en el modelo neutral y cómo se traduce en AWS.",
         internetEdgeOn: "Internet edge activo",
         internetEdgeOff: "Sin internet edge",
         managedEgressOn: "Managed egress activo",
@@ -1479,14 +1667,16 @@ const es = {
       sections: {
         meaning: {
           title: "1. Qué significa un CIDR",
-          bodyStart: "Un CIDR combina una dirección base y un prefijo. Por ejemplo,",
+          bodyStart:
+            "Un CIDR combina una dirección base y un prefijo. Por ejemplo,",
           bodyEnd:
             "significa que el laboratorio tiene un bloque amplio desde el cual luego derivaremos segmentos y subredes.",
         },
         rule: {
           title: "2. Regla práctica para este MVP",
           bodyStart: "Si partes con un",
-          bodyMiddle: ", normalmente podrás dividirlo con tranquilidad en varias redes",
+          bodyMiddle:
+            ", normalmente podrás dividirlo con tranquilidad en varias redes",
           bodyEnd:
             ". Esa combinación es cómoda para laboratorio porque deja margen para crecer sin tener que rehacer el direccionamiento.",
         },
@@ -1495,7 +1685,8 @@ const es = {
           masterStart: "Supón que tu rango maestro es",
           defineSegments: "Desde ahí puedes definir segmentos o VPCs como:",
           simpleVpc: "- `10.20.0.0/16` para una VPC simple",
-          multiSegments: "- o separar varios segmentos en rangos distintos si el caso lo requiere",
+          multiSegments:
+            "- o separar varios segmentos en rangos distintos si el caso lo requiere",
           subnets: "Dentro de una VPC, puedes crear subredes como:",
           publicSubnet: "- `10.20.1.0/24` para una subred pública",
           privateSubnet: "- `10.20.2.0/24` para una subred privada",
@@ -1517,16 +1708,18 @@ const es = {
           title: "4. Cómo pensar el cálculo sin complicarte",
           step1: "1. Elige primero el rango maestro del laboratorio.",
           step2: "2. Decide cuántos segmentos o VPCs vas a necesitar.",
-          step3: "3. Dentro de cada segmento, separa subredes públicas y privadas con bloques que no se solapen.",
-          step4: "4. Reserva IPs fijas para workloads solo después de definir bien sus subredes.",
+          step3:
+            "3. Dentro de cada segmento, separa subredes públicas y privadas con bloques que no se solapen.",
+          step4:
+            "4. Reserva IPs fijas para workloads solo después de definir bien sus subredes.",
         },
         math: {
           title: "4.1. Cómo se calcula matemáticamente",
           bodyStart: "En IPv4 hay",
-          bodyEnd: ". El prefijo indica cuántos bits están reservados para la red.",
+          bodyEnd:
+            ". El prefijo indica cuántos bits están reservados para la red.",
           formula: "La fórmula base es:",
-          note:
-            "En laboratorio usamos esa regla práctica aunque algunos entornos reservan direcciones adicionales.",
+          note: "En laboratorio usamos esa regla práctica aunque algunos entornos reservan direcciones adicionales.",
           exampleA: "Ejemplo A: `10.20.0.0/16`",
           exampleAConclusion:
             "Eso explica por qué un `/16` sirve bien como rango maestro: deja mucho espacio para varias subredes internas.",
@@ -1536,8 +1729,7 @@ const es = {
         },
         membership: {
           title: "4.2. Cómo saber si una IP pertenece a una subred",
-          body:
-            "En un `/24`, los primeros 3 octetos identifican la red y el último octeto cambia por host.",
+          body: "En un `/24`, los primeros 3 octetos identifican la red y el último octeto cambia por host.",
           mentalRule: "Regla mental rápida:",
           exampleC: "Ejemplo C: `10.20.1.128/25`",
           exampleCBody: "Un `/25` divide el `/24` en dos bloques:",
@@ -1551,8 +1743,7 @@ const es = {
           publicStart: "Una",
           publicEnd:
             "sirve para acceso desde Internet cuando la topología, la subred y las reglas de seguridad lo permiten.",
-          note:
-            "No compiten entre sí: una VM puede tener private IP siempre, y public IP solo si el diseño lo requiere.",
+          note: "No compiten entre sí: una VM puede tener private IP siempre, y public IP solo si el diseño lo requiere.",
           exampleD: "Ejemplo D: cómo leerlo en una VM pública",
           exampleDConclusion:
             "Si haces `ssh` desde tu computador, entrarás por la public IP. Pero dentro de la nube, otras máquinas alcanzarán esa VM por su private IP.",
@@ -1560,8 +1751,7 @@ const es = {
         },
         goldenRule: {
           title: "5. Regla de oro",
-          body:
-            "Ningún segmento debe salirse del rango maestro, ninguna subred debe salirse de su segmento y ninguna IP fija debe salirse de su subred. Si mantienes esa jerarquía, el modelado suele ser estable y fácil de explicar en la demo.",
+          body: "Ningún segmento debe salirse del rango maestro, ninguna subred debe salirse de su segmento y ninguna IP fija debe salirse de su subred. Si mantienes esa jerarquía, el modelado suele ser estable y fácil de explicar en la demo.",
         },
       },
     },
@@ -1572,7 +1762,8 @@ const es = {
       cidrRequired: "El bloque CIDR es obligatorio",
       cidrFormat: "El bloque CIDR debe tener formato 192.168.0.0/24",
       cidrInvalid: "El bloque CIDR es inválido",
-      cidrPrefixRoom: "El CIDR debe dejar espacio para subredes (por ejemplo /16 a /24)",
+      cidrPrefixRoom:
+        "El CIDR debe dejar espacio para subredes (por ejemplo /16 a /24)",
       invalidCloudProvider: "Cloud provider inválido",
       cloudProviderRequired: "Cloud provider es obligatorio",
       regionRequired: "La región es obligatoria",
