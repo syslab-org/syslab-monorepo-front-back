@@ -1040,6 +1040,155 @@ const en = {
         delete: "Delete node",
       },
     },
+    routerForm: {
+      headerEyebrow: "connectivity node",
+      headerTitle: "Connectivity Policy",
+      headerSubtitle:
+        "Define the connectivity mode and traffic policies between connected network segments.",
+      identifier: "Identifier",
+      connectedSegments: "Segments connected to this node:",
+      cidrNa: "CIDR n/a",
+      none: "(none)",
+      noneOption: "— None —",
+      connectivityModel: "Connectivity model",
+      modeOptions: {
+        peering: "Direct links (AWS: Peering)",
+        tgw: "Hub routing (AWS: Transit Gateway)",
+      },
+      modeHelp:
+        "This selector defines the neutral connectivity model. The AWS translation can be pairwise peering or a central Transit Gateway. Final connectivity depends on the policies you declare.",
+      academic: {
+        noConnectivity: {
+          title: "No connectivity between segments",
+          message:
+            "This node needs at least 2 connected segments to model traffic between them.",
+        },
+        pointToPoint: {
+          title: "Point-to-point topology",
+          message:
+            "With 2 connected segments, this node will act as a simple intermediary. Communication only exists if you define explicit policies.",
+        },
+        multiPoint: {
+          title: "Multipoint topology",
+          message:
+            "With more than 2 connected segments, this node centralizes connectivity. You should define clear policies to control which segment can communicate with which.",
+        },
+      },
+      modeSummary: {
+        tgw: {
+          title: "Hub routing",
+          detailLarge:
+            "The topology will be implemented as a central hub with {{count}} attachment(s).",
+          detailSmall:
+            "With few segments, hub mode can be more complex than a direct link.",
+          bulletAws:
+            "AWS translation: 1 Transit Gateway + 1 attachment per connected segment.",
+          bulletTraffic:
+            "Traffic passes through the central hub; there is no mesh of direct links between pairs.",
+          bulletPing:
+            "For bidirectional ping, define forward and return routes in the router table.",
+        },
+        peering: {
+          title: "Direct links",
+          detail:
+            "With your current topology, the maximum is {{count}} direct link(s) between pairs.",
+          bulletAws:
+            "AWS translation: 1 peering connection per pair with routes declared in both directions.",
+          bulletTransit:
+            "It is not transitive: A↔B and B↔C do not automatically enable A↔C.",
+          bulletManySegments:
+            "With several segments, the number of pairs and route maintenance both increase.",
+          bulletSmallLabs:
+            "It is ideal for small, direct labs.",
+        },
+      },
+      chips: {
+        awsHub: "AWS: 1 central hub",
+        awsDirect: "AWS: direct links by pair",
+        readingHub: "Reading: traffic passes through the hub",
+        readingDirect: "Reading: traffic goes directly between segments",
+        scales: "Scales better with several segments",
+        simple: "Simpler for small labs",
+      },
+      stats: {
+        pairs: "Pairs with routes: {{count}}",
+        bidirectional: "Bidirectional: {{count}}",
+        oneWay: "One-way: {{count}}",
+        effectiveHub: "Effective payload: active hub routing",
+        effectiveDirect: "Effective payload: active direct links",
+        isolated: "Effective payload: isolated",
+      },
+      alerts: {
+        pendingReverse: {
+          before: "In mode",
+          after:
+            "you need forward and return routes for each pair of segments so that link can materialize.",
+        },
+        noPolicies: {
+          before:
+            "There are segments visually connected to this node, but you have not defined policies. If you deploy like this, the payload will be",
+          isolated: "isolated",
+          after:
+            "even though the edge toward the router remains visible on the canvas.",
+        },
+        notEffective:
+          "The node already has policies, but they still do not generate effective connectivity. In peering, that usually means the return route from the other segment is missing.",
+      },
+      routingCopy: {
+        tgw: {
+          sectionTitle: "Policies toward the hub",
+          intro:
+            "Each row indicates which traffic leaves one segment and is sent to the hub to reach another connected network.",
+          explainer:
+            "Here you are not defining a direct link between pairs. You are defining which destinations should be sent to the central hub.",
+          sourceLabel: "Segment sending to the hub",
+          destVpcLabel: "Segment reached through the hub",
+          destCidrLabel: "CIDR sent to the hub",
+          oneWayLabel: "Return missing",
+        },
+        peering: {
+          sectionTitle: "Policies between direct peers",
+          intro:
+            "Each row represents one direct destination between segments. In direct links, a pair only becomes operational when you declare both directions.",
+          explainer:
+            "Here you are modeling direct connectivity between two specific segments.",
+          sourceLabel: "Source segment",
+          destVpcLabel: "Direct destination segment",
+          destCidrLabel: "Destination CIDR",
+          oneWayLabel: "One-way only",
+        },
+      },
+      table: {
+        edgesMeaning:
+          "Canvas edges only indicate which segments are connected to this policy node. The connectivity that will really translate to AWS comes from the routes/policies defined below.",
+        title: "How to read this table",
+        origin: "- Source: the segment from which traffic leaves.",
+        destination: "- Destination: the network you want to reach.",
+        peering:
+          "- In direct links you model direct connectivity between segment pairs.",
+        tgw:
+          "- In hub routing you model which destinations should be sent to the central hub.",
+      },
+      validation: {
+        selectSource: "Select the source segment",
+        sourceNotConnected:
+          "The source segment is not connected to this policy",
+        destRequired: "Destination CIDR is required",
+        destInvalid: "Destination CIDR is invalid",
+        destNotConnected:
+          "The destination segment is not connected to this policy",
+        destWithinSegment:
+          "Destination CIDR must be {{value}} or be contained within that segment",
+        duplicateRoute:
+          "Duplicate route (same source and destination CIDR)",
+      },
+      actions: {
+        addRoute: "+ Route",
+        save: "Save",
+        deleteNode: "Delete node",
+        deleteRoute: "Delete route",
+      },
+    },
     deployDialog: {
       exportError: "Could not export the plan. Check the console.",
       title: "Confirm infrastructure",
