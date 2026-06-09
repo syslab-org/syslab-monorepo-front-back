@@ -74,7 +74,7 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges, t }) => {
     const sshCidr = String(selectedNode.data?.allowedSshCidr || "").trim();
 
     return {
-      title: `Network Segment: ${label}`,
+      title: t('canvas.learningGuide.focus.segmentTitle', { label }),
       subtitle: t('canvas.learningGuide.focus.segmentSubtitle'),
       badges: [
         makeBadge(`CIDR ${selectedNode.data?.cidrBlock || "n/a"}/${selectedNode.data?.prefixLength || "?"}`),
@@ -83,31 +83,32 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges, t }) => {
         makeBadge(sshCidr ? t('canvas.learningGuide.focus.sshExposed') : t('canvas.learningGuide.focus.sshHidden'), sshCidr ? "info" : "default"),
       ],
       labLines: [
-        `Este segmento representa un dominio principal de red dentro del laboratorio.`,
+        t('canvas.learningGuide.focus.segmentLabDomain'),
         publicSubnets > 0
-          ? `Tienes ${publicSubnets} zona(s) pública(s): sirven para bastions o servicios con salida directa.`
-          : "No hay zonas públicas; este segmento no está pensado para exposición directa.",
+          ? t('canvas.learningGuide.focus.publicZones', { count: publicSubnets })
+          : t('canvas.learningGuide.focus.noPublicZones'),
         privateSubnets > 0
-          ? `Tienes ${privateSubnets} zona(s) privada(s): sirven para workloads internos.`
-          : "No hay zonas privadas; toda la práctica está concentrada en areas públicas o no definidas.",
+          ? t('canvas.learningGuide.focus.privateZones', { count: privateSubnets })
+          : t('canvas.learningGuide.focus.noPrivateZones'),
       ],
       awsLines: [
-        `AWS creará 1 VPC real en ${selectedNode.data?.region || "us-east-1"} con el CIDR indicado.`,
+        t('canvas.learningGuide.focus.segmentAwsVpc', {
+          region: selectedNode.data?.region || "us-east-1",
+        }),
         hasIgw
-          ? "Se creará y adjuntará un Internet Gateway para permitir salida/entrada pública donde existan rutas y SGs."
-          : "Sin Internet Gateway, la VPC no tendrá salida pública directa.",
+          ? t('canvas.learningGuide.focus.igwCreated')
+          : t('canvas.learningGuide.focus.igwMissing'),
         hasNat
-          ? "Se creará 1 NAT Gateway: tus redes privadas podrán salir a Internet, pero no recibir tráfico entrante."
-          : "Sin NAT Gateway, las subnets privadas tampoco tendrán salida pública a menos que exista otro camino.",
+          ? t('canvas.learningGuide.focus.natCreated')
+          : t('canvas.learningGuide.focus.natMissing'),
         hasNat
-          ? "Si asignas una Elastic IP al NAT, debe ser un Allocation ID existente de AWS (por ejemplo `eipalloc-...`), no la IP pública visible."
-          : "Si luego habilitas NAT y quieres fijar su EIP, usa un Allocation ID real de AWS.",
+          ? t('canvas.learningGuide.focus.natEipDefined')
+          : t('canvas.learningGuide.focus.natEipLater'),
         sshCidr
-          ? `El Security Group abrirá TCP/22 desde ${sshCidr}.`
-          : "No se abrirá SSH administrativo desde Internet salvo que lo habilites explícitamente.",
+          ? t('canvas.learningGuide.focus.sshRule', { value: sshCidr })
+          : t('canvas.learningGuide.focus.noSshRule'),
       ],
-      whyItMatters:
-        "Este segmento define el limite principal del laboratorio. A partir de aqui se decide segmentacion, exposicion y conectividad hacia otras redes.",
+      whyItMatters: t('canvas.learningGuide.focus.segmentWhy'),
     };
   }
 
@@ -134,7 +135,7 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges, t }) => {
     ).length;
 
     return {
-      title: `Connectivity Policy: ${label}`,
+      title: t('canvas.learningGuide.focus.routerTitle', { label }),
       subtitle: mode === "tgw" ? t('canvas.learningGuide.focus.routerHub') : t('canvas.learningGuide.focus.routerDirect'),
       badges: [
         makeBadge(mode === "tgw" ? t('canvas.learningGuide.focus.routerHubMode') : t('canvas.learningGuide.focus.routerDirectMode'), mode === "tgw" ? "primary" : "secondary"),
@@ -144,20 +145,19 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges, t }) => {
       ],
       labLines: [
         mode === "tgw"
-          ? "En el laboratorio este nodo actua como un hub: los segmentos envian trafico al nodo para alcanzar otras redes."
-          : "En el laboratorio este nodo representa enlaces directos por pares: cada segmento necesita policies explicitas hacia el otro.",
-        "Las filas de policy no son decorativas: determinan quien puede hablar con quien.",
+          ? t('canvas.learningGuide.focus.routerHubLab')
+          : t('canvas.learningGuide.focus.routerDirectLab'),
+        t('canvas.learningGuide.focus.policyRows'),
       ],
       awsLines: [
         mode === "tgw"
-          ? `AWS implementará 1 Transit Gateway y ${connectedVpcs.size} attachment(s) para los segmentos conectados.`
-          : "AWS implementará conexiones VPC Peering entre los pares que realmente queden declarados por policies.",
+          ? t('canvas.learningGuide.focus.routerHubAws', { count: connectedVpcs.size })
+          : t('canvas.learningGuide.focus.routerPeeringAws'),
         mode === "tgw"
-          ? "Cada policy hacia TGW enviara trafico al hub central; luego el hub lo reencamina hacia el segmento destino."
-          : "En peering no existe tránsito implícito: A↔B y B↔C no conectan automáticamente A↔C.",
+          ? t('canvas.learningGuide.focus.routerHubRoute')
+          : t('canvas.learningGuide.focus.routerPeeringRoute'),
       ],
-      whyItMatters:
-        "Aquí se define la diferencia entre una topología punto a punto y una topología centralizada. Ese cambio altera tanto la escalabilidad como la forma de razonar el tráfico.",
+      whyItMatters: t('canvas.learningGuide.focus.routerWhy'),
     };
   }
 
@@ -165,7 +165,7 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges, t }) => {
     const subnetType = String(selectedNode.data?.subnetType || "").toLowerCase();
     const routeTable = selectedNode.data?.routeTable || "main";
     return {
-      title: `Zone Segment: ${label}`,
+      title: t('canvas.learningGuide.focus.zoneTitle', { label }),
       subtitle: t('canvas.learningGuide.focus.zoneSubtitle'),
       badges: [
         makeBadge(subnetType === "public" ? t('canvas.learningGuide.focus.publicZone') : t('canvas.learningGuide.focus.privateZone'), subnetType === "public" ? "success" : "default"),
@@ -174,17 +174,16 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges, t }) => {
       ],
       labLines: [
         subnetType === "public"
-          ? "En el laboratorio esta zona esta pensada para bastions o workloads con salida directa."
-          : "En el laboratorio esta zona esta pensada para workloads internos o menos expuestos.",
+          ? t('canvas.learningGuide.focus.publicZoneLab')
+          : t('canvas.learningGuide.focus.privateZoneLab'),
       ],
       awsLines: [
-        "AWS creará 1 aws_subnet con el CIDR indicado y la asociará a una route table.",
+        t('canvas.learningGuide.focus.subnetAws'),
         subnetType === "public"
-          ? "Será pública solo si su route table apunta a un Internet Gateway."
-          : "Será privada mientras no tenga ruta pública directa.",
+          ? t('canvas.learningGuide.focus.subnetPublicRule')
+          : t('canvas.learningGuide.focus.subnetPrivateRule'),
       ],
-      whyItMatters:
-        "La subnet no define conectividad por sí sola; la combinación de route table y Security Group determina su comportamiento real.",
+      whyItMatters: t('canvas.learningGuide.focus.zoneWhy'),
     };
   }
 
@@ -196,7 +195,7 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges, t }) => {
     const hasPublicIp = Boolean(selectedNode.data?.associatePublicIp);
     const keyPair = selectedNode.data?.ssh_access || selectedNode.data?.sshAccess || "n/a";
     return {
-      title: `Workload: ${label}`,
+      title: t('canvas.learningGuide.focus.workloadTitle', { label }),
       subtitle: t('canvas.learningGuide.focus.workloadSubtitle'),
       badges: [
         makeBadge(selectedNode.data?.instance_type || "tipo n/a"),
@@ -204,16 +203,15 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges, t }) => {
         makeBadge(`Key ${keyPair}`),
       ],
       labLines: [
-        "En el laboratorio este nodo representa el equipo final sobre el que harás pruebas o desplegarás servicios.",
+        t('canvas.learningGuide.focus.workloadLab'),
       ],
       awsLines: [
-        "AWS creará 1 instancia EC2 con la AMI, tipo y key pair definidos.",
+        t('canvas.learningGuide.focus.workloadAws'),
         hasPublicIp
-          ? "Podrás administrarla desde fuera si la ruta pública y el SG lo permiten."
-          : "Solo será alcanzable desde dentro de la red o mediante saltos intermedios.",
+          ? t('canvas.learningGuide.focus.workloadPublicAccess')
+          : t('canvas.learningGuide.focus.workloadPrivateAccess'),
       ],
-      whyItMatters:
-        "Las pruebas de ping y acceso SSH terminan ocurriendo aqui. Si el workload esta mal ubicado o mal protegido, el laboratorio no sera verificable.",
+      whyItMatters: t('canvas.learningGuide.focus.workloadWhy'),
     };
   }
 

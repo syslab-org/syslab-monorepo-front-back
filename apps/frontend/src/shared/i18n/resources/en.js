@@ -818,6 +818,228 @@ const en = {
         unknown: "Availability not confirmed",
       },
     },
+    vpcForm: {
+      headerEyebrow: "network segment",
+      headerTitle: "Network Segment",
+      headerSubtitle:
+        "Define address space, internet exposure, and egress behavior for this segment. AWS translation: VPC.",
+      networkFallback: "network",
+      snackbar: {
+        autoSelectNatSubnet: 'The public zone "{{value}}" was selected automatically for the NAT.',
+        noPublicSubnetsForNat: "There are no public zones available to place the NAT Gateway.",
+        natWithoutPrivateZones:
+          "Managed egress is enabled, but there are still no private zones that benefit from that NAT.",
+        selectNatPublicZoneBeforeSave:
+          "You must select a public zone for the NAT before saving.",
+        createPublicZoneFirst:
+          "Create a public zone first to enable managed egress.",
+      },
+      fields: {
+        segmentName: "Segment name",
+        segmentCidr: "Segment CIDR block (inside {{parent}})",
+        segmentCidrPlaceholder: "10.30.0.0/20",
+        region: "Region",
+        internetEdge: "Internet edge",
+        enabled: "Enabled",
+        disabled: "Disabled",
+        publicZoneForEgress: "Public zone for egress",
+        selectPublicZone: "Select a public zone",
+        publicZoneHelp:
+          "Create a public zone inside this segment first to host managed egress.",
+        natEip: "Elastic IP Allocation ID (optional, AWS)",
+        natEipPlaceholder: "eipalloc-0123456789abcdef0",
+        natEipHelpEnabled:
+          "If you leave it empty, AWS will assign a new Elastic IP. If you already reserved one, enter its real Allocation ID (`eipalloc-...`), not the public IP.",
+        natEipHelpDisabled: "Only applies if you enable managed egress.",
+        allowedSsh: "Allowed SSH CIDR (optional)",
+        allowedSshPlaceholder: "203.0.113.5/32",
+        allowedSshHelp:
+          "Ex: 203.0.113.5/32. This creates a Security Group rule to allow SSH from your public IP.",
+      },
+      info: {
+        title: "What this segment means",
+        cidr: "- The CIDR defines the main address range of the segment.",
+        internetEdge:
+          "- Internet edge enables direct public egress where proper routes exist.",
+        managedEgress:
+          "- Managed egress gives outbound access to private zones, but not inbound Internet access.",
+        elasticIp:
+          "- In AWS, if you define an Elastic IP for egress, it must be a real Allocation ID (`eipalloc-...`), not a public IP.",
+        allowedSsh:
+          "- Allowed SSH CIDR opens TCP/22 only from the IP or network you declare.",
+      },
+      chips: {
+        igwEnabled: "AWS: creates Internet Gateway",
+        igwDisabled: "AWS: no Internet Gateway",
+        natEnabled: "AWS: creates NAT Gateway",
+        natDisabled: "AWS: no NAT Gateway",
+        privateZones: "Private zones: {{count}}",
+        sshExposed: "Security: SSH exposed to CIDR",
+        sshHidden: "Security: no external SSH",
+      },
+      alerts: {
+        noPublicZones:
+          "There are no public zones in this VPC. Create one to enable managed egress.",
+        topologyReady:
+          "You already have a topology that fits private egress: one public zone and one private zone. If you want private zones to reach the Internet without becoming public, enable",
+        natWithoutPrivateZones:
+          "Managed egress is active, but this VPC has no private zones. The NAT can be created, but you will not be solving the main teaching case of controlled private egress.",
+        demoCase:
+          "Good demo case: the NAT will live in a public zone and provide egress to the private zones of this VPC.",
+      },
+      tooltip: {
+        enableNatBlocked:
+          "Create a public zone first to enable managed egress.",
+        saveBlocked:
+          "Select a public zone for managed egress before saving.",
+      },
+      switchLabel: "Enable managed egress",
+      actions: {
+        save: "Save configuration",
+        delete: "Delete node",
+        saveHint: "You must select a public zone for managed egress.",
+      },
+    },
+    instanceForm: {
+      headerEyebrow: "workload node",
+      headerTitle: "Instance",
+      headerSubtitle:
+        "Configure naming, addressing, and runtime profile for this VM.",
+      subnetFallback: "subnet",
+      sections: {
+        identity: {
+          eyebrow: "Identity and network",
+          title: "Name and private IP",
+          helper:
+            "First define how this VM will appear inside the segment and whether you want to pin an IP.",
+        },
+        runtime: {
+          eyebrow: "Runtime",
+          title: "Image and size",
+          helper:
+            "Here you decide which AMI creates the instance and what machine size will be reserved.",
+        },
+        ssh: {
+          eyebrow: "SSH access",
+          title: "Key pair and compatibility",
+          helper:
+            "Here you choose the key pair reference AWS will look for when launching the instance.",
+        },
+      },
+      fields: {
+        name: "Instance name",
+        privateIp: "Private IP (inside {{subnet}})",
+        privateIpHelp: 'Leave it empty or write "auto" for automatic assignment.',
+        privateIpPlaceholder: "10.10.0.10  •  or write: auto",
+        ami: "AMI",
+        useDefaultAmi: "Use default AMI",
+        amiFallback:
+          "No AMIs are configured in the catalog. If you leave it empty, the backend will use the default AMI.",
+        instanceType: "Instance type",
+        sshAccess: "SSH access (key pair)",
+        sshAccessHelp:
+          "Choose a compatible key pair or type the name manually.",
+        sshAccessManualHelp:
+          "Optional. You can manually type the name of an existing key pair in AWS.",
+        sshAccessPlaceholder: "e.g. tesis-key",
+      },
+      quickTips: {
+        title: "Quick tips",
+        privateIp:
+          "The private IP must belong to the parent subnet. If you use auto, the provider will assign an available IP.",
+        publicIp:
+          "A public IP does not replace the private IP: it depends on the subnet and the deploy policy.",
+      },
+      scope: {
+        courseShared: "Course shared",
+        personal: "Personal",
+        unknown: "unknown",
+      },
+      snackbar: {
+        scopeMismatch:
+          "The selected key pair is {{scope}}, but this lab will deploy with a {{executionScope}} connection.",
+        connectionMismatch:
+          "The selected key pair is linked to another cloud connection. Verify that it exists in the effective deploy account.",
+      },
+      compatibility: {
+        scopeReason: "scope {{value}}",
+        regionReason: "region {{value}}",
+        otherConnection: "another connection",
+        mismatch: "Does not match because of {{reasons}}",
+        match: "Compatible with this lab",
+        compatible: "Compatible",
+        review: "Review",
+        selectedCompatible: "Key pair compatible with this lab",
+      },
+      catalogHint:
+        "The catalog prioritizes key pairs compatible with the effective connection and region, and still lets you type a name manually.",
+      executionRegion: "Effective region: {{value}}",
+      hiddenOptions:
+        "We hid {{count}} key pair option(s) from the catalog because they do not match the effective cloud connection or region of this lab.",
+      alerts: {
+        arm64:
+          "Types t4g.* use ARM architecture (Graviton). Make sure you choose an ARM64-compatible AMI.",
+        scopeMismatch: {
+          before: "The selected key pair is of type",
+          middle:
+            "but this lab is resolving a cloud connection of type",
+          after:
+            "AWS might not find that key pair in the effective deploy account.",
+        },
+        connectionMismatch:
+          "The selected key pair is linked to another cloud connection. Verify that it also exists in the account this lab will really use to deploy.",
+      },
+      systemValidation: {
+        title: "What the system validates",
+        deploy:
+          "Deploy validates that the key pair exists in the effective account and region.",
+        ssh:
+          "Subsequent SSH access still depends on you having the .pem file outside the platform, on the machine from which you will connect.",
+      },
+      actions: {
+        save: "Save configuration",
+        delete: "Delete node",
+      },
+    },
+    subnetForm: {
+      headerEyebrow: "network zone",
+      headerTitle: "Zone Segment",
+      headerSubtitle:
+        "Define traffic behavior and addressing inside the parent network segment. AWS translation: subnet.",
+      segmentFallback: "segment",
+      info: {
+        title: "What this zone means",
+        parentCidr: "- The zone must live inside the CIDR of the parent segment.",
+        noOverlap:
+          "- Zones must not overlap each other inside the same segment.",
+        publicVsPrivate:
+          "- Public zone allows broader ingress/egress by route policy. Private zone keeps traffic internal by default.",
+      },
+      alerts: {
+        privateZoneBefore:
+          "This zone is private. If you later need Internet egress without exposing it publicly, enable",
+        managedEgressLabel: "managed egress",
+        privateZoneAfter: "from the parent",
+        parentSegmentLabel: "Network Segment",
+      },
+      fields: {
+        name: "Zone name",
+        cidr: "Zone CIDR block (inside {{parent}})",
+        cidrPlaceholder: "10.10.0.0/24",
+        availabilityZone: "Availability Zone",
+        type: "Zone type",
+        autoAssignPublicIp:
+          "Auto-assign public IPv4 (recommended for public zones)",
+      },
+      type: {
+        public: "Public",
+        private: "Private",
+      },
+      actions: {
+        save: "Save configuration",
+        delete: "Delete node",
+      },
+    },
     deployDialog: {
       exportError: "Could not export the plan. Check the console.",
       title: "Confirm infrastructure",
@@ -933,6 +1155,7 @@ const en = {
         neutralLabel: "Neutral:",
         awsLabel: "AWS:",
         blockers: "Detected blockers",
+        moreErrors: "+ {{count}} additional errors.",
         openValidation: "Open validation",
         openDeploy: "Open deploy",
       },
@@ -1006,6 +1229,35 @@ const en = {
         managedEgressOff: "No managed egress",
         sshExposed: "SSH from a defined IP",
         sshHidden: "SSH not exposed",
+        segmentLabDomain:
+          "This segment represents a main network domain inside the lab.",
+        publicZones:
+          "You have {{count}} public zone(s): they are useful for bastions or services with direct egress.",
+        noPublicZones:
+          "There are no public zones; this segment is not designed for direct exposure.",
+        privateZones:
+          "You have {{count}} private zone(s): they are useful for internal workloads.",
+        noPrivateZones:
+          "There are no private zones; the whole practice is concentrated in public or undefined areas.",
+        segmentAwsVpc:
+          "AWS will create 1 real VPC in {{region}} with the indicated CIDR.",
+        igwCreated:
+          "An Internet Gateway will be created and attached to allow public ingress/egress where routes and security groups exist.",
+        igwMissing:
+          "Without an Internet Gateway, the VPC will not have direct public egress.",
+        natCreated:
+          "AWS will create 1 NAT Gateway: your private networks will be able to reach the Internet, but not receive inbound traffic.",
+        natMissing:
+          "Without a NAT Gateway, private subnets will not have public egress unless another path exists.",
+        natEipDefined:
+          "If you assign an Elastic IP to the NAT, it must be an existing AWS Allocation ID (for example `eipalloc-...`), not the visible public IP.",
+        natEipLater:
+          "If you enable NAT later and want to pin its EIP, use a real AWS Allocation ID.",
+        sshRule: "The Security Group will open TCP/22 from {{value}}.",
+        noSshRule:
+          "Administrative SSH from the Internet will not be opened unless you enable it explicitly.",
+        segmentWhy:
+          "This segment defines the main boundary of the lab. From here you decide segmentation, exposure, and connectivity toward other networks.",
         routerHub: "Central connectivity hub",
         routerDirect: "Direct connectivity between pairs",
         routerHubMode: "Hub routing mode",
@@ -1014,17 +1266,181 @@ const en = {
         declaredPolicies: "{{count}} declared polic(y/ies)",
         missingReturns: "{{count}} missing return(s)",
         roundTripPolicies: "Round-trip policies consistent",
+        routerHubLab:
+          "In the lab, this node acts as a hub: segments send traffic to the node to reach other networks.",
+        routerDirectLab:
+          "In the lab, this node represents direct pair links: each segment needs explicit policies toward the other.",
+        policyRows:
+          "Policy rows are not decorative: they determine who can talk to whom.",
+        routerHubAws:
+          "AWS will implement 1 Transit Gateway and {{count}} attachment(s) for the connected segments.",
+        routerPeeringAws:
+          "AWS will implement VPC Peering connections between the pairs that are actually declared by policies.",
+        routerHubRoute:
+          "Each policy toward the TGW sends traffic to the central hub; then the hub forwards it to the destination segment.",
+        routerPeeringRoute:
+          "In peering there is no implicit transit: A↔B and B↔C do not automatically connect A↔C.",
+        routerWhy:
+          "Here the difference between a point-to-point topology and a centralized topology is defined. That changes both scalability and how you reason about traffic.",
         zoneSubtitle: "Internal zone inside a main segment.",
         publicZone: "Public",
         privateZone: "Private",
         routeTable: "Table {{value}}",
+        publicZoneLab:
+          "In the lab this zone is intended for bastions or workloads with direct egress.",
+        privateZoneLab:
+          "In the lab this zone is intended for internal or less exposed workloads.",
+        subnetAws:
+          "AWS will create 1 aws_subnet with the indicated CIDR and associate it with a route table.",
+        subnetPublicRule:
+          "It will be public only if its route table points to an Internet Gateway.",
+        subnetPrivateRule:
+          "It will be private while it has no direct public route.",
+        zoneWhy:
+          "The subnet does not define connectivity by itself; the combination of route table and Security Group determines its real behavior.",
         workloadSubtitle: "Host where the practice materializes.",
+        segmentTitle: "Network Segment: {{label}}",
+        routerTitle: "Connectivity Policy: {{label}}",
+        zoneTitle: "Zone Segment: {{label}}",
+        workloadTitle: "Workload: {{label}}",
         publicIp: "With public IP",
         privateOnly: "Private IP only",
+        workloadLab:
+          "In the lab this node represents the final machine on which you will run tests or deploy services.",
+        workloadAws:
+          "AWS will create 1 EC2 instance with the defined AMI, size, and key pair.",
+        workloadPublicAccess:
+          "You will be able to manage it from outside if the public route and security group allow it.",
+        workloadPrivateAccess:
+          "It will only be reachable from inside the network or through intermediate hops.",
+        workloadWhy:
+          "Ping and SSH access tests end up happening here. If the workload is badly placed or badly protected, the lab will not be verifiable.",
         defaultSubtitle: "Contextual explanation of the selected element.",
         defaultLine:
           "Select a main canvas element to see a more precise pedagogical reading.",
       },
+    },
+    cidrGuide: {
+      button: "How to calculate?",
+      title: "Quick guide to CIDR, subnets, and IP addresses",
+      templateWarning:
+        "If you change the parent CIDR after choosing a template, the preloaded canvas does not automatically recalculate all IPs. In that case, manually review segment CIDRs, subnets, and fixed IPs before validating or deploying.",
+      understood: "Understood",
+      sections: {
+        meaning: {
+          title: "1. What a CIDR means",
+          bodyStart: "A CIDR combines a base address and a prefix. For example,",
+          bodyEnd:
+            "means the lab has a wide block from which we will later derive segments and subnets.",
+        },
+        rule: {
+          title: "2. Practical rule for this MVP",
+          bodyStart: "If you start with a",
+          bodyMiddle: ", you will usually be able to divide it comfortably into several",
+          bodyEnd:
+            ". That combination is convenient for a lab because it leaves room to grow without having to redo the addressing.",
+        },
+        example: {
+          title: "3. Simple example",
+          masterStart: "Suppose your parent range is",
+          defineSegments: "From there you can define segments or VPCs such as:",
+          simpleVpc: "- `10.20.0.0/16` for a simple VPC",
+          multiSegments: "- or separate several segments into different ranges if the case requires it",
+          subnets: "Inside a VPC, you can create subnets such as:",
+          publicSubnet: "- `10.20.1.0/24` for a public subnet",
+          privateSubnet: "- `10.20.2.0/24` for a private subnet",
+          workloads: "And then assign IPs to workloads, for example:",
+          bastion: "- `10.20.1.10` for a bastion",
+          privateApp: "- `10.20.2.10` for a private app",
+        },
+        visualMap: {
+          title: "3.1. Visual map of the addressing",
+          body: "Think of the lab as a hierarchy: each level contains the next one.",
+          masterLabel: "Lab / parent range",
+          segmentLabel: "Segment / VPC",
+          publicSubnetLabel: "Public subnet",
+          publicWorkload: "Example workload: `10.20.1.10`",
+          privateSubnetLabel: "Private subnet",
+          privateWorkload: "Example workload: `10.20.2.10`",
+        },
+        howToThink: {
+          title: "4. How to think about the calculation without overcomplicating it",
+          step1: "1. First choose the parent range of the lab.",
+          step2: "2. Decide how many segments or VPCs you will need.",
+          step3: "3. Inside each segment, separate public and private subnets with non-overlapping blocks.",
+          step4: "4. Reserve fixed IPs for workloads only after you clearly define their subnets.",
+        },
+        math: {
+          title: "4.1. How it is calculated mathematically",
+          bodyStart: "In IPv4 there are",
+          bodyEnd: ". The prefix indicates how many bits are reserved for the network.",
+          formula: "The base formula is:",
+          note:
+            "In labs we use that practical rule even though some environments reserve additional addresses.",
+          exampleA: "Example A: `10.20.0.0/16`",
+          exampleAConclusion:
+            "That explains why a `/16` works well as a parent range: it leaves plenty of space for several internal subnets.",
+          exampleB: "Example B: `10.20.1.0/24`",
+          exampleBConclusion:
+            "That is why a `/24` subnet is usually convenient for labs: you can assign several fixed IPs without running short.",
+        },
+        membership: {
+          title: "4.2. How to know if an IP belongs to a subnet",
+          body:
+            "In a `/24`, the first 3 octets identify the network and the last octet changes per host.",
+          mentalRule: "Quick mental rule:",
+          exampleC: "Example C: `10.20.1.128/25`",
+          exampleCBody: "A `/25` divides the `/24` into two blocks:",
+          then: "Then:",
+        },
+        ipTypes: {
+          title: "4.3. Private IP vs Public IP",
+          privateStart: "A",
+          privateEnd:
+            "identifies the workload inside its internal network. That IP is used for routing between subnets and segments.",
+          publicStart: "A",
+          publicEnd:
+            "is used for access from the Internet when the topology, subnet, and security rules allow it.",
+          note:
+            "They do not compete with each other: a VM can always have a private IP, and a public IP only if the design requires it.",
+          exampleD: "Example D: how to read it on a public VM",
+          exampleDConclusion:
+            "If you SSH from your computer, you will enter through the public IP. But inside the cloud, other machines will reach that VM through its private IP.",
+          practicalRule: "Practical rule for labs",
+        },
+        goldenRule: {
+          title: "5. Golden rule",
+          body:
+            "No segment should go outside the parent range, no subnet should go outside its segment, and no fixed IP should go outside its subnet. If you keep that hierarchy, the modeling is usually stable and easy to explain in the demo.",
+        },
+      },
+    },
+    validation: {
+      vlanNameMin: "VLAN name must be at least 3 characters",
+      vlanNameMax: "VLAN name must be at most 60 characters",
+      vlanNameRequired: "VLAN name is required",
+      cidrRequired: "CIDR block is required",
+      cidrFormat: "CIDR block must be in format 192.168.0.0/24",
+      cidrInvalid: "CIDR block is invalid",
+      cidrPrefixRoom: "CIDR should leave room for subnets (e.g. /16 to /24)",
+      invalidCloudProvider: "Invalid cloud provider",
+      cloudProviderRequired: "Cloud provider is required",
+      regionRequired: "Region is required",
+      descriptionMax: "Description must have at most 4000 characters",
+      vpcNameRequired: "VPC name is required",
+      minThree: "Min 3 characters",
+      maxSixty: "Max 60",
+      nameRequired: "Name is required",
+      cidrShortRequired: "CIDR is required",
+      cidrExample: "CIDR is invalid (e.g.: 10.0.1.0/24)",
+      mustBeWithinVlan: "Must be within VLAN range {{value}}",
+      cidrOverlapVpc: "CIDR overlaps with another VPC in the VLAN",
+      enableIgwForNat: "Enable Internet Gateway to use NAT Gateway",
+      cidrInvalidExample: "Invalid CIDR (e.g.: 203.0.113.5/32)",
+      selectPublicSubnetNat: "Select the public subnet for NAT",
+      subnetMustBeSelected: "Subnet must be selected",
+      elasticIpInvalid:
+        "Invalid Elastic IP. Use an Allocation ID, for example: eipalloc-0123456789abcdef0",
     },
   },
   onboarding: {

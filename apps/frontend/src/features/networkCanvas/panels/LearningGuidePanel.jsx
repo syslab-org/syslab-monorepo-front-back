@@ -282,8 +282,7 @@ export default function LearningGuidePanel({
           ))}
           {issues.errors.length > maxIssuesToShow && (
             <Typography variant="caption" display="block">
-              + {issues.errors.length - maxIssuesToShow} errores adicionales.
-              
+              {t('canvas.learningGuide.panel.moreErrors', { count: issues.errors.length - maxIssuesToShow })}
             </Typography>
           )}
         </Alert>

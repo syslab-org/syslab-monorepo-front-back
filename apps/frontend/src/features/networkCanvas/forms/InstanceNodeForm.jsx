@@ -21,6 +21,7 @@ import {
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
+import { useTranslation } from "react-i18next";
 import CidrLearningGuideButton from '@/features/networkCanvas/ui/CidrLearningGuideButton';
 import { TYPE_INSTANCE_NODE } from "../utils/constants";
 import { INSTANCE_TYPE_OPTIONS } from './options/instanceTypes';
@@ -47,7 +48,13 @@ const InstanceNodeForm = ({
   executionTarget = null,
   defaultAssociatePublicIp = true,
 }) => {
+  const { t, i18n } = useTranslation();
   const [mismatchSnackbarOpen, setMismatchSnackbarOpen] = useState(false);
+  const formatScopeLabel = (scope) => {
+    if (scope === "course_shared") return t("canvas.instanceForm.scope.courseShared");
+    if (scope === "personal") return t("canvas.instanceForm.scope.personal");
+    return t("canvas.instanceForm.scope.unknown");
+  };
   const validationSchema = useFormValidationSchema(
     TYPE_INSTANCE_NODE,
     parentSubnetCidr,
@@ -79,7 +86,7 @@ const InstanceNodeForm = ({
           const name = String(entry?.name || "").trim();
           if (!name) return null;
           const label = String(entry?.label || "").trim();
-          const scopeLabel = entry?.scope === "course_shared" ? "Curso" : "Personal";
+          const scopeLabel = formatScopeLabel(String(entry?.scope || "").trim());
           const region = String(entry?.region || "").trim();
           const connectionName = String(entry?.cloud_connection?.name || "").trim();
           const courseName = String(entry?.course?.name || "").trim();
@@ -96,7 +103,7 @@ const InstanceNodeForm = ({
           };
         })
         .filter(Boolean),
-    [keyPairList]
+    [i18n.resolvedLanguage, keyPairList, t]
   );
 
   const {
@@ -133,6 +140,8 @@ const InstanceNodeForm = ({
   const selectedKeyPairScope = String(
     keyPairList.find((entry) => entry?.name === selectedKeyPairMeta?.value)?.scope || ""
   ).trim();
+  const selectedKeyPairScopeLabel = formatScopeLabel(selectedKeyPairScope);
+  const executionScopeLabel = formatScopeLabel(executionScope);
   const selectedKeyPairConnectionId = String(
     keyPairList.find((entry) => entry?.name === selectedKeyPairMeta?.value)?.cloud_connection?.id || ""
   ).trim();
@@ -144,9 +153,12 @@ const InstanceNodeForm = ({
     !!selectedKeyPairConnectionId &&
     executionConnectionId !== selectedKeyPairConnectionId;
   const mismatchSnackbarMessage = hasScopeMismatch
-    ? `La key pair seleccionada es ${selectedKeyPairScope}, pero este laboratorio desplegará con una conexión ${executionScope}.`
+    ? t("canvas.instanceForm.snackbar.scopeMismatch", {
+      scope: selectedKeyPairScopeLabel || selectedKeyPairScope,
+      executionScope: executionScopeLabel,
+    })
     : hasConnectionMismatch
-      ? "La key pair seleccionada está vinculada a otra conexión cloud. Verifica que exista en la cuenta efectiva del deploy."
+      ? t("canvas.instanceForm.snackbar.connectionMismatch")
       : "";
   const keyPairOptionsWithMatch = useMemo(
     () =>
@@ -158,16 +170,18 @@ const InstanceNodeForm = ({
           !executionConnectionId || !option.connectionId || option.connectionId === executionConnectionId;
         const isCompatible = scopeMatches && regionMatches && connectionMatches;
         const reasons = [];
-        if (!scopeMatches) reasons.push(`scope ${option.scope || "n/a"}`);
-        if (!regionMatches) reasons.push(`región ${option.region || "n/a"}`);
-        if (!connectionMatches) reasons.push("otra conexión");
+        if (!scopeMatches) reasons.push(t("canvas.instanceForm.compatibility.scopeReason", { value: formatScopeLabel(option.scope) }));
+        if (!regionMatches) reasons.push(t("canvas.instanceForm.compatibility.regionReason", { value: option.region || t("canvas.instanceForm.scope.unknown") }));
+        if (!connectionMatches) reasons.push(t("canvas.instanceForm.compatibility.otherConnection"));
         return {
           ...option,
           isCompatible,
-          compatibilityHint: reasons.length > 0 ? `No coincide por ${reasons.join(" · ")}` : "Compatible con este laboratorio",
+          compatibilityHint: reasons.length > 0
+            ? t("canvas.instanceForm.compatibility.mismatch", { reasons: reasons.join(" · ") })
+            : t("canvas.instanceForm.compatibility.match"),
         };
       }),
-    [keyPairOptions, executionScope, executionRegion, executionConnectionId]
+    [executionConnectionId, executionRegion, executionScope, keyPairOptions, t]
   );
   const compatibleKeyPairOptions = useMemo(
     () => keyPairOptionsWithMatch.filter((option) => option.isCompatible),
@@ -265,23 +279,23 @@ const InstanceNodeForm = ({
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="pt-node-form">
       <Box className="pt-node-form__header">
-        <Typography className="pt-node-form__eyebrow">workload node</Typography>
-        <Typography className="pt-node-form__title">Instance</Typography>
+        <Typography className="pt-node-form__eyebrow">{t("canvas.instanceForm.headerEyebrow")}</Typography>
+        <Typography className="pt-node-form__title">{t("canvas.instanceForm.headerTitle")}</Typography>
         <Typography className="pt-node-form__subtitle">
-          Configure naming, addressing and runtime profile for this VM.
+          {t("canvas.instanceForm.headerSubtitle")}
         </Typography>
       </Box>
 
       <Box className="pt-node-form__section">
         {renderSectionHeader(
-          "Identidad y red",
-          "Nombre e IP privada",
-          "Primero define cómo se verá esta VM dentro del segmento y si quieres fijar una IP."
+          t("canvas.instanceForm.sections.identity.eyebrow"),
+          t("canvas.instanceForm.sections.identity.title"),
+          t("canvas.instanceForm.sections.identity.helper")
         )}
 
         <Box className="pt-node-form__grid pt-node-form__grid--two">
           <TextField
-            label="Name of Instance"
+            label={t("canvas.instanceForm.fields.name")}
             {...register("name")}
             error={!!errors.name}
             helperText={errors.name?.message}
@@ -290,49 +304,49 @@ const InstanceNodeForm = ({
           />
 
           <TextField
-            label={`private IP (inside ${parentSubnetCidr || 'subnet'})`}
+            label={t("canvas.instanceForm.fields.privateIp", { subnet: parentSubnetCidr || t("canvas.instanceForm.subnetFallback") })}
             {...register("ipAddress")}
             error={!!errors.ipAddress}
-            helperText={errors.ipAddress?.message || `Deja vacío o escribe "auto" para asignación automática`}
-            placeholder="10.10.0.10  •  o escribe: auto"
+            helperText={errors.ipAddress?.message || t("canvas.instanceForm.fields.privateIpHelp")}
+            placeholder={t("canvas.instanceForm.fields.privateIpPlaceholder")}
             fullWidth
             margin="normal"
           />
         </Box>
 
         <Box className="pt-node-form__noteCard">
-          <Typography className="pt-node-form__noteTitle">Pistas rápidas</Typography>
+          <Typography className="pt-node-form__noteTitle">{t("canvas.instanceForm.quickTips.title")}</Typography>
           <Typography className="pt-node-form__noteText">
-            La private IP debe pertenecer a la subred padre. Si usas <b>auto</b>, el provider asignará una IP disponible.
+            {t("canvas.instanceForm.quickTips.privateIp")}
           </Typography>
           <Typography className="pt-node-form__noteText">
-            La IP pública no reemplaza la private IP: depende de la subred y de la política del deploy.
+            {t("canvas.instanceForm.quickTips.publicIp")}
           </Typography>
           <Box sx={{ mt: 1.2 }}>
-            <CidrLearningGuideButton buttonLabel="Ayuda con CIDR e IPs" />
+            <CidrLearningGuideButton buttonLabel={t("canvas.cidrGuide.button")} />
           </Box>
         </Box>
       </Box>
 
       <Box className="pt-node-form__section">
         {renderSectionHeader(
-          "Runtime",
-          "Imagen y tamaño",
-          "Aquí decides con qué AMI se crea la instancia y qué tipo de máquina se reservará."
+          t("canvas.instanceForm.sections.runtime.eyebrow"),
+          t("canvas.instanceForm.sections.runtime.title"),
+          t("canvas.instanceForm.sections.runtime.helper")
         )}
 
         <Box className="pt-node-form__grid pt-node-form__grid--two">
           <FormControl fullWidth margin="normal" error={!!errors.ami}>
-            <InputLabel id="ami-label">AMI</InputLabel>
+            <InputLabel id="ami-label">{t("canvas.instanceForm.fields.ami")}</InputLabel>
             <Select
               labelId="ami-label"
               {...register("ami")}
-              label="AMI"
+              label={t("canvas.instanceForm.fields.ami")}
               defaultValue={nodeData.ami || ""}
               displayEmpty
             >
               <MenuItem value="">
-                <em>Usar AMI por defecto</em>
+                <em>{t("canvas.instanceForm.fields.useDefaultAmi")}</em>
               </MenuItem>
               {amiOptions.map((ami) => (
                 <MenuItem key={ami.key} value={ami.value}>
@@ -343,16 +357,16 @@ const InstanceNodeForm = ({
             {errors.ami && <FormHelperText>{errors.ami.message}</FormHelperText>}
             {!errors.ami && amiOptions.length === 0 && (
               <FormHelperText>
-                No hay AMIs configuradas en el catalogo. Si lo dejas vacio, el backend usara la AMI por defecto.
+                {t("canvas.instanceForm.fields.amiFallback")}
               </FormHelperText>
             )}
           </FormControl>
 
           <FormControl fullWidth margin="normal" error={!!errors.instanceType}>
-            <InputLabel id="instance-type-label">Instance Type</InputLabel>
+            <InputLabel id="instance-type-label">{t("canvas.instanceForm.fields.instanceType")}</InputLabel>
             <Select
               labelId="instance-type-label"
-              label="Instance Type"
+              label={t("canvas.instanceForm.fields.instanceType")}
               {...register("instanceType")}
               defaultValue={nodeData.instanceType || "t2.micro"}
             >
@@ -368,16 +382,16 @@ const InstanceNodeForm = ({
 
         {watch("instanceType")?.startsWith("t4g") && (
           <Alert severity="info" variant="outlined" sx={{ mt: 0.6 }}>
-            Los tipos <b>t4g.*</b> usan arquitectura ARM (Graviton). Asegúrate de elegir una AMI compatible con ARM64.
+            {t("canvas.instanceForm.alerts.arm64")}
           </Alert>
         )}
       </Box>
 
       <Box className="pt-node-form__section">
         {renderSectionHeader(
-          "Acceso SSH",
-          "Key pair y compatibilidad",
-          "Aquí eliges la referencia al key pair que AWS buscará al lanzar la instancia."
+          t("canvas.instanceForm.sections.ssh.eyebrow"),
+          t("canvas.instanceForm.sections.ssh.title"),
+          t("canvas.instanceForm.sections.ssh.helper")
         )}
 
         <Controller
@@ -430,7 +444,7 @@ const InstanceNodeForm = ({
                             <WarningAmberRoundedIcon sx={{ fontSize: 16 }} />
                           )
                         }
-                        label={option.isCompatible ? "Compatible" : "Revisar"}
+                        label={option.isCompatible ? t("canvas.instanceForm.compatibility.compatible") : t("canvas.instanceForm.compatibility.review")}
                         size="small"
                         color={option.isCompatible ? "success" : "warning"}
                         variant={option.isCompatible ? "filled" : "outlined"}
@@ -454,15 +468,15 @@ const InstanceNodeForm = ({
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label="SSH Access (KeyPair)"
+                  label={t("canvas.instanceForm.fields.sshAccess")}
                   error={!!errors.sshAccess}
                   helperText={
                     errors.sshAccess?.message ||
                     (visibleKeyPairOptions.length > 0
-                      ? "Elige una key pair compatible o escribe el nombre manualmente."
-                      : "Opcional. Puedes escribir manualmente el nombre de una key pair existente en AWS.")
+                      ? t("canvas.instanceForm.fields.sshAccessHelp")
+                      : t("canvas.instanceForm.fields.sshAccessManualHelp"))
                   }
-                  placeholder="p. ej., tesis-key"
+                  placeholder={t("canvas.instanceForm.fields.sshAccessPlaceholder")}
                   fullWidth
                   margin="normal"
                 />
@@ -474,7 +488,7 @@ const InstanceNodeForm = ({
         {visibleKeyPairOptions.length > 0 && (
           <Box className="pt-node-form__microCopy">
             <Typography className="pt-node-form__microCopyText">
-              El catálogo prioriza las key pairs compatibles con la conexión y región efectivas, y aún te deja escribir un nombre manual.
+              {t("canvas.instanceForm.catalogHint")}
             </Typography>
           </Box>
         )}
@@ -483,7 +497,7 @@ const InstanceNodeForm = ({
             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
               <Chip
                 icon={<CheckCircleOutlineRoundedIcon sx={{ fontSize: 16 }} />}
-                label="Key pair compatible con este laboratorio"
+                label={t("canvas.instanceForm.compatibility.selectedCompatible")}
                 size="small"
                 color="success"
                 variant="filled"
@@ -491,7 +505,7 @@ const InstanceNodeForm = ({
               />
               {executionRegion && (
                 <Typography className="pt-node-form__microCopyText">
-                  Región efectiva: <b>{executionRegion}</b>
+                  {t("canvas.instanceForm.executionRegion", { value: executionRegion })}
                 </Typography>
               )}
             </Stack>
@@ -499,32 +513,30 @@ const InstanceNodeForm = ({
         )}
         {hiddenKeyPairCount > 0 && (
           <Alert severity="info" variant="outlined" sx={{ mt: 0.6 }}>
-            Ocultamos {hiddenKeyPairCount} key pair{hiddenKeyPairCount === 1 ? "" : "s"} del catálogo porque no coinciden con la conexión cloud o la región efectivas de este laboratorio.
+            {t("canvas.instanceForm.hiddenOptions", { count: hiddenKeyPairCount })}
           </Alert>
         )}
 
         <Stack spacing={1.1} sx={{ mt: 0.8 }}>
           {hasScopeMismatch && (
             <Alert severity="warning" variant="outlined">
-              La key pair seleccionada es de tipo <b>{selectedKeyPairScope}</b>, pero este laboratorio está resolviendo una
-              conexión cloud de tipo <b>{executionScope}</b>. Puede que AWS no encuentre esa key pair en la cuenta efectiva del deploy.
+              {t("canvas.instanceForm.alerts.scopeMismatch.before")} <b>{selectedKeyPairScopeLabel}</b>, {t("canvas.instanceForm.alerts.scopeMismatch.middle")} <b>{executionScopeLabel}</b>. {t("canvas.instanceForm.alerts.scopeMismatch.after")}
             </Alert>
           )}
           {!hasScopeMismatch && hasConnectionMismatch && (
             <Alert severity="warning" variant="outlined">
-              La key pair seleccionada está vinculada a otra conexión cloud. Verifica que exista también en la cuenta que
-              este laboratorio usará realmente para desplegar.
+              {t("canvas.instanceForm.alerts.connectionMismatch")}
             </Alert>
           )}
 
           <Box className="pt-node-form__noteCard pt-node-form__noteCard--soft">
-            <Typography className="pt-node-form__noteTitle">Qué valida el sistema</Typography>
+            <Typography className="pt-node-form__noteTitle">{t("canvas.instanceForm.systemValidation.title")}</Typography>
             <Typography className="pt-node-form__noteText">
-              El <b>deploy</b> valida que esa key pair exista en la cuenta y región efectivas.
+              {t("canvas.instanceForm.systemValidation.deploy")}
             </Typography>
             <Divider flexItem sx={{ my: 0.9 }} />
             <Typography className="pt-node-form__noteText">
-              El acceso <b>SSH</b> posterior sigue dependiendo de que tengas el archivo <b>.pem</b> fuera de la plataforma, en el equipo desde el que te conectarás.
+              {t("canvas.instanceForm.systemValidation.ssh")}
             </Typography>
           </Box>
         </Stack>
@@ -533,10 +545,10 @@ const InstanceNodeForm = ({
 
       <Box className="pt-node-form__actions">
         <Button type="submit" variant="contained" color="primary">
-          Registrar Configuración
+          {t("canvas.instanceForm.actions.save")}
         </Button>
         <Button onClick={deleteNode} color="error">
-          Delete Node
+          {t("canvas.instanceForm.actions.delete")}
         </Button>
       </Box>
 
