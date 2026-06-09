@@ -6,6 +6,8 @@
 # -------- Variables comunes --------
 COMPOSE       = docker compose -f tools/docker/compose.dev.yml
 COMPOSE_PUBLIC = docker compose -f tools/docker/compose.dev.yml -f tools/docker/compose.public.yml
+COMPOSE_SERVER = docker compose -f tools/docker/compose.server.yml
+BASE_TF_IMAGE = base-tf:latest
 SVC_FRONTEND  = frontend
 SVC_BACKEND   = backend
 SVC_CELERY    = celery
@@ -23,8 +25,8 @@ AWS_REGION    ?= us-east-1
 AWS_PROFILE   ?= tesis
 TAG           ?= dev-latest
 
-AWS_ACCOUNT_ID := $(shell aws sts get-caller-identity --query Account --output text --profile $(AWS_PROFILE))
-ECR_REG        := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
+AWS_ACCOUNT_ID = $(shell command -v aws >/dev/null 2>&1 && aws sts get-caller-identity --query Account --output text --profile $(AWS_PROFILE) 2>/dev/null || true)
+ECR_REG        = $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 
 ECR_BACKEND    := $(ECR_REG)/tesis-dev-backend
 ECR_CELERY     := $(ECR_REG)/tesis-dev-celery
@@ -56,9 +58,12 @@ SLEEP             ?= 5
 .PHONY: \
   help \
   up down restart restart-frontend start stop up-nobuild recreate ps ps-healthy logs \
-  public-up public-down public-restart public-logs public-ps tunnel-up tunnel-down tunnel-logs \
+  server-up server-down server-restart server-logs server-ps \
+  server-quick-tunnel-up server-quick-tunnel-down server-quick-tunnel-logs \
+  server-tunnel-up server-tunnel-down server-tunnel-logs \
+  public-up public-down public-restart public-logs public-ps tunnel-up tunnel-down tunnel-logs quick-tunnel-up quick-tunnel-down quick-tunnel-logs \
   logs-backend logs-frontend logs-celery logs-flower logs-redis \
-  rm-stopped ps-paused unpause build build-nc pull prune nuke \
+  rm-stopped ps-paused unpause build-base-tf build build-nc pull prune nuke \
   setup lint test migrate makemigrations-api migrate-all migrate-api createsuperuser sh-backend sh-frontend sh-celery sh-flower sh-redis \
   dbshell psql plan-outputs \
   ecr-login check-images build-backend build-celery tag-backend tag-celery push-backend push-celery push \
@@ -87,7 +92,11 @@ help:
 	@echo "  make smoke-local   # healthz + tarea Celery + /api/network/plan"
 	@echo "  make logs          # logs de todos los servicios"
 	@echo "  make public-up     # expone la app por Caddy en :80"
-	@echo "  make tunnel-up     # publica la app via Cloudflare Tunnel (requiere token)"
+	@echo "  make server-up     # despliegue Ubuntu compartido, publicado solo en localhost para proxy central"
+	@echo "  make server-quick-tunnel-up # URL temporal trycloudflare.com para el stack server"
+	@echo "  make server-tunnel-up # Cloudflare Tunnel estable para el stack server (requiere .env.public)"
+	@echo "  make quick-tunnel-up # publica la app con URL temporal trycloudflare.com"
+	@echo "  make tunnel-up     # publica la app via Cloudflare Tunnel estable (requiere token)"
 	@echo ""
 	@echo " RUNBOOK B · PUBLICAR IMÁGENES EN ECR"
 	@echo "  make push          # tag & push backend+celery al ECR (usa TAG=$(TAG))"
@@ -108,22 +117,27 @@ help:
 # =============================================================================
 # RUNBOOK A · DESARROLLO LOCAL (docker compose)
 # =============================================================================
-up:        ## Levanta dev stack (build si hace falta)
+up: build-base-tf       ## Levanta dev stack (build si hace falta)
 	$(COMPOSE) up -d --build
 
 down:      ## Baja dev stack
 	$(COMPOSE) down
 
 
-restart:   ## Reinicia dev stack (con build)
+restart: build-base-tf   ## Reinicia dev stack (con build)
 	$(COMPOSE) down
 	$(COMPOSE) up -d --build
 
 restart-frontend: ## Reinicia SOLO el servicio frontend
 	$(COMPOSE) restart $(SVC_FRONTEND)
 
-start:     ## Arranca contenedores existentes (sin build)
-	$(COMPOSE) start
+start:     ## Arranca contenedores existentes (sin build); si no existen, los crea con up -d
+	@if [ -n "$$($(COMPOSE) ps -a -q 2>/dev/null)" ]; then \
+		$(COMPOSE) start; \
+	else \
+		echo "ℹ️  No hay contenedores creados para compose.dev; levantando stack con 'up -d'..."; \
+		$(COMPOSE) up -d; \
+	fi
 
 stop:      ## Detiene contenedores (sin borrar)
 	$(COMPOSE) stop
@@ -147,6 +161,59 @@ logs:      ## Logs de todo
 public-up: ## Levanta stack con Caddy en :80
 	$(COMPOSE_PUBLIC) up -d --build caddy
 
+server-up: ## Levanta stack Ubuntu para host compartido, publicado en localhost:${SERVER_HTTP_PORT}
+	$(COMPOSE_SERVER) up -d --build
+
+server-down: ## Baja stack Ubuntu
+	$(COMPOSE_SERVER) down
+
+server-restart: ## Reinicia stack Ubuntu
+	$(COMPOSE_SERVER) down
+	$(COMPOSE_SERVER) up -d --build
+
+server-logs: ## Logs del stack Ubuntu
+	$(COMPOSE_SERVER) logs -f
+
+server-ps: ## Estado del stack Ubuntu
+	$(COMPOSE_SERVER) ps
+
+server-quick-tunnel-up: ## Publica el stack server por Quick Tunnel apuntando a localhost:${SERVER_HTTP_PORT}
+	@PORT=$$(awk -F= '/^SERVER_HTTP_PORT=/{print $$2}' .env.server 2>/dev/null | tail -n1); \
+	if [ -z "$$PORT" ]; then PORT=18080; fi; \
+	docker rm -f syslab-cloudflared-quick >/dev/null 2>&1 || true; \
+	docker run -d --network host --name syslab-cloudflared-quick cloudflare/cloudflared:2025.4.2 \
+	  tunnel --no-autoupdate --url http://127.0.0.1:$$PORT; \
+	echo "Quick Tunnel levantado. Revisa la URL con: make server-quick-tunnel-logs"
+
+server-quick-tunnel-down: ## Baja el Quick Tunnel del stack server
+	docker rm -f syslab-cloudflared-quick || true
+
+server-quick-tunnel-logs: ## Logs del Quick Tunnel del stack server
+	docker logs -f syslab-cloudflared-quick
+
+server-tunnel-up: ## Publica el stack server por Cloudflare Tunnel estable (requiere .env.public)
+	@set -a; \
+	if [ ! -f .env.public ]; then \
+	  echo "Falta .env.public. Copia .env.public.example y define CLOUDFLARE_TUNNEL_TOKEN."; \
+	  exit 1; \
+	fi; \
+	. ./.env.public; \
+	set +a; \
+	if [ -z "$$CLOUDFLARE_TUNNEL_TOKEN" ]; then \
+	  echo "CLOUDFLARE_TUNNEL_TOKEN no definido en .env.public"; \
+	  exit 1; \
+	fi; \
+	docker rm -f syslab-cloudflared >/dev/null 2>&1 || true; \
+	docker run -d --network host --name syslab-cloudflared cloudflare/cloudflared:2025.4.2 \
+	  tunnel --no-autoupdate run --token "$$CLOUDFLARE_TUNNEL_TOKEN"; \
+	echo "Tunnel estable levantado. Revisa logs con: make server-tunnel-logs"
+
+server-tunnel-down: ## Baja el Cloudflare Tunnel estable del stack server
+	docker rm -f syslab-cloudflared || true
+
+server-tunnel-logs: ## Logs del Cloudflare Tunnel estable del stack server
+	docker logs -f syslab-cloudflared
+
 public-down: ## Baja Caddy y cloudflared
 	$(COMPOSE_PUBLIC) stop caddy cloudflared
 
@@ -157,7 +224,7 @@ public-logs: ## Logs de Caddy y cloudflared
 	$(COMPOSE_PUBLIC) logs -f caddy cloudflared
 
 public-ps: ## Estado de Caddy y cloudflared
-	$(COMPOSE_PUBLIC) ps caddy cloudflared
+	$(COMPOSE_PUBLIC) ps caddy cloudflared cloudflared-quick
 
 tunnel-up: ## Publica via Cloudflare Tunnel (requiere CLOUDFLARE_TUNNEL_TOKEN)
 	$(COMPOSE_PUBLIC) up -d cloudflared
@@ -167,6 +234,15 @@ tunnel-down: ## Baja Cloudflare Tunnel
 
 tunnel-logs: ## Logs de Cloudflare Tunnel
 	$(COMPOSE_PUBLIC) logs -f cloudflared
+
+quick-tunnel-up: ## Publica via Quick Tunnel sin dominio
+	$(COMPOSE_PUBLIC) up -d cloudflared-quick
+
+quick-tunnel-down: ## Baja Quick Tunnel
+	$(COMPOSE_PUBLIC) stop cloudflared-quick
+
+quick-tunnel-logs: ## Logs de Quick Tunnel
+	$(COMPOSE_PUBLIC) logs -f cloudflared-quick
 
 logs-backend:
 	$(COMPOSE) logs -f $(SVC_BACKEND)
@@ -191,10 +267,13 @@ unpause:
 	@docker ps --filter status=paused -q | xargs -r docker unpause
 	@echo "✅ Listo."
 
-build:
+build-base-tf:
+	docker build -f tools/docker/base.terraform.Dockerfile -t $(BASE_TF_IMAGE) .
+
+build: build-base-tf
 	$(COMPOSE) build
 
-build-nc:
+build-nc: build-base-tf
 	$(COMPOSE) build --no-cache
 
 pull:

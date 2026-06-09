@@ -295,6 +295,7 @@ const executionSourceLabels = {
   lab_explicit: 'Conexión fijada explícitamente en el laboratorio.',
   owner_personal_auto: 'Auto resolverá la cuenta personal del owner del laboratorio.',
   course_shared_auto: 'Auto resolverá la cuenta compartida del curso.',
+  environment: 'Se ejecutará con las credenciales AWS disponibles en el servidor.',
   unresolved: 'No hay una conexión cloud ejecutable resuelta para este laboratorio.',
 };
 
@@ -906,9 +907,9 @@ function buildManagedEgressScenarios(plan, outputsResponse) {
       } else if (bastion?.publicIp) {
         checks.push({
           title: `Confirmar acceso SSH a ${bastion.instanceName}`,
-          command: `ssh -i ~/.ssh/tesis-key-new.pem ec2-user@${bastion.publicIp}`,
+          command: `ssh -i ~/.ssh/<tu-clave-privada> ec2-user@${bastion.publicIp}`,
           context:
-            'Úsalo para verificar que la instancia pública quedó accesible y contrastar que el NAT existe aunque no haya subnets privadas que lo aprovechen.',
+            'Úsalo para verificar que la instancia pública quedó accesible. Si la key pair fue generada por AWS, tu clave privada suele ser un `.pem`; si importaste una public key, usa la clave privada local correspondiente.',
         });
       }
 
@@ -984,9 +985,9 @@ function buildPublicAccessScenarios(plan, outputsResponse) {
         checks: [
           {
             title: `Confirmar acceso SSH a ${bastion.instanceName}`,
-            command: `ssh -i ~/.ssh/${bastion.keyPair}.pem ec2-user@${bastion.publicIp}`,
+            command: `ssh -i ~/.ssh/<tu-clave-privada> ec2-user@${bastion.publicIp}`,
             context:
-              'Úsalo para validar que la instancia pública quedó expuesta correctamente y que tu IP está permitida en Allowed SSH CIDR.',
+              `Úsalo para validar que la instancia pública quedó expuesta correctamente y que tu IP está permitida en Allowed SSH CIDR. AWS solo recibe el nombre de la key pair (${bastion.keyPair}); aquí debes usar la clave privada real que tengas en tu computador.`,
           },
         ],
         readyForRun: true,
@@ -1126,6 +1127,7 @@ export default function PlanDetailPage() {
     plan?.payload?.canvasId ||
     plan?.lab?.id ||
     null;
+  const labNotes = String(plan?.lab?.notes || '').trim();
   const resolvedExecutionTarget = safeObject(plan?.resolved_execution_target);
   const hasResolvedExecutionTarget = Object.keys(resolvedExecutionTarget).length > 0;
   const lastApplyContext = safeObject(plan?.last_apply_context);
@@ -1839,6 +1841,25 @@ export default function PlanDetailPage() {
             <Alert severity={actionAvailability.severity} sx={{ mt: 2 }}>
               {actionAvailability.text}
             </Alert>
+          )}
+
+          {labNotes && (
+            <Paper
+              variant="outlined"
+              sx={{
+                mt: 2,
+                p: 2,
+                borderRadius: 3,
+                bgcolor: 'rgba(255,255,255,0.72)',
+              }}
+            >
+              <Typography variant="subtitle2" sx={{ mb: 0.75, fontWeight: 700 }}>
+                Notas del laboratorio
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                {labNotes}
+              </Typography>
+            </Paper>
           )}
 
           {isRunning && (
@@ -2976,8 +2997,8 @@ export default function PlanDetailPage() {
                 1. Requisitos previos
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Necesitas `aws` CLI, acceso a la key pair con la que desplegaste la instancia y que tu IP pública esté
-                permitida en `Allowed SSH CIDR`.
+                Necesitas `aws` CLI, acceso a la clave privada asociada a la key pair con la que desplegaste la
+                instancia y que tu IP pública esté permitida en `Allowed SSH CIDR`.
               </Typography>
             </Box>
 
@@ -3007,7 +3028,11 @@ export default function PlanDetailPage() {
 
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                3. Si ya tienes el archivo `.pem`, conéctate por SSH
+                3. Si ya tienes la clave privada correspondiente, conéctate por SSH
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                Si AWS generó la key pair, normalmente usarás un archivo `.pem`. Si importaste una public key desde tu
+                computador, usa la clave privada local asociada, aunque no tenga extensión `.pem`.
               </Typography>
               <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'background.default' }}>
                 <Box
@@ -3019,8 +3044,8 @@ export default function PlanDetailPage() {
                     fontSize: 12,
                   }}
                 >
-{`chmod 400 ~/.ssh/tesis-key-new.pem
-ssh -i ~/.ssh/tesis-key-new.pem ec2-user@${consoleGuide.bastions[0]?.publicIp || 'IP_PUBLICA_BASTION'}`}
+{`chmod 400 ~/.ssh/<tu-clave-privada>
+ssh -i ~/.ssh/<tu-clave-privada> ec2-user@${consoleGuide.bastions[0]?.publicIp || 'IP_PUBLICA_BASTION'}`}
                 </Box>
               </Paper>
             </Box>

@@ -35,7 +35,8 @@ export default function FlowWorkspace({
     theme,
     toolbarProps,
     feedbackProps,
-    learningGuideProps
+    learningGuideProps,
+    labNotes
 }) {
     const [isPaletteOpen, setIsPaletteOpen] = useState(false);
     const [isGuideOpen, setIsGuideOpen] = useState(false);
@@ -217,6 +218,38 @@ export default function FlowWorkspace({
                         </Stack>
                     )}
                 </Box>
+
+                {labNotes && (
+                    <Box
+                        sx={{
+                            px: { xs: 1.5, md: 2 },
+                            py: 1.1,
+                            borderBottom: "1px solid",
+                            borderColor: "divider",
+                            backgroundColor: (t) =>
+                                t.palette.mode === "light" ? "rgba(255,255,255,0.92)" : "rgba(15,23,42,0.82)",
+                        }}
+                    >
+                        <Stack spacing={0.45}>
+                            <Typography variant="caption" sx={{ fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase" }}>
+                                Notas del laboratorio
+                            </Typography>
+                            <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{
+                                    whiteSpace: "pre-wrap",
+                                    display: "-webkit-box",
+                                    WebkitLineClamp: 3,
+                                    WebkitBoxOrient: "vertical",
+                                    overflow: "hidden",
+                                }}
+                            >
+                                {labNotes}
+                            </Typography>
+                        </Stack>
+                    </Box>
+                )}
 
                 <Box
                     data-tour="canvas-drop-area"

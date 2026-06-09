@@ -173,6 +173,7 @@ function CanvasFlowPage() {
     state.setMasterCidrBlock,
     state.setPrefixLength
   ]);
+  const labNotes = useCanvasLabStore((state) => state.labNotes);
   const resolvedExecutionTarget = useCanvasLabStore((state) => state.resolvedExecutionTarget);
 
   // eslint-disable-next-line no-unused-vars
@@ -437,6 +438,7 @@ function CanvasFlowPage() {
               onOpenValidation: guardBeforeEdit(processJsonToCloud),
               onOpenDeploy: guardBeforeEdit(processJsonToCloud),
             }}
+            labNotes={labNotes}
           />
 
         </Grid>

@@ -112,6 +112,7 @@ const NewVLANForm = ({
       labTemplate: 'mvp1-single-vpc-bastion-private', // solo se usa si wizardMode=true
       courseId: '',
       cloudConnectionId: '',
+      labNotes: '',
     },
   });
 
@@ -281,6 +282,7 @@ const NewVLANForm = ({
         : {}),
       course_id: data.courseId || null,
       cloud_connection_id: data.cloudConnectionId || null,
+      notes: String(data.labNotes || '').trim(),
     });
   };
 
@@ -408,6 +410,21 @@ const NewVLANForm = ({
             'Este nombre se verá en la lista y será la referencia principal del laboratorio.'
           }
           fullWidth
+          autoComplete="off"
+        />
+
+        <TextField
+          label="Descripción, observaciones o notas"
+          placeholder="Ej: Laboratorio para validar una VPC pública con bastion, pruebas SSH y evidencias para la defensa."
+          {...register('labNotes')}
+          error={!!errors.labNotes}
+          helperText={
+            errors.labNotes?.message ||
+            'Opcional. Úsalo para explicar el objetivo del laboratorio, dejar observaciones operativas o anotar cualquier detalle importante.'
+          }
+          fullWidth
+          multiline
+          minRows={3}
           autoComplete="off"
         />
 

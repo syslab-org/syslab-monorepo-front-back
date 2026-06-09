@@ -5,7 +5,7 @@
 :80 {
   encode gzip zstd
 
-  @backend path /api/* /healthz/ /admin/* /static/*
+  @backend path /api/* /healthz/ /django-admin/* /static/*
   handle @backend {
     reverse_proxy backend:8000
   }

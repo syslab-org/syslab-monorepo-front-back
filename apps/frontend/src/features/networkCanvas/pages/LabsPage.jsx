@@ -59,6 +59,7 @@ const executionSourceLabels = {
   lab_explicit: 'Fijada en el lab',
   owner_personal_auto: 'Auto -> cuenta personal',
   course_shared_auto: 'Auto -> cuenta del curso',
+  environment: 'Credenciales del servidor',
   unresolved: 'Sin resolver',
 };
 
@@ -93,6 +94,7 @@ const LabsPage = () => {
   const [editCidr, setEditCidr] = useState("");
   const [editRegion, setEditRegion] = useState("us-east-1");
   const [editCloudConnectionId, setEditCloudConnectionId] = useState("");
+  const [editNotes, setEditNotes] = useState("");
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [isCreateLabModalOpen, setIsCreateLabModalOpen] = useState(false)
@@ -147,6 +149,7 @@ const LabsPage = () => {
         intent: vpc.intent || {},
         capabilities: vpc.capabilities || [],
         provider_overrides: vpc.provider_overrides || {},
+        notes: vpc.notes || '',
         course_id: vpc.course?.id || null,
         visibility_scope: vpc.visibility_scope || 'owner',
         cloud_connection_id: vpc.cloud_connection?.id || null,
@@ -177,7 +180,8 @@ const LabsPage = () => {
         const id = (v?.id || "").toLowerCase();
         const owner = (v?.owner_user?.display_name || v?.owner_user?.email || "").toLowerCase();
         const course = (v?.course?.name || "").toLowerCase();
-        return name.includes(q) || id.includes(q) || owner.includes(q) || course.includes(q);
+        const notes = (v?.notes || "").toLowerCase();
+        return name.includes(q) || id.includes(q) || owner.includes(q) || course.includes(q) || notes.includes(q);
       });
   }, [vpcs, query, typeFilter]);
 
@@ -270,6 +274,7 @@ const LabsPage = () => {
     );
     setEditRegion(vpc?.region || "us-east-1");
     setEditCloudConnectionId(vpc?.cloud_connection?.id || "");
+    setEditNotes(vpc?.notes || "");
     setRenameDialogOpen(true);
   };
 
@@ -280,6 +285,7 @@ const LabsPage = () => {
     setEditCidr("");
     setEditRegion("us-east-1");
     setEditCloudConnectionId("");
+    setEditNotes("");
   };
 
   const handleRename = async () => {
@@ -297,6 +303,7 @@ const LabsPage = () => {
         prefix_length: cidrCheck.prefix,
         region: editRegion,
         cloud_connection_id: editCloudConnectionId || null,
+        notes: editNotes.trim(),
       });
       await fetchVPCs();
       closeRenameDialog();
@@ -395,6 +402,20 @@ const LabsPage = () => {
                   <Stack spacing={0.5}>
                     <Typography fontWeight={600}>{vpc.name}</Typography>
                     <Typography variant="caption" color="text.secondary">{vpc.id}</Typography>
+                    {vpc.notes && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {vpc.notes}
+                      </Typography>
+                    )}
                     <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
                       <Chip
                         label={String(vpc.target_provider || 'aws').toUpperCase()}
@@ -569,6 +590,16 @@ const LabsPage = () => {
               ))}
             </Select>
           </FormControl>
+          <TextField
+            margin="dense"
+            label="Descripción, observaciones o notas"
+            fullWidth
+            multiline
+            minRows={3}
+            value={editNotes}
+            onChange={(e) => setEditNotes(e.target.value)}
+            helperText="Opcional. Sirve para documentar el objetivo del laboratorio o dejar notas operativas."
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={closeRenameDialog}>Cancelar</Button>
