@@ -209,6 +209,180 @@ const en = {
       studentLabel: "Student",
       actionLabel: "Action",
     },
+    cloudConnections: {
+      title: "Cloud connections",
+      subtitle:
+        "Register personal AWS credentials or course-shared credentials. Real deploy runs from the backend using this connection, not from the user's computer.",
+      new: "New connection",
+      loadError: "Could not load cloud connections.",
+      updated: "Cloud connection updated.",
+      created: "Cloud connection created.",
+      saveError: "Could not save the connection.",
+      deleteConfirm: 'Delete connection "{{name}}"?',
+      deleted: "Connection deleted.",
+      deleteError: "Could not delete the connection.",
+      testOk: "Valid connection: {{message}}",
+      testFail: "Test failed: {{message}}",
+      testError: "Could not test the connection.",
+      statusPrefix: "Current status:",
+      loading: "loading",
+      visibleCount: "{{count}} visible connection(s)",
+      statusHelp:
+        "Students can only create personal connections; teachers and administrators can also register course-shared connections.",
+      columns: {
+        name: "Name",
+        scope: "Scope",
+        auth: "Auth",
+        course: "Course",
+        region: "Region",
+        target: "Target",
+        lastTest: "Last test",
+        actions: "Actions",
+      },
+      active: "Active",
+      inactive: "Inactive",
+      scopeCourse: "Course",
+      scopePersonal: "Personal",
+      scopeCourseShared: "Course shared",
+      authAssumeRole: "AssumeRole",
+      authStaticKeys: "Static keys",
+      emptyValue: "—",
+      untested: "Untested",
+      test: "Test",
+      edit: "Edit",
+      delete: "Delete",
+      empty: "There are no visible cloud connections yet.",
+      editTitle: "Edit cloud connection",
+      createTitle: "New cloud connection",
+      fields: {
+        name: "Name",
+        scope: "Scope",
+        authType: "Authentication",
+        course: "Course",
+        defaultRegion: "Default region",
+        accessKeyId: "AWS Access Key ID",
+        secretAccessKey: "AWS Secret Access Key",
+        secretAccessKeyReplace: "AWS Secret Access Key (only if you want to replace it)",
+        roleArn: "AWS Role ARN",
+        externalId: "External ID",
+        externalIdReplace: "External ID (only if you want to replace it)",
+        activeConnection: "Active connection",
+      },
+      scopeSharedHelp:
+        "Use it for course labs and shared review flows.",
+      scopePersonalHelp:
+        "You will only use it in your own labs.",
+      assumeRoleHelp:
+        "Recommended for production: the platform assumes a role and uses temporary credentials.",
+      staticKeysHelp:
+        "Simpler for local testing, but less secure in the long term.",
+      cancel: "Cancel",
+      saving: "Saving...",
+      save: "Save",
+    },
+    amis: {
+      title: "AMI catalog",
+      subtitle:
+        "Manage the suggested images for canvas workloads. This catalog is available to teachers and administrators.",
+      new: "New AMI",
+      loadError: "Could not load the AMIs.",
+      created: "AMI registered.",
+      createError: "Could not register the AMI.",
+      deleted: "AMI deleted.",
+      deleteError: "Could not delete the AMI.",
+      info:
+        "AMIs help standardize images approved by the course or platform and reduce errors when configuring instances.",
+      registered: "Registered AMIs",
+      codePrefix: "Code: {{value}}",
+      empty: "There are no AMIs registered.",
+    },
+    keyPairs: {
+      title: "Key pair catalog",
+      subtitle:
+        "Register personal or course-shared key pairs so they can be suggested later in the canvas and reduce typing mistakes in ssh_access.",
+      howToCreate: "How to create it in AWS",
+      new: "New key pair",
+      loadError: "Could not load the key pairs.",
+      created: "Key pair registered.",
+      createError: "Could not register the key pair.",
+      deleted: "Key pair deleted.",
+      deleteError: "Could not delete the key pair.",
+      scopePersonal: "Personal",
+      scopeCourseShared: "Course shared",
+      awsNamePrefix: "AWS name:",
+      connectionChip: "Connection: {{value}}",
+      courseChip: "Course: {{value}}",
+      ownerChip: "Owner: {{value}}",
+      scopeCourseHelp:
+        "Designed for labs that deploy over the course shared account.",
+      scopePersonalHelp:
+        "Designed for labs that deploy over the user's personal account.",
+      empty: "There are no registered key pairs.",
+      infoBanner:
+        "Here we only register the key pair name in AWS. The platform does not store the private .pem file or distribute it across computers.",
+      warningBanner:
+        "For deploy, the key pair only needs to exist in the right account and region. To connect later through SSH, the user must have the matching .pem on the computer they will use.",
+      info:
+        "Key pairs depend on the AWS account and region. This catalog does not create the key in AWS, but it helps declare it with context and reuse it correctly from the canvas.",
+      registered: "Registered key pairs",
+      search: "Search",
+      searchPlaceholder: "Name, connection, course, or owner",
+      scope: "Scope",
+      all: "All",
+      region: "Region",
+      allRegions: "All",
+      legend: {
+        personal: "Personal: individual account",
+        courseShared: "Course shared: course account",
+        connection: "Linked cloud connection",
+      },
+      awsGuide: {
+        title: "How to create a key pair in AWS",
+        step1:
+          "1. Sign in to the AWS account and open EC2 in the region where you will deploy.",
+        step2:
+          "2. Go to Network & Security → Key Pairs.",
+        step3:
+          "3. Choose Create key pair if you want AWS to generate a new one, or Import key pair if you already have a public key.",
+        step4:
+          "4. Save the downloaded .pem file in a safe place; AWS will not show the private key again.",
+        step5:
+          "5. Register here the exact same name with which it was created in AWS.",
+        alert:
+          "The platform uses the key pair name for deploy. The .pem file remains outside the system and you will only need it to connect via SSH.",
+        docs: "View AWS documentation",
+      },
+      close: "Close",
+    },
+    keyPairModal: {
+      overline: "AWS Key Pairs",
+      title: "Register key pair",
+      subtitle:
+        "We store the name AWS knows for the key pair so we can suggest it later in the canvas.",
+      infoBanner:
+        "This form does not upload or store the private .pem file. It only registers the name of the key pair that already exists in AWS.",
+      warningBanner:
+        "If you later want to connect through SSH, the .pem must be on the computer from which you will make the connection.",
+      awsHint:
+        "In AWS you can create it from EC2 → Key Pairs → Create key pair, or import it with Import key pair if you already have a public key.",
+      nameRequired: "The key pair name is required.",
+      courseRequired: "You must choose a course for a shared key pair.",
+      fields: {
+        awsName: "Name in AWS",
+        awsNamePlaceholder: "e.g. tesis-key-new",
+        label: "Visible label",
+        labelPlaceholder: "e.g. Course bastion",
+        region: "Region",
+        scope: "Scope",
+        course: "Course",
+        connection: "Optional cloud connection",
+      },
+      noExplicitLink: "No explicit link",
+      connectionHelp:
+        "Linking it to a connection helps explain in which account or course it should exist.",
+      cancel: "Cancel",
+      save: "Save key pair",
+    },
   },
   labs: {
     title: "Labs",
@@ -740,6 +914,53 @@ const en = {
     },
   },
   canvas: {
+    sidebar: {
+      title: "Tool palette",
+      subtitle: "Drag components onto the canvas",
+      categories: {
+        networking: "Networking",
+        compute: "Compute",
+        routing: "Routing",
+      },
+      items: {
+        vpc: {
+          label: "Network Segment",
+          description:
+            "Logical container that defines a main network segment. In AWS it translates to a VPC.",
+        },
+        subnetwork: {
+          label: "Zone Segment",
+          description:
+            "CIDR zone inside a network segment where workloads live.",
+        },
+        instance: {
+          label: "Workload",
+          description:
+            "Workload or virtual machine inside a zone.",
+        },
+        router: {
+          label: "Connectivity Policy",
+          description:
+            "Logical node that defines how segments communicate with each other.",
+        },
+      },
+    },
+    workspace: {
+      title: "Architecture canvas",
+      emptyTitle: "Design your network lab",
+      emptyDescription:
+        "Model the topology in a neutral language, validate its AWS translation, and decide whether a deploy or redeploy makes sense.",
+      emptyHint:
+        "Use the floating Tools button to open the palette and start dragging components.",
+      palette: {
+        open: "Open modeling tools",
+        hide: "Hide modeling tools",
+      },
+      guide: {
+        open: "Open modeling guide",
+        hide: "Hide modeling guide",
+      },
+    },
     feedback: {
       outdatedTitle: "Canvas out of date with respect to the plan",
       outdatedDescription:

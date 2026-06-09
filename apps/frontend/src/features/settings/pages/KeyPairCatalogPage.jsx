@@ -1,4 +1,5 @@
 import { useContext, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Alert,
   Box,
@@ -37,7 +38,7 @@ import { api } from "@/infrastructure/http/api";
 import { PageHeader } from "@/shared/ui/layouts/MainLayout";
 import { USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER } from "@/shared/constants";
 
-const KeyPairList = ({ items, onDelete }) => (
+const KeyPairList = ({ items, onDelete, t }) => (
   <List dense sx={{ mt: 1 }}>
     {items.length > 0 ? (
       items.map((entry) => (
@@ -71,13 +72,13 @@ const KeyPairList = ({ items, onDelete }) => (
                     size="small"
                     color={entry.scope === "course_shared" ? "secondary" : "primary"}
                     variant={entry.scope === "course_shared" ? "filled" : "outlined"}
-                    label={entry.scope === "course_shared" ? "Curso compartido" : "Personal"}
+                    label={entry.scope === "course_shared" ? t("settings.keyPairs.scopeCourseShared") : t("settings.keyPairs.scopePersonal")}
                   />
                   {entry.region && <Chip size="small" variant="outlined" label={entry.region} />}
                 </Stack>
 
                 <Typography variant="body2" color="text.secondary">
-                  Nombre AWS: <b>{entry.name}</b>
+                  {t("settings.keyPairs.awsNamePrefix")} <b>{entry.name}</b>
                 </Typography>
 
                 <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
@@ -85,7 +86,7 @@ const KeyPairList = ({ items, onDelete }) => (
                     <Chip
                       size="small"
                       icon={<CloudOutlined />}
-                      label={`Conexión: ${entry.cloud_connection.name}`}
+                      label={t("settings.keyPairs.connectionChip", { value: entry.cloud_connection.name })}
                       variant="outlined"
                     />
                   )}
@@ -93,7 +94,7 @@ const KeyPairList = ({ items, onDelete }) => (
                     <Chip
                       size="small"
                       icon={<SchoolOutlined />}
-                      label={`Curso: ${entry.course.name}`}
+                      label={t("settings.keyPairs.courseChip", { value: entry.course.name })}
                       color="secondary"
                       variant="outlined"
                     />
@@ -102,7 +103,7 @@ const KeyPairList = ({ items, onDelete }) => (
                     <Chip
                       size="small"
                       icon={<PersonOutlineRounded />}
-                      label={`Owner: ${entry.owner_user.display_name}`}
+                      label={t("settings.keyPairs.ownerChip", { value: entry.owner_user.display_name })}
                       variant="outlined"
                     />
                   )}
@@ -114,8 +115,8 @@ const KeyPairList = ({ items, onDelete }) => (
                 <Divider sx={{ mb: 1 }} />
                 <Typography variant="caption" color="text.secondary">
                   {entry.scope === "course_shared"
-                    ? "Pensada para laboratorios que despliegan sobre la cuenta compartida del curso."
-                    : "Pensada para laboratorios que despliegan sobre la cuenta personal del usuario."}
+                    ? t("settings.keyPairs.scopeCourseHelp")
+                    : t("settings.keyPairs.scopePersonalHelp")}
                 </Typography>
               </Box>
             }
@@ -125,26 +126,27 @@ const KeyPairList = ({ items, onDelete }) => (
       ))
     ) : (
       <ListItem>
-        <ListItemText primary="No hay key pairs registradas." />
+        <ListItemText primary={t("settings.keyPairs.empty")} />
       </ListItem>
     )}
   </List>
 );
 
-const KeyPairLegend = () => (
+const KeyPairLegend = ({ t }) => (
   <Stack
     direction={{ xs: "column", md: "row" }}
     spacing={1}
     useFlexGap
     sx={{ mt: 1.5, mb: 0.25 }}
   >
-    <Chip size="small" color="primary" variant="outlined" label="Personal: cuenta individual" />
-    <Chip size="small" color="secondary" variant="filled" label="Curso compartido: cuenta del curso" />
-    <Chip size="small" variant="outlined" icon={<CloudOutlined />} label="Conexión cloud vinculada" />
+    <Chip size="small" color="primary" variant="outlined" label={t("settings.keyPairs.legend.personal")} />
+    <Chip size="small" color="secondary" variant="filled" label={t("settings.keyPairs.legend.courseShared")} />
+    <Chip size="small" variant="outlined" icon={<CloudOutlined />} label={t("settings.keyPairs.legend.connection")} />
   </Stack>
 );
 
 export default function KeyPairCatalogPage() {
+  const { t } = useTranslation();
   const [keyPairList, setKeyPairList] = useState([]);
   const [courses, setCourses] = useState([]);
   const [cloudConnections, setCloudConnections] = useState([]);
@@ -173,7 +175,7 @@ export default function KeyPairCatalogPage() {
       setCourses(Array.isArray(availableCourses) ? availableCourses : []);
       setCloudConnections(Array.isArray(visibleConnections) ? visibleConnections : []);
     } catch (loadError) {
-      setError(loadError?.message || "No se pudieron cargar las key pairs.");
+      setError(loadError?.message || t("settings.keyPairs.loadError"));
     } finally {
       setLoadingFlow(false);
     }
@@ -234,10 +236,10 @@ export default function KeyPairCatalogPage() {
         ...newKeyPairData,
         provider: "aws",
       });
-      setMessage("Key pair registrada.");
+      setMessage(t("settings.keyPairs.created"));
       await fetchKeyPairs();
     } catch (saveError) {
-      setError(saveError?.message || "No se pudo registrar la key pair.");
+      setError(saveError?.message || t("settings.keyPairs.createError"));
     } finally {
       setLoadingFlow(false);
     }
@@ -248,10 +250,10 @@ export default function KeyPairCatalogPage() {
     setError("");
     try {
       await api.deleteKeyPair(keyPairId);
-      setMessage("Key pair eliminada.");
+      setMessage(t("settings.keyPairs.deleted"));
       await fetchKeyPairs();
     } catch (deleteError) {
-      setError(deleteError?.message || "No se pudo eliminar la key pair.");
+      setError(deleteError?.message || t("settings.keyPairs.deleteError"));
     } finally {
       setLoadingFlow(false);
     }
@@ -260,15 +262,15 @@ export default function KeyPairCatalogPage() {
   return (
     <Box sx={{ p: 3 }}>
       <PageHeader
-        title="Catálogo de Key Pairs"
-        subtitle="Registra key pairs personales o compartidas por curso para sugerirlas luego en el canvas y reducir errores de tipeo en ssh_access."
+        title={t("settings.keyPairs.title")}
+        subtitle={t("settings.keyPairs.subtitle")}
         actions={
           <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
             <Button variant="outlined" onClick={() => setInfoOpen(true)}>
-              Cómo crearla en AWS
+              {t("settings.keyPairs.howToCreate")}
             </Button>
             <Button variant="contained" onClick={() => setOpen(true)}>
-              Nueva key pair
+              {t("settings.keyPairs.new")}
             </Button>
           </Stack>
         }
@@ -278,25 +280,23 @@ export default function KeyPairCatalogPage() {
       {message && <Alert severity="success" sx={{ mb: 2 }}>{message}</Alert>}
 
       <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
-        Aquí registramos solo el <b>nombre de la key pair en AWS</b>. La plataforma no guarda el archivo privado
-        <b> .pem</b> ni lo distribuye entre computadores.
+        {t("settings.keyPairs.infoBanner")}
       </Alert>
 
       <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>
-        Para hacer <b>deploy</b> basta con que la key pair exista en la cuenta y región correctas. Para entrar luego
-        por <b>SSH</b>, el usuario debe tener el <b>.pem</b> correspondiente en el computador desde el que va a conectarse.
+        {t("settings.keyPairs.warningBanner")}
       </Alert>
 
       <Paper sx={{ p: 2.5, mb: 3 }}>
         <Typography variant="body2" color="text.secondary">
-          Las key pairs son dependientes de la cuenta y la región AWS. Este catálogo no crea la key en AWS, pero sí ayuda a declararla con contexto y a reutilizarla correctamente desde el canvas.
+          {t("settings.keyPairs.info")}
         </Typography>
-        <KeyPairLegend />
+        <KeyPairLegend t={t} />
       </Paper>
 
       <Paper sx={{ p: 2.5 }}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>Key pairs registradas</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>{t("settings.keyPairs.registered")}</Typography>
           <Chip size="small" label={`${filteredKeyPairs.length}/${keyPairList.length}`} />
         </Stack>
         <Stack
@@ -308,32 +308,32 @@ export default function KeyPairCatalogPage() {
           <TextField
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
-            label="Buscar"
-            placeholder="Nombre, conexión, curso u owner"
+            label={t("settings.keyPairs.search")}
+            placeholder={t("settings.keyPairs.searchPlaceholder")}
             fullWidth
           />
           <FormControl sx={{ minWidth: { xs: "100%", md: 180 } }}>
-            <InputLabel id="keypair-scope-filter-label">Scope</InputLabel>
+            <InputLabel id="keypair-scope-filter-label">{t("settings.keyPairs.scope")}</InputLabel>
             <Select
               labelId="keypair-scope-filter-label"
-              label="Scope"
+              label={t("settings.keyPairs.scope")}
               value={scopeFilter}
               onChange={(event) => setScopeFilter(event.target.value)}
             >
-              <MenuItem value="all">Todos</MenuItem>
-              <MenuItem value="personal">Personal</MenuItem>
-              <MenuItem value="course_shared">Curso compartido</MenuItem>
+              <MenuItem value="all">{t("settings.keyPairs.all")}</MenuItem>
+              <MenuItem value="personal">{t("settings.keyPairs.scopePersonal")}</MenuItem>
+              <MenuItem value="course_shared">{t("settings.keyPairs.scopeCourseShared")}</MenuItem>
             </Select>
           </FormControl>
           <FormControl sx={{ minWidth: { xs: "100%", md: 180 } }}>
-            <InputLabel id="keypair-region-filter-label">Región</InputLabel>
+            <InputLabel id="keypair-region-filter-label">{t("settings.keyPairs.region")}</InputLabel>
             <Select
               labelId="keypair-region-filter-label"
-              label="Región"
+              label={t("settings.keyPairs.region")}
               value={regionFilter}
               onChange={(event) => setRegionFilter(event.target.value)}
             >
-              <MenuItem value="all">Todas</MenuItem>
+              <MenuItem value="all">{t("settings.keyPairs.allRegions")}</MenuItem>
               {regionOptions.map((region) => (
                 <MenuItem key={region} value={region}>
                   {region}
@@ -342,7 +342,7 @@ export default function KeyPairCatalogPage() {
             </Select>
           </FormControl>
         </Stack>
-        <KeyPairList items={filteredKeyPairs} onDelete={handleDelete} />
+        <KeyPairList items={filteredKeyPairs} onDelete={handleDelete} t={t} />
       </Paper>
 
       <AddKeyPairModal
@@ -355,27 +355,27 @@ export default function KeyPairCatalogPage() {
 
       <Dialog open={infoOpen} onClose={() => setInfoOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ fontWeight: 800 }}>
-          Cómo crear una key pair en AWS
+          {t("settings.keyPairs.awsGuide.title")}
         </DialogTitle>
         <DialogContent dividers>
           <Stack spacing={1.1}>
             <Typography variant="body2" color="text.secondary">
-              1. Entra a la cuenta AWS y abre <b>EC2</b> en la región donde vas a desplegar.
+              {t("settings.keyPairs.awsGuide.step1")}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              2. Ve a <b>Network &amp; Security → Key Pairs</b>.
+              {t("settings.keyPairs.awsGuide.step2")}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              3. Elige <b>Create key pair</b> si quieres que AWS genere una nueva, o <b>Import key pair</b> si ya tienes una public key.
+              {t("settings.keyPairs.awsGuide.step3")}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              4. Guarda el archivo <b>.pem</b> descargado en un lugar seguro; AWS no vuelve a mostrar la private key después.
+              {t("settings.keyPairs.awsGuide.step4")}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              5. Registra aquí el <b>mismo nombre exacto</b> con el que quedó creada en AWS.
+              {t("settings.keyPairs.awsGuide.step5")}
             </Typography>
             <Alert severity="info" variant="outlined" sx={{ mt: 1 }}>
-              La plataforma usa el nombre de la key pair para el deploy. El archivo <b>.pem</b> sigue quedando fuera del sistema y lo necesitarás solo para conectarte por SSH.
+              {t("settings.keyPairs.awsGuide.alert")}
             </Alert>
           </Stack>
         </DialogContent>
@@ -386,9 +386,9 @@ export default function KeyPairCatalogPage() {
             target="_blank"
             rel="noreferrer"
           >
-            Ver documentación AWS
+            {t("settings.keyPairs.awsGuide.docs")}
           </Button>
-          <Button onClick={() => setInfoOpen(false)}>Cerrar</Button>
+          <Button onClick={() => setInfoOpen(false)}>{t("settings.keyPairs.close")}</Button>
         </DialogActions>
       </Dialog>
     </Box>
