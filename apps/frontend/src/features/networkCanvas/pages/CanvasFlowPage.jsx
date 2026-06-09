@@ -4,6 +4,7 @@ import { useCanvasRuntimeController } from "@/features/networkCanvas/core/useCan
 import { useRoutingPreview } from "@/features/networkCanvas/core/useRoutingPreview";
 import { useReactFlow } from "@xyflow/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 import { initialNodes } from '../utils/initials-elements';
 // mui
@@ -79,6 +80,7 @@ const useBodyClass = (className, enabled = true) => {
 
 // eslint-disable-next-line react-refresh/only-export-components
 function CanvasFlowPage() {
+  const { t } = useTranslation();
   const params = useParams();
   const { labId: routeLabId, vpcid: legacyLabId } = params;
   const labId = routeLabId || legacyLabId;
@@ -401,7 +403,7 @@ function CanvasFlowPage() {
               onZoomIn: handleZoomIn,
               onZoomOut: handleZoomOut,
               onFitView: handleFitView,
-              title: "Canvas de arquitectura",
+              title: t("canvas.workspace.title"),
               onPreviewRoutes: openRoutesPreview,
               planStatus: canvasPlanInfo,
               canvasState,

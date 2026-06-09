@@ -209,6 +209,180 @@ const es = {
       studentLabel: "Alumno",
       actionLabel: "Acción",
     },
+    cloudConnections: {
+      title: "Conexiones Cloud",
+      subtitle:
+        "Registra credenciales AWS personales o compartidas por curso. El deploy real se ejecutará desde el backend usando esta conexión, no desde el computador del usuario.",
+      new: "Nueva conexión",
+      loadError: "No se pudieron cargar las conexiones cloud.",
+      updated: "Conexión cloud actualizada.",
+      created: "Conexión cloud creada.",
+      saveError: "No se pudo guardar la conexión.",
+      deleteConfirm: '¿Eliminar la conexión "{{name}}"?',
+      deleted: "Conexión eliminada.",
+      deleteError: "No se pudo eliminar la conexión.",
+      testOk: "Conexión válida: {{message}}",
+      testFail: "La prueba falló: {{message}}",
+      testError: "No se pudo probar la conexión.",
+      statusPrefix: "Estado actual:",
+      loading: "cargando",
+      visibleCount: "{{count}} conexión(es) visible(s)",
+      statusHelp:
+        "Los estudiantes solo pueden crear conexiones personales; docentes y administradores también pueden registrar conexiones compartidas de curso.",
+      columns: {
+        name: "Nombre",
+        scope: "Scope",
+        auth: "Auth",
+        course: "Curso",
+        region: "Región",
+        target: "Destino",
+        lastTest: "Última prueba",
+        actions: "Acciones",
+      },
+      active: "Activa",
+      inactive: "Inactiva",
+      scopeCourse: "Curso",
+      scopePersonal: "Personal",
+      scopeCourseShared: "Curso compartido",
+      authAssumeRole: "AssumeRole",
+      authStaticKeys: "Static keys",
+      emptyValue: "—",
+      untested: "Sin probar",
+      test: "Probar",
+      edit: "Editar",
+      delete: "Eliminar",
+      empty: "No hay conexiones cloud visibles todavía.",
+      editTitle: "Editar conexión cloud",
+      createTitle: "Nueva conexión cloud",
+      fields: {
+        name: "Nombre",
+        scope: "Scope",
+        authType: "Autenticación",
+        course: "Curso",
+        defaultRegion: "Región por defecto",
+        accessKeyId: "AWS Access Key ID",
+        secretAccessKey: "AWS Secret Access Key",
+        secretAccessKeyReplace: "AWS Secret Access Key (solo si quieres reemplazarla)",
+        roleArn: "AWS Role ARN",
+        externalId: "External ID",
+        externalIdReplace: "External ID (solo si quieres reemplazarlo)",
+        activeConnection: "Conexión activa",
+      },
+      scopeSharedHelp:
+        "Úsala para laboratorios del curso y revisiones compartidas.",
+      scopePersonalHelp:
+        "Solo la usarás en tus propios laboratorios.",
+      assumeRoleHelp:
+        "Recomendado para producción: la plataforma asume un role y usa credenciales temporales.",
+      staticKeysHelp:
+        "Más simple para pruebas locales, pero menos seguro a largo plazo.",
+      cancel: "Cancelar",
+      saving: "Guardando...",
+      save: "Guardar",
+    },
+    amis: {
+      title: "Catálogo de AMIs",
+      subtitle:
+        "Administra las imágenes sugeridas para workloads del canvas. Este catálogo queda disponible para docentes y administradores.",
+      new: "Nueva AMI",
+      loadError: "No se pudieron cargar las AMIs.",
+      created: "AMI registrada.",
+      createError: "No se pudo registrar la AMI.",
+      deleted: "AMI eliminada.",
+      deleteError: "No se pudo eliminar la AMI.",
+      info:
+        "Las AMIs ayudan a estandarizar imágenes aprobadas por curso o por plataforma y reducen errores al configurar instancias.",
+      registered: "AMIs registradas",
+      codePrefix: "Código: {{value}}",
+      empty: "No hay AMIs registradas.",
+    },
+    keyPairs: {
+      title: "Catálogo de Key Pairs",
+      subtitle:
+        "Registra key pairs personales o compartidas por curso para sugerirlas luego en el canvas y reducir errores de tipeo en ssh_access.",
+      howToCreate: "Cómo crearla en AWS",
+      new: "Nueva key pair",
+      loadError: "No se pudieron cargar las key pairs.",
+      created: "Key pair registrada.",
+      createError: "No se pudo registrar la key pair.",
+      deleted: "Key pair eliminada.",
+      deleteError: "No se pudo eliminar la key pair.",
+      scopePersonal: "Personal",
+      scopeCourseShared: "Curso compartido",
+      awsNamePrefix: "Nombre AWS:",
+      connectionChip: "Conexión: {{value}}",
+      courseChip: "Curso: {{value}}",
+      ownerChip: "Owner: {{value}}",
+      scopeCourseHelp:
+        "Pensada para laboratorios que despliegan sobre la cuenta compartida del curso.",
+      scopePersonalHelp:
+        "Pensada para laboratorios que despliegan sobre la cuenta personal del usuario.",
+      empty: "No hay key pairs registradas.",
+      infoBanner:
+        "Aquí registramos solo el nombre de la key pair en AWS. La plataforma no guarda el archivo privado .pem ni lo distribuye entre computadores.",
+      warningBanner:
+        "Para hacer deploy basta con que la key pair exista en la cuenta y región correctas. Para entrar luego por SSH, el usuario debe tener el .pem correspondiente en el computador desde el que va a conectarse.",
+      info:
+        "Las key pairs son dependientes de la cuenta y la región AWS. Este catálogo no crea la key en AWS, pero sí ayuda a declararla con contexto y a reutilizarla correctamente desde el canvas.",
+      registered: "Key pairs registradas",
+      search: "Buscar",
+      searchPlaceholder: "Nombre, conexión, curso u owner",
+      scope: "Scope",
+      all: "Todos",
+      region: "Región",
+      allRegions: "Todas",
+      legend: {
+        personal: "Personal: cuenta individual",
+        courseShared: "Curso compartido: cuenta del curso",
+        connection: "Conexión cloud vinculada",
+      },
+      awsGuide: {
+        title: "Cómo crear una key pair en AWS",
+        step1:
+          "1. Entra a la cuenta AWS y abre EC2 en la región donde vas a desplegar.",
+        step2:
+          "2. Ve a Network & Security → Key Pairs.",
+        step3:
+          "3. Elige Create key pair si quieres que AWS genere una nueva, o Import key pair si ya tienes una public key.",
+        step4:
+          "4. Guarda el archivo .pem descargado en un lugar seguro; AWS no vuelve a mostrar la private key después.",
+        step5:
+          "5. Registra aquí el mismo nombre exacto con el que quedó creada en AWS.",
+        alert:
+          "La plataforma usa el nombre de la key pair para el deploy. El archivo .pem sigue quedando fuera del sistema y lo necesitarás solo para conectarte por SSH.",
+        docs: "Ver documentación AWS",
+      },
+      close: "Cerrar",
+    },
+    keyPairModal: {
+      overline: "AWS Key Pairs",
+      title: "Registrar key pair",
+      subtitle:
+        "Guardamos el nombre con el que AWS conoce la key pair para poder sugerirla luego en el canvas.",
+      infoBanner:
+        "Este formulario no sube ni almacena el archivo privado .pem. Solo registra el nombre de la key pair que ya existe en AWS.",
+      warningBanner:
+        "Si luego quieres entrar por SSH, el .pem debe estar en el computador desde el que harás la conexión.",
+      awsHint:
+        "En AWS puedes crearla desde EC2 → Key Pairs → Create key pair, o importarla con Import key pair si ya tienes una public key.",
+      nameRequired: "El nombre del key pair es obligatorio.",
+      courseRequired: "Debes elegir un curso para un key pair compartido.",
+      fields: {
+        awsName: "Nombre en AWS",
+        awsNamePlaceholder: "p. ej., tesis-key-new",
+        label: "Etiqueta visible",
+        labelPlaceholder: "p. ej., Bastion del curso",
+        region: "Región",
+        scope: "Scope",
+        course: "Curso",
+        connection: "Conexión cloud opcional",
+      },
+      noExplicitLink: "Sin vínculo explícito",
+      connectionHelp:
+        "Vincularla a una conexión ayuda a entender en qué cuenta o curso debería existir.",
+      cancel: "Cancelar",
+      save: "Guardar key pair",
+    },
   },
   labs: {
     title: "Laboratorios",
@@ -737,6 +911,53 @@ const es = {
     },
   },
   canvas: {
+    sidebar: {
+      title: "Paleta de herramientas",
+      subtitle: "Arrastra componentes al lienzo",
+      categories: {
+        networking: "Redes",
+        compute: "Computo",
+        routing: "Ruteo",
+      },
+      items: {
+        vpc: {
+          label: "Segmento de red",
+          description:
+            "Contenedor logico que define un segmento principal de red. En AWS se traduce a una VPC.",
+        },
+        subnetwork: {
+          label: "Segmento de zona",
+          description:
+            "Zona CIDR dentro de un segmento de red donde viven las cargas de trabajo.",
+        },
+        instance: {
+          label: "Carga de trabajo",
+          description:
+            "Carga de trabajo o maquina virtual dentro de una zona.",
+        },
+        router: {
+          label: "Politica de conectividad",
+          description:
+            "Nodo logico que define como se comunican los segmentos entre si.",
+        },
+      },
+    },
+    workspace: {
+      title: "Canvas de arquitectura",
+      emptyTitle: "Diseña tu laboratorio de red",
+      emptyDescription:
+        "Modela la topología en lenguaje neutral, valida su traducción a AWS y decide si corresponde un deploy o un redeploy.",
+      emptyHint:
+        "Usa el botón flotante Herramientas para abrir la paleta y comenzar a arrastrar componentes.",
+      palette: {
+        open: "Abrir herramientas para modelar",
+        hide: "Ocultar herramientas para modelar",
+      },
+      guide: {
+        open: "Abrir guía de modelado",
+        hide: "Ocultar guía de modelado",
+      },
+    },
     feedback: {
       outdatedTitle: "Canvas desactualizado respecto al plan",
       outdatedDescription:

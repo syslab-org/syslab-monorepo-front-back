@@ -14,6 +14,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 const style = {
   position: "absolute",
@@ -45,6 +46,7 @@ const AddKeyPairModal = ({
   courses = [],
   cloudConnections = [],
 }) => {
+  const { t } = useTranslation();
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState("");
 
@@ -76,11 +78,11 @@ const AddKeyPairModal = ({
   const handleSubmit = () => {
     const name = String(form.name || "").trim();
     if (!name) {
-      setError("El nombre del key pair es obligatorio.");
+      setError(t("settings.keyPairModal.nameRequired"));
       return;
     }
     if (form.scope === "course_shared" && !form.course_id) {
-      setError("Debes elegir un curso para un key pair compartido.");
+      setError(t("settings.keyPairModal.courseRequired"));
       return;
     }
     setError("");
@@ -100,73 +102,72 @@ const AddKeyPairModal = ({
         <Stack spacing={2}>
           <Box>
             <Typography variant="overline" sx={{ fontWeight: 800, letterSpacing: 1.1, opacity: 0.7 }}>
-              AWS Key Pairs
+              {t("settings.keyPairModal.overline")}
             </Typography>
             <Typography variant="h6" sx={{ fontWeight: 800 }}>
-              Registrar key pair
+              {t("settings.keyPairModal.title")}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Guardamos el nombre con el que AWS conoce la key pair para poder sugerirla luego en el canvas.
+              {t("settings.keyPairModal.subtitle")}
             </Typography>
           </Box>
 
           <Alert severity="info" variant="outlined">
-            Este formulario <b>no sube ni almacena</b> el archivo privado <b>.pem</b>. Solo registra el nombre de la
-            key pair que ya existe en AWS.
+            {t("settings.keyPairModal.infoBanner")}
           </Alert>
 
           <Alert severity="warning" variant="outlined">
-            Si luego quieres entrar por SSH, el <b>.pem</b> debe estar en el computador desde el que harás la conexión.
+            {t("settings.keyPairModal.warningBanner")}
           </Alert>
 
           <Alert severity="info" variant="outlined">
-            En AWS puedes crearla desde <b>EC2 → Key Pairs → Create key pair</b>, o importarla con <b>Import key pair</b> si ya tienes una public key.
+            {t("settings.keyPairModal.awsHint")}
           </Alert>
 
           <TextField
-            label="Nombre en AWS"
+            label={t("settings.keyPairModal.fields.awsName")}
             value={form.name}
             onChange={(event) => handleChange("name", event.target.value)}
-            placeholder="p. ej., tesis-key-new"
+            placeholder={t("settings.keyPairModal.fields.awsNamePlaceholder")}
             fullWidth
           />
 
           <TextField
-            label="Etiqueta visible"
+            label={t("settings.keyPairModal.fields.label")}
             value={form.label}
             onChange={(event) => handleChange("label", event.target.value)}
-            placeholder="p. ej., Bastion del curso"
+            placeholder={t("settings.keyPairModal.fields.labelPlaceholder")}
             fullWidth
           />
 
           <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
             <TextField
-              label="Región"
+              label={t("settings.keyPairModal.fields.region")}
               value={form.region}
               onChange={(event) => handleChange("region", event.target.value)}
               fullWidth
             />
             <FormControl fullWidth>
-              <InputLabel id="key-pair-scope-label">Scope</InputLabel>
+              <InputLabel id="key-pair-scope-label">{t("settings.keyPairModal.fields.scope")}</InputLabel>
               <Select
                 labelId="key-pair-scope-label"
                 value={form.scope}
-                label="Scope"
+                label={t("settings.keyPairModal.fields.scope")}
                 onChange={(event) => handleChange("scope", event.target.value)}
               >
-                <MenuItem value="personal">Personal</MenuItem>
-                {canCreateCourseShared && <MenuItem value="course_shared">Curso compartido</MenuItem>}
+                <MenuItem value="personal">{t("settings.keyPairs.scopePersonal")}</MenuItem>
+                {canCreateCourseShared && <MenuItem value="course_shared">{t("settings.keyPairs.scopeCourseShared")}</MenuItem>}
               </Select>
             </FormControl>
           </Stack>
 
           {form.scope === "course_shared" && (
             <FormControl fullWidth>
-              <InputLabel id="key-pair-course-label">Curso</InputLabel>
+              <InputLabel id="key-pair-course-label">{t("settings.keyPairModal.fields.course")}</InputLabel>
               <Select
                 labelId="key-pair-course-label"
                 value={form.course_id}
-                label="Curso"
+                label={t("settings.keyPairModal.fields.course")}
                 onChange={(event) => handleChange("course_id", event.target.value)}
               >
                 {(Array.isArray(courses) ? courses : []).map((course) => (
@@ -179,15 +180,15 @@ const AddKeyPairModal = ({
           )}
 
           <FormControl fullWidth>
-            <InputLabel id="key-pair-connection-label">Conexión cloud opcional</InputLabel>
+            <InputLabel id="key-pair-connection-label">{t("settings.keyPairModal.fields.connection")}</InputLabel>
             <Select
               labelId="key-pair-connection-label"
               value={form.cloud_connection_id}
-              label="Conexión cloud opcional"
+              label={t("settings.keyPairModal.fields.connection")}
               onChange={(event) => handleChange("cloud_connection_id", event.target.value)}
             >
               <MenuItem value="">
-                <em>Sin vínculo explícito</em>
+                <em>{t("settings.keyPairModal.noExplicitLink")}</em>
               </MenuItem>
               {visibleConnections.map((connection) => (
                 <MenuItem key={connection.id} value={connection.id}>
@@ -196,16 +197,16 @@ const AddKeyPairModal = ({
               ))}
             </Select>
             <FormHelperText>
-              Vincularla a una conexión ayuda a entender en qué cuenta o curso debería existir.
+              {t("settings.keyPairModal.connectionHelp")}
             </FormHelperText>
           </FormControl>
 
           {error && <FormHelperText error>{error}</FormHelperText>}
 
           <Stack direction="row" spacing={1} justifyContent="flex-end">
-            <Button onClick={() => closeModal()}>Cancelar</Button>
+            <Button onClick={() => closeModal()}>{t("settings.keyPairModal.cancel")}</Button>
             <Button variant="contained" onClick={handleSubmit}>
-              Guardar key pair
+              {t("settings.keyPairModal.save")}
             </Button>
           </Stack>
         </Stack>

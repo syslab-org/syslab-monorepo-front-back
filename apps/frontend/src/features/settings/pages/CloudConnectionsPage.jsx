@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Alert,
   Box,
@@ -46,6 +47,7 @@ const EMPTY_FORM = {
 };
 
 export default function CloudConnectionsPage() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [courses, setCourses] = useState([]);
@@ -69,7 +71,7 @@ export default function CloudConnectionsPage() {
       setItems(Array.isArray(connections) ? connections : []);
       setCourses(Array.isArray(availableCourses) ? availableCourses : []);
     } catch (e) {
-      setError(e?.message || "No se pudieron cargar las conexiones cloud.");
+      setError(e?.message || t("settings.cloudConnections.loadError"));
     } finally {
       setLoading(false);
     }
@@ -148,34 +150,34 @@ export default function CloudConnectionsPage() {
 
       if (form.id) {
         await api.updateCloudConnection(form.id, payload);
-        setMessage("Conexión cloud actualizada.");
+        setMessage(t("settings.cloudConnections.updated"));
       } else {
         await api.createCloudConnection({
           ...payload,
           aws_secret_access_key: form.auth_type === "aws_static_keys" ? form.aws_secret_access_key : "",
         });
-        setMessage("Conexión cloud creada.");
+        setMessage(t("settings.cloudConnections.created"));
       }
 
       handleClose();
       await load();
     } catch (e) {
-      setError(e?.message || "No se pudo guardar la conexión.");
+      setError(e?.message || t("settings.cloudConnections.saveError"));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (item) => {
-    if (!window.confirm(`Eliminar la conexión "${item.name}"?`)) return;
+    if (!window.confirm(t("settings.cloudConnections.deleteConfirm", { name: item.name }))) return;
     setError("");
     setMessage("");
     try {
       await api.deleteCloudConnection(item.id);
-      setMessage("Conexión eliminada.");
+      setMessage(t("settings.cloudConnections.deleted"));
       await load();
     } catch (e) {
-      setError(e?.message || "No se pudo eliminar la conexión.");
+      setError(e?.message || t("settings.cloudConnections.deleteError"));
     }
   };
 
@@ -184,19 +186,23 @@ export default function CloudConnectionsPage() {
     setMessage("");
     try {
       const result = await api.testCloudConnection(item.id);
-      setMessage(result?.ok ? `Conexión válida: ${result?.message}` : `La prueba falló: ${result?.message}`);
+      setMessage(
+        result?.ok
+          ? t("settings.cloudConnections.testOk", { message: result?.message })
+          : t("settings.cloudConnections.testFail", { message: result?.message })
+      );
       await load();
     } catch (e) {
-      setError(e?.message || "No se pudo probar la conexión.");
+      setError(e?.message || t("settings.cloudConnections.testError"));
     }
   };
 
   return (
     <Box sx={{ p: 3 }}>
       <PageHeader
-        title="Conexiones Cloud"
-        subtitle="Registra credenciales AWS personales o compartidas por curso. El deploy real se ejecutará desde el backend usando esta conexión, no desde el computador del usuario."
-        actions={<Button variant="contained" onClick={handleOpenCreate}>Nueva conexión</Button>}
+        title={t("settings.cloudConnections.title")}
+        subtitle={t("settings.cloudConnections.subtitle")}
+        actions={<Button variant="contained" onClick={handleOpenCreate}>{t("settings.cloudConnections.new")}</Button>}
       />
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -204,10 +210,9 @@ export default function CloudConnectionsPage() {
 
       <Paper sx={{ p: 2.5, mb: 3 }}>
         <Typography variant="body2" color="text.secondary">
-          Estado actual:
-          {" "}
-          <b>{loading ? "cargando" : `${items.length} conexión(es) visible(s)`}</b>
-          . Los estudiantes solo pueden crear conexiones personales; docentes y administradores también pueden registrar conexiones compartidas de curso.
+          {t("settings.cloudConnections.statusPrefix")}{" "}
+          <b>{loading ? t("settings.cloudConnections.loading") : t("settings.cloudConnections.visibleCount", { count: items.length })}</b>
+          . {t("settings.cloudConnections.statusHelp")}
         </Typography>
       </Paper>
 
@@ -215,14 +220,14 @@ export default function CloudConnectionsPage() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Nombre</TableCell>
-              <TableCell>Scope</TableCell>
-              <TableCell>Auth</TableCell>
-              <TableCell>Curso</TableCell>
-              <TableCell>Región</TableCell>
-              <TableCell>Destino</TableCell>
-              <TableCell>Última prueba</TableCell>
-              <TableCell align="right">Acciones</TableCell>
+              <TableCell>{t("settings.cloudConnections.columns.name")}</TableCell>
+              <TableCell>{t("settings.cloudConnections.columns.scope")}</TableCell>
+              <TableCell>{t("settings.cloudConnections.columns.auth")}</TableCell>
+              <TableCell>{t("settings.cloudConnections.columns.course")}</TableCell>
+              <TableCell>{t("settings.cloudConnections.columns.region")}</TableCell>
+              <TableCell>{t("settings.cloudConnections.columns.target")}</TableCell>
+              <TableCell>{t("settings.cloudConnections.columns.lastTest")}</TableCell>
+              <TableCell align="right">{t("settings.cloudConnections.columns.actions")}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -232,21 +237,21 @@ export default function CloudConnectionsPage() {
                   <Stack spacing={0.5}>
                     <Typography variant="body2" sx={{ fontWeight: 700 }}>{item.name}</Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {String(item.provider || "aws").toUpperCase()} · {item.is_active ? "Activa" : "Inactiva"}
+                      {String(item.provider || "aws").toUpperCase()} · {item.is_active ? t("settings.cloudConnections.active") : t("settings.cloudConnections.inactive")}
                     </Typography>
                   </Stack>
                 </TableCell>
-                <TableCell>{item.scope === "course_shared" ? "Curso" : "Personal"}</TableCell>
-                <TableCell>{item.auth_type === "aws_assume_role" ? "AssumeRole" : "Static keys"}</TableCell>
-                <TableCell>{item.course?.name || "—"}</TableCell>
-                <TableCell>{item.default_region || "—"}</TableCell>
-                <TableCell>{item.auth_type === "aws_assume_role" ? item.masked_role_arn || item.aws_role_arn || "—" : item.masked_access_key_id || "—"}</TableCell>
-                <TableCell>{item.last_test_status || "Sin probar"}</TableCell>
+                <TableCell>{item.scope === "course_shared" ? t("settings.cloudConnections.scopeCourse") : t("settings.cloudConnections.scopePersonal")}</TableCell>
+                <TableCell>{item.auth_type === "aws_assume_role" ? t("settings.cloudConnections.authAssumeRole") : t("settings.cloudConnections.authStaticKeys")}</TableCell>
+                <TableCell>{item.course?.name || t("settings.cloudConnections.emptyValue")}</TableCell>
+                <TableCell>{item.default_region || t("settings.cloudConnections.emptyValue")}</TableCell>
+                <TableCell>{item.auth_type === "aws_assume_role" ? item.masked_role_arn || item.aws_role_arn || t("settings.cloudConnections.emptyValue") : item.masked_access_key_id || t("settings.cloudConnections.emptyValue")}</TableCell>
+                <TableCell>{item.last_test_status || t("settings.cloudConnections.untested")}</TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={1} justifyContent="flex-end">
-                    {item.can_edit && <Button size="small" variant="outlined" onClick={() => handleTest(item)}>Probar</Button>}
-                    {item.can_edit && <Button size="small" variant="outlined" onClick={() => handleOpenEdit(item)}>Editar</Button>}
-                    {item.can_edit && <Button size="small" color="error" variant="outlined" onClick={() => handleDelete(item)}>Eliminar</Button>}
+                    {item.can_edit && <Button size="small" variant="outlined" onClick={() => handleTest(item)}>{t("settings.cloudConnections.test")}</Button>}
+                    {item.can_edit && <Button size="small" variant="outlined" onClick={() => handleOpenEdit(item)}>{t("settings.cloudConnections.edit")}</Button>}
+                    {item.can_edit && <Button size="small" color="error" variant="outlined" onClick={() => handleDelete(item)}>{t("settings.cloudConnections.delete")}</Button>}
                   </Stack>
                 </TableCell>
               </TableRow>
@@ -255,7 +260,7 @@ export default function CloudConnectionsPage() {
               <TableRow>
                 <TableCell colSpan={8}>
                   <Typography variant="body2" color="text.secondary">
-                    No hay conexiones cloud visibles todavía.
+                    {t("settings.cloudConnections.empty")}
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -265,59 +270,59 @@ export default function CloudConnectionsPage() {
       </TableContainer>
 
       <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
-        <DialogTitle>{form.id ? "Editar conexión cloud" : "Nueva conexión cloud"}</DialogTitle>
+        <DialogTitle>{form.id ? t("settings.cloudConnections.editTitle") : t("settings.cloudConnections.createTitle")}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
-              label="Nombre"
+              label={t("settings.cloudConnections.fields.name")}
               value={form.name}
               onChange={(e) => handleChange("name", e.target.value)}
               fullWidth
             />
 
             <FormControl fullWidth>
-              <InputLabel id="scope-label">Scope</InputLabel>
+              <InputLabel id="scope-label">{t("settings.cloudConnections.fields.scope")}</InputLabel>
               <Select
                 labelId="scope-label"
                 value={form.scope}
-                label="Scope"
+                label={t("settings.cloudConnections.fields.scope")}
                 onChange={(e) => handleChange("scope", e.target.value)}
               >
-                <MenuItem value="personal">Personal</MenuItem>
-                {canCreateCourseShared && <MenuItem value="course_shared">Curso compartido</MenuItem>}
+                <MenuItem value="personal">{t("settings.cloudConnections.scopePersonal")}</MenuItem>
+                {canCreateCourseShared && <MenuItem value="course_shared">{t("settings.cloudConnections.scopeCourseShared")}</MenuItem>}
               </Select>
               <FormHelperText>
                 {form.scope === "course_shared"
-                  ? "Úsala para laboratorios del curso y revisiones compartidas."
-                  : "Solo la usarás en tus propios laboratorios."}
+                  ? t("settings.cloudConnections.scopeSharedHelp")
+                  : t("settings.cloudConnections.scopePersonalHelp")}
               </FormHelperText>
             </FormControl>
 
             <FormControl fullWidth>
-              <InputLabel id="auth-type-label">Autenticación</InputLabel>
+              <InputLabel id="auth-type-label">{t("settings.cloudConnections.fields.authType")}</InputLabel>
               <Select
                 labelId="auth-type-label"
                 value={form.auth_type}
-                label="Autenticación"
+                label={t("settings.cloudConnections.fields.authType")}
                 onChange={(e) => handleChange("auth_type", e.target.value)}
               >
-                <MenuItem value="aws_static_keys">AWS Static Keys</MenuItem>
-                <MenuItem value="aws_assume_role">AWS AssumeRole</MenuItem>
+                <MenuItem value="aws_static_keys">{t("settings.cloudConnections.authStaticKeys")}</MenuItem>
+                <MenuItem value="aws_assume_role">{t("settings.cloudConnections.authAssumeRole")}</MenuItem>
               </Select>
               <FormHelperText>
                 {form.auth_type === "aws_assume_role"
-                  ? "Recomendado para producción: la plataforma asume un role y usa credenciales temporales."
-                  : "Más simple para pruebas locales, pero menos seguro a largo plazo."}
+                  ? t("settings.cloudConnections.assumeRoleHelp")
+                  : t("settings.cloudConnections.staticKeysHelp")}
               </FormHelperText>
             </FormControl>
 
             {form.scope === "course_shared" && (
               <FormControl fullWidth>
-                <InputLabel id="course-label">Curso</InputLabel>
+                <InputLabel id="course-label">{t("settings.cloudConnections.fields.course")}</InputLabel>
                 <Select
                   labelId="course-label"
                   value={form.course_id}
-                  label="Curso"
+                  label={t("settings.cloudConnections.fields.course")}
                   onChange={(e) => handleChange("course_id", e.target.value)}
                 >
                   {visibleCourses.map((course) => (
@@ -328,7 +333,7 @@ export default function CloudConnectionsPage() {
             )}
 
             <TextField
-              label="Región por defecto"
+              label={t("settings.cloudConnections.fields.defaultRegion")}
               value={form.default_region}
               onChange={(e) => handleChange("default_region", e.target.value)}
               fullWidth
@@ -337,14 +342,14 @@ export default function CloudConnectionsPage() {
             {form.auth_type === "aws_static_keys" ? (
               <>
                 <TextField
-                  label="AWS Access Key ID"
+                  label={t("settings.cloudConnections.fields.accessKeyId")}
                   value={form.aws_access_key_id}
                   onChange={(e) => handleChange("aws_access_key_id", e.target.value)}
                   fullWidth
                 />
 
                 <TextField
-                  label={form.id ? "AWS Secret Access Key (solo si quieres reemplazarla)" : "AWS Secret Access Key"}
+                  label={form.id ? t("settings.cloudConnections.fields.secretAccessKeyReplace") : t("settings.cloudConnections.fields.secretAccessKey")}
                   value={form.aws_secret_access_key}
                   onChange={(e) => handleChange("aws_secret_access_key", e.target.value)}
                   type="password"
@@ -354,7 +359,7 @@ export default function CloudConnectionsPage() {
             ) : (
               <>
                 <TextField
-                  label="AWS Role ARN"
+                  label={t("settings.cloudConnections.fields.roleArn")}
                   value={form.aws_role_arn}
                   onChange={(e) => handleChange("aws_role_arn", e.target.value)}
                   placeholder="arn:aws:iam::123456789012:role/syslab-course-role"
@@ -362,7 +367,7 @@ export default function CloudConnectionsPage() {
                 />
 
                 <TextField
-                  label={form.id ? "External ID (solo si quieres reemplazarlo)" : "External ID"}
+                  label={form.id ? t("settings.cloudConnections.fields.externalIdReplace") : t("settings.cloudConnections.fields.externalId")}
                   value={form.aws_external_id}
                   onChange={(e) => handleChange("aws_external_id", e.target.value)}
                   fullWidth
@@ -372,14 +377,14 @@ export default function CloudConnectionsPage() {
 
             <Stack direction="row" spacing={1} alignItems="center">
               <Switch checked={!!form.is_active} onChange={(e) => handleChange("is_active", e.target.checked)} />
-              <Typography variant="body2">Conexión activa</Typography>
+              <Typography variant="body2">{t("settings.cloudConnections.fields.activeConnection")}</Typography>
             </Stack>
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleClose}>Cancelar</Button>
+          <Button onClick={handleClose}>{t("settings.cloudConnections.cancel")}</Button>
           <Button onClick={handleSubmit} variant="contained" disabled={saving}>
-            {saving ? "Guardando..." : "Guardar"}
+            {saving ? t("settings.cloudConnections.saving") : t("settings.cloudConnections.save")}
           </Button>
         </DialogActions>
       </Dialog>
