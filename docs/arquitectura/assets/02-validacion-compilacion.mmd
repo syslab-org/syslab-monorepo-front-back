@@ -1,0 +1,7 @@
+flowchart LR
+    A[Payload de entrada] --> B[validate_network_plan]
+    B --> C[normalize_network_intent]
+    C --> D[Adapter del provider]
+    D --> E[Payload compilado AWS]
+    E --> F[MultiPlanSerializer]
+    F --> G[Payload final valido]
