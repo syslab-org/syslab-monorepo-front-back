@@ -17,7 +17,7 @@
         "region": "us-east-1",
         "cidrBlock": "10.60.0.0",
         "prefixLength": 16,
-        "cloudProvider": "AWS",
+        "cloudProvider": "aws",
         "internetGateway": true,
         "enableNatGateway": false,
         "natGatewayPublicSubnet": "",
@@ -27,7 +27,7 @@
           "public_subnet": "",
           "elastic_ip": ""
         },
-        "allowedSshCidr": "190.20.221.154/32"
+        "allowedSshCidr": "190.20.220.188/32"
       }
     },
     {
@@ -53,7 +53,9 @@
         "subnetType": "public",
         "subnet_type": "public",
         "map_public_ip_on_launch": true,
-        "route_table": "public"
+        "route_table": "public",
+        "privateGoogleAccess": false,
+        "flowLogs": false
       }
     },
     {
@@ -77,8 +79,9 @@
         "ami": "ami-0ebfd941bbafe70c6",
         "instanceType": "t2.micro",
         "instance_type": "t2.micro",
-        "sshAccess": "tesis-key",
-        "ssh_access": "tesis-key",
+        "sshAccess": "tesis-key-new",
+        "ssh_access": "tesis-key-new",
+        "associatePublicIp": true,
         "associate_public_ip": true
       }
     },
@@ -99,7 +102,7 @@
         "region": "us-east-1",
         "cidrBlock": "10.61.0.0",
         "prefixLength": 16,
-        "cloudProvider": "AWS",
+        "cloudProvider": "aws",
         "internetGateway": true,
         "enableNatGateway": false,
         "natGatewayPublicSubnet": "",
@@ -109,7 +112,7 @@
           "public_subnet": "",
           "elastic_ip": ""
         },
-        "allowedSshCidr": "190.20.221.154/32"
+        "allowedSshCidr": "190.20.220.188/32"
       }
     },
     {
@@ -135,7 +138,9 @@
         "subnetType": "public",
         "subnet_type": "public",
         "map_public_ip_on_launch": true,
-        "route_table": "public"
+        "route_table": "public",
+        "privateGoogleAccess": false,
+        "flowLogs": false
       }
     },
     {
@@ -159,8 +164,9 @@
         "ami": "ami-0ebfd941bbafe70c6",
         "instanceType": "t2.micro",
         "instance_type": "t2.micro",
-        "sshAccess": "tesis-key",
-        "ssh_access": "tesis-key",
+        "sshAccess": "tesis-key-new",
+        "ssh_access": "tesis-key-new",
+        "associatePublicIp": true,
         "associate_public_ip": true
       }
     },
@@ -181,7 +187,7 @@
         "region": "us-east-1",
         "cidrBlock": "10.62.0.0",
         "prefixLength": 16,
-        "cloudProvider": "AWS",
+        "cloudProvider": "aws",
         "internetGateway": true,
         "enableNatGateway": false,
         "natGatewayPublicSubnet": "",
@@ -191,7 +197,7 @@
           "public_subnet": "",
           "elastic_ip": ""
         },
-        "allowedSshCidr": "190.20.221.154/32"
+        "allowedSshCidr": "190.20.220.188/32"
       }
     },
     {
@@ -217,7 +223,9 @@
         "subnetType": "public",
         "subnet_type": "public",
         "map_public_ip_on_launch": true,
-        "route_table": "public"
+        "route_table": "public",
+        "privateGoogleAccess": false,
+        "flowLogs": false
       }
     },
     {
@@ -241,8 +249,9 @@
         "ami": "ami-0ebfd941bbafe70c6",
         "instanceType": "t2.micro",
         "instance_type": "t2.micro",
-        "sshAccess": "tesis-key",
-        "ssh_access": "tesis-key",
+        "sshAccess": "tesis-key-new",
+        "ssh_access": "tesis-key-new",
+        "associatePublicIp": true,
         "associate_public_ip": true
       }
     },
@@ -352,7 +361,8 @@
   "meta": {
     "generated_from": "05-three-vpcs-tgw-full-mesh.json",
     "scenario_name": "scenario-05-three-vpcs-tgw-full-mesh",
-    "generated_at": "2026-03-12T11:20:13.784191+00:00",
+    "provider": "aws",
+    "generated_at": "2026-06-10T21:11:22.098120+00:00",
     "counts": {
       "nodes": 10,
       "edges": 9,

@@ -49,6 +49,23 @@ class RouterDef:
     route_rows: List[dict]
 
 
+def normalize_provider(raw: Optional[str]) -> str:
+    value = str(raw or "aws").strip().lower()
+    return value if value in {"aws", "gcp"} else "aws"
+
+
+def default_region_for_provider(provider: str) -> str:
+    return "us-central1" if provider == "gcp" else "us-east-1"
+
+
+def provider_label(provider: str) -> str:
+    return "GCP" if provider == "gcp" else "AWS"
+
+
+def default_instance_type(provider: str) -> str:
+    return "e2-micro" if provider == "gcp" else "t2.micro"
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate canvas flow files from network scenarios.",
@@ -242,6 +259,10 @@ def build_flow(scenario: dict, source_name: str) -> dict:
     nodes: List[dict] = []
     edges: List[dict] = []
     edge_count = 0
+    scenario_provider = normalize_provider(scenario.get("cloud"))
+    vlan_region = str(
+        (scenario.get("vlan") or {}).get("region") or default_region_for_provider(scenario_provider)
+    )
 
     vpcs = scenario.get("vpcs", [])
 
@@ -259,7 +280,13 @@ def build_flow(scenario: dict, source_name: str) -> dict:
     for idx, vpc in enumerate(vpcs):
         vpc_id = str(vpc.get("id") or slugify(vpc.get("name", f"vpc-{idx + 1}")))
         vpc_name = str(vpc.get("name") or vpc_id)
-        vpc_region = str(vpc.get("region") or (scenario.get("vlan") or {}).get("region") or "us-east-1")
+        vpc_region = str(vpc.get("region") or vlan_region or default_region_for_provider(scenario_provider))
+        vpc_provider_overrides = vpc.get("provider_overrides") if isinstance(vpc.get("provider_overrides"), dict) else {}
+        vpc_gcp_override = (
+            vpc_provider_overrides.get("gcp")
+            if isinstance(vpc_provider_overrides.get("gcp"), dict)
+            else {}
+        )
 
         cidr_base, cidr_prefix = parse_cidr(vpc.get("cidr_block"))
 
@@ -296,6 +323,12 @@ def build_flow(scenario: dict, source_name: str) -> dict:
         }
 
         nat_cfg = vpc.get("nat_gateway") or {}
+        nat_enabled = bool(nat_cfg.get("enabled", False))
+        allowed_ssh_cidr = str(
+            vpc.get("allowed_ssh_cidr")
+            or ((vpc_gcp_override.get("firewall") or {}).get("ssh_source_ranges") or [""])[0]
+            or ""
+        )
         vpc_node = {
             "id": vpc_id,
             "type": TYPE_VPC_NODE,
@@ -310,19 +343,35 @@ def build_flow(scenario: dict, source_name: str) -> dict:
                 "region": vpc_region,
                 "cidrBlock": cidr_base,
                 "prefixLength": cidr_prefix,
-                "cloudProvider": "AWS",
+                "cloudProvider": scenario_provider,
                 "internetGateway": bool(vpc.get("internet_gateway", False)),
-                "enableNatGateway": bool(nat_cfg.get("enabled", False)),
+                "enableNatGateway": nat_enabled,
                 "natGatewayPublicSubnet": str(nat_cfg.get("public_subnet") or ""),
                 "natGatewayElasticIp": str(nat_cfg.get("elastic_ip") or ""),
                 "nat_gateway": {
-                    "enabled": bool(nat_cfg.get("enabled", False)),
+                    "enabled": nat_enabled,
                     "public_subnet": str(nat_cfg.get("public_subnet") or ""),
                     "elastic_ip": str(nat_cfg.get("elastic_ip") or ""),
                 },
-                "allowedSshCidr": str(vpc.get("allowed_ssh_cidr") or ""),
+                "allowedSshCidr": allowed_ssh_cidr,
             },
         }
+        if scenario_provider == "gcp":
+            vpc_node["data"]["provider_overrides"] = {
+                "gcp": {
+                    "resource_kind": str(vpc_gcp_override.get("resource_kind") or "vpc_network"),
+                    "cloud_nat": {
+                        "enabled": bool(
+                            ((vpc_gcp_override.get("cloud_nat") or {}).get("enabled"))
+                            if isinstance(vpc_gcp_override.get("cloud_nat"), dict)
+                            else nat_enabled
+                        )
+                    },
+                    "firewall": {
+                        "ssh_source_ranges": [allowed_ssh_cidr] if allowed_ssh_cidr else [],
+                    },
+                }
+            }
         nodes.append(vpc_node)
 
         for sidx, subnet in enumerate(subnets):
@@ -333,9 +382,33 @@ def build_flow(scenario: dict, source_name: str) -> dict:
             )
             subnet_cidr = str(subnet.get("cidr_block") or "")
             subnet_type = str(subnet.get("subnet_type") or "public").lower()
-            subnet_az = str(subnet.get("availability_zone") or f"{vpc_region}a")
+            subnet_az = str(
+                subnet.get("availability_zone")
+                or (vpc_region if scenario_provider == "gcp" else f"{vpc_region}a")
+            )
             route_table = str(subnet.get("route_table") or ("public" if subnet_type == "public" else "private"))
-            map_public_ip = bool(subnet.get("map_public_ip_on_launch", subnet_type == "public"))
+            map_public_ip = bool(
+                subnet.get(
+                    "map_public_ip_on_launch",
+                    False if scenario_provider == "gcp" else subnet_type == "public",
+                )
+            )
+            subnet_provider_overrides = (
+                subnet.get("provider_overrides")
+                if isinstance(subnet.get("provider_overrides"), dict)
+                else {}
+            )
+            subnet_gcp_override = (
+                subnet_provider_overrides.get("gcp")
+                if isinstance(subnet_provider_overrides.get("gcp"), dict)
+                else {}
+            )
+            private_google_access = bool(
+                subnet.get("private_google_access", subnet_gcp_override.get("private_google_access", False))
+            )
+            flow_logs = bool(
+                subnet.get("flow_logs", subnet_gcp_override.get("flow_logs", False))
+            )
 
             sn_w = subnet_widths[sidx] if sidx < len(subnet_widths) else SUBNET_DEFAULT_W
             sn_h = subnet_heights[sidx] if sidx < len(subnet_heights) else SUBNET_DEFAULT_H
@@ -363,8 +436,19 @@ def build_flow(scenario: dict, source_name: str) -> dict:
                     "subnet_type": subnet_type,
                     "map_public_ip_on_launch": map_public_ip,
                     "route_table": route_table,
+                    "privateGoogleAccess": private_google_access,
+                    "flowLogs": flow_logs,
                 },
             }
+            if scenario_provider == "gcp":
+                subnet_node["data"]["provider_overrides"] = {
+                    "gcp": {
+                        "subnet_type": subnet_type,
+                        "private_google_access": private_google_access,
+                        "flow_logs": flow_logs,
+                        "region": str(subnet_gcp_override.get("region") or vpc_region),
+                    }
+                }
             nodes.append(subnet_node)
 
             edge_count += 1
@@ -381,6 +465,29 @@ def build_flow(scenario: dict, source_name: str) -> dict:
                 inst_name = str(inst.get("name") or f"instance-{iidx + 1}")
                 inst_id = str(inst.get("id") or f"{subnet_id}--inst--{slugify(inst_name)}")
                 inst_type = detect_instance_type(inst_name)
+                inst_provider_overrides = (
+                    inst.get("provider_overrides")
+                    if isinstance(inst.get("provider_overrides"), dict)
+                    else {}
+                )
+                inst_gcp_override = (
+                    inst_provider_overrides.get("gcp")
+                    if isinstance(inst_provider_overrides.get("gcp"), dict)
+                    else {}
+                )
+                image_value = str(inst.get("ami") or inst_gcp_override.get("image_family") or "")
+                instance_type_value = str(
+                    inst.get("instance_type")
+                    or inst_gcp_override.get("machine_type")
+                    or default_instance_type(scenario_provider)
+                )
+                ssh_access_value = str(inst.get("ssh_access") or inst_gcp_override.get("ssh_user") or "")
+                associate_public_ip = bool(
+                    inst.get("associate_public_ip", subnet_type == "public")
+                )
+                image_project_value = str(
+                    inst.get("image_project") or inst_gcp_override.get("image_project") or ""
+                )
 
                 inst_node = {
                     "id": inst_id,
@@ -400,14 +507,26 @@ def build_flow(scenario: dict, source_name: str) -> dict:
                         "name": inst_name,
                         "ipAddress": str(inst.get("ip_address") or ""),
                         "ip_address": str(inst.get("ip_address") or ""),
-                        "ami": str(inst.get("ami") or ""),
-                        "instanceType": str(inst.get("instance_type") or "t2.micro"),
-                        "instance_type": str(inst.get("instance_type") or "t2.micro"),
-                        "sshAccess": str(inst.get("ssh_access") or ""),
-                        "ssh_access": str(inst.get("ssh_access") or ""),
-                        "associate_public_ip": bool(inst.get("associate_public_ip", subnet_type == "public")),
+                        "ami": image_value,
+                        "instanceType": instance_type_value,
+                        "instance_type": instance_type_value,
+                        "sshAccess": ssh_access_value,
+                        "ssh_access": ssh_access_value,
+                        "associatePublicIp": associate_public_ip,
+                        "associate_public_ip": associate_public_ip,
                     },
                 }
+                if scenario_provider == "gcp":
+                    inst_node["data"]["gcpImageProject"] = image_project_value
+                    inst_node["data"]["provider_overrides"] = {
+                        "gcp": {
+                            "machine_type": instance_type_value,
+                            "image_family": image_value,
+                            "image_project": image_project_value,
+                            "external_ip": associate_public_ip,
+                            "ssh_user": ssh_access_value,
+                        }
+                    }
                 nodes.append(inst_node)
 
                 edge_count += 1
@@ -457,7 +576,7 @@ def build_flow(scenario: dict, source_name: str) -> dict:
                 "identifier": router.name or router.router_id,
                 "name": router.name or router.router_id,
                 "mode": router.mode,
-                "region": str((scenario.get("vlan") or {}).get("region") or "us-east-1"),
+                "region": vlan_region,
                 "routeTable": router.route_rows,
             },
         }
@@ -481,6 +600,7 @@ def build_flow(scenario: dict, source_name: str) -> dict:
     meta = {
         "generated_from": source_name,
         "scenario_name": scenario.get("name"),
+        "provider": scenario_provider,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "counts": {
             "nodes": len(nodes),
@@ -544,6 +664,7 @@ def main() -> int:
             {
                 "source": scenario_path.name,
                 "scenario": scenario.get("name", scenario_path.stem),
+                "provider": normalize_provider(scenario.get("cloud")),
                 "output": out_name,
                 "nodes": len(flow.get("nodes", [])),
                 "edges": len(flow.get("edges", [])),

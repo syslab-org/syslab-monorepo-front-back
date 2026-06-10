@@ -3,6 +3,7 @@
     {
       "source": "01-single-vpc-public.json",
       "scenario": "scenario-01-single-vpc-public",
+      "provider": "aws",
       "output": "01-single-vpc-public.canvas.json",
       "nodes": 3,
       "edges": 2
@@ -10,6 +11,7 @@
     {
       "source": "02-single-vpc-public-private-nat.json",
       "scenario": "scenario-02-single-vpc-public-private-nat",
+      "provider": "aws",
       "output": "02-single-vpc-public-private-nat.canvas.json",
       "nodes": 5,
       "edges": 4
@@ -17,6 +19,7 @@
     {
       "source": "03-two-vpcs-peering-bidirectional.json",
       "scenario": "scenario-03-two-vpcs-peering-bidirectional",
+      "provider": "aws",
       "output": "03-two-vpcs-peering-bidirectional.canvas.json",
       "nodes": 7,
       "edges": 6
@@ -24,6 +27,7 @@
     {
       "source": "04-two-vpcs-isolated-baseline.json",
       "scenario": "scenario-04-two-vpcs-isolated-baseline",
+      "provider": "aws",
       "output": "04-two-vpcs-isolated-baseline.canvas.json",
       "nodes": 6,
       "edges": 4
@@ -31,6 +35,7 @@
     {
       "source": "05-three-vpcs-tgw-full-mesh.json",
       "scenario": "scenario-05-three-vpcs-tgw-full-mesh",
+      "provider": "aws",
       "output": "05-three-vpcs-tgw-full-mesh.canvas.json",
       "nodes": 10,
       "edges": 9
@@ -38,6 +43,7 @@
     {
       "source": "06-three-vpcs-peering-partial.json",
       "scenario": "scenario-06-three-vpcs-peering-partial",
+      "provider": "aws",
       "output": "06-three-vpcs-peering-partial.canvas.json",
       "nodes": 10,
       "edges": 9
@@ -45,9 +51,42 @@
     {
       "source": "07-overlapping-subnets-invalid.json",
       "scenario": "scenario-07-overlapping-subnets-invalid",
+      "provider": "aws",
       "output": "07-overlapping-subnets-invalid.canvas.json",
       "nodes": 3,
       "edges": 2
+    },
+    {
+      "source": "08-single-vpc-public-gcp.json",
+      "scenario": "scenario-08-single-vpc-public-gcp",
+      "provider": "gcp",
+      "output": "08-single-vpc-public-gcp.canvas.json",
+      "nodes": 3,
+      "edges": 2
+    },
+    {
+      "source": "09-single-vpc-public-private-nat-gcp.json",
+      "scenario": "scenario-09-single-vpc-public-private-nat-gcp",
+      "provider": "gcp",
+      "output": "09-single-vpc-public-private-nat-gcp.canvas.json",
+      "nodes": 5,
+      "edges": 4
+    },
+    {
+      "source": "10-two-vpcs-peering-bidirectional-gcp.json",
+      "scenario": "scenario-10-two-vpcs-peering-bidirectional-gcp",
+      "provider": "gcp",
+      "output": "10-two-vpcs-peering-bidirectional-gcp.canvas.json",
+      "nodes": 7,
+      "edges": 6
+    },
+    {
+      "source": "11-three-vpcs-hub-routing-gcp.json",
+      "scenario": "scenario-11-three-vpcs-hub-routing-gcp",
+      "provider": "gcp",
+      "output": "11-three-vpcs-hub-routing-gcp.canvas.json",
+      "nodes": 10,
+      "edges": 9
     }
   ]
 }
