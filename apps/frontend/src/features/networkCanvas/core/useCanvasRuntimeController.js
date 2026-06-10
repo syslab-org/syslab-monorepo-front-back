@@ -15,6 +15,8 @@ export function useCanvasRuntimeController({
   reactFlowInstance,
   setTarget,
   TYPE_SUBNETWORK_NODE,
+  provider = "aws",
+  defaultRegion,
 }) {
   const reactFlow = useReactFlow();
 
@@ -47,7 +49,10 @@ export function useCanvasRuntimeController({
     nodes,
   );
 
-  const drop = useHandleDrop(reactFlowInstance, setNodes, setCanvasUiError);
+  const drop = useHandleDrop(reactFlowInstance, setNodes, setCanvasUiError, {
+    provider,
+    defaultRegion,
+  });
 
   // Ensure subnets remain inside their VPC boundaries
   useRestrictSubnetsInsideVPC();

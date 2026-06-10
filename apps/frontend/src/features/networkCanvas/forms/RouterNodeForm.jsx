@@ -133,6 +133,10 @@ export default function RouterNodeForm({
   const isGcp = provider === "gcp";
   const providerDefinition = getCanvasProviderDefinition(provider);
   const providerLabel = providerDefinition.label || String(provider || "aws").toUpperCase();
+  const effectiveVlanRegion =
+    String(nodeData.region || vlanRegion || providerDefinition.lab?.defaultRegion || "us-east-1").trim()
+    || providerDefinition.lab?.defaultRegion
+    || "us-east-1";
   // Rutas persistidas previamente
   const [routes, setRoutes] = useState(() =>
     Array.isArray(nodeData.routeTable) ? nodeData.routeTable : []
@@ -377,7 +381,7 @@ export default function RouterNodeForm({
         "",
       mode,
       routeTable: routes,
-      region: nodeData.region || vlanRegion,
+      region: effectiveVlanRegion,
     });
   };
 

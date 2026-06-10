@@ -1,0 +1,57 @@
+{
+  "name": "scenario-08-single-vpc-public-gcp",
+  "cloud": "gcp",
+  "simulate_only": true,
+  "vlan": {
+    "name": "lab-single-public-gcp",
+    "region": "us-central1",
+    "master_cidr": "10.120.0.0/16"
+  },
+  "vpcs": [
+    {
+      "id": "vpc-a-08",
+      "name": "VPC-A",
+      "region": "us-central1",
+      "cidr_block": "10.120.0.0/16",
+      "allowed_ssh_cidr": "190.20.221.154/32",
+      "internet_gateway": false,
+      "nat_gateway": {
+        "enabled": false,
+        "public_subnet": "",
+        "elastic_ip": ""
+      },
+      "route_tables": [
+        {
+          "name": "public",
+          "routes": []
+        }
+      ],
+      "subnets": [
+        {
+          "name": "public-a1",
+          "cidr_block": "10.120.1.0/24",
+          "subnet_type": "public",
+          "availability_zone": "us-central1",
+          "map_public_ip_on_launch": false,
+          "route_table": "public",
+          "private_google_access": false,
+          "flow_logs": true,
+          "instances": [
+            {
+              "id": "vm-a1",
+              "name": "bastion-a1",
+              "ami": "debian-12",
+              "image_project": "debian-cloud",
+              "instance_type": "e2-micro",
+              "ip_address": "10.120.1.10",
+              "ssh_access": "syslab",
+              "associate_public_ip": true
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "links": [],
+  "routers": []
+}

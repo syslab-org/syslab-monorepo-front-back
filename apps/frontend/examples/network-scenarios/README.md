@@ -6,7 +6,8 @@ Objetivo:
 - cargar ejemplos rápidos de topología,
 - validar casos correctos e incorrectos,
 - comparar `direct links` vs `hub routing`,
-- revisar el flujo de validación, deploy y pruebas post-deploy.
+- revisar el flujo de validación, deploy y pruebas post-deploy,
+- contrastar la misma intención de laboratorio entre AWS y GCP.
 
 Archivos incluidos:
 - `index.json`: catálogo resumido de escenarios.
@@ -18,6 +19,15 @@ Archivos incluidos:
 - `05-three-vpcs-tgw-full-mesh.json`: tres segmentos conectados mediante `hub routing`.
 - `06-three-vpcs-peering-partial.json`: tres segmentos con `direct links` parciales para estudiar pares aislados.
 - `07-overlapping-subnets-invalid.json`: caso inválido por zonas solapadas.
+- `08-single-vpc-public-gcp.json`: baseline GCP con subnet regional y bastion con IP externa.
+- `09-single-vpc-public-private-nat-gcp.json`: baseline GCP con subnet pública, privada y salida administrada.
+- `10-two-vpcs-peering-bidirectional-gcp.json`: dos segmentos GCP con `VPC Peering` bidireccional.
+- `11-three-vpcs-hub-routing-gcp.json`: tres segmentos GCP conectados a un `hub routing` neutral.
+
+Convención recomendada:
+- `01` a `07`: escenarios base pensados para AWS.
+- `08` a `11`: pares equivalentes en GCP para demo y comparación visual.
+- Cada escenario define un solo `cloud`, para que el flujo generado y la carga del laboratorio nazcan ya con el provider correcto.
 
 Uso recomendado:
 1. Crear o sincronizar un plan con uno de estos JSON.
@@ -25,9 +35,16 @@ Uso recomendado:
 3. Revisar `Preview de rutas`.
 4. Si aplica, desplegar y luego revisar `Plan Detail -> Pruebas`.
 
+Para demo comparativa:
+1. Cargar un escenario AWS y su equivalente GCP.
+2. Abrir `Create lab` y confirmar diferencias de provider, región y destino de ejecución.
+3. Abrir los nodos de segmento, zona, workload y conectividad para comparar labels y campos.
+4. En GCP, esperar validación de diseño y mensajes de runtime planificado.
+
 Nota:
 - Los casos de `direct links` y `hub routing` están pensados para comparar la traducción final por provider.
 - El caso de error por ruta de una sola vía está documentado en `canvas-recipes.md`, porque ese comportamiento vive en el canvas y en la policy de conectividad, no en el payload final.
+- Los escenarios GCP usan `image family`, `image project`, `machine type`, `Cloud NAT`, `Private Google Access` y `flow logs` para que el canvas refleje diferencias reales del provider.
 
 ## Generar flows de canvas automaticamente
 

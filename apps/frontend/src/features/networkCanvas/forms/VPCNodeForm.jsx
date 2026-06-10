@@ -43,6 +43,11 @@ const VPCNodeForm = ({
   const providerDefinition = getCanvasProviderDefinition(provider);
   const isGcp = provider === "gcp";
   const providerLabel = providerDefinition.label || String(provider || "aws").toUpperCase();
+  const regionOptions = providerDefinition.lab?.regionOptions || [];
+  const fallbackRegion = providerDefinition.lab?.defaultRegion || defaultRegion;
+  const resolvedRegionOptions = regionOptions.length > 0
+    ? regionOptions
+    : [{ value: fallbackRegion, label: fallbackRegion }];
   const validationSchema = useFormValidationSchema(
     VPC_CHILD_FORM,
     null,
@@ -76,7 +81,7 @@ const VPCNodeForm = ({
     resolver: yupResolver(validationSchema),
     defaultValues: {
       vpcName: nodeData?.vpcName || "",
-      region: nodeData?.region || defaultRegion, // ej: "us-east-1"
+      region: nodeData?.region || fallbackRegion,
       cidrBlock:
         nodeData?.cidrBlock && nodeData?.prefixLength
           ? `${nodeData.cidrBlock}/${nodeData.prefixLength}`
@@ -100,13 +105,14 @@ const VPCNodeForm = ({
   const natSubnet = watch("natGatewayPublicSubnet");
   const internetGatewayEnabled = watch("internetGateway");
   const allowedSshCidr = watch("allowedSshCidr");
+  const region = watch("region");
   const natRequiresPublicZone = providerDefinition.segment.natRequiresPublicZone !== false;
 
   // Cuando cambia el nodeData (o props clave), refresca el form SIN perder NAT fields
   useEffect(() => {
     reset({
       vpcName: nodeData?.vpcName || "",
-      region: nodeData?.region || defaultRegion,
+      region: nodeData?.region || fallbackRegion,
       cidrBlock:
         nodeData?.cidrBlock && nodeData?.prefixLength
           ? `${nodeData.cidrBlock}/${nodeData.prefixLength}`
@@ -119,7 +125,14 @@ const VPCNodeForm = ({
       natGatewayPublicSubnet: nodeData?.natGatewayPublicSubnet || "",
       natGatewayElasticIp: nodeData?.natGatewayElasticIp || "",
     });
-  }, [nodeData, reset, defaultRegion]);
+  }, [nodeData, reset, fallbackRegion]);
+
+  useEffect(() => {
+    const isVisibleRegion = resolvedRegionOptions.some((option) => option.value === region);
+    if (!isVisibleRegion) {
+      setValue("region", fallbackRegion, { shouldValidate: true, shouldDirty: true });
+    }
+  }, [fallbackRegion, region, resolvedRegionOptions, setValue]);
 
   // Al cambiar el estado de NAT o la disponibilidad de subnets públicas:
   // - Si NAT está activo y hay subnets públicas pero no hay seleccionada → autoselecciona la primera + snackbar
@@ -272,11 +285,13 @@ const VPCNodeForm = ({
           labelId="vpc-region-label"
           {...register("region")}
           label={t("canvas.vpcForm.fields.region")}
-          defaultValue={defaultRegion}
+          defaultValue={fallbackRegion}
         >
-          <MenuItem value="us-east-1">US East (N. Virginia)</MenuItem>
-          <MenuItem value="us-west-2">US West (Oregon)</MenuItem>
-          <MenuItem value="eu-west-1">EU (Ireland)</MenuItem>
+          {resolvedRegionOptions.map((option) => (
+            <MenuItem key={option.value} value={option.value}>
+              {option.label}
+            </MenuItem>
+          ))}
         </Select>
         {errors.region && (
           <FormHelperText error>{errors.region.message}</FormHelperText>
