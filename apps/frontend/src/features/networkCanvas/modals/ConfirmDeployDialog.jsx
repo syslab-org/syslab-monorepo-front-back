@@ -12,8 +12,10 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+import { useState } from "react";
 import { useTranslation } from 'react-i18next';
 
+import { getCanvasProviderDefinition } from '@/features/networkCanvas/providers/providerCatalog';
 import { translate as tr } from '@/shared/i18n';
 
 function normalizePlanSummary(transformedData) {
@@ -94,12 +96,17 @@ const ConfirmDeployDialog = ({
   planStatus,
   validationResult,
   transformedData,
+  targetProvider,
   onValidate,
   onDeploy,
   onViewPlan,
   loadingFlow,
+  providerAvailabilityNotice,
+  onCloseProviderAvailabilityNotice,
 }) => {
   const { t } = useTranslation();
+  const [providerInfoOpen, setProviderInfoOpen] = useState(false);
+  const [providerInfoAction, setProviderInfoAction] = useState("validate");
   const hasActiveInfra = planStatus?.applied === true;
   const hasReusablePlanId = Boolean(validationResult?.plan_id || planStatus?.id);
   const hasSuccessfulPlanSnapshot =
@@ -117,6 +124,18 @@ const ConfirmDeployDialog = ({
     validationState === "PLANNING";
 
   const summary = normalizePlanSummary(transformedData);
+  const providerKey =
+    String(targetProvider || summary.provider || "aws").trim().toLowerCase() || "aws";
+  const providerDefinition = getCanvasProviderDefinition(providerKey);
+  const isAwsProvider = providerKey === "aws";
+  const isGcpProvider = providerKey === "gcp";
+  const providerDisplayLabel = providerDefinition.label || String(providerKey || "aws").toUpperCase();
+  const externalProviderInfoOpen = Boolean(providerAvailabilityNotice);
+  const resolvedProviderInfoAction =
+    providerAvailabilityNotice?.action || providerInfoAction;
+  const resolvedProviderLabel = String(
+    providerAvailabilityNotice?.provider || providerKey || "aws",
+  ).toUpperCase();
   const segments = summary.segments;
   const links = summary.links;
   const hubs = summary.hubs;
@@ -192,6 +211,13 @@ const ConfirmDeployDialog = ({
   const vpcsWithNat = segments.filter(
     (segment) => Boolean(segment?.provider_overrides?.aws?.nat_gateway?.enabled),
   ).length;
+  const gcpSegmentsWithCloudNat = segments.filter(
+    (segment) => Boolean(segment?.provider_overrides?.gcp?.cloud_nat?.enabled),
+  ).length;
+  const gcpSegmentsWithSshRanges = segments.filter((segment) => {
+    const sshRanges = segment?.provider_overrides?.gcp?.firewall?.ssh_source_ranges;
+    return Array.isArray(sshRanges) && sshRanges.length > 0;
+  }).length;
   const vpcsWithSsh = segments.filter((segment) => Boolean(segment?.ingress?.ssh_cidr)).length;
   const segmentZoneStats = segments.map((segment) => {
     const zones = Array.isArray(segment?.zones) ? segment.zones : [];
@@ -223,6 +249,23 @@ const ConfirmDeployDialog = ({
     0,
   );
   const privateSubnets = Math.max(summary.totalZones - publicSubnets, 0);
+  const gcpSubnetsWithPrivateGoogleAccess = segments.reduce((acc, segment) => {
+    const zones = Array.isArray(segment?.zones) ? segment.zones : [];
+    return acc + zones.filter((zone) => Boolean(zone?.provider_overrides?.gcp?.private_google_access)).length;
+  }, 0);
+  const gcpSubnetsWithFlowLogs = segments.reduce((acc, segment) => {
+    const zones = Array.isArray(segment?.zones) ? segment.zones : [];
+    return acc + zones.filter((zone) => Boolean(zone?.provider_overrides?.gcp?.flow_logs)).length;
+  }, 0);
+  const gcpWorkloadsWithExternalIp = segments.reduce((acc, segment) => {
+    const zones = Array.isArray(segment?.zones) ? segment.zones : [];
+    return acc + zones.reduce((zoneAcc, zone) => {
+      const workloads = Array.isArray(zone?.workloads) ? zone.workloads : [];
+      return zoneAcc + workloads.filter(
+        (workload) => Boolean(workload?.provider_overrides?.gcp?.external_ip ?? workload?.access?.public_ip),
+      ).length;
+    }, 0);
+  }, 0);
   const mixedExposure = segments.filter(
     (segment) => String(segment?.exposure || "").toLowerCase() === "mixed",
   ).length;
@@ -293,6 +336,71 @@ const ConfirmDeployDialog = ({
         directLinks,
       }),
   ];
+  const gcpInterpretation = [
+    t('canvas.deployDialog.gcp.created', {
+      segments: segments.length,
+      zones: summary.totalZones,
+      workloads: summary.totalWorkloads,
+    }),
+    t('canvas.deployDialog.gcp.externalAccess', {
+      workloadsWithExternalIp: gcpWorkloadsWithExternalIp,
+      segmentsWithSshRanges: gcpSegmentsWithSshRanges,
+    }),
+    t('canvas.deployDialog.gcp.privateServices', {
+      subnetsWithPrivateGoogleAccess: gcpSubnetsWithPrivateGoogleAccess,
+      subnetsWithFlowLogs: gcpSubnetsWithFlowLogs,
+    }),
+    hubRouters > 0
+      ? t('canvas.deployDialog.gcp.centralRouting', {
+        hubLabel: providerDefinition.router?.hubLabel || 'Cloud Router Hub',
+        hubRouters,
+        hubAttachments,
+      })
+      : t('canvas.deployDialog.gcp.directRouting', {
+        directLabel: providerDefinition.router?.directLabel || 'VPC Peering',
+        directLinks,
+      }),
+    t('canvas.deployDialog.gcp.privateEgress', {
+      managedEgressLabel: providerDefinition.segment?.managedEgressLabel || 'Cloud NAT',
+      segmentsWithCloudNat: gcpSegmentsWithCloudNat,
+    }),
+  ];
+  const providerInterpretationTitle = isAwsProvider
+    ? t('canvas.deployDialog.awsTitle')
+    : isGcpProvider
+      ? t('canvas.deployDialog.gcpTitle')
+      : t('canvas.deployDialog.providerPreviewTitle', { provider: providerDisplayLabel });
+  const providerInterpretation = isAwsProvider
+    ? awsInterpretation
+    : isGcpProvider
+      ? gcpInterpretation
+      : [t('canvas.deployDialog.providerPreviewBody', { provider: providerDisplayLabel })];
+
+  const openProviderInfo = (action) => {
+    setProviderInfoAction(action);
+    setProviderInfoOpen(true);
+  };
+
+  const handleValidateClick = () => {
+    if (!isAwsProvider) {
+      openProviderInfo("validate");
+      return;
+    }
+    onValidate?.();
+  };
+
+  const handleDeployClick = () => {
+    if (!isAwsProvider) {
+      openProviderInfo("deploy");
+      return;
+    }
+    onDeploy?.();
+  };
+
+  const handleCloseProviderInfo = () => {
+    setProviderInfoOpen(false);
+    onCloseProviderAvailabilityNotice?.();
+  };
 
   return (
     <Dialog
@@ -406,7 +514,7 @@ const ConfirmDeployDialog = ({
               {t('canvas.deployDialog.summaryTitle')}
             </Typography>
             <Stack direction="row" spacing={1} flexWrap="wrap">
-              <Chip label={t('canvas.deployDialog.summary.provider', { value: String(summary.provider || "aws").toUpperCase() })} />
+              <Chip label={t('canvas.deployDialog.summary.provider', { value: providerDisplayLabel })} />
               <Chip label={t('canvas.deployDialog.summary.segments', { count: segments.length })} />
               <Chip label={t('canvas.deployDialog.summary.zones', { count: summary.totalZones })} />
               <Chip label={t('canvas.deployDialog.summary.workloads', { count: summary.totalWorkloads })} />
@@ -429,7 +537,9 @@ const ConfirmDeployDialog = ({
           </Box>
 
           <Alert severity="info" sx={{ mt: 2 }}>
-            {t('canvas.deployDialog.postDeployHint')}
+            {isAwsProvider
+              ? t('canvas.deployDialog.postDeployHint')
+              : t('canvas.deployDialog.providerPreviewHint', { provider: providerDisplayLabel })}
           </Alert>
 
           <Box mt={3}>
@@ -447,10 +557,10 @@ const ConfirmDeployDialog = ({
 
           <Box mt={3}>
             <Typography variant="subtitle1" gutterBottom>
-              {t('canvas.deployDialog.awsTitle')}
+              {providerInterpretationTitle}
             </Typography>
             <Stack spacing={1}>
-              {awsInterpretation.map((line) => (
+              {providerInterpretation.map((line) => (
                 <Alert key={line} severity="info" variant="outlined">
                   {line}
                 </Alert>
@@ -461,6 +571,23 @@ const ConfirmDeployDialog = ({
           <Box mt={4}>
             {segments.map((segment) => {
               const aws = segment?.provider_overrides?.aws || {};
+              const gcp = segment?.provider_overrides?.gcp || {};
+              const segmentZones = Array.isArray(segment?.zones) ? segment.zones : [];
+              const gcpPrivateGoogleAccessCount = segmentZones.filter(
+                (zone) => Boolean(zone?.provider_overrides?.gcp?.private_google_access),
+              ).length;
+              const gcpFlowLogsCount = segmentZones.filter(
+                (zone) => Boolean(zone?.provider_overrides?.gcp?.flow_logs),
+              ).length;
+              const gcpExternalIpCount = segmentZones.reduce((acc, zone) => {
+                const workloads = Array.isArray(zone?.workloads) ? zone.workloads : [];
+                return acc + workloads.filter(
+                  (workload) => Boolean(workload?.provider_overrides?.gcp?.external_ip ?? workload?.access?.public_ip),
+                ).length;
+              }, 0);
+              const gcpSshRanges = Array.isArray(gcp?.firewall?.ssh_source_ranges)
+                ? gcp.firewall.ssh_source_ranges.filter(Boolean)
+                : [];
               return (
                 <Box
                   key={segment.id}
@@ -481,17 +608,20 @@ const ConfirmDeployDialog = ({
                       variant="outlined"
                     />
                     <Chip
-                      label={t('canvas.deployDialog.segment.awsVpc')}
+                      label={t('canvas.deployDialog.segment.providerNetwork', {
+                        provider: providerDisplayLabel,
+                        kind: providerDefinition.segment?.kindLabel || 'Network',
+                      })}
                       size="small"
                       variant="outlined"
                     />
-                    {aws.internet_gateway && (
+                    {isAwsProvider && aws.internet_gateway && (
                       <Chip label={t('canvas.deployDialog.segment.igw')} size="small" color="primary" />
                     )}
-                    {aws.nat_gateway?.enabled && (
+                    {isAwsProvider && aws.nat_gateway?.enabled && (
                       <Chip label={t('canvas.deployDialog.segment.nat')} size="small" color="secondary" />
                     )}
-                    {aws.nat_gateway?.enabled && aws.nat_gateway?.elastic_ip && (
+                    {isAwsProvider && aws.nat_gateway?.enabled && aws.nat_gateway?.elastic_ip && (
                       <Chip
                         label={t('canvas.deployDialog.segment.natEip', {
                           value: aws.nat_gateway.elastic_ip,
@@ -500,10 +630,54 @@ const ConfirmDeployDialog = ({
                         color="warning"
                       />
                     )}
+                    {isGcpProvider && gcp.cloud_nat?.enabled && (
+                      <Chip label={t('canvas.deployDialog.segment.cloudNat')} size="small" color="secondary" />
+                    )}
+                    {isGcpProvider && gcpSshRanges.length > 0 && (
+                      <Chip
+                        label={t('canvas.deployDialog.segment.sshRanges', { count: gcpSshRanges.length })}
+                        size="small"
+                        color="primary"
+                      />
+                    )}
+                    {isGcpProvider && gcpPrivateGoogleAccessCount > 0 && (
+                      <Chip
+                        label={t('canvas.deployDialog.segment.privateGoogleAccess', {
+                          count: gcpPrivateGoogleAccessCount,
+                        })}
+                        size="small"
+                        color="info"
+                      />
+                    )}
+                    {isGcpProvider && gcpFlowLogsCount > 0 && (
+                      <Chip
+                        label={t('canvas.deployDialog.segment.flowLogs', {
+                          count: gcpFlowLogsCount,
+                        })}
+                        size="small"
+                        color="info"
+                      />
+                    )}
+                    {isGcpProvider && gcpExternalIpCount > 0 && (
+                      <Chip
+                        label={t('canvas.deployDialog.segment.externalIps', {
+                          count: gcpExternalIpCount,
+                        })}
+                        size="small"
+                        color="warning"
+                      />
+                    )}
                   </Stack>
-                  {aws.nat_gateway?.enabled && (
+                  {isAwsProvider && aws.nat_gateway?.enabled && (
                     <Typography variant="caption" color="text.secondary" display="block" mt={1}>
                       {t('canvas.deployDialog.segment.natHelp')}
+                    </Typography>
+                  )}
+                  {isGcpProvider && gcpSshRanges.length > 0 && (
+                    <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+                      {t('canvas.deployDialog.segment.sshRangesDetail', {
+                        value: gcpSshRanges.join(', '),
+                      })}
                     </Typography>
                   )}
                 </Box>
@@ -516,7 +690,7 @@ const ConfirmDeployDialog = ({
         <Button onClick={onClose} disabled={isBusy}>{t('actions.cancel')}</Button>
         <Button
           variant="contained"
-          onClick={onValidate}
+          onClick={handleValidateClick}
           disabled={isBusy}
         >
           {secondaryActionLabel}
@@ -538,12 +712,43 @@ const ConfirmDeployDialog = ({
         <Button
           variant="contained"
           color={isRedeployPreview ? "warning" : "success"}
-          onClick={onDeploy}
-          disabled={!isValidated || !hasReusablePlanId || isBusy}
+          onClick={handleDeployClick}
+          disabled={(!isValidated || !hasReusablePlanId) ? isAwsProvider || isBusy : isBusy}
         >
           {isRedeployPreview ? t('canvas.deployDialog.applyRedeploy') : t('canvas.deployDialog.deploy')}
         </Button>
       </DialogActions>
+
+      <Dialog
+        open={providerInfoOpen || externalProviderInfoOpen}
+        onClose={handleCloseProviderInfo}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>
+          {t('canvas.deployDialog.providerSoonTitle', { provider: resolvedProviderLabel })}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1.5}>
+            <Alert severity="info">
+              {t('canvas.deployDialog.providerSoonBody', {
+                provider: resolvedProviderLabel,
+                action: resolvedProviderInfoAction === "deploy"
+                  ? t('canvas.deployDialog.providerSoonActionDeploy')
+                  : t('canvas.deployDialog.providerSoonActionValidate'),
+              })}
+            </Alert>
+            <Typography variant="body2" color="text.secondary">
+              {t('canvas.deployDialog.providerSoonHelp', { provider: resolvedProviderLabel })}
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseProviderInfo} autoFocus>
+            {t('actions.close')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 };

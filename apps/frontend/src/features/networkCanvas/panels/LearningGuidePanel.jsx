@@ -26,7 +26,7 @@ export default function LearningGuidePanel({
   const { t } = useTranslation();
   if (!guide) return null;
 
-  const { stats, progress, steps, nextStep, nextAction, issues, focused } = guide;
+  const { stats, progress, steps, nextStep, nextAction, issues, focused, providerLabel } = guide;
   const canOpenValidation = nextStep?.id === "validate";
   const canOpenDeploy = nextStep?.id === "deploy";
 
@@ -130,9 +130,9 @@ export default function LearningGuidePanel({
 
                 <Box>
                   <Typography variant="caption" sx={{ fontWeight: 700 }} display="block">
-                    {t('canvas.learningGuide.panel.awsReading')}
+                    {t('canvas.learningGuide.panel.providerReading', { provider: providerLabel || "AWS" })}
                   </Typography>
-                  {focused.awsLines.map((line) => (
+                  {focused.providerLines.map((line) => (
                     <Typography key={line} variant="caption" display="block" color="text.secondary">
                       - {line}
                     </Typography>
@@ -193,10 +193,10 @@ export default function LearningGuidePanel({
             <Stack direction="row" spacing={0.8} alignItems="center" sx={{ mb: 0.8 }}>
               <CloudQueueIcon fontSize="small" color="success" />
               <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                {t('canvas.learningGuide.panel.awsView')}
+                {t('canvas.learningGuide.panel.providerView', { provider: providerLabel || "AWS" })}
               </Typography>
             </Stack>
-            {guide.contrast.awsLines.map((line) => (
+            {guide.contrast.providerLines.map((line) => (
               <Typography key={line} variant="caption" display="block">
                 - {line}
               </Typography>
@@ -223,7 +223,7 @@ export default function LearningGuidePanel({
                 {t('canvas.learningGuide.panel.neutralLabel')} {row.vlanView}
               </Typography>
               <Typography variant="caption" display="block" color="text.secondary">
-                {t('canvas.learningGuide.panel.awsLabel')} {row.awsView}
+                {t('canvas.learningGuide.panel.providerLabel', { provider: providerLabel || "AWS" })} {row.providerView}
               </Typography>
             </Box>
           ))}

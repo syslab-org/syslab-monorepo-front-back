@@ -9,6 +9,7 @@ import { api } from "@/infrastructure/http/api";
 import { useProviderCapabilities } from "@/features/networkCanvas/core/useProviderCapabilities";
 import { decideRouterMode } from "@/features/networkCanvas/domain/decideRouterMode";
 import { parseTerraformPlanSummary } from "@/features/plans/utils/parseTerraformPlanSummary";
+import { mergeNodeProviderOverrides } from "@/features/networkCanvas/providers/providerOverrides";
 import { useCanvasLabStore } from "../store/canvasLabStore";
 import { buildRoutingPreview } from "../utils/buildRoutingPreview";
 import { computeInfraHash } from "../utils/infraHash";
@@ -219,7 +220,7 @@ function buildLinksFromEdges(nodes, edges) {
   return { links, routers };
 }
 
-function buildNeutralConnectivity(links, routers) {
+function buildNeutralConnectivity(links, routers, provider) {
   const hubs = (Array.isArray(routers) ? routers : [])
     .filter((router) => String(router?.type || "").toLowerCase() === "tgw")
     .map((router) => ({
@@ -243,9 +244,16 @@ function buildNeutralConnectivity(links, routers) {
         routes: Array.isArray(link?.routes?.to_router)
           ? link.routes.to_router
           : [],
-        provider_overrides: {
-          aws: { ...link },
-        },
+        provider_overrides: provider === "gcp"
+          ? {
+            gcp: {
+              ...link,
+              implementation: "cloud_router_hub",
+            },
+          }
+          : {
+            aws: { ...link },
+          },
       };
     }
 
@@ -254,9 +262,16 @@ function buildNeutralConnectivity(links, routers) {
       implementation: "peering",
       segment_a_id: link.vpc_a_id || "",
       segment_b_id: link.vpc_b_id || "",
-      provider_overrides: {
-        aws: { ...link },
-      },
+      provider_overrides: provider === "gcp"
+        ? {
+          gcp: {
+            ...link,
+            implementation: "vpc_peering",
+          },
+        }
+        : {
+          aws: { ...link },
+        },
     };
   });
 
@@ -305,6 +320,7 @@ const useDeployNetwork = ({
   const [planName, setPlanName] = useState("");
   const [successMessage, setSuccessMessage] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [providerAvailabilityNotice, setProviderAvailabilityNotice] = useState(null);
   const [canvasLabName, setCanvasLabName] = useState("");
   const { setLoadingFlow } = useContext(LoadingFlowContext);
   const [simulateOnly, setSimulateOnly] = useState(true);
@@ -383,6 +399,9 @@ const useDeployNetwork = ({
     ]);
   const { getCapability } = useProviderCapabilities();
   const providerCapability = getCapability(targetProvider);
+  const normalizedTargetProvider =
+    String(targetProvider || "aws").trim().toLowerCase() || "aws";
+  const isAwsTargetProvider = normalizedTargetProvider === "aws";
   const currentInfraHash = useMemo(
     () => computeInfraHash(nodes, edges),
     [nodes, edges],
@@ -469,6 +488,8 @@ const useDeployNetwork = ({
           const associatePublic =
             typeof inst.data?.associate_public_ip === "boolean"
               ? inst.data.associate_public_ip
+              : typeof inst.data?.associatePublicIp === "boolean"
+                ? inst.data.associatePublicIp
               : isPublic;
 
           return {
@@ -479,6 +500,8 @@ const useDeployNetwork = ({
             ip_address: ip,
             ssh_access: keypair,
             associate_public_ip: !!associatePublic,
+            gcpImageProject: s(inst.data?.gcpImageProject),
+            provider_overrides: inst.data?.provider_overrides || {},
           };
         });
 
@@ -491,6 +514,9 @@ const useDeployNetwork = ({
           map_public_ip_on_launch: !!isPublic,
           subnet_type: sn.data?.subnetType,
           route_table: routeTableName,
+          private_google_access: !!sn.data?.privateGoogleAccess,
+          flow_logs: !!sn.data?.flowLogs,
+          provider_overrides: sn.data?.provider_overrides || {},
           instances,
         };
       });
@@ -558,6 +584,7 @@ const useDeployNetwork = ({
         route_tables: routeTables,
         subnets: subnetsRaw,
         allowed_ssh_cidr: s(vpcNode.data?.allowedSshCidr),
+        provider_overrides: vpcNode.data?.provider_overrides || {},
       };
     });
 
@@ -601,9 +628,17 @@ const useDeployNetwork = ({
             ssh_key: instance.ssh_access || "",
             public_ip: !!instance.associate_public_ip,
           },
-          provider_overrides: {
-            aws: { ...instance },
-          },
+          provider_overrides: mergeNodeProviderOverrides(instance, targetProvider, targetProvider === "gcp"
+            ? {
+              machine_type: instance.instance_type || "e2-micro",
+              image_family: instance.ami || "",
+              image_project: instance.gcpImageProject || "",
+              external_ip: !!instance.associate_public_ip,
+              ssh_user: instance.ssh_access || "",
+            }
+            : {
+              ...instance,
+            }),
         }));
 
         return {
@@ -615,12 +650,17 @@ const useDeployNetwork = ({
           map_public_ip_on_launch: !!subnet.map_public_ip_on_launch,
           route_table: subnet.route_table || "",
           workloads,
-          provider_overrides: {
-            aws: {
+          provider_overrides: mergeNodeProviderOverrides(subnet, targetProvider, targetProvider === "gcp"
+            ? {
+              subnet_type: subnet.subnet_type || "",
+              private_google_access: !!subnet.private_google_access,
+              flow_logs: !!subnet.flow_logs,
+              region: subnet.availability_zone || vlanRegionFinal,
+            }
+            : {
               subnet_type: subnet.subnet_type || "",
               route_table: subnet.route_table || "",
-            },
-          },
+            }),
         };
       });
 
@@ -642,18 +682,26 @@ const useDeployNetwork = ({
         },
         zones,
         workloads,
-        provider_overrides: {
-          aws: {
+        provider_overrides: mergeNodeProviderOverrides(vpc, targetProvider, targetProvider === "gcp"
+          ? {
+            resource_kind: "vpc_network",
+            cloud_nat: {
+              enabled: !!vpc.nat_gateway?.enabled,
+            },
+            firewall: {
+              ssh_source_ranges: vpc.allowed_ssh_cidr ? [vpc.allowed_ssh_cidr] : [],
+            },
+          }
+          : {
             resource_kind: "vpc",
             internet_gateway: !!vpc.internet_gateway,
             nat_gateway: { ...(vpc.nat_gateway || { enabled: false, public_subnet: "", elastic_ip: "" }) },
             route_tables: Array.isArray(vpc.route_tables) ? vpc.route_tables : [],
-          },
-        },
+          }),
       };
     });
 
-    const connectivity = buildNeutralConnectivity(links, routers);
+    const connectivity = buildNeutralConnectivity(links, routers, targetProvider);
 
     // Construimos el payload neutral que el backend traduce al provider.
     const built = {
@@ -717,7 +765,23 @@ const useDeployNetwork = ({
     throw new Error(t("canvas.deployRuntime.timeoutPlan"));
   };
 
+  const openProviderAvailabilityNotice = (action, provider = normalizedTargetProvider) => {
+    setProviderAvailabilityNotice({
+      action,
+      provider: String(provider || normalizedTargetProvider || "aws").trim().toLowerCase() || "aws",
+    });
+  };
+
+  const handleCloseProviderAvailabilityNotice = () => {
+    setProviderAvailabilityNotice(null);
+  };
+
   const handleValidatePlan = async () => {
+    if (!isAwsTargetProvider) {
+      openProviderAvailabilityNotice("validate");
+      return;
+    }
+
     setLoadingFlow(true);
     setSuccessMessage(null);
     setErrorMessage(null);
@@ -839,6 +903,11 @@ const useDeployNetwork = ({
   };
 
   const handleApplyReal = async () => {
+    if (!isAwsTargetProvider) {
+      openProviderAvailabilityNotice("deploy");
+      return;
+    }
+
     const isValidationReady =
       validationState === PLAN_STATES.SUCCESS ||
       (hasPersistedValidatedPlan && Boolean(validationResult?.plan_id || canvasPlanId));
@@ -958,6 +1027,8 @@ const useDeployNetwork = ({
     handleValidatePlan,
     handleApplyReal,
     handleOpenPlanDetails,
+    providerAvailabilityNotice,
+    handleCloseProviderAvailabilityNotice,
     PLAN_STATES,
   };
 };

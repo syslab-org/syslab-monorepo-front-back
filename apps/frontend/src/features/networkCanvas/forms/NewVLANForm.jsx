@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { VLAN_FORM } from "@/features/networkCanvas/utils/constants";
 import { LAB_TEMPLATES } from '@/features/networkCanvas/utils/labTemplates';
 import { CLOUD_AWS_VALUE } from '@/shared/constants';
+import { buildCanvasProviderOptions, getCanvasProviderLabel } from '@/features/networkCanvas/providers/providerCatalog';
 import { translate as tr } from '@/shared/i18n';
 import CidrLearningGuideButton from '@/features/networkCanvas/ui/CidrLearningGuideButton';
 import { useFormValidationSchema } from './validations/useFormValidations';
@@ -59,12 +60,6 @@ const parseAndValidateCidr = (raw) => {
 };
 
 // eslint-disable-next-line react/prop-types
-const providerLabels = {
-  aws: 'AWS',
-  gcp: 'GCP',
-  azure: 'Azure',
-}
-
 const providerStatusLabels = {
   ready: 'canvas.form.providerStatus.ready',
   planned: 'canvas.form.providerStatus.planned',
@@ -87,11 +82,26 @@ const NewVLANForm = ({
   requireCourseSelection = false,
   currentUserRole = '',
   currentUserCourseId = '',
-  providerCapabilities = [],
+  providerOptions = [],
   defaultProvider = CLOUD_AWS_VALUE,
 }) => {
   const { t } = useTranslation();
-  const validationSchema = useFormValidationSchema(VLAN_FORM, null, null, {}, true);
+  const allowedProviders = useMemo(
+    () =>
+      (Array.isArray(providerOptions) && providerOptions.length > 0
+        ? providerOptions
+        : buildCanvasProviderOptions([]))
+        .map((item) => String(item?.provider || '').trim().toLowerCase())
+        .filter(Boolean),
+    [providerOptions],
+  );
+  const validationSchema = useFormValidationSchema(
+    VLAN_FORM,
+    null,
+    null,
+    { allowedProviders },
+    true,
+  );
 
   const defaultCidr = useMemo(() => {
     // default “bonito” cuando wizard está activo
@@ -119,28 +129,30 @@ const NewVLANForm = ({
     },
   });
 
-  const normalizedProviderCapabilities = useMemo(() => {
-    if (!Array.isArray(providerCapabilities) || providerCapabilities.length === 0) {
-      return [{ provider: CLOUD_AWS_VALUE, status: 'ready', features: {} }];
-    }
+  const normalizedProviderOptions = useMemo(() => {
+    const source = Array.isArray(providerOptions) && providerOptions.length > 0
+      ? providerOptions
+      : buildCanvasProviderOptions([]);
 
-    return providerCapabilities
+    return source
       .map((item) => ({
         provider: String(item?.provider || '').trim().toLowerCase(),
-        status: item?.status || 'unknown',
+        label: item?.label || getCanvasProviderLabel(item?.provider),
+        designEnabled: item?.designEnabled !== false,
+        runtimeStatus: item?.runtimeStatus || 'unknown',
         features: item?.features || {},
       }))
       .filter((item) => item.provider);
-  }, [providerCapabilities]);
+  }, [providerOptions]);
 
   const selectedProvider = normalizeProviderValue(watch('cloudProvider')) || defaultProvider;
-  const selectedProviderCapability = useMemo(
+  const selectedProviderOption = useMemo(
     () =>
-      normalizedProviderCapabilities.find((item) => item.provider === selectedProvider)
-      || normalizedProviderCapabilities.find((item) => item.status === 'ready')
-      || normalizedProviderCapabilities[0]
-      || { provider: defaultProvider, status: 'unknown', features: {} },
-    [defaultProvider, normalizedProviderCapabilities, selectedProvider],
+      normalizedProviderOptions.find((item) => item.provider === selectedProvider)
+      || normalizedProviderOptions.find((item) => item.designEnabled)
+      || normalizedProviderOptions[0]
+      || { provider: defaultProvider, label: getCanvasProviderLabel(defaultProvider), designEnabled: true, runtimeStatus: 'unknown', features: {} },
+    [defaultProvider, normalizedProviderOptions, selectedProvider],
   );
 
   useEffect(() => {
@@ -198,7 +210,7 @@ const NewVLANForm = ({
         status: 'missing',
         name: '',
         accountId: '',
-        helper: 'canvas.form.awsOnlyExecution',
+        helper: 'canvas.form.designOnlyExecution',
       };
     }
 
@@ -336,22 +348,22 @@ const NewVLANForm = ({
             label={t('canvas.form.cloudProvider')}
             defaultValue={CLOUD_AWS_VALUE}
           >
-            {normalizedProviderCapabilities.map((providerCapability) => (
+            {normalizedProviderOptions.map((providerOption) => (
               <MenuItem
-                key={providerCapability.provider}
-                value={providerCapability.provider}
-                disabled={providerCapability.status !== 'ready'}
+                key={providerOption.provider}
+                value={providerOption.provider}
+                disabled={!providerOption.designEnabled}
               >
-                {providerLabels[providerCapability.provider] || providerCapability.provider.toUpperCase()}
+                {providerOption.label || getCanvasProviderLabel(providerOption.provider)}
                 {' '}
-                {providerCapability.status !== 'ready' ? `(${t('canvas.form.providerStatus.planned')})` : ''}
+                {providerOption.runtimeStatus !== 'ready' ? `(${t('canvas.form.providerStatus.planned')})` : ''}
               </MenuItem>
             ))}
           </Select>
           <FormHelperText>
-            {selectedProviderCapability.status === 'ready'
-              ? `${providerLabels[selectedProviderCapability.provider] || selectedProviderCapability.provider.toUpperCase()}: ${t(providerStatusLabels[selectedProviderCapability.status])}.`
-              : `${providerLabels[selectedProviderCapability.provider] || selectedProviderCapability.provider.toUpperCase()}: ${t(providerStatusLabels[selectedProviderCapability.status])}. ${t('canvas.form.useAwsHint')}`}
+            {selectedProviderOption.runtimeStatus === 'ready'
+              ? `${selectedProviderOption.label || getCanvasProviderLabel(selectedProviderOption.provider)}: ${t(providerStatusLabels[selectedProviderOption.runtimeStatus])}.`
+              : `${selectedProviderOption.label || getCanvasProviderLabel(selectedProviderOption.provider)}: ${t(providerStatusLabels[selectedProviderOption.runtimeStatus])}. ${t('canvas.form.designRuntimeHint', { provider: selectedProviderOption.label || getCanvasProviderLabel(selectedProviderOption.provider) })}`}
           </FormHelperText>
         </FormControl>
 
