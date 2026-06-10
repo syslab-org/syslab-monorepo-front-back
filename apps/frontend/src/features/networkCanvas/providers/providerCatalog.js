@@ -17,6 +17,24 @@ const GCP_MACHINE_TYPE_OPTIONS = [
   { value: "n2-standard-2", label: "n2-standard-2" },
 ];
 
+const AWS_REGION_OPTIONS = [
+  { value: "us-east-1", label: "US East (N. Virginia)" },
+  { value: "us-west-2", label: "US West (Oregon)" },
+  { value: "eu-west-1", label: "EU (Ireland)" },
+];
+
+const GCP_REGION_OPTIONS = [
+  { value: "us-central1", label: "Iowa (us-central1)" },
+  { value: "us-east1", label: "South Carolina (us-east1)" },
+  { value: "southamerica-west1", label: "Santiago (southamerica-west1)" },
+];
+
+const AZURE_REGION_OPTIONS = [
+  { value: "eastus", label: "East US (eastus)" },
+  { value: "westus2", label: "West US 2 (westus2)" },
+  { value: "westeurope", label: "West Europe (westeurope)" },
+];
+
 const PROVIDER_UI_CATALOG = {
   [CLOUD_AWS_VALUE]: {
     provider: CLOUD_AWS_VALUE,
@@ -63,6 +81,11 @@ const PROVIDER_UI_CATALOG = {
     router: {
       directLabel: "VPC Peering",
       hubLabel: "Transit Gateway",
+    },
+    lab: {
+      defaultRegion: "us-east-1",
+      regionOptions: AWS_REGION_OPTIONS,
+      executionTargetDescriptor: "AWS cloud connection",
     },
   },
   [CLOUD_GCP_VALUE]: {
@@ -111,6 +134,11 @@ const PROVIDER_UI_CATALOG = {
       directLabel: "VPC Peering",
       hubLabel: "Cloud Router Hub",
     },
+    lab: {
+      defaultRegion: "us-central1",
+      regionOptions: GCP_REGION_OPTIONS,
+      executionTargetDescriptor: "GCP project + service account",
+    },
   },
   [CLOUD_AZURE_VALUE]: {
     provider: CLOUD_AZURE_VALUE,
@@ -149,6 +177,11 @@ const PROVIDER_UI_CATALOG = {
     router: {
       directLabel: "VNet Peering",
       hubLabel: "Hub Routing",
+    },
+    lab: {
+      defaultRegion: "eastus",
+      regionOptions: AZURE_REGION_OPTIONS,
+      executionTargetDescriptor: "Azure subscription + service principal",
     },
   },
 };
@@ -190,4 +223,3 @@ export function buildCanvasProviderOptions(runtimeCapabilities = []) {
     };
   });
 }
-

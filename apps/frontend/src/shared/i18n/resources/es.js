@@ -1028,6 +1028,12 @@ const es = {
       courseOptional: "Opcional para administradores.",
       cloudConnectionHelp:
         "Puedes fijar una conexión AWS específica o dejar que el backend resuelva la personal del owner y luego la compartida del curso.",
+      executionTarget: "Destino de ejecución",
+      executionTargetPlannedTitle: "Binding de ejecución planificado para {{provider}}",
+      executionTargetPlannedBody:
+        "{{provider}} ya puede diseñarse en el canvas, pero su runtime real aún no se enlaza desde este formulario. Cuando lo habilitemos, aquí se asociará el destino efectivo del provider: {{target}}.",
+      executionTargetPlannedPreview:
+        "Este laboratorio quedará listo para diseño en {{provider}}. El binding real de ejecución se conectará más adelante cuando esté disponible su runtime.",
       accountLabel: "cuenta",
       executionPreviewResolved:
         "Ejecución prevista: {{name}}{{account}}. {{helper}}",

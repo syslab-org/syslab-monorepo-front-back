@@ -1031,6 +1031,12 @@ const en = {
       courseOptional: "Optional for administrators.",
       cloudConnectionHelp:
         "You can pin a specific AWS connection or let the backend resolve the owner's personal one and then the course shared one.",
+      executionTarget: "Execution target",
+      executionTargetPlannedTitle: "Planned execution binding for {{provider}}",
+      executionTargetPlannedBody:
+        "{{provider}} can already be designed in the canvas, but its real runtime is not yet bound from this form. When enabled, this step will link the effective provider target: {{target}}.",
+      executionTargetPlannedPreview:
+        "This lab will be ready for design in {{provider}}. The real execution binding will be connected later when its runtime becomes available.",
       accountLabel: "account",
       executionPreviewResolved:
         "Planned execution: {{name}}{{account}}. {{helper}}",

@@ -19,7 +19,11 @@ import { useTranslation } from 'react-i18next';
 import { VLAN_FORM } from "@/features/networkCanvas/utils/constants";
 import { LAB_TEMPLATES } from '@/features/networkCanvas/utils/labTemplates';
 import { CLOUD_AWS_VALUE } from '@/shared/constants';
-import { buildCanvasProviderOptions, getCanvasProviderLabel } from '@/features/networkCanvas/providers/providerCatalog';
+import {
+  buildCanvasProviderOptions,
+  getCanvasProviderDefinition,
+  getCanvasProviderLabel,
+} from '@/features/networkCanvas/providers/providerCatalog';
 import { translate as tr } from '@/shared/i18n';
 import CidrLearningGuideButton from '@/features/networkCanvas/ui/CidrLearningGuideButton';
 import { useFormValidationSchema } from './validations/useFormValidations';
@@ -64,7 +68,7 @@ const providerStatusLabels = {
   ready: 'canvas.form.providerStatus.ready',
   planned: 'canvas.form.providerStatus.planned',
   unknown: 'canvas.form.providerStatus.unknown',
-}
+};
 
 const executionSourceLabels = {
   explicit: 'canvas.form.executionSource.explicit',
@@ -72,6 +76,8 @@ const executionSourceLabels = {
   course_shared_auto: 'canvas.form.executionSource.courseSharedAuto',
   unresolved: 'canvas.form.executionSource.unresolved',
 };
+
+const FALLBACK_REGION = 'us-east-1';
 
 // eslint-disable-next-line react/prop-types
 const NewVLANForm = ({
@@ -102,6 +108,12 @@ const NewVLANForm = ({
     { allowedProviders },
     true,
   );
+  const defaultProviderValue = normalizeProviderValue(defaultProvider) || CLOUD_AWS_VALUE;
+  const defaultProviderDefinition = useMemo(
+    () => getCanvasProviderDefinition(defaultProviderValue),
+    [defaultProviderValue],
+  );
+  const defaultRegionValue = defaultProviderDefinition.lab?.defaultRegion || FALLBACK_REGION;
 
   const defaultCidr = useMemo(() => {
     // default “bonito” cuando wizard está activo
@@ -118,10 +130,10 @@ const NewVLANForm = ({
   } = useForm({
     resolver: yupResolver(validationSchema),
     defaultValues: {
-      cloudProvider: CLOUD_AWS_VALUE,
+      cloudProvider: defaultProviderValue,
       vlanName: '',
       cidrBlock: defaultCidr,
-      region: 'us-east-1',
+      region: defaultRegionValue,
       labTemplate: 'mvp1-single-vpc-bastion-private', // solo se usa si wizardMode=true
       courseId: '',
       cloudConnectionId: '',
@@ -145,22 +157,33 @@ const NewVLANForm = ({
       .filter((item) => item.provider);
   }, [providerOptions]);
 
-  const selectedProvider = normalizeProviderValue(watch('cloudProvider')) || defaultProvider;
+  const selectedProvider = normalizeProviderValue(watch('cloudProvider')) || defaultProviderValue;
   const selectedProviderOption = useMemo(
     () =>
       normalizedProviderOptions.find((item) => item.provider === selectedProvider)
       || normalizedProviderOptions.find((item) => item.designEnabled)
       || normalizedProviderOptions[0]
-      || { provider: defaultProvider, label: getCanvasProviderLabel(defaultProvider), designEnabled: true, runtimeStatus: 'unknown', features: {} },
-    [defaultProvider, normalizedProviderOptions, selectedProvider],
+      || { provider: defaultProviderValue, label: getCanvasProviderLabel(defaultProviderValue), designEnabled: true, runtimeStatus: 'unknown', features: {} },
+    [defaultProviderValue, normalizedProviderOptions, selectedProvider],
   );
+  const selectedProviderLabel =
+    selectedProviderOption.label || getCanvasProviderLabel(selectedProviderOption.provider);
+  const selectedProviderDefinition = useMemo(
+    () => getCanvasProviderDefinition(selectedProviderOption.provider),
+    [selectedProviderOption.provider],
+  );
+  const supportsExecutableTarget = selectedProvider === CLOUD_AWS_VALUE;
+  const selectedRegionOptions = selectedProviderDefinition.lab?.regionOptions || [];
+  const selectedProviderDefaultRegion = selectedProviderDefinition.lab?.defaultRegion || FALLBACK_REGION;
+  const selectedExecutionTargetDescriptor =
+    selectedProviderDefinition.lab?.executionTargetDescriptor || selectedProviderLabel;
 
   useEffect(() => {
     const current = normalizeProviderValue(watch('cloudProvider'));
-    if (!current && defaultProvider) {
-      setValue('cloudProvider', defaultProvider, { shouldValidate: true });
+    if (!current && defaultProviderValue) {
+      setValue('cloudProvider', defaultProviderValue, { shouldValidate: true });
     }
-  }, [defaultProvider, setValue, watch]);
+  }, [defaultProviderValue, setValue, watch]);
 
   const region = watch('region');
   const labTemplate = watch('labTemplate');
@@ -203,14 +226,27 @@ const NewVLANForm = ({
     }
   }, [filteredCloudConnections, selectedConnectionId, setValue]);
 
+  useEffect(() => {
+    if (!selectedRegionOptions.length) return;
+    const regionStillVisible = selectedRegionOptions.some((option) => option.value === region);
+    if (!regionStillVisible) {
+      setValue('region', selectedProviderDefaultRegion, { shouldValidate: true, shouldDirty: true });
+    }
+  }, [region, selectedProviderDefaultRegion, selectedRegionOptions, setValue]);
+
+  const selectedRegionLabel = useMemo(() => {
+    return selectedRegionOptions.find((option) => option.value === region)?.label || region;
+  }, [region, selectedRegionOptions]);
+
   const executionPreview = useMemo(() => {
-    if (selectedProvider !== CLOUD_AWS_VALUE) {
+    if (!supportsExecutableTarget) {
       return {
-        source: 'unresolved',
-        status: 'missing',
+        source: 'planned',
+        status: 'planned',
         name: '',
         accountId: '',
-        helper: 'canvas.form.designOnlyExecution',
+        helper: 'canvas.form.executionTargetPlannedPreview',
+        helperValues: { provider: selectedProviderLabel },
       };
     }
 
@@ -257,7 +293,7 @@ const NewVLANForm = ({
       accountId: '',
       helper: executionSourceLabels.unresolved,
     };
-  }, [filteredCloudConnections, selectedConnectionId, selectedProvider]);
+  }, [filteredCloudConnections, selectedConnectionId, selectedProviderLabel, supportsExecutableTarget]);
 
   const onSubmit = (data) => {
     if (requireCourseSelection && !data.courseId) {
@@ -272,6 +308,7 @@ const NewVLANForm = ({
 
     const { base, prefix } = cidrCheck;
     const provider = normalizeProviderValue(data.cloudProvider) || CLOUD_AWS_VALUE;
+    const canBindExecutionTarget = provider === CLOUD_AWS_VALUE;
 
     onSave({
       type: 'vlan',
@@ -296,7 +333,7 @@ const NewVLANForm = ({
         }
         : {}),
       course_id: data.courseId || null,
-      cloud_connection_id: data.cloudConnectionId || null,
+      cloud_connection_id: canBindExecutionTarget ? (data.cloudConnectionId || null) : null,
       notes: String(data.labNotes || '').trim(),
     });
   };
@@ -462,7 +499,7 @@ const NewVLANForm = ({
           </FormControl>
         )}
 
-        {availableCloudConnections.length > 0 && (
+        {supportsExecutableTarget && (
           <FormControl fullWidth>
             <InputLabel id="cloud-connection-label">{t('labs.cloudConnection')}</InputLabel>
             <Select
@@ -485,8 +522,33 @@ const NewVLANForm = ({
           </FormControl>
         )}
 
+        {!supportsExecutableTarget && (
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.75 }}>
+              {t('canvas.form.executionTarget')}
+            </Typography>
+            <Alert severity="info" variant="outlined">
+              <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.35 }}>
+                {t('canvas.form.executionTargetPlannedTitle', { provider: selectedProviderLabel })}
+              </Typography>
+              <Typography variant="body2">
+                {t('canvas.form.executionTargetPlannedBody', {
+                  provider: selectedProviderLabel,
+                  target: selectedExecutionTargetDescriptor,
+                })}
+              </Typography>
+            </Alert>
+          </Box>
+        )}
+
         <Alert
-          severity={executionPreview.status === 'resolved' ? 'success' : 'warning'}
+          severity={
+            executionPreview.status === 'resolved'
+              ? 'success'
+              : executionPreview.status === 'planned'
+                ? 'info'
+                : 'warning'
+          }
           variant="outlined"
         >
           {executionPreview.status === 'resolved'
@@ -495,7 +557,7 @@ const NewVLANForm = ({
               account: executionPreview.accountId ? ` · ${t('canvas.form.accountLabel')} ${executionPreview.accountId}` : '',
               helper: t(executionPreview.helper),
             })
-            : t(executionPreview.helper)}
+            : t(executionPreview.helper, executionPreview.helperValues)}
         </Alert>
 
         <TextField
@@ -521,14 +583,16 @@ const NewVLANForm = ({
             id="select-region"
             {...register('region')}
             label={t('labs.region')}
-            defaultValue="us-east-1"
+            defaultValue={defaultRegionValue}
           >
-            <MenuItem value="us-east-1">US East (N. Virginia)</MenuItem>
-            <MenuItem value="us-west-2">US West (Oregon)</MenuItem>
-            <MenuItem value="eu-west-1">EU (Ireland)</MenuItem>
+            {selectedRegionOptions.map((option) => (
+              <MenuItem key={option.value} value={option.value}>
+                {option.label}
+              </MenuItem>
+            ))}
           </Select>
           <FormHelperText>
-            {t('canvas.form.selectedRegion', { value: region })}
+            {t('canvas.form.selectedRegion', { value: selectedRegionLabel })}
           </FormHelperText>
         </FormControl>
 
