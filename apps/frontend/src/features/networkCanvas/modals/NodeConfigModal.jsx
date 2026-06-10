@@ -322,6 +322,7 @@ function NodeConfigModal({
     selectedNode,
     nodes,
     edges,
+    provider = "aws",
     amiList,
     keyPairList,
     executionTarget,
@@ -380,6 +381,7 @@ function NodeConfigModal({
                         getInstanceNodeProps(selectedNode, nodes, restrictedNodes);
                     return (
                         <InstanceNodeForm
+                            provider={provider}
                             nodeData={selectedNode.data}
                             onSave={saveNodeData}
                             deleteNode={deleteNodeInstance}
@@ -399,6 +401,7 @@ function NodeConfigModal({
                         getSubnetNodeProps(selectedNode, nodes);
                     return (
                         <SubNetworkNodeForm
+                            provider={provider}
                             nodeData={selectedNode.data}
                             onSave={saveNodeData}
                             deleteNode={deleteNodeInstance}
@@ -416,6 +419,7 @@ function NodeConfigModal({
                     const vlanRegion = "us-east-1";
                     return (
                         <RouterNodeForm
+                            provider={provider}
                             node={selectedNode}
                             nodeData={selectedNode.data}
                             onSave={saveNodeData}
@@ -433,6 +437,7 @@ function NodeConfigModal({
                         getVpcNodeProps(selectedNode, nodes, cidrBlockVPC, prefixLength);
                     return (
                         <VPCNodeForm
+                            provider={provider}
                             nodeData={selectedNode.data}
                             onSave={saveNodeData}
                             deleteNode={deleteNodeInstance}

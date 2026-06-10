@@ -22,10 +22,12 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  Typography
+  Typography,
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
+import { getCanvasProviderDefinition } from "@/features/networkCanvas/providers/providerCatalog";
 import { buildRoutingPreview } from "../utils/buildRoutingPreview";
 import { validateTopology } from "../utils/topologyValidation";
 
@@ -43,15 +45,20 @@ const style = {
   overflow: "hidden",
 };
 
-const routeChip = (target, viewMode = "neutral") => {
-  const isAws = viewMode === "aws";
+const routeChip = (target, viewMode = "neutral", providerDefinition = null) => {
+  const isProviderView = viewMode === "provider";
+  const internetEdgeLabel = providerDefinition?.segment?.internetEdgeLabel || "Internet Gateway";
+  const managedEgressLabel = providerDefinition?.segment?.managedEgressLabel || "NAT Gateway";
+  const directLabel = providerDefinition?.router?.directLabel || "direct link";
+  const hubLabel = providerDefinition?.router?.hubLabel || "routing hub";
+
   switch (target) {
     case "segment_local":
     case "local":
       return (
         <Chip
           icon={<LanIcon />}
-          label={isAws ? "local" : "segment local"}
+          label={isProviderView ? "local" : "segment local"}
           color="success"
           size="small"
           sx={{ fontWeight: 600 }}
@@ -62,7 +69,7 @@ const routeChip = (target, viewMode = "neutral") => {
       return (
         <Chip
           icon={<PublicIcon />}
-          label={isAws ? "Internet Gateway" : "internet edge"}
+          label={isProviderView ? internetEdgeLabel : "internet edge"}
           color="info"
           size="small"
           sx={{ fontWeight: 600 }}
@@ -73,7 +80,7 @@ const routeChip = (target, viewMode = "neutral") => {
       return (
         <Chip
           icon={<CloudUploadIcon />}
-          label={isAws ? "NAT Gateway" : "egress gateway"}
+          label={isProviderView ? managedEgressLabel : "egress gateway"}
           color="warning"
           size="small"
           sx={{ fontWeight: 600 }}
@@ -85,7 +92,7 @@ const routeChip = (target, viewMode = "neutral") => {
       return (
         <Chip
           icon={<RouteIcon />}
-          label={isAws ? "Peering" : "direct link"}
+          label={isProviderView ? directLabel : "direct link"}
           color="secondary"
           size="small"
           sx={{ fontWeight: 600 }}
@@ -97,7 +104,7 @@ const routeChip = (target, viewMode = "neutral") => {
       return (
         <Chip
           icon={<HubIcon />}
-          label={isAws ? "Transit Gateway" : "routing hub"}
+          label={isProviderView ? hubLabel : "routing hub"}
           color="primary"
           size="small"
           sx={{ fontWeight: 600 }}
@@ -115,11 +122,45 @@ const routeChip = (target, viewMode = "neutral") => {
   }
 };
 
-export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
+export default function RoutePreviewPanel({
+  open,
+  onClose,
+  nodes,
+  edges,
+  targetProvider = "aws",
+}) {
+  const { i18n } = useTranslation();
   const [errors, setErrors] = useState([]);
   const [warnings, setWarnings] = useState([]);
   const [validated, setValidated] = useState(false);
   const [viewMode, setViewMode] = useState("neutral");
+  const providerKey = String(targetProvider || "aws").trim().toLowerCase() || "aws";
+  const providerDefinition = getCanvasProviderDefinition(providerKey);
+  const providerLabel = providerDefinition.label || providerKey.toUpperCase();
+  const providerReadingLabel =
+    i18n.resolvedLanguage === "en" ? `${providerLabel} view` : `Lectura ${providerLabel}`;
+  const providerImplementationLabel =
+    i18n.resolvedLanguage === "en"
+      ? `${providerLabel} implementation`
+      : `Implementacion ${providerLabel}`;
+  const providerNoModelLabel =
+    i18n.resolvedLanguage === "en" ? "No provider implementation" : "Sin implementacion del provider";
+  const providerTranslationHelp =
+    i18n.resolvedLanguage === "en"
+      ? `Review the lab connectivity intent first. If needed, you can also inspect how ${providerLabel} would represent the same design.`
+      : `Revisa primero la intencion de conectividad del laboratorio. Si lo necesitas, tambien puedes ver como ${providerLabel} representaria ese mismo diseno.`;
+  const providerNodeTitle =
+    i18n.resolvedLanguage === "en"
+      ? `How ${providerLabel} would implement each connectivity node`
+      : `Como ${providerLabel} implementaria cada nodo de conectividad`;
+  const providerRoutesTitle =
+    i18n.resolvedLanguage === "en"
+      ? `${providerLabel} route representation`
+      : `Representacion de rutas en ${providerLabel}`;
+  const providerRouteTableHelp =
+    i18n.resolvedLanguage === "en"
+      ? `${providerLabel} route table view`
+      : `Vista de rutas de ${providerLabel}`;
 
   const preview = useMemo(() => buildRoutingPreview(nodes, edges), [nodes, edges]);
   const previewWarnings = useMemo(
@@ -127,7 +168,7 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
       (preview?.warnings || []).map(
         (warning) =>
           warning?.message ||
-          `Router ${warning?.router_id || "n/a"}: ${warning?.from_vpc || "?"} → ${warning?.to_vpc || "?"}`,
+          `Router ${warning?.router_id || "n/a"}: ${warning?.from_vpc || "?"} -> ${warning?.to_vpc || "?"}`,
       ),
     [preview],
   );
@@ -138,17 +179,17 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
 
   useEffect(() => {
     if (!open) return;
-    const { errors: e, warnings: w } = validateTopology(nodes, edges);
-    setErrors(e);
-    setWarnings(w);
+    const { errors: nextErrors, warnings: nextWarnings } = validateTopology(nodes, edges);
+    setErrors(nextErrors);
+    setWarnings(nextWarnings);
     setValidated(false);
     setViewMode("neutral");
   }, [open, nodes, edges]);
 
   const runValidation = () => {
-    const { errors: e, warnings: w } = validateTopology(nodes, edges);
-    setErrors(e);
-    setWarnings(w);
+    const { errors: nextErrors, warnings: nextWarnings } = validateTopology(nodes, edges);
+    setErrors(nextErrors);
+    setWarnings(nextWarnings);
     setValidated(true);
   };
 
@@ -163,7 +204,7 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
         </Stack>
 
         <Typography variant="body2" sx={{ color: "text.secondary", mb: 1 }}>
-          Revisa primero la intención de conectividad del laboratorio. Si lo necesitas, también puedes ver cómo AWS traducirá ese mismo diseño.
+          {providerTranslationHelp}
         </Typography>
 
         <Stack direction="row" gap={1} sx={{ mb: 1, flexWrap: "wrap" }}>
@@ -177,10 +218,10 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
             Vista neutral
           </Button>
           <Button
-            variant={viewMode === "aws" ? "contained" : "outlined"}
-            onClick={() => setViewMode("aws")}
+            variant={viewMode === "provider" ? "contained" : "outlined"}
+            onClick={() => setViewMode("provider")}
           >
-            Traducción AWS
+            {providerReadingLabel}
           </Button>
           <Chip label={`warnings: ${allWarnings.length}`} color="warning" size="small" variant={allWarnings.length ? "filled" : "outlined"} />
           <Chip label={`errores: ${errors.length}`} color="error" size="small" variant={errors.length ? "filled" : "outlined"} />
@@ -200,8 +241,8 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
                 Corrige estos errores antes del deploy:
               </Alert>
               <Stack gap={0.5}>
-                {errors.map((e, i) => (
-                  <Typography key={i} variant="body2">• {e}</Typography>
+                {errors.map((error, index) => (
+                  <Typography key={index} variant="body2">• {error}</Typography>
                 ))}
               </Stack>
             </Box>
@@ -213,8 +254,8 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
                 Advertencias (no bloquean el deploy):
               </Alert>
               <Stack gap={0.5}>
-                {allWarnings.map((w, i) => (
-                  <Typography key={i} variant="body2">• {w}</Typography>
+                {allWarnings.map((warning, index) => (
+                  <Typography key={index} variant="body2">• {warning}</Typography>
                 ))}
               </Stack>
             </Box>
@@ -223,9 +264,9 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
           {(preview?.routers || []).length > 0 && (
             <Box sx={{ mb: 2 }}>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                {viewMode === "aws"
-                  ? "Cómo AWS implementará cada nodo de conectividad"
-                  : "Cómo queda modelada la conectividad por nodo"}
+                {viewMode === "provider"
+                  ? providerNodeTitle
+                  : "Como queda modelada la conectividad por nodo"}
               </Typography>
               <Stack spacing={1}>
                 {preview.routers.map((router) => (
@@ -243,13 +284,14 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
                         {router.name}
                       </Typography>
                       {routeChip(
-                        viewMode === "aws" ? router.providerMode : router.neutralMode,
+                        viewMode === "provider" ? router.providerMode : router.neutralMode,
                         viewMode,
+                        providerDefinition,
                       )}
                       {viewMode === "neutral" && (
                         <Chip
                           size="small"
-                          label={`AWS: ${router.providerMode === "tgw" ? "Transit Gateway" : "Peering por pares"}`}
+                          label={`${providerLabel}: ${router.providerMode === "tgw" ? (providerDefinition.router?.hubLabel || "routing hub") : (providerDefinition.router?.directLabel || "direct link")}`}
                           variant="outlined"
                         />
                       )}
@@ -261,21 +303,21 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
                       {router.mode === "peering" ? (
                         <Chip
                           size="small"
-                          label={`Peerings listos: ${router.awsResources?.peerings || 0}`}
+                          label={`${providerDefinition.router?.directLabel || "links"}: ${router.awsResources?.peerings || 0}`}
                           color="secondary"
                           variant="outlined"
                         />
                       ) : (
                         <Chip
                           size="small"
-                          label={`Attachments TGW: ${router.awsResources?.attachments || 0}`}
+                          label={`${providerDefinition.router?.hubLabel || "hub"} attachments: ${router.awsResources?.attachments || 0}`}
                           color="primary"
                           variant="outlined"
                         />
                       )}
                     </Stack>
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.6 }}>
-                      Policies explícitas: {router.explicitRoutes} • Bidireccionales: {router.bidirectionalPairs} • Solo ida: {router.oneWayPairs}
+                      Policies explicitas: {router.explicitRoutes} • Bidireccionales: {router.bidirectionalPairs} • Solo ida: {router.oneWayPairs}
                     </Typography>
                   </Box>
                 ))}
@@ -292,7 +334,7 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
                 <TableHead>
                   <TableRow>
                     <TableCell>Par de segmentos</TableCell>
-                    <TableCell>{viewMode === "aws" ? "Implementación AWS" : "Modelo"}</TableCell>
+                    <TableCell>{viewMode === "provider" ? providerImplementationLabel : "Modelo"}</TableCell>
                     <TableCell>Estado</TableCell>
                     <TableCell>Lectura</TableCell>
                   </TableRow>
@@ -308,13 +350,14 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
                       <TableCell>
                         {pair.mode ? (
                           routeChip(
-                            viewMode === "aws" ? pair.providerMode : pair.neutralMode,
+                            viewMode === "provider" ? pair.providerMode : pair.neutralMode,
                             viewMode,
+                            providerDefinition,
                           )
                         ) : (
                           <Chip
                             size="small"
-                            label={viewMode === "aws" ? "Sin implementación" : "Sin modelo"}
+                            label={viewMode === "provider" ? providerNoModelLabel : "Sin modelo"}
                             variant="outlined"
                           />
                         )}
@@ -353,7 +396,7 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
 
           <Divider sx={{ my: 1.5 }} />
 
-          {(preview?.vpcs || []).map(vpc => (
+          {(preview?.vpcs || []).map((vpc) => (
             <Accordion key={vpc.id} disableGutters>
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                 <Stack direction="row" gap={1} alignItems="center" sx={{ width: "100%", pr: 2 }}>
@@ -365,40 +408,43 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
               </AccordionSummary>
               <AccordionDetails>
                 <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                  {viewMode === "aws"
-                    ? <>Tabla de rutas AWS: <b>main</b></>
+                  {viewMode === "provider"
+                    ? <>{providerRouteTableHelp}: <b>main</b></>
                     : <>Policies de salida del segmento</>}
                 </Typography>
                 <Table size="small" sx={{ mt: 1 }}>
                   <TableHead>
                     <TableRow>
                       <TableCell>Destino (CIDR)</TableCell>
-                      <TableCell>{viewMode === "aws" ? "Target" : "Destino lógico"}</TableCell>
-                      <TableCell>{viewMode === "aws" ? "via_router_id" : "Nodo intermedio"}</TableCell>
+                      <TableCell>{viewMode === "provider" ? "Target" : "Destino lógico"}</TableCell>
+                      <TableCell>{viewMode === "provider" ? "via_router_id" : "Nodo intermedio"}</TableCell>
                       <TableCell>Direccionalidad</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {(vpc.main_route_table || []).map((r, i) => (
-                      <TableRow key={i}>
-                        <TableCell><Typography variant="body2">{r.dest_cidr}</Typography></TableCell>
+                    {(vpc.main_route_table || []).map((route, index) => (
+                      <TableRow key={index}>
+                        <TableCell><Typography variant="body2">{route.dest_cidr}</Typography></TableCell>
                         <TableCell>
                           {routeChip(
-                            viewMode === "aws" ? r.provider_target || r.target : r.neutral_target || r.target,
+                            viewMode === "provider"
+                              ? route.provider_target || route.target
+                              : route.neutral_target || route.target,
                             viewMode,
+                            providerDefinition,
                           )}
                         </TableCell>
                         <TableCell>
-                          <Typography variant="body2" sx={{ color: r.via_router_id ? "text.primary" : "text.disabled" }}>
-                            {r.via_router_id || "—"}
+                          <Typography variant="body2" sx={{ color: route.via_router_id ? "text.primary" : "text.disabled" }}>
+                            {route.via_router_id || "—"}
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          {r.directionality === "missing-return" ? (
+                          {route.directionality === "missing-return" ? (
                             <Chip size="small" color="warning" label="Falta retorno" />
-                          ) : r.directionality === "bidirectional" ? (
+                          ) : route.directionality === "bidirectional" ? (
                             <Chip size="small" color="success" label="Ida y vuelta" />
-                          ) : r.directionality === "manual-cidr" ? (
+                          ) : route.directionality === "manual-cidr" ? (
                             <Chip size="small" variant="outlined" label="CIDR manual" />
                           ) : (
                             <Chip size="small" variant="outlined" label="N/A" />
@@ -410,8 +456,8 @@ export default function RoutePreviewPanel({ open, onClose, nodes, edges }) {
                       <TableRow>
                         <TableCell colSpan={4}>
                           <Typography variant="body2" color="text.secondary">
-                            {viewMode === "aws"
-                              ? "Sin rutas AWS calculadas para este segmento."
+                            {viewMode === "provider"
+                              ? `${providerRoutesTitle}. No hay rutas calculadas para este segmento.`
                               : "Sin policies calculadas para este segmento."}
                           </Typography>
                         </TableCell>

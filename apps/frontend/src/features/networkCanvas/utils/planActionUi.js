@@ -1,10 +1,14 @@
 import { translate as tr } from "@/shared/i18n";
+import { getCanvasProviderDefinition } from "@/features/networkCanvas/providers/providerCatalog";
 
-export function computePlanActionState(planStatus, canvasState, validationState) {
+export function computePlanActionState(planStatus, canvasState, validationState, provider = "aws") {
   const status = String(planStatus?.status || "").toUpperCase();
   const lastAction = String(
     planStatus?.last_action || planStatus?.lastAction || "",
   ).toLowerCase();
+  const providerKey = String(provider || "aws").trim().toLowerCase() || "aws";
+  const providerDefinition = getCanvasProviderDefinition(providerKey);
+  const providerLabel = providerDefinition.label || providerKey.toUpperCase();
   const applied = planStatus?.applied === true;
   const canDestroy = Boolean(planStatus?.can_destroy ?? (applied && lastAction !== "destroy"));
   const isRunning =
@@ -32,17 +36,17 @@ export function computePlanActionState(planStatus, canvasState, validationState)
       actionColor: "warning",
       helper:
         canvasState === "PLAN_OUTDATED"
-          ? tr("canvas.planAction.applied.helperOutdated")
-          : tr("canvas.planAction.applied.helper"),
+          ? tr("canvas.planAction.applied.helperOutdated", { provider: providerLabel })
+          : tr("canvas.planAction.applied.helper", { provider: providerLabel }),
       helperSeverity: canvasState === "PLAN_OUTDATED" ? "warning" : "info",
       workspaceTitle:
         canvasState === "PLAN_OUTDATED"
           ? tr("canvas.planAction.applied.workspaceTitleOutdated")
-          : tr("canvas.planAction.applied.workspaceTitle"),
+          : tr("canvas.planAction.applied.workspaceTitle", { provider: providerLabel }),
       workspaceDetail:
         canvasState === "PLAN_OUTDATED"
-          ? tr("canvas.planAction.applied.workspaceDetailOutdated")
-          : tr("canvas.planAction.applied.workspaceDetail"),
+          ? tr("canvas.planAction.applied.workspaceDetailOutdated", { provider: providerLabel })
+          : tr("canvas.planAction.applied.workspaceDetail", { provider: providerLabel }),
       workspaceSeverity: canvasState === "PLAN_OUTDATED" ? "warning" : "info",
       chips: [
         { label: tr("canvas.planAction.applied.chipRedeploy"), color: "warning", variant: "filled" },
@@ -58,12 +62,12 @@ export function computePlanActionState(planStatus, canvasState, validationState)
   if (normalizedValidation === "SUCCESS" || canvasState === "PLAN_VALIDATED") {
     return {
       actionLabel: tr("canvas.planAction.validated.actionLabel"),
-      actionTooltip: tr("canvas.planAction.validated.actionTooltip"),
+      actionTooltip: tr("canvas.planAction.validated.actionTooltip", { provider: providerLabel }),
       actionColor: "success",
-      helper: tr("canvas.planAction.validated.helper"),
+      helper: tr("canvas.planAction.validated.helper", { provider: providerLabel }),
       helperSeverity: "success",
       workspaceTitle: tr("canvas.planAction.validated.workspaceTitle"),
-      workspaceDetail: tr("canvas.planAction.validated.workspaceDetail"),
+      workspaceDetail: tr("canvas.planAction.validated.workspaceDetail", { provider: providerLabel }),
       workspaceSeverity: "success",
       chips: [
         { label: tr("canvas.planAction.validated.chipDeploy"), color: "primary", variant: "filled" },
@@ -92,12 +96,12 @@ export function computePlanActionState(planStatus, canvasState, validationState)
 
   return {
     actionLabel: tr("canvas.planAction.default.actionLabel"),
-    actionTooltip: tr("canvas.planAction.default.actionTooltip"),
+    actionTooltip: tr("canvas.planAction.default.actionTooltip", { provider: providerLabel }),
     actionColor: "success",
     helper: tr("canvas.planAction.default.helper"),
     helperSeverity: "info",
     workspaceTitle: tr("canvas.planAction.default.workspaceTitle"),
-    workspaceDetail: tr("canvas.planAction.default.workspaceDetail"),
+    workspaceDetail: tr("canvas.planAction.default.workspaceDetail", { provider: providerLabel }),
     workspaceSeverity: "info",
     chips: [{ label: tr("canvas.planAction.default.chip"), color: "info", variant: "filled" }],
   };

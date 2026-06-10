@@ -37,6 +37,7 @@ export default function PacketToolbar({
   planStatus = null, // { status, last_action, simulate_only, updated_at }
   canvasState = "NO_PLAN",
   validationState = "IDLE",
+  targetProvider = "aws",
   paletteOpen = true,
   guideOpen = false,
   onTogglePalette,
@@ -58,7 +59,7 @@ export default function PacketToolbar({
   };
 
   const normalizedValidation = String(validationState || "").toUpperCase();
-  const actionState = computePlanActionState(planStatus, canvasState, validationState);
+  const actionState = computePlanActionState(planStatus, canvasState, validationState, targetProvider);
   const planSnapshotStatus = String(planStatus?.status || '').toUpperCase();
   const hasActiveInfra = planStatus?.applied === true;
   const statusGuideOpen = Boolean(statusGuideAnchor);

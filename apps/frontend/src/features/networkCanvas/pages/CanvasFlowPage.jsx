@@ -142,8 +142,9 @@ function CanvasFlowPage() {
     [isValidConnection, nodes]
   );
 
-  const amiList = useAmiList();
-  const keyPairList = useKeyPairList();
+  const targetProvider = useCanvasLabStore((state) => state.targetProvider || "aws");
+  const amiList = useAmiList(targetProvider);
+  const keyPairList = useKeyPairList(targetProvider);
 
   const {
     isCanvasDirty,
@@ -262,6 +263,8 @@ function CanvasFlowPage() {
     handleValidatePlan,
     handleApplyReal,
     handleOpenPlanDetails,
+    providerAvailabilityNotice,
+    handleCloseProviderAvailabilityNotice,
     planValidationOk,
     planCanvasHash,
   } = useNetworkPlanController({
@@ -303,6 +306,7 @@ function CanvasFlowPage() {
     canvasState,
     canvasPlanInfo,
     selectedNode,
+    targetProvider,
   });
 
   const location = useLocation();
@@ -407,7 +411,8 @@ function CanvasFlowPage() {
               onPreviewRoutes: openRoutesPreview,
               planStatus: canvasPlanInfo,
               canvasState,
-              validationState: validationStateForToolbar
+              validationState: validationStateForToolbar,
+              targetProvider,
             }}
             feedbackProps={{
               canvasUiError,
@@ -431,6 +436,9 @@ function CanvasFlowPage() {
               handleApplyReal,
               handleOpenPlanDetails,
               loadingFlow,
+              targetProvider,
+              providerAvailabilityNotice,
+              handleCloseProviderAvailabilityNotice,
               successMessage,
               errorMessage,
               handleCloseSnackbar
@@ -449,6 +457,7 @@ function CanvasFlowPage() {
           onClose={closeRoutesPreview}
           nodes={nodes}
           edges={edges}
+          targetProvider={targetProvider}
         />
 
         <NodeConfigModal
@@ -457,6 +466,7 @@ function CanvasFlowPage() {
           selectedNode={selectedNode}
           nodes={nodes}
           edges={edges}
+          provider={targetProvider}
           amiList={amiList}
           keyPairList={keyPairList}
           executionTarget={resolvedExecutionTarget}

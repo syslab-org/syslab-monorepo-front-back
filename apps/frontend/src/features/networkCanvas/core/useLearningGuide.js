@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useTranslation } from 'react-i18next';
+import { getCanvasProviderDefinition } from "@/features/networkCanvas/providers/providerCatalog";
 import {
   TYPE_COMPUTER_NODE,
   TYPE_PRINTER_NODE,
@@ -56,10 +57,19 @@ const resolveNodeLabel = (node, fallbackLabel) =>
   node?.id ||
   fallbackLabel;
 
-const buildFocusedGuide = ({ selectedNode, nodes, edges, t }) => {
+const buildFocusedGuide = ({
+  selectedNode,
+  nodes,
+  edges,
+  t,
+  providerKey,
+  providerDefinition,
+}) => {
   if (!selectedNode) return null;
 
   const label = resolveNodeLabel(selectedNode, t('canvas.learningGuide.focus.element'));
+  const providerLabel = providerDefinition.label || String(providerKey || "aws").toUpperCase();
+  const isAwsProvider = providerKey === "aws";
 
   if (selectedNode.type === TYPE_VPC_NODE) {
     const subnets = nodes.filter((node) => node.parentId === selectedNode.id);
@@ -72,26 +82,8 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges, t }) => {
     const hasIgw = Boolean(selectedNode.data?.internetGateway);
     const hasNat = Boolean(selectedNode.data?.enableNatGateway);
     const sshCidr = String(selectedNode.data?.allowedSshCidr || "").trim();
-
-    return {
-      title: t('canvas.learningGuide.focus.segmentTitle', { label }),
-      subtitle: t('canvas.learningGuide.focus.segmentSubtitle'),
-      badges: [
-        makeBadge(`CIDR ${selectedNode.data?.cidrBlock || "n/a"}/${selectedNode.data?.prefixLength || "?"}`),
-        makeBadge(hasIgw ? t('canvas.learningGuide.focus.internetEdgeOn') : t('canvas.learningGuide.focus.internetEdgeOff'), hasIgw ? "success" : "default"),
-        makeBadge(hasNat ? t('canvas.learningGuide.focus.managedEgressOn') : t('canvas.learningGuide.focus.managedEgressOff'), hasNat ? "warning" : "default"),
-        makeBadge(sshCidr ? t('canvas.learningGuide.focus.sshExposed') : t('canvas.learningGuide.focus.sshHidden'), sshCidr ? "info" : "default"),
-      ],
-      labLines: [
-        t('canvas.learningGuide.focus.segmentLabDomain'),
-        publicSubnets > 0
-          ? t('canvas.learningGuide.focus.publicZones', { count: publicSubnets })
-          : t('canvas.learningGuide.focus.noPublicZones'),
-        privateSubnets > 0
-          ? t('canvas.learningGuide.focus.privateZones', { count: privateSubnets })
-          : t('canvas.learningGuide.focus.noPrivateZones'),
-      ],
-      awsLines: [
+    const providerLines = isAwsProvider
+      ? [
         t('canvas.learningGuide.focus.segmentAwsVpc', {
           region: selectedNode.data?.region || "us-east-1",
         }),
@@ -107,7 +99,47 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges, t }) => {
         sshCidr
           ? t('canvas.learningGuide.focus.sshRule', { value: sshCidr })
           : t('canvas.learningGuide.focus.noSshRule'),
+      ]
+      : [
+        t('canvas.learningGuide.focus.segmentProviderNetwork', {
+          provider: providerLabel,
+          networkKind: providerDefinition.segment?.kindLabel || "network",
+          region: selectedNode.data?.region || "us-east-1",
+        }),
+        hasNat
+          ? t('canvas.learningGuide.focus.providerManagedEgressOn', {
+            managedEgressLabel: providerDefinition.segment?.managedEgressLabel || "managed egress",
+          })
+          : t('canvas.learningGuide.focus.providerManagedEgressOff', {
+            managedEgressLabel: providerDefinition.segment?.managedEgressLabel || "managed egress",
+          }),
+        sshCidr
+          ? t('canvas.learningGuide.focus.providerFirewallRule', {
+            provider: providerLabel,
+            value: sshCidr,
+          })
+          : t('canvas.learningGuide.focus.providerNoFirewallRule'),
+      ];
+
+    return {
+      title: t('canvas.learningGuide.focus.segmentTitle', { label }),
+      subtitle: t('canvas.learningGuide.focus.segmentSubtitleProvider', { provider: providerLabel }),
+      badges: [
+        makeBadge(`CIDR ${selectedNode.data?.cidrBlock || "n/a"}/${selectedNode.data?.prefixLength || "?"}`),
+        makeBadge(hasIgw ? t('canvas.learningGuide.focus.internetEdgeOn') : t('canvas.learningGuide.focus.internetEdgeOff'), hasIgw ? "success" : "default"),
+        makeBadge(hasNat ? t('canvas.learningGuide.focus.managedEgressOn') : t('canvas.learningGuide.focus.managedEgressOff'), hasNat ? "warning" : "default"),
+        makeBadge(sshCidr ? t('canvas.learningGuide.focus.sshExposed') : t('canvas.learningGuide.focus.sshHidden'), sshCidr ? "info" : "default"),
       ],
+      labLines: [
+        t('canvas.learningGuide.focus.segmentLabDomain'),
+        publicSubnets > 0
+          ? t('canvas.learningGuide.focus.publicZones', { count: publicSubnets })
+          : t('canvas.learningGuide.focus.noPublicZones'),
+        privateSubnets > 0
+          ? t('canvas.learningGuide.focus.privateZones', { count: privateSubnets })
+          : t('canvas.learningGuide.focus.noPrivateZones'),
+      ],
+      providerLines,
       whyItMatters: t('canvas.learningGuide.focus.segmentWhy'),
     };
   }
@@ -133,6 +165,34 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges, t }) => {
             candidate?.destVpcId === route.sourceVpcId,
         ),
     ).length;
+    const providerLines = isAwsProvider
+      ? [
+        mode === "tgw"
+          ? t('canvas.learningGuide.focus.routerHubAws', { count: connectedVpcs.size })
+          : t('canvas.learningGuide.focus.routerPeeringAws'),
+        mode === "tgw"
+          ? t('canvas.learningGuide.focus.routerHubRoute')
+          : t('canvas.learningGuide.focus.routerPeeringRoute'),
+      ]
+      : [
+        mode === "tgw"
+          ? t('canvas.learningGuide.focus.routerHubProvider', {
+            provider: providerLabel,
+            hubLabel: providerDefinition.router?.hubLabel || "routing hub",
+            count: connectedVpcs.size,
+          })
+          : t('canvas.learningGuide.focus.routerDirectProvider', {
+            provider: providerLabel,
+            directLabel: providerDefinition.router?.directLabel || "direct links",
+          }),
+        mode === "tgw"
+          ? t('canvas.learningGuide.focus.routerHubRouteProvider', {
+            hubLabel: providerDefinition.router?.hubLabel || "routing hub",
+          })
+          : t('canvas.learningGuide.focus.routerDirectRouteProvider', {
+            directLabel: providerDefinition.router?.directLabel || "direct links",
+          }),
+      ];
 
     return {
       title: t('canvas.learningGuide.focus.routerTitle', { label }),
@@ -149,14 +209,7 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges, t }) => {
           : t('canvas.learningGuide.focus.routerDirectLab'),
         t('canvas.learningGuide.focus.policyRows'),
       ],
-      awsLines: [
-        mode === "tgw"
-          ? t('canvas.learningGuide.focus.routerHubAws', { count: connectedVpcs.size })
-          : t('canvas.learningGuide.focus.routerPeeringAws'),
-        mode === "tgw"
-          ? t('canvas.learningGuide.focus.routerHubRoute')
-          : t('canvas.learningGuide.focus.routerPeeringRoute'),
-      ],
+      providerLines,
       whyItMatters: t('canvas.learningGuide.focus.routerWhy'),
     };
   }
@@ -164,6 +217,22 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges, t }) => {
   if (selectedNode.type === TYPE_SUBNETWORK_NODE) {
     const subnetType = String(selectedNode.data?.subnetType || "").toLowerCase();
     const routeTable = selectedNode.data?.routeTable || "main";
+    const providerLines = isAwsProvider
+      ? [
+        t('canvas.learningGuide.focus.subnetAws'),
+        subnetType === "public"
+          ? t('canvas.learningGuide.focus.subnetPublicRule')
+          : t('canvas.learningGuide.focus.subnetPrivateRule'),
+      ]
+      : [
+        t('canvas.learningGuide.focus.subnetProvider', {
+          provider: providerLabel,
+          subnetKind: providerDefinition.subnet?.kindLabel || "subnet",
+        }),
+        subnetType === "public"
+          ? t('canvas.learningGuide.focus.subnetProviderPublicRule')
+          : t('canvas.learningGuide.focus.subnetProviderPrivateRule'),
+      ];
     return {
       title: t('canvas.learningGuide.focus.zoneTitle', { label }),
       subtitle: t('canvas.learningGuide.focus.zoneSubtitle'),
@@ -177,12 +246,7 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges, t }) => {
           ? t('canvas.learningGuide.focus.publicZoneLab')
           : t('canvas.learningGuide.focus.privateZoneLab'),
       ],
-      awsLines: [
-        t('canvas.learningGuide.focus.subnetAws'),
-        subnetType === "public"
-          ? t('canvas.learningGuide.focus.subnetPublicRule')
-          : t('canvas.learningGuide.focus.subnetPrivateRule'),
-      ],
+      providerLines,
       whyItMatters: t('canvas.learningGuide.focus.zoneWhy'),
     };
   }
@@ -193,24 +257,34 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges, t }) => {
     selectedNode.type === TYPE_PRINTER_NODE
   ) {
     const hasPublicIp = Boolean(selectedNode.data?.associatePublicIp);
-    const keyPair = selectedNode.data?.ssh_access || selectedNode.data?.sshAccess || "n/a";
-    return {
-      title: t('canvas.learningGuide.focus.workloadTitle', { label }),
-      subtitle: t('canvas.learningGuide.focus.workloadSubtitle'),
-      badges: [
-        makeBadge(selectedNode.data?.instance_type || "tipo n/a"),
-        makeBadge(hasPublicIp ? t('canvas.learningGuide.focus.publicIp') : t('canvas.learningGuide.focus.privateOnly'), hasPublicIp ? "info" : "default"),
-        makeBadge(`Key ${keyPair}`),
-      ],
-      labLines: [
-        t('canvas.learningGuide.focus.workloadLab'),
-      ],
-      awsLines: [
+    const accessValue = selectedNode.data?.ssh_access || selectedNode.data?.sshAccess || "n/a";
+    const providerLines = isAwsProvider
+      ? [
         t('canvas.learningGuide.focus.workloadAws'),
         hasPublicIp
           ? t('canvas.learningGuide.focus.workloadPublicAccess')
           : t('canvas.learningGuide.focus.workloadPrivateAccess'),
+      ]
+      : [
+        t('canvas.learningGuide.focus.workloadProvider', {
+          provider: providerLabel,
+        }),
+        hasPublicIp
+          ? t('canvas.learningGuide.focus.workloadProviderPublicAccess')
+          : t('canvas.learningGuide.focus.workloadProviderPrivateAccess'),
+      ];
+    return {
+      title: t('canvas.learningGuide.focus.workloadTitle', { label }),
+      subtitle: t('canvas.learningGuide.focus.workloadSubtitle'),
+      badges: [
+        makeBadge(selectedNode.data?.instanceType || selectedNode.data?.instance_type || "tipo n/a"),
+        makeBadge(hasPublicIp ? t('canvas.learningGuide.focus.publicIp') : t('canvas.learningGuide.focus.privateOnly'), hasPublicIp ? "info" : "default"),
+        makeBadge(`${providerDefinition.instance?.sshFieldLabel || "Access"} ${accessValue}`),
       ],
+      labLines: [
+        t('canvas.learningGuide.focus.workloadLab'),
+      ],
+      providerLines,
       whyItMatters: t('canvas.learningGuide.focus.workloadWhy'),
     };
   }
@@ -220,7 +294,7 @@ const buildFocusedGuide = ({ selectedNode, nodes, edges, t }) => {
     subtitle: t('canvas.learningGuide.focus.defaultSubtitle'),
     badges: [],
     labLines: [t('canvas.learningGuide.focus.defaultLine')],
-    awsLines: [],
+    providerLines: [],
     whyItMatters: "",
   };
 };
@@ -232,9 +306,13 @@ export function useLearningGuide({
   canvasState,
   canvasPlanInfo,
   selectedNode,
+  targetProvider = "aws",
 }) {
   const { t, i18n } = useTranslation();
   return useMemo(() => {
+    const providerKey = String(targetProvider || "aws").trim().toLowerCase() || "aws";
+    const providerDefinition = getCanvasProviderDefinition(providerKey);
+    const providerLabel = providerDefinition.label || providerKey.toUpperCase();
     const vpcs = nodes.filter((n) => n.type === TYPE_VPC_NODE);
     const subnets = nodes.filter((n) => n.type === TYPE_SUBNETWORK_NODE);
     const routers = nodes.filter((n) => n.type === TYPE_ROUTER_NODE);
@@ -256,6 +334,9 @@ export function useLearningGuide({
     ).length;
     const igwCount = vpcs.filter((v) => Boolean(v.data?.internetGateway)).length;
     const natCount = vpcs.filter((v) => Boolean(v.data?.enableNatGateway)).length;
+    const workloadsWithPublicIp = instances.filter(
+      (instance) => Boolean(instance.data?.associatePublicIp || instance.data?.associate_public_ip),
+    ).length;
     const routersWithRoutes = routers.filter(
       (r) => Array.isArray(r.data?.routeTable) && r.data.routeTable.some((rt) => rt?.destCidr),
     ).length;
@@ -340,7 +421,7 @@ export function useLearningGuide({
       {
         id: "deploy",
         title: t('canvas.learningGuide.steps.deploy.title'),
-        description: t('canvas.learningGuide.steps.deploy.description'),
+        description: t('canvas.learningGuide.steps.deploy.description', { provider: providerLabel }),
         completed: appliedReal,
         optional: true,
       },
@@ -362,7 +443,7 @@ export function useLearningGuide({
     } else if (nextStep?.id === "validate") {
       nextAction = t('canvas.learningGuide.nextAction.validate');
     } else if (nextStep?.id === "deploy") {
-      nextAction = t('canvas.learningGuide.nextAction.deploy');
+      nextAction = t('canvas.learningGuide.nextAction.deploy', { provider: providerLabel });
     } else if (nextStep) {
       nextAction = t('canvas.learningGuide.nextAction.nextStep', { title: nextStep.title });
     }
@@ -377,38 +458,75 @@ export function useLearningGuide({
         : t('canvas.learningGuide.contrast.vlanLines.routesMissing'),
     ];
 
-    const awsLines = [
-      t('canvas.learningGuide.contrast.awsLines.vpcs', { vpcs: vpcs.length, subnets: subnets.length }),
-      t('canvas.learningGuide.contrast.awsLines.egress', { igw: igwCount, nat: natCount }),
-      t('canvas.learningGuide.contrast.awsLines.routers', { peering: peeringRouters, tgw: tgwRouters }),
-      routersWithRoutes > 0
-        ? t('canvas.learningGuide.contrast.awsLines.routesReady')
-        : t('canvas.learningGuide.contrast.awsLines.routesMissing'),
-      oneWayPairs > 0
-        ? t('canvas.learningGuide.contrast.awsLines.oneWayPairs', { count: oneWayPairs })
-        : t('canvas.learningGuide.contrast.awsLines.noOneWayPairs'),
-    ];
+    const providerLines = providerKey === "aws"
+      ? [
+        t('canvas.learningGuide.contrast.awsLines.vpcs', { vpcs: vpcs.length, subnets: subnets.length }),
+        t('canvas.learningGuide.contrast.awsLines.egress', { igw: igwCount, nat: natCount }),
+        t('canvas.learningGuide.contrast.awsLines.routers', { peering: peeringRouters, tgw: tgwRouters }),
+        routersWithRoutes > 0
+          ? t('canvas.learningGuide.contrast.awsLines.routesReady')
+          : t('canvas.learningGuide.contrast.awsLines.routesMissing'),
+        oneWayPairs > 0
+          ? t('canvas.learningGuide.contrast.awsLines.oneWayPairs', { count: oneWayPairs })
+          : t('canvas.learningGuide.contrast.awsLines.noOneWayPairs'),
+      ]
+      : [
+        t('canvas.learningGuide.contrast.providerLines.vpcs', {
+          provider: providerLabel,
+          segments: vpcs.length,
+          zones: subnets.length,
+          networkKind: providerDefinition.segment?.kindLabel || "network",
+          subnetKind: providerDefinition.subnet?.kindLabel || "subnet",
+        }),
+        t('canvas.learningGuide.contrast.providerLines.egress', {
+          internetEdgeLabel: providerDefinition.segment?.internetEdgeLabel || "internet edge",
+          internetEdgeCount: workloadsWithPublicIp,
+          managedEgressLabel: providerDefinition.segment?.managedEgressLabel || "managed egress",
+          managedEgressCount: natCount,
+        }),
+        t('canvas.learningGuide.contrast.providerLines.routers', {
+          provider: providerLabel,
+          directLabel: providerDefinition.router?.directLabel || "direct links",
+          directCount: peeringRouters,
+          hubLabel: providerDefinition.router?.hubLabel || "routing hub",
+          hubCount: tgwRouters,
+        }),
+        routersWithRoutes > 0
+          ? t('canvas.learningGuide.contrast.providerLines.routesReady', { provider: providerLabel })
+          : t('canvas.learningGuide.contrast.providerLines.routesMissing', { provider: providerLabel }),
+        oneWayPairs > 0
+          ? t('canvas.learningGuide.contrast.providerLines.oneWayPairs', { count: oneWayPairs })
+          : t('canvas.learningGuide.contrast.providerLines.noOneWayPairs'),
+      ];
 
     const conceptMap = [
       {
         concept: t('canvas.learningGuide.concepts.segmentation.concept'),
         vlanView: t('canvas.learningGuide.concepts.segmentation.vlan'),
-        awsView: t('canvas.learningGuide.concepts.segmentation.aws'),
+        providerView: providerKey === "aws"
+          ? t('canvas.learningGuide.concepts.segmentation.aws')
+          : `${providerDefinition.segment?.kindLabel || "Network"} y ${providerDefinition.subnet?.kindLabel || "subnets"} con CIDR reales`,
       },
       {
         concept: t('canvas.learningGuide.concepts.gateway.concept'),
         vlanView: t('canvas.learningGuide.concepts.gateway.vlan'),
-        awsView: t('canvas.learningGuide.concepts.gateway.aws'),
+        providerView: providerKey === "aws"
+          ? t('canvas.learningGuide.concepts.gateway.aws')
+          : `${providerDefinition.segment?.internetEdgeLabel || "internet edge"} + ${providerDefinition.segment?.managedEgressLabel || "managed egress"} + ${providerDefinition.router?.hubLabel || "routing hub"}`,
       },
       {
         concept: t('canvas.learningGuide.concepts.hosts.concept'),
         vlanView: t('canvas.learningGuide.concepts.hosts.vlan'),
-        awsView: t('canvas.learningGuide.concepts.hosts.aws'),
+        providerView: providerKey === "aws"
+          ? t('canvas.learningGuide.concepts.hosts.aws')
+          : `VMs y parametros de acceso en ${providerLabel}`,
       },
       {
         concept: t('canvas.learningGuide.concepts.validation.concept'),
         vlanView: t('canvas.learningGuide.concepts.validation.vlan'),
-        awsView: t('canvas.learningGuide.concepts.validation.aws'),
+        providerView: providerKey === "aws"
+          ? t('canvas.learningGuide.concepts.validation.aws')
+          : `Lectura y validacion orientada a ${providerLabel} antes de habilitar runtime`,
       },
     ];
 
@@ -442,12 +560,20 @@ export function useLearningGuide({
       },
       contrast: {
         vlanLines,
-        awsLines,
+        providerLines,
         conceptMap,
       },
-      focused: buildFocusedGuide({ selectedNode, nodes, edges, t }),
+      providerLabel,
+      focused: buildFocusedGuide({
+        selectedNode,
+        nodes,
+        edges,
+        t,
+        providerKey,
+        providerDefinition,
+      }),
     };
-  }, [nodes, edges, validationState, canvasState, canvasPlanInfo, selectedNode, t, i18n.resolvedLanguage]);
+  }, [nodes, edges, validationState, canvasState, canvasPlanInfo, selectedNode, targetProvider, t, i18n.resolvedLanguage]);
 }
 
 export default useLearningGuide;

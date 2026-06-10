@@ -11,6 +11,11 @@ import {
   VPC_CHILD_FORM,
   VPC_FORM,
 } from '@/features/networkCanvas/utils/constants';
+import {
+  CLOUD_AWS_VALUE,
+  CLOUD_AZURE_VALUE,
+  CLOUD_GCP_VALUE,
+} from '@/shared/constants';
 import { INSTANCE_TYPE_OPTIONS } from '../options/instanceTypes';
 import { cidrsOverlap, isSubnetOf } from './cidrUtils';
 import { translate as tr } from '@/shared/i18n';
@@ -73,8 +78,11 @@ export const useFormValidationSchema = (
 
         cloudProvider: yup
           .string()
-          .transform((v) => (typeof v === 'string' ? v.toUpperCase() : v))
-          .oneOf(['AWS'], tr('canvas.validation.invalidCloudProvider'))
+          .transform((v) => (typeof v === 'string' ? v.trim().toLowerCase() : v))
+          .oneOf(
+            context?.allowedProviders || [CLOUD_AWS_VALUE, CLOUD_GCP_VALUE, CLOUD_AZURE_VALUE],
+            tr('canvas.validation.invalidCloudProvider'),
+          )
           .required(tr('canvas.validation.cloudProviderRequired')),
 
         region: yup.string().required(tr('canvas.validation.regionRequired')),
@@ -107,6 +115,9 @@ export const useFormValidationSchema = (
       const siblingVpcCidrs = (context?.siblingVpcCidrs || [])
         .map((c) => (c || '').trim())
         .filter(Boolean);
+      const providerNetwork = context?.providerNetwork || {};
+      const natRequiresPublicSubnet = providerNetwork.natRequiresPublicZone !== false;
+      const supportsElasticIp = providerNetwork.supportsElasticIp !== false;
 
       return yup.object({
         vpcName: yup
@@ -145,7 +156,7 @@ export const useFormValidationSchema = (
           .default(false)
           .test('igw-required', tr('canvas.validation.enableIgwForNat'), function (v) {
             const nat = this.parent?.enableNatGateway;
-            return nat ? v === true : true;
+            return nat && natRequiresPublicSubnet ? v === true : true;
           }),
 
         allowedSshCidr: yup
@@ -162,31 +173,39 @@ export const useFormValidationSchema = (
         natGatewayPublicSubnet: yup.string().when('enableNatGateway', {
           is: true,
           then: (s) =>
-            s
-              .required(tr('canvas.validation.selectPublicSubnetNat'))
-              .min(1, tr('canvas.validation.subnetMustBeSelected')),
+            (natRequiresPublicSubnet
+              ? s
+                .required(tr('canvas.validation.selectPublicSubnetNat'))
+                .min(1, tr('canvas.validation.subnetMustBeSelected'))
+              : s.optional()),
           otherwise: (s) => s.optional(),
         }),
 
         natGatewayElasticIp: yup.string().when('enableNatGateway', {
           is: true,
           then: (s) =>
-            s
-              .nullable()
-              .transform((v) => (v === '' ? null : v))
-              .test(
-                'nat-eip-allocation-id',
-                tr('canvas.validation.elasticIpInvalid'),
-                (value) => value == null || /^eipalloc-[a-z0-9]+$/.test(value)
-              )
-              .notRequired(),
+            (supportsElasticIp
+              ? s
+                .nullable()
+                .transform((v) => (v === '' ? null : v))
+                .test(
+                  'nat-eip-allocation-id',
+                  tr('canvas.validation.elasticIpInvalid'),
+                  (value) => value == null || /^eipalloc-[a-z0-9]+$/.test(value)
+                )
+                .notRequired()
+              : s.optional()),
           otherwise: (s) => s.optional(),
         }),
       });
     }
 
     /* ================= Subnet ================= */
-    case TYPE_SUBNETWORK_NODE:
+    case TYPE_SUBNETWORK_NODE: {
+      const providerSubnet = context?.providerSubnet || {};
+      const requiresAz = providerSubnet.showAvailabilityZone !== false;
+      const requiresSubnetType = providerSubnet.showZoneType !== false;
+
       return yup.object({
         subnetName: yup
           .string()
@@ -226,8 +245,12 @@ export const useFormValidationSchema = (
             return !sibs.some((cidr) => cidrsOverlap(val, cidr));
           }),
 
-        availabilityZone: yup.string().required('Zone is required'),
-        subnetType: yup.string().oneOf(['public', 'private']).required('Subnet Type is required'),
+        availabilityZone: requiresAz
+          ? yup.string().required('Zone is required')
+          : yup.string().optional(),
+        subnetType: requiresSubnetType
+          ? yup.string().oneOf(['public', 'private']).required('Subnet Type is required')
+          : yup.string().optional(),
 
         map_public_ip_on_launch: yup
           .boolean()
@@ -236,6 +259,7 @@ export const useFormValidationSchema = (
             return t === 'public' ? v === true : true;
           }),
       });
+    }
 
     /* ================= Instancias ================= */
     case TYPE_COMPUTER_NODE:
@@ -244,12 +268,13 @@ export const useFormValidationSchema = (
     case TYPE_INSTANCE_NODE: {
       const emptyToUndef = (v) =>
         v === null || v === undefined || String(v).trim() === '' ? undefined : v;
+      const allowedInstanceTypes = (context?.instanceTypeOptions || INSTANCE_TYPE_OPTIONS).map((o) => o.value);
 
       return yup.object({
         ami: yup.string().transform(emptyToUndef).notRequired(),
         instanceType: yup
           .string()
-          .oneOf(INSTANCE_TYPE_OPTIONS.map((o) => o.value), 'Invalid instance type')
+          .oneOf(allowedInstanceTypes, 'Invalid instance type')
           .required('Instance type is required'),
         ipAddress: yup
           .string()

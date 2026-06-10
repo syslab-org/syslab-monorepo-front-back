@@ -7,6 +7,7 @@ import { LoadingFlowContext } from '@/app/providers/LoadingFlowContext';
 import { api } from '@/infrastructure/http/api';
 import { USER_ROL_STUDENT, USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER } from '@/shared/constants';
 import { useProviderCapabilities } from '@/features/networkCanvas/core/useProviderCapabilities';
+import { buildCanvasProviderOptions } from '@/features/networkCanvas/providers/providerCatalog';
 import { buildTemplateFlow, getLabTemplateByValue } from '@/features/networkCanvas/utils/labTemplates';
 import NewVLANForm from '../forms/NewVLANForm';
 import { useWizard } from "@/features/networkCanvas/context/WizardContext"
@@ -52,7 +53,8 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
   const { active, currentStep, steps } = useWizard()
   const [courses, setCourses] = useState([])
   const [cloudConnections, setCloudConnections] = useState([])
-  const { capabilities, getCapability, readyProviders } = useProviderCapabilities()
+  const { capabilities, getCapability } = useProviderCapabilities()
+  const providerOptions = buildCanvasProviderOptions(capabilities)
 
   useEffect(() => {
     let alive = true
@@ -61,7 +63,7 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
       try {
         const [coursesResponse, connectionsResponse] = await Promise.all([
           api.listCourses(),
-          api.listCloudConnections({ provider: 'aws' }),
+          api.listCloudConnections(),
         ])
         if (alive) {
           setCourses(Array.isArray(coursesResponse) ? coursesResponse : [])
@@ -172,8 +174,8 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
             requireCourseSelection={user?.role === USER_ROL_TEACHER}
             currentUserRole={user?.role || ''}
             currentUserCourseId={user?.course?.id || ''}
-            providerCapabilities={capabilities}
-            defaultProvider={readyProviders[0] || 'aws'}
+            providerOptions={providerOptions}
+            defaultProvider={providerOptions.find((item) => item.designEnabled)?.provider || 'aws'}
           />
         </WizardModalLayout>
       </Box>

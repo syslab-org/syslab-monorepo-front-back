@@ -30,10 +30,13 @@ export default function CanvasFeedbackLayer({
     planStatus,
     validationResult,
     transformedData,
+    targetProvider,
     handleValidatePlan,
     handleApplyReal,
     handleOpenPlanDetails,
     loadingFlow,
+    providerAvailabilityNotice,
+    handleCloseProviderAvailabilityNotice,
     successMessage,
     errorMessage,
     handleCloseSnackbar
@@ -111,12 +114,15 @@ export default function CanvasFeedbackLayer({
                 planStatus={planStatus}
                 validationResult={validationResult}
                 transformedData={transformedData}
+                targetProvider={targetProvider}
                 onValidate={handleValidatePlan}
                 onDeploy={handleApplyReal}
                 onViewPlan={() =>
                     handleOpenPlanDetails(validationResult?.plan_id || planStatus?.id)
                 }
                 loadingFlow={loadingFlow}
+                providerAvailabilityNotice={providerAvailabilityNotice}
+                onCloseProviderAvailabilityNotice={handleCloseProviderAvailabilityNotice}
             />
 
             <Snackbar
