@@ -130,9 +130,12 @@ export default function RouterNodeForm({
   vlanRegion = "us-east-1",
 }) {
   const { t } = useTranslation();
-  const isGcp = provider === "gcp";
   const providerDefinition = getCanvasProviderDefinition(provider);
   const providerLabel = providerDefinition.label || String(provider || "aws").toUpperCase();
+  const routerFormConfig = providerDefinition.router?.form || {};
+  const modeOptionConfig = routerFormConfig.modeOptions || {};
+  const chipConfig = routerFormConfig.chips || {};
+  const modeSummaryConfig = routerFormConfig.modeSummary || {};
   const effectiveVlanRegion =
     String(nodeData.region || vlanRegion || providerDefinition.lab?.defaultRegion || "us-east-1").trim()
     || providerDefinition.lab?.defaultRegion
@@ -293,6 +296,19 @@ export default function RouterNodeForm({
       ? hasExplicitPolicies
       : routePairStats.bidirectional > 0;
 
+  const providerRouterParams = {
+    provider: providerLabel,
+    directLabel: providerDefinition.router?.directLabel || "direct links",
+    hubLabel: providerDefinition.router?.hubLabel || "hub routing",
+  };
+
+  const getModeLabel = (modeKey) => {
+    const key = modeKey === "tgw"
+      ? (modeOptionConfig.tgwLabelKey || "canvas.routerForm.modeOptions.providerHub")
+      : (modeOptionConfig.peeringLabelKey || "canvas.routerForm.modeOptions.providerPeering");
+    return t(key, providerRouterParams);
+  };
+
   const modeSummary = useMemo(() => {
     if (normalizedMode === "tgw") {
       return {
@@ -303,12 +319,10 @@ export default function RouterNodeForm({
             ? t("canvas.routerForm.modeSummary.tgw.detailLarge", { count: connectedVpcCount })
             : t("canvas.routerForm.modeSummary.tgw.detailSmall"),
         bullets: [
-          isGcp
-            ? t("canvas.routerForm.modeSummary.tgw.bulletProvider", {
-              provider: providerLabel,
-              hubLabel: providerDefinition.router?.hubLabel || "hub routing",
-            })
-            : t("canvas.routerForm.modeSummary.tgw.bulletAws"),
+          t(
+            modeSummaryConfig.tgwBulletKey || "canvas.routerForm.modeSummary.tgw.bulletProvider",
+            providerRouterParams
+          ),
           t("canvas.routerForm.modeSummary.tgw.bulletTraffic"),
           t("canvas.routerForm.modeSummary.tgw.bulletPing"),
         ],
@@ -320,12 +334,10 @@ export default function RouterNodeForm({
       title: t("canvas.routerForm.modeSummary.peering.title"),
       detail: t("canvas.routerForm.modeSummary.peering.detail", { count: potentialPairs }),
       bullets: [
-        isGcp
-          ? t("canvas.routerForm.modeSummary.peering.bulletProvider", {
-            provider: providerLabel,
-            directLabel: providerDefinition.router?.directLabel || "direct links",
-          })
-          : t("canvas.routerForm.modeSummary.peering.bulletAws"),
+        t(
+          modeSummaryConfig.peeringBulletKey || "canvas.routerForm.modeSummary.peering.bulletProvider",
+          providerRouterParams
+        ),
         t("canvas.routerForm.modeSummary.peering.bulletTransit"),
         connectedVpcCount > 2
           ? t("canvas.routerForm.modeSummary.peering.bulletManySegments")
@@ -337,10 +349,9 @@ export default function RouterNodeForm({
     connectedVpcCount,
     potentialPairs,
     hasPendingReverseForPeering,
-    isGcp,
-    providerDefinition.router?.directLabel,
-    providerDefinition.router?.hubLabel,
-    providerLabel,
+    modeSummaryConfig.peeringBulletKey,
+    modeSummaryConfig.tgwBulletKey,
+    providerRouterParams,
     t,
   ]);
 
@@ -445,20 +456,12 @@ export default function RouterNodeForm({
           value={mode}
           onChange={(e) => setMode(e.target.value)}
         >
-          <MenuItem value="peering">
-            {isGcp ? t("canvas.routerForm.gcpModeOptions.peering") : t("canvas.routerForm.modeOptions.peering")}
-          </MenuItem>
-          <MenuItem value="tgw">
-            {isGcp ? t("canvas.routerForm.gcpModeOptions.tgw") : t("canvas.routerForm.modeOptions.tgw")}
-          </MenuItem>
+          <MenuItem value="peering">{getModeLabel("peering")}</MenuItem>
+          <MenuItem value="tgw">{getModeLabel("tgw")}</MenuItem>
         </Select>
 
         <Typography variant="caption" color="text.secondary">
-          {t("canvas.routerForm.modeHelpProvider", {
-            provider: providerLabel,
-            directLabel: providerDefinition.router?.directLabel || "direct links",
-            hubLabel: providerDefinition.router?.hubLabel || "hub routing",
-          })}
+          {t("canvas.routerForm.modeHelpProvider", providerRouterParams)}
         </Typography>
       </Box>
 
@@ -482,8 +485,8 @@ export default function RouterNodeForm({
         <Chip
           size="small"
           label={normalizedMode === "tgw"
-            ? (isGcp ? t("canvas.routerForm.gcpChips.hub") : t("canvas.routerForm.chips.awsHub"))
-            : (isGcp ? t("canvas.routerForm.gcpChips.direct") : t("canvas.routerForm.chips.awsDirect"))}
+            ? t(chipConfig.hubKey || "canvas.routerForm.chips.providerHub", providerRouterParams)
+            : t(chipConfig.directKey || "canvas.routerForm.chips.providerDirect", providerRouterParams)}
           color={normalizedMode === "tgw" ? "primary" : "secondary"}
           variant="filled"
         />
@@ -544,7 +547,7 @@ export default function RouterNodeForm({
 
       {hasPendingReverseForPeering && (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          {t("canvas.routerForm.alerts.pendingReverse.before")} <b>{isGcp ? t("canvas.routerForm.gcpModeOptions.peering") : t("canvas.routerForm.modeOptions.peering")}</b> {t("canvas.routerForm.alerts.pendingReverse.after")}
+          {t("canvas.routerForm.alerts.pendingReverse.before")} <b>{getModeLabel("peering")}</b> {t("canvas.routerForm.alerts.pendingReverse.after")}
         </Alert>
       )}
 

@@ -6,12 +6,16 @@ from django.db import transaction
 from django.utils import timezone
 
 from .cloud_connections import (
-    build_aws_runtime_env,
-    get_aws_identity_from_runtime_env,
     resolve_lab_cloud_connection,
 )
 from .models import Plan, PlanExecutionRecord
-from .providers import get_provider_executor, get_provider_key
+from .providers import (
+    build_connection_runtime_env,
+    get_provider_executor,
+    get_provider_key,
+    get_provider_runtime_hooks,
+    get_runtime_identity,
+)
 
 
 LOG_FLUSH_MIN_INTERVAL_SECONDS = 1.0
@@ -47,12 +51,9 @@ def _make_incremental_log_flusher(plan_obj, bundle):
 def _build_last_apply_context(*, provider, connection, bundle, identity=None, identity_error=""):
     identity = identity or {}
     runtime_env = bundle.runtime_env or {}
-    region = (
-        bundle.diag.get("aws_region")
-        or runtime_env.get("AWS_DEFAULT_REGION")
-        or runtime_env.get("AWS_REGION")
-        or ""
-    )
+    runtime_hooks = get_provider_runtime_hooks(provider)
+    identity_summary = runtime_hooks.summarize_identity(identity)
+    region = runtime_hooks.resolve_region(runtime_env=runtime_env, diag=bundle.diag)
     context = {
         "provider": provider,
         "credential_source": bundle.diag.get("credential_source") or ("cloud_connection" if connection else "environment"),
@@ -60,9 +61,9 @@ def _build_last_apply_context(*, provider, connection, bundle, identity=None, id
         "cloud_connection_id": str(connection.id) if connection else "",
         "cloud_connection_name": getattr(connection, "name", "") if connection else "",
         "cloud_connection_scope": getattr(connection, "scope", "") if connection else "",
-        "account_id": str(identity.get("Account") or ""),
-        "arn": str(identity.get("Arn") or ""),
-        "user_id": str(identity.get("UserId") or ""),
+        "account_id": identity_summary["account_id"],
+        "arn": identity_summary["arn"],
+        "user_id": identity_summary["user_id"],
         "identity": identity,
         "captured_at": timezone.now().isoformat(),
     }
@@ -111,9 +112,11 @@ def _mark_execution_record_finished(
         updates["cloud_connection_name"] = getattr(connection, "name", "") or ""
         updates["cloud_connection_scope"] = getattr(connection, "scope", "") or ""
     if identity:
-        updates["account_id"] = str(identity.get("Account") or "")
-        updates["arn"] = str(identity.get("Arn") or "")
-        updates["sts_user_id"] = str(identity.get("UserId") or "")
+        provider = getattr(bundle, "provider", "") or getattr(connection, "provider", "")
+        identity_summary = get_provider_runtime_hooks(provider).summarize_identity(identity)
+        updates["account_id"] = identity_summary["account_id"]
+        updates["arn"] = identity_summary["arn"]
+        updates["sts_user_id"] = identity_summary["user_id"]
     PlanExecutionRecord.objects.filter(id=record_id).update(**updates)
 
 
@@ -171,7 +174,7 @@ def process_network_plan(self, plan_id: str, payload: dict, execution_record_id:
                     "lab__owner_user",
                 ).get(id=plan_obj.id)
                 connection = resolve_lab_cloud_connection(plan_obj.lab, provider)
-                runtime_env = build_aws_runtime_env(connection) if connection else {}
+                runtime_env = build_connection_runtime_env(connection, provider) if connection else {}
 
             bundle = executor.build_bundle(plan_id, raw_payload, runtime_env=runtime_env)
 
@@ -270,7 +273,7 @@ def process_network_plan(self, plan_id: str, payload: dict, execution_record_id:
             identity = {}
             identity_error = ""
             try:
-                identity = get_aws_identity_from_runtime_env(bundle.runtime_env)
+                identity = get_runtime_identity(provider, bundle.runtime_env)
             except Exception as exc:
                 identity_error = str(exc)
 
@@ -366,7 +369,7 @@ def destroy_last_deploy(self, plan_id: str, execution_record_id: str | None = No
     provider = get_provider_key((plan.payload or {}).get("cloud"))
     executor = get_provider_executor(provider)
     connection = resolve_lab_cloud_connection(getattr(plan, "lab", None), provider)
-    runtime_env = build_aws_runtime_env(connection) if connection else {}
+    runtime_env = build_connection_runtime_env(connection, provider) if connection else {}
     bundle = executor.build_bundle(plan_id, plan.payload or {}, force_simulate_only=False, runtime_env=runtime_env)
 
     # La validación de "si se puede destruir" se hace en la vista antes de encolar.

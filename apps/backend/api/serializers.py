@@ -7,10 +7,7 @@ from rest_framework import serializers
 
 from .cloud_connections import get_aws_identity_from_runtime_env, resolve_lab_cloud_connection_with_source
 from .models import (
-    CLOUD_AUTH_AWS_ASSUME_ROLE,
     AmiCatalogEntry,
-    CLOUD_SCOPE_PERSONAL,
-    CLOUD_AUTH_AWS_STATIC,
     CloudExecutionDelegation,
     CloudAuthTypeChoices,
     CloudConnection,
@@ -31,6 +28,8 @@ from .models import (
     VisibilityScopeChoices,
 )
 from .permissions import can_edit_cloud_connection, can_execute_plan, canonical_role
+from .providers.connection_registry import get_provider_connection_spec
+from .providers.runtime_registry import get_provider_runtime_hooks, get_runtime_identity
 
 
 ROLE_CHOICES = [ROLE_PLATFORM_ADMIN, ROLE_TEACHER, ROLE_STUDENT]
@@ -489,6 +488,8 @@ class CloudConnectionSerializer(serializers.ModelSerializer):
     secret_configured = serializers.SerializerMethodField()
     external_id_configured = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
+    provider_support = serializers.SerializerMethodField()
+    provider_details = serializers.SerializerMethodField()
 
     class Meta:
         model = CloudConnection
@@ -506,6 +507,8 @@ class CloudConnectionSerializer(serializers.ModelSerializer):
             "aws_role_arn",
             "secret_configured",
             "external_id_configured",
+            "provider_support",
+            "provider_details",
             "is_active",
             "last_test_status",
             "last_test_message",
@@ -523,6 +526,8 @@ class CloudConnectionSerializer(serializers.ModelSerializer):
             "aws_role_arn",
             "secret_configured",
             "external_id_configured",
+            "provider_support",
+            "provider_details",
             "last_test_status",
             "last_test_message",
             "last_test_identity",
@@ -556,10 +561,20 @@ class CloudConnectionSerializer(serializers.ModelSerializer):
             return False
         return can_edit_cloud_connection(request.user, obj)
 
+    def get_provider_support(self, obj):
+        spec = get_provider_connection_spec(obj.provider)
+        return spec.capabilities()
+
+    def get_provider_details(self, obj):
+        spec = get_provider_connection_spec(obj.provider)
+        return spec.serialize_details(obj)
+
 
 def _serialize_execution_connection(connection, source: str, provider: str):
+    runtime_hooks = get_provider_runtime_hooks(provider)
     identity = connection.last_test_identity if connection else {}
     identity = identity if isinstance(identity, dict) else {}
+    identity_summary = runtime_hooks.summarize_identity(identity)
 
     if not connection:
         return {
@@ -583,31 +598,34 @@ def _serialize_execution_connection(connection, source: str, provider: str):
         "name": connection.name,
         "scope": connection.scope,
         "default_region": connection.default_region,
-        "account_id": str(identity.get("Account") or ""),
-        "arn": str(identity.get("Arn") or ""),
+        "account_id": identity_summary["account_id"],
+        "arn": identity_summary["arn"],
         "last_test_status": connection.last_test_status or "",
     }
 
 
 def _serialize_environment_execution_target(provider: str):
-    region = str(os.getenv("AWS_DEFAULT_REGION") or os.getenv("AWS_REGION") or "").strip()
+    runtime_hooks = get_provider_runtime_hooks(provider)
+    runtime_env = dict(os.environ)
+    region = runtime_hooks.resolve_region(runtime_env=runtime_env)
     try:
-        identity = get_aws_identity_from_runtime_env({})
+        identity = get_aws_identity_from_runtime_env({}) if provider == ProviderChoices.AWS else get_runtime_identity(provider, {})
     except Exception:
         identity = {}
 
     identity = identity if isinstance(identity, dict) else {}
+    identity_summary = runtime_hooks.summarize_identity(identity)
     is_resolved = bool(identity)
     return {
         "provider": provider,
         "source": "environment",
         "status": "resolved" if is_resolved else "missing",
         "id": "",
-        "name": "Environment credentials" if is_resolved else "",
+        "name": runtime_hooks.environment_target_name if is_resolved else "",
         "scope": "environment",
         "default_region": region,
-        "account_id": str(identity.get("Account") or ""),
-        "arn": str(identity.get("Arn") or ""),
+        "account_id": identity_summary["account_id"],
+        "arn": identity_summary["arn"],
         "last_test_status": "sts_ok" if is_resolved else "",
     }
 
@@ -707,10 +725,7 @@ class CloudConnectionCreateSerializer(serializers.Serializer):
         choices=CloudConnectionScopeChoices.choices,
         default=CloudConnectionScopeChoices.PERSONAL,
     )
-    auth_type = serializers.ChoiceField(
-        choices=CloudAuthTypeChoices.choices,
-        default=CloudAuthTypeChoices.AWS_STATIC_KEYS,
-    )
+    auth_type = serializers.CharField(required=False, allow_blank=True, default=CloudAuthTypeChoices.AWS_STATIC_KEYS)
     course_id = serializers.UUIDField(required=False, allow_null=True)
     default_region = serializers.CharField(required=False, allow_blank=True, default="")
     aws_access_key_id = serializers.CharField(max_length=128, required=False, allow_blank=True, default="")
@@ -721,31 +736,13 @@ class CloudConnectionCreateSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         provider = attrs.get("provider")
-        auth_type = attrs.get("auth_type")
-        scope = attrs.get("scope")
-        course_id = attrs.get("course_id")
-
-        if provider != ProviderChoices.AWS:
-            raise serializers.ValidationError("Por ahora solo AWS soporta conexiones ejecutables reales.")
-        if scope == CLOUD_SCOPE_PERSONAL and course_id:
-            raise serializers.ValidationError("Una conexion personal no debe quedar asociada a un curso.")
-        if scope != CLOUD_SCOPE_PERSONAL and not course_id:
-            raise serializers.ValidationError("Debes seleccionar un curso para una conexion compartida.")
-        if auth_type == CLOUD_AUTH_AWS_STATIC:
-            if not str(attrs.get("aws_access_key_id") or "").strip():
-                raise serializers.ValidationError("Debes ingresar AWS Access Key ID.")
-            if not str(attrs.get("aws_secret_access_key") or "").strip():
-                raise serializers.ValidationError("Debes ingresar AWS Secret Access Key.")
-        elif auth_type == CLOUD_AUTH_AWS_ASSUME_ROLE:
-            if not str(attrs.get("aws_role_arn") or "").strip():
-                raise serializers.ValidationError("Debes ingresar el Role ARN para AssumeRole.")
-        else:
-            raise serializers.ValidationError("Tipo de autenticacion AWS no soportado en este MVP.")
-        return attrs
+        attrs["auth_type"] = str(attrs.get("auth_type") or CloudAuthTypeChoices.AWS_STATIC_KEYS).strip().lower()
+        spec = get_provider_connection_spec(provider)
+        return spec.validate_create(attrs)
 
 
 class CloudConnectionUpdateSerializer(serializers.Serializer):
-    auth_type = serializers.ChoiceField(choices=CloudAuthTypeChoices.choices, required=False)
+    auth_type = serializers.CharField(required=False, allow_blank=True)
     name = serializers.CharField(max_length=120, required=False)
     default_region = serializers.CharField(required=False, allow_blank=True)
     aws_access_key_id = serializers.CharField(max_length=128, required=False)
@@ -756,25 +753,10 @@ class CloudConnectionUpdateSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         instance = self.context.get("instance")
-        auth_type = attrs.get("auth_type") or getattr(instance, "auth_type", CLOUD_AUTH_AWS_STATIC)
-        role_arn = attrs.get("aws_role_arn", getattr(instance, "aws_role_arn", ""))
-        access_key = attrs.get("aws_access_key_id", getattr(instance, "aws_access_key_id", ""))
-        secret_configured = bool(
-            str(attrs.get("aws_secret_access_key") or "").strip()
-            or getattr(instance, "aws_secret_access_key_encrypted", "")
-        )
-
-        if auth_type == CLOUD_AUTH_AWS_STATIC:
-            if not str(access_key or "").strip():
-                raise serializers.ValidationError("Debes ingresar AWS Access Key ID.")
-            if not secret_configured:
-                raise serializers.ValidationError("Debes ingresar AWS Secret Access Key.")
-        elif auth_type == CLOUD_AUTH_AWS_ASSUME_ROLE:
-            if not str(role_arn or "").strip():
-                raise serializers.ValidationError("Debes ingresar el Role ARN para AssumeRole.")
-        else:
-            raise serializers.ValidationError("Tipo de autenticacion AWS no soportado en este MVP.")
-        return attrs
+        if "auth_type" in attrs:
+            attrs["auth_type"] = str(attrs.get("auth_type") or "").strip().lower()
+        spec = get_provider_connection_spec(getattr(instance, "provider", ProviderChoices.AWS))
+        return spec.validate_update(attrs, instance)
 
 
 class CloudExecutionDelegationCreateSerializer(serializers.Serializer):

@@ -41,8 +41,17 @@ const VPCNodeForm = ({
 }) => {
   const { t } = useTranslation();
   const providerDefinition = getCanvasProviderDefinition(provider);
-  const isGcp = provider === "gcp";
   const providerLabel = providerDefinition.label || String(provider || "aws").toUpperCase();
+  const segmentFormConfig = providerDefinition.segment?.form || {};
+  const segmentFieldConfig = segmentFormConfig.fields || {};
+  const internetGatewayField = segmentFieldConfig.internetGateway || null;
+  const allowedIngressField = segmentFieldConfig.allowedSshCidr || null;
+  const managedEgressConfig = segmentFormConfig.managedEgress || {};
+  const providerOverrideRules = Array.isArray(segmentFormConfig.providerOverrides)
+    ? segmentFormConfig.providerOverrides
+    : [];
+  const chipConfig = segmentFormConfig.chips || {};
+  const extraFields = Array.isArray(segmentFormConfig.extraFields) ? segmentFormConfig.extraFields : [];
   const regionOptions = providerDefinition.lab?.regionOptions || [];
   const fallbackRegion = providerDefinition.lab?.defaultRegion || defaultRegion;
   const resolvedRegionOptions = regionOptions.length > 0
@@ -201,25 +210,13 @@ const VPCNodeForm = ({
         public_subnet: natRequiresPublicZone ? (data.natGatewayPublicSubnet || "") : "",
         elastic_ip: providerDefinition.segment.supportsElasticIp ? (data.natGatewayElasticIp || "").trim() : "",
       },
-      provider_overrides: mergeNodeProviderOverrides(nodeData, provider, isGcp
-        ? {
-          resource_kind: "vpc_network",
-          cloud_nat: {
-            enabled: !!data.enableNatGateway,
-          },
-          firewall: {
-            ssh_source_ranges: data.allowedSshCidr ? [data.allowedSshCidr] : [],
-          },
-        }
-        : {
-          resource_kind: "vpc",
-          internet_gateway: !!data.internetGateway,
-          nat_gateway: {
-            enabled: !!data.enableNatGateway,
-            public_subnet: data.natGatewayPublicSubnet || "",
-            elastic_ip: (data.natGatewayElasticIp || "").trim(),
-          },
-        }),
+      provider_overrides: mergeNodeProviderOverrides(nodeData, provider, buildProviderOverrides({
+        ...data,
+        internetGateway: natRequiresPublicZone ? data.internetGateway : false,
+        natGatewayPublicSubnet: natRequiresPublicZone ? (data.natGatewayPublicSubnet || "") : "",
+        natGatewayElasticIp: providerDefinition.segment.supportsElasticIp ? (data.natGatewayElasticIp || "").trim() : "",
+        allowedSshCidr: data.allowedSshCidr || "",
+      })),
     };
 
     onSave(payload);
@@ -227,6 +224,111 @@ const VPCNodeForm = ({
 
   const disableSubmitForNat =
     natRequiresPublicZone && enableNat && (!hasPublicSubnets || !natSubnet || natSubnet === "");
+
+  const setNestedValue = (target, path, value) => {
+    const keys = String(path || "").split(".").filter(Boolean);
+    if (keys.length === 0) return target;
+
+    let cursor = target;
+    keys.forEach((key, index) => {
+      const isLeaf = index === keys.length - 1;
+      if (isLeaf) {
+        cursor[key] = value;
+        return;
+      }
+      if (!cursor[key] || typeof cursor[key] !== "object" || Array.isArray(cursor[key])) {
+        cursor[key] = {};
+      }
+      cursor = cursor[key];
+    });
+
+    return target;
+  };
+
+  const resolveProviderOverrideValue = (rule, data) => {
+    if (!rule?.target) return undefined;
+    if (rule.source === "$literal") return rule.value;
+
+    const rawValue = data?.[rule.source];
+
+    if (rule.transform === "boolean") return !!rawValue;
+    if (rule.transform === "trim") return String(rawValue || "").trim();
+    if (rule.transform === "arrayIfValue") {
+      const value = String(rawValue || "").trim();
+      return value ? [value] : [];
+    }
+
+    return rawValue;
+  };
+
+  const buildProviderOverrides = (data) => providerOverrideRules.reduce((acc, rule) => {
+    const value = resolveProviderOverrideValue(rule, data);
+    if (typeof value === "undefined") return acc;
+    setNestedValue(acc, rule.target, value);
+    return acc;
+  }, {});
+
+  const renderConfiguredField = (field) => {
+    if (!field?.name) return null;
+
+    if (field.control === "text") {
+      return (
+        <TextField
+          key={field.name}
+          label={t(field.labelKey)}
+          {...register(field.name)}
+          error={!!errors[field.name]}
+          helperText={
+            errors[field.name]?.message ||
+            (field.helpKey ? t(field.helpKey) : "")
+          }
+          placeholder={field.placeholderKey ? t(field.placeholderKey) : ""}
+          fullWidth
+          margin="normal"
+        />
+      );
+    }
+
+    if (field.control === "boolean-select") {
+      return (
+        <FormControl key={field.name} fullWidth margin="normal">
+          <InputLabel id={`${field.name}-label`}>{t(field.labelKey)}</InputLabel>
+          <Select
+            labelId={`${field.name}-label`}
+            label={t(field.labelKey)}
+            {...register(field.name)}
+            defaultValue={nodeData?.[field.name] ?? field.defaultValue ?? false}
+          >
+            {(Array.isArray(field.options) ? field.options : []).map((option) => (
+              <MenuItem key={`${field.name}-${String(option.value)}`} value={option.value}>
+                {t(option.labelKey)}
+              </MenuItem>
+            ))}
+          </Select>
+          {errors[field.name] && (
+            <FormHelperText error>
+              {errors[field.name]?.message}
+            </FormHelperText>
+          )}
+        </FormControl>
+      );
+    }
+
+    if (field.control === "alert") {
+      return (
+        <Alert
+          key={field.name}
+          severity={field.severity || "info"}
+          variant="outlined"
+          sx={{ mt: 1, mb: 1 }}
+        >
+          {field.textKey ? t(field.textKey) : ""}
+        </Alert>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="pt-node-form">
@@ -298,30 +400,10 @@ const VPCNodeForm = ({
         )}
       </FormControl>
 
-      {/* Internet Edge */}
-      {natRequiresPublicZone ? (
-        <FormControl fullWidth margin="normal">
-          <InputLabel id="igw-label">{t("canvas.vpcForm.fields.internetEdge")}</InputLabel>
-          <Select
-            labelId="igw-label"
-            label={t("canvas.vpcForm.fields.internetEdge")}
-            {...register("internetGateway")}
-            defaultValue={nodeData?.internetGateway ?? false}
-          >
-            <MenuItem value={true}>{t("canvas.vpcForm.fields.enabled")}</MenuItem>
-            <MenuItem value={false}>{t("canvas.vpcForm.fields.disabled")}</MenuItem>
-          </Select>
-          {errors.internetGateway && (
-            <FormHelperText error>
-              {errors.internetGateway.message}
-            </FormHelperText>
-          )}
-        </FormControl>
-      ) : (
-        <Alert severity="info" variant="outlined" sx={{ mt: 1, mb: 1 }}>
-          {t("canvas.vpcForm.gcpInternetHint")}
-        </Alert>
-      )}
+      {renderConfiguredField({
+        name: "internetGateway",
+        ...(internetGatewayField || {}),
+      })}
 
       <Alert severity="info" variant="outlined" sx={{ mt: 1, mb: 1.5 }}>
         <Typography variant="body2" sx={{ fontWeight: 600 }}>
@@ -337,7 +419,7 @@ const VPCNodeForm = ({
           {t("canvas.vpcForm.info.managedEgress")}
         </Typography>
         <Typography variant="caption" display="block">
-          {isGcp ? t("canvas.vpcForm.info.providerInternetModel") : t("canvas.vpcForm.info.elasticIp")}
+          {t(segmentFormConfig.infoSummaryTailKey || "canvas.vpcForm.info.elasticIp")}
         </Typography>
         <Typography variant="caption" display="block">
           {t("canvas.vpcForm.info.allowedSsh")}
@@ -351,20 +433,20 @@ const VPCNodeForm = ({
         <Chip
           size="small"
           label={
-            isGcp
-              ? t("canvas.vpcForm.gcpChips.internetModel")
-              : internetGatewayEnabled
-                ? t("canvas.vpcForm.chips.igwEnabled")
-                : t("canvas.vpcForm.chips.igwDisabled")
+            natRequiresPublicZone
+              ? internetGatewayEnabled
+                ? t(chipConfig.internetEnabledKey || "canvas.vpcForm.chips.igwEnabled")
+                : t(chipConfig.internetDisabledKey || "canvas.vpcForm.chips.igwDisabled")
+              : t(chipConfig.internetModelKey || "canvas.vpcForm.gcpChips.internetModel")
           }
-          color={internetGatewayEnabled ? "primary" : "default"}
-          variant={internetGatewayEnabled ? "filled" : "outlined"}
+          color={natRequiresPublicZone && internetGatewayEnabled ? "primary" : "default"}
+          variant={natRequiresPublicZone && internetGatewayEnabled ? "filled" : "outlined"}
         />
         <Chip
           size="small"
           label={enableNat
-            ? (isGcp ? t("canvas.vpcForm.gcpChips.natEnabled") : t("canvas.vpcForm.chips.natEnabled"))
-            : (isGcp ? t("canvas.vpcForm.gcpChips.natDisabled") : t("canvas.vpcForm.chips.natDisabled"))}
+            ? t(managedEgressConfig.natEnabledKey || "canvas.vpcForm.chips.natEnabled")
+            : t(managedEgressConfig.natDisabledKey || "canvas.vpcForm.chips.natDisabled")}
           color={enableNat ? "warning" : "default"}
           variant={enableNat ? "filled" : "outlined"}
         />
@@ -392,7 +474,7 @@ const VPCNodeForm = ({
 
         {!enableNat && (hasPublicSubnets || !natRequiresPublicZone) && hasPrivateSubnets && (
           <Alert severity="info" sx={{ mb: 1 }}>
-            {t("canvas.vpcForm.alerts.topologyReady")}<b> {isGcp ? t("canvas.vpcForm.gcpSwitchLabel") : t("canvas.vpcForm.switchLabel")}</b>.
+            {t("canvas.vpcForm.alerts.topologyReady")}<b> {t(managedEgressConfig.labelKey || "canvas.vpcForm.switchLabel")}</b>.
           </Alert>
         )}
 
@@ -404,7 +486,7 @@ const VPCNodeForm = ({
 
         {enableNat && (hasPublicSubnets || !natRequiresPublicZone) && hasPrivateSubnets && (
           <Alert severity="success" sx={{ mb: 1 }}>
-            {isGcp ? t("canvas.vpcForm.gcpAlerts.demoCase") : t("canvas.vpcForm.alerts.demoCase")}
+            {t(managedEgressConfig.demoCaseKey || "canvas.vpcForm.alerts.demoCase")}
           </Alert>
         )}
 
@@ -446,7 +528,7 @@ const VPCNodeForm = ({
                         disabled={willBlockTurnOn}
                       />
                     }
-                    label={isGcp ? t("canvas.vpcForm.gcpSwitchLabel") : t("canvas.vpcForm.switchLabel")}
+                    label={t(managedEgressConfig.labelKey || "canvas.vpcForm.switchLabel")}
                   />
                 </span>
               </Tooltip>
@@ -513,19 +595,12 @@ const VPCNodeForm = ({
         />
       )}
 
-      {/* Allowed SSH */}
-      <TextField
-        label={isGcp ? t("canvas.vpcForm.gcpFields.allowedSsh") : t("canvas.vpcForm.fields.allowedSsh")}
-        {...register("allowedSshCidr")}
-        error={!!errors.allowedSshCidr}
-        helperText={
-          errors.allowedSshCidr?.message ||
-          (isGcp ? t("canvas.vpcForm.gcpFields.allowedSshHelp") : t("canvas.vpcForm.fields.allowedSshHelp"))
-        }
-        placeholder={isGcp ? t("canvas.vpcForm.gcpFields.allowedSshPlaceholder") : t("canvas.vpcForm.fields.allowedSshPlaceholder")}
-        fullWidth
-        margin="normal"
-      />
+      {renderConfiguredField({
+        name: "allowedSshCidr",
+        ...(allowedIngressField || {}),
+      })}
+
+      {extraFields.map((field) => renderConfiguredField(field))}
 
       {/* Botones */}
       <Box className="pt-node-form__actions">

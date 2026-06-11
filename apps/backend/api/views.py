@@ -2,7 +2,6 @@ import os
 from typing import Optional
 from uuid import UUID
 
-from botocore.exceptions import ClientError
 from celery.result import AsyncResult
 from django.utils import timezone
 from rest_framework import status
@@ -11,8 +10,6 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .cloud_connections import (
-    build_aws_runtime_env,
-    build_boto3_session_from_runtime_env,
     resolve_lab_cloud_connection,
     resolve_lab_cloud_connection_with_source,
 )
@@ -20,8 +17,9 @@ from .helpers import ensure_lab_for_canvas, visible_plans_queryset
 from .i18n import tr
 from .models import Plan, PlanExecutionRecord
 from .permissions import can_execute_plan, get_active_execution_delegation
+from .providers import build_connection_runtime_env, get_provider_runtime_hooks
 from .serializers import serialize_cloud_target_state
-from .providers.aws.payload import get_network_id, get_region
+from .providers.aws.payload import get_network_id
 from .tasks import destroy_last_deploy, process_network_plan, prueba_larga
 from .validators import validate_network_plan
 
@@ -125,76 +123,27 @@ def _plan_cloud_target_changed(plan: Plan) -> Response:
     )
 
 
-def _can_run_real_terraform(runtime_env: dict | None = None) -> bool:
-    runtime_env = runtime_env or {}
-    running_in_ecs = bool(
-        os.getenv("ECS_TASK_DEFINITION")
-        or os.getenv("ECS_CONTAINER_METADATA_URI")
-        or os.getenv("ECS_CONTAINER_METADATA_URI_V4")
-        or os.getenv("AWS_EXECUTION_ENV")
-    )
-    allow_local = os.getenv("ALLOW_LOCAL_APPLY") == "1"
-    has_static_creds = bool(
-        (runtime_env.get("AWS_ACCESS_KEY_ID") or os.getenv("AWS_ACCESS_KEY_ID"))
-        and (runtime_env.get("AWS_SECRET_ACCESS_KEY") or os.getenv("AWS_SECRET_ACCESS_KEY"))
-    )
-    has_profile = (
-        bool(runtime_env.get("AWS_PROFILE") or os.getenv("AWS_PROFILE"))
-        and os.getenv("AWS_SDK_LOAD_CONFIG") == "1"
-    )
-    if runtime_env and has_static_creds:
-        return True
-    return running_in_ecs or (allow_local and (has_static_creds or has_profile))
+def _can_run_real_terraform(runtime_env: dict | None = None, provider: str = "aws") -> bool:
+    hooks = get_provider_runtime_hooks(provider)
+    return hooks.can_run_real_execution(runtime_env)
 
 
 
 def _runtime_env_for_plan(plan: Plan) -> dict:
-    connection = resolve_lab_cloud_connection(getattr(plan, "lab", None), (plan.payload or {}).get("cloud"))
-    return build_aws_runtime_env(connection) if connection else {}
-
-
-def _probe_plan_live_vpcs(plan: Plan, runtime_env: dict | None = None):
-    """Detecta si el despliegue AWS aún existe usando los VPC ids del último apply."""
-    outputs = plan.outputs or {}
-    if not isinstance(outputs, dict):
-        return None, "missing_outputs"
-
-    vpc_map = outputs.get("vpc_ids")
-    if not isinstance(vpc_map, dict) or not vpc_map:
-        return None, "missing_vpc_ids"
-
-    vpc_ids = sorted({str(v).strip() for v in vpc_map.values() if str(v or "").strip()})
-    if not vpc_ids:
-        return None, "missing_vpc_ids"
-
-    payload = plan.payload or {}
-    region = get_region(payload)
-    session = build_boto3_session_from_runtime_env(runtime_env)
-    ec2 = session.client("ec2", region_name=region)
-
-    found = 0
-    for vpc_id in vpc_ids:
-        try:
-            ec2.describe_vpcs(VpcIds=[vpc_id])
-            found += 1
-        except ClientError as e:
-            code = (e.response.get("Error", {}) or {}).get("Code", "")
-            if code == "InvalidVpcID.NotFound":
-                continue
-            return None, f"probe_error:{code}"
-        except Exception as e:
-            return None, f"probe_error:{e}"
-
-    return found > 0, f"vpcs_found={found}/{len(vpc_ids)}"
+    provider = str((plan.payload or {}).get("cloud") or "aws").strip().lower() or "aws"
+    connection = resolve_lab_cloud_connection(getattr(plan, "lab", None), provider)
+    return build_connection_runtime_env(connection, provider) if connection else {}
 
 
 
 def _reconcile_applied_flag_if_drifted(plan: Plan):
+    provider = str((plan.payload or {}).get("cloud") or "aws").strip().lower() or "aws"
     runtime_env = _runtime_env_for_plan(plan)
-    if not bool(plan.applied) or not _can_run_real_terraform(runtime_env):
+    runtime_hooks = get_provider_runtime_hooks(provider)
+    if not bool(plan.applied) or not _can_run_real_terraform(runtime_env, provider):
         return False
 
-    has_live, reason = _probe_plan_live_vpcs(plan, runtime_env)
+    has_live, reason = runtime_hooks.probe_live_resources(plan, runtime_env)
     if has_live is not False:
         return False
 
@@ -204,7 +153,7 @@ def _reconcile_applied_flag_if_drifted(plan: Plan):
     plan.status = Plan.Status.PENDING
     plan.last_action = Plan.LastAction.PLAN
     plan.error = (
-        "Se detecto drift: la infraestructura ya no existe en AWS y el estado local "
+        f"Se detecto drift: la infraestructura ya no existe en {runtime_hooks.label} y el estado local "
         f"se reconcilio a no aplicado ({reason})."
     )
     plan.updated_at = timezone.now()
@@ -353,6 +302,8 @@ def deploy_plan(request, plan_id: UUID):
     body = request.data or {}
     simulate_only = bool(body.get("simulate_only", True))
     runtime_env = _runtime_env_for_plan(plan)
+    provider = str((plan.payload or {}).get("cloud") or getattr(getattr(plan, "lab", None), "target_provider", "aws") or "aws").strip().lower() or "aws"
+    provider_label = get_provider_runtime_hooks(provider).label
 
     if not simulate_only and not can_execute_plan(request.user, plan):
         return _plan_execution_forbidden(plan)
@@ -371,13 +322,13 @@ def deploy_plan(request, plan_id: UUID):
         if conflict:
             return conflict
 
-    if not simulate_only and not _can_run_real_terraform(runtime_env):
+    if not simulate_only and not _can_run_real_terraform(runtime_env, provider):
         return Response(
             {
                 "ok": False,
                 "error": (
                     "Terraform apply BLOQUEADO: no hay una conexion cloud activa para este laboratorio "
-                    "ni credenciales IAM detectadas en el runtime. Configura una conexion AWS personal "
+                    f"ni credenciales {provider_label} detectadas en el runtime. Configura una conexion {provider_label} personal "
                     "o compartida del curso, o usa el modo legacy del contenedor."
                 ),
             },
@@ -475,6 +426,8 @@ def destroy_plan(request, plan_id: UUID):
 
 
 def _start_destroy_for_plan(user, plan: Plan):
+    provider = str((plan.payload or {}).get("cloud") or getattr(getattr(plan, "lab", None), "target_provider", "aws") or "aws").strip().lower() or "aws"
+    provider_label = get_provider_runtime_hooks(provider).label
     if not can_execute_plan(user, plan):
         return _plan_execution_forbidden(plan)
     cloud_target_state = serialize_cloud_target_state(plan)
@@ -488,13 +441,13 @@ def _start_destroy_for_plan(user, plan: Plan):
         return conflict
 
     runtime_env = _runtime_env_for_plan(plan)
-    if not _can_run_real_terraform(runtime_env):
+    if not _can_run_real_terraform(runtime_env, provider):
         return Response(
             {
                 "ok": False,
                 "error": (
                     "Terraform destroy BLOQUEADO: no hay una conexion cloud activa para este laboratorio "
-                    "ni credenciales IAM detectadas en el runtime. Configura una conexion AWS personal "
+                    f"ni credenciales {provider_label} detectadas en el runtime. Configura una conexion {provider_label} personal "
                     "o compartida del curso, o usa el modo legacy del contenedor."
                 ),
             },

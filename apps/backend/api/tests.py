@@ -12,9 +12,11 @@ from .domain.network_intent import normalize_network_intent
 from .models import CLOUD_AUTH_AWS_ASSUME_ROLE, CLOUD_SCOPE_COURSE_SHARED, CLOUD_SCOPE_PERSONAL, CloudConnection, CloudExecutionDelegation, Course, KeyPairCatalogEntry, Lab, Plan, PlanExecutionRecord, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, STATUS_ACTIVE, VISIBILITY_COURSE, VISIBILITY_OWNER
 from .providers import get_provider_adapter, get_provider_executor
 from .cloud_connections import build_aws_runtime_env
+from .providers.runtime_registry import get_provider_runtime_hooks, test_cloud_connection
 from .providers.aws.runtime import build_nat_cleanup_targets, check_key_pairs_preflight, collect_required_key_pairs
 from .providers.aws.terraform import render_workspace
 from .secret_store import encrypt_secret
+from .serializers import CloudConnectionCreateSerializer, CloudConnectionSerializer
 from .tasks import _build_last_apply_context
 from .validators import validate_network_plan
 
@@ -492,6 +494,45 @@ class AssumeRoleConnectionTests(SimpleTestCase):
         self.assertEqual(env["AWS_SECRET_ACCESS_KEY"], "temp-secret")
         self.assertEqual(env["AWS_SESSION_TOKEN"], "temp-token")
         self.assertEqual(env["AWS_REGION"], "us-east-1")
+
+
+class ProviderRuntimeRegistryTests(SimpleTestCase):
+    def test_gcp_runtime_hooks_expose_planned_runtime_contract(self):
+        hooks = get_provider_runtime_hooks("gcp")
+        connection = CloudConnection(name="GCP planned", provider="gcp")
+
+        self.assertEqual(hooks.label, "GCP")
+        self.assertEqual(hooks.environment_target_name, "Application Default Credentials")
+        self.assertFalse(hooks.can_run_real_execution({}))
+
+        ok, message, identity = test_cloud_connection(connection)
+
+        self.assertFalse(ok)
+        self.assertEqual(identity, {})
+        self.assertIn("not implemented yet", message)
+
+    def test_gcp_connection_serializer_reports_planned_runtime_support(self):
+        connection = CloudConnection(name="GCP planned", provider="gcp")
+
+        data = CloudConnectionSerializer(connection).data
+
+        self.assertEqual(data["provider_support"]["provider"], "gcp")
+        self.assertEqual(data["provider_support"]["runtime_status"], "planned")
+        self.assertFalse(data["provider_support"]["supports_real_connections"])
+        self.assertEqual(data["provider_details"]["label"], "GCP")
+
+    def test_gcp_connection_create_serializer_fails_through_provider_spec(self):
+        serializer = CloudConnectionCreateSerializer(
+            data={
+                "name": "GCP personal",
+                "provider": "gcp",
+                "scope": "personal",
+                "auth_type": "gcp_service_account",
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("backend", str(serializer.errors))
 
 
 class VisibilityApiTests(APITestCase):
