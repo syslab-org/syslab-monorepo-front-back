@@ -1061,6 +1061,30 @@ const en = {
         "Parent range from which segments and zones will be derived.",
       selectedRegion: "Selected region: {{value}}",
       continue: "Continue",
+      providerFields: {
+        gcpProjectProfile: "GCP project profile",
+        gcpProjectProfileHelp:
+          "Reference profile for the lab. Useful to show how a provider can expose predefined options from the catalog.",
+        gcpProjectId: "GCP project ID",
+        gcpProjectIdHelp:
+          "Optional for now. It lets you make explicit which project you want to use once real GCP runtime is enabled.",
+        gcpProjectIdPlaceholder: "e.g. tesis-network-lab",
+        azureLandingZone: "Azure subscription context",
+        azureLandingZoneHelp:
+          "Reference context for the lab. Useful to demonstrate provider-specific selects defined through configuration.",
+        azureSubscriptionAlias: "Azure subscription alias",
+        azureSubscriptionAliasHelp:
+          "Optional for now. You can use it to document which subscription or context you expect to bind once real runtime is enabled.",
+        azureSubscriptionAliasPlaceholder: "e.g. tesis-azure-sandbox",
+        options: {
+          gcpSandbox: "Sandbox",
+          gcpSharedLab: "Shared lab",
+          gcpProductionLike: "Production-like",
+          azureStudentSubscription: "Student subscription",
+          azureSharedCourseSubscription: "Course shared subscription",
+          azureNetworkSandbox: "Network sandbox",
+        },
+      },
       providerStatus: {
         ready: "Ready for validation and deploy",
         planned: "Coming soon",
@@ -1361,6 +1385,8 @@ const en = {
       modeOptions: {
         peering: "Direct links (AWS: Peering)",
         tgw: "Hub routing (AWS: Transit Gateway)",
+        providerPeering: "Direct links ({{provider}}: {{directLabel}})",
+        providerHub: "Hub routing ({{provider}}: {{hubLabel}})",
       },
       gcpModeOptions: {
         peering: "Direct links (GCP: VPC Peering)",
@@ -1426,6 +1452,8 @@ const en = {
       chips: {
         awsHub: "AWS: 1 central hub",
         awsDirect: "AWS: direct links by pair",
+        providerHub: "{{provider}}: {{hubLabel}}",
+        providerDirect: "{{provider}}: {{directLabel}}",
         readingHub: "Reading: traffic passes through the hub",
         readingDirect: "Reading: traffic goes directly between segments",
         scales: "Scales better with several segments",
@@ -2149,6 +2177,7 @@ const en = {
       cidrPrefixRoom: "CIDR should leave room for subnets (e.g. /16 to /24)",
       invalidCloudProvider: "Invalid cloud provider",
       cloudProviderRequired: "Cloud provider is required",
+      requiredField: "This field is required",
       regionRequired: "Region is required",
       descriptionMax: "Description must have at most 4000 characters",
       vpcNameRequired: "VPC name is required",

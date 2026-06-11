@@ -41,8 +41,17 @@ const SubNetworkNodeForm = ({
   const { t } = useTranslation();
   const providerDefinition = getCanvasProviderDefinition(provider);
   const providerOverride = getNodeProviderOverride(nodeData, provider);
-  const isGcp = provider === "gcp";
   const providerLabel = providerDefinition.label || String(provider || "aws").toUpperCase();
+  const subnetFormConfig = providerDefinition.subnet?.form || {};
+  const infoLines = subnetFormConfig.infoLines || [];
+  const extraInfoLines = subnetFormConfig.extraInfoLines || [];
+  const toggleFields = subnetFormConfig.toggleFields || [];
+  const providerOverrideRules = subnetFormConfig.providerOverrides || [];
+  const availabilityScope = subnetFormConfig.availabilityScope || "zone";
+  const hasAvailabilityZoneField = availabilityScope === "zone";
+  const hasAutoAssignPublicIpToggle = toggleFields.some(
+    (field) => field?.name === "map_public_ip_on_launch"
+  );
   const effectiveRegion =
     String(region || providerDefinition.lab?.defaultRegion || "us-east-1").trim()
     || providerDefinition.lab?.defaultRegion
@@ -103,9 +112,10 @@ const SubNetworkNodeForm = ({
   // Si cambia el tipo de subnet, sincroniza el flag de IP pública
   const subnetType = watch("subnetType");
   useEffect(() => {
+    if (!hasAutoAssignPublicIpToggle) return;
     if (subnetType === "public") setValue("map_public_ip_on_launch", true);
     if (subnetType === "private") setValue("map_public_ip_on_launch", false);
-  }, [subnetType, setValue]);
+  }, [hasAutoAssignPublicIpToggle, subnetType, setValue]);
 
   useEffect(() => {
     reset({
@@ -120,12 +130,67 @@ const SubNetworkNodeForm = ({
     });
   }, [nodeData, reset, azOptions, effectiveRegion, incomingSubnetType, providerOverride.flow_logs, providerOverride.private_google_access]);
 
+  const resolveOverrideValue = (rule, data) => {
+    if (!rule || !rule.target) return undefined;
+    if (rule.source === "$effectiveRegion") return effectiveRegion;
+    if (rule.source === "$literal") return rule.value;
+
+    const rawValue = data?.[rule.source];
+    if (rule.transform === "boolean") return !!rawValue;
+    return rawValue;
+  };
+
+  const buildProviderOverrides = (data) => providerOverrideRules.reduce((acc, rule) => {
+    const value = resolveOverrideValue(rule, data);
+    if (typeof value === "undefined") return acc;
+    acc[rule.target] = value;
+    return acc;
+  }, {});
+
+  const renderToggleField = (fieldConfig) => {
+    if (!fieldConfig?.name || fieldConfig.control !== "checkbox") return null;
+    const errorField = fieldConfig.errorField || fieldConfig.name;
+    const disabled = fieldConfig.disableWhenSubnetType
+      ? watch("subnetType") === fieldConfig.disableWhenSubnetType
+      : false;
+
+    return (
+      <Box key={fieldConfig.name}>
+        <FormControlLabel
+          sx={{ mt: 0.5 }}
+          control={
+            <Controller
+              name={fieldConfig.name}
+              control={control}
+              render={({ field }) => (
+                <Checkbox
+                  {...field}
+                  checked={!!field.value}
+                  onChange={(e) => field.onChange(e.target.checked)}
+                  disabled={disabled}
+                />
+              )}
+            />
+          }
+          label={t(fieldConfig.labelKey)}
+        />
+        {errors[errorField] && (
+          <FormHelperText error>{errors[errorField]?.message}</FormHelperText>
+        )}
+      </Box>
+    );
+  };
+
   const onSubmit = (data) => {
     const name = data.subnetName.trim();
     const cidr = data.cidrBlock.trim();
-    const az = isGcp ? effectiveRegion : (data.availabilityZone || `${effectiveRegion}a`).trim();
+    const az = availabilityScope === "region"
+      ? effectiveRegion
+      : (data.availabilityZone || `${effectiveRegion}a`).trim();
     const type = String(data.subnetType || "public").toLowerCase();
-    const mapPublic = isGcp ? false : !!data.map_public_ip_on_launch;
+    const mapPublic = hasAutoAssignPublicIpToggle
+      ? !!data.map_public_ip_on_launch
+      : false;
 
     // ✅ Guardamos camelCase (lo que renderiza el canvas y usa el builder)
     // ✅ y snake_case (lo que espera Terraform al transformar el payload)
@@ -150,17 +215,10 @@ const SubNetworkNodeForm = ({
       map_public_ip_on_launch: mapPublic,
       privateGoogleAccess: !!data.privateGoogleAccess,
       flowLogs: !!data.flowLogs,
-      provider_overrides: mergeNodeProviderOverrides(nodeData, provider, isGcp
-        ? {
-          subnet_type: type,
-          private_google_access: !!data.privateGoogleAccess,
-          flow_logs: !!data.flowLogs,
-          region: effectiveRegion,
-        }
-        : {
-          subnet_type: type,
-          route_table: "main",
-        }),
+      provider_overrides: mergeNodeProviderOverrides(nodeData, provider, buildProviderOverrides({
+        ...data,
+        subnetType: type,
+      })),
     });
   };
 
@@ -182,24 +240,18 @@ const SubNetworkNodeForm = ({
           {t("canvas.subnetForm.info.title")}
         </Typography>
         <Typography variant="caption" display="block">
-          {t("canvas.subnetForm.info.parentCidr")}
+          {t(infoLines[0] || "canvas.subnetForm.info.parentCidr")}
         </Typography>
-        <Typography variant="caption" display="block">
-          {t("canvas.subnetForm.info.noOverlap")}
-        </Typography>
-        <Typography variant="caption" display="block">
-          {t("canvas.subnetForm.info.publicVsPrivate")}
-        </Typography>
-        {isGcp && (
-          <>
-            <Typography variant="caption" display="block">
-              {t("canvas.subnetForm.gcpInfo.regional")}
-            </Typography>
-            <Typography variant="caption" display="block">
-              {t("canvas.subnetForm.gcpInfo.externalIp")}
-            </Typography>
-          </>
-        )}
+        {infoLines.slice(1).map((lineKey) => (
+          <Typography key={lineKey} variant="caption" display="block">
+            {t(lineKey)}
+          </Typography>
+        ))}
+        {extraInfoLines.map((lineKey) => (
+          <Typography key={lineKey} variant="caption" display="block">
+            {t(lineKey)}
+          </Typography>
+        ))}
         <Box sx={{ mt: 1.25 }}>
           <CidrLearningGuideButton buttonLabel={t("canvas.cidrGuide.button")} />
         </Box>
@@ -207,7 +259,7 @@ const SubNetworkNodeForm = ({
 
       {watch("subnetType") === "private" && (
         <Alert severity="info" sx={{ mb: 1.5 }}>
-          {t("canvas.subnetForm.alerts.privateZoneBefore")} <b>{t("canvas.subnetForm.alerts.managedEgressLabel")}</b> {t("canvas.subnetForm.alerts.privateZoneAfter")} <b>{t("canvas.subnetForm.alerts.parentSegmentLabel")}</b>.
+          {t("canvas.subnetForm.alerts.privateZoneBefore")} <b>{providerDefinition.segment?.managedEgressLabel || t("canvas.subnetForm.alerts.managedEgressLabel")}</b> {t("canvas.subnetForm.alerts.privateZoneAfter")} <b>{providerDefinition.segment?.kindLabel || t("canvas.subnetForm.alerts.parentSegmentLabel")}</b>.
         </Alert>
       )}
 
@@ -230,7 +282,7 @@ const SubNetworkNodeForm = ({
         margin="normal"
       />
 
-      {providerDefinition.subnet.showAvailabilityZone && (
+      {hasAvailabilityZoneField && (
         <FormControl fullWidth margin="normal" error={!!errors.availabilityZone}>
           <InputLabel id="az-label">{t("canvas.subnetForm.fields.availabilityZone")}</InputLabel>
           <Controller
@@ -280,71 +332,7 @@ const SubNetworkNodeForm = ({
         )}
       </FormControl>
 
-      {providerDefinition.subnet.showAutoAssignPublicIp && (
-        <>
-          <FormControlLabel
-            sx={{ mt: 1 }}
-            control={
-              <Controller
-                name="map_public_ip_on_launch"
-                control={control}
-                render={({ field }) => (
-                  <Checkbox
-                    {...field}
-                    checked={!!field.value}
-                    onChange={(e) => field.onChange(e.target.checked)}
-                    disabled={watch("subnetType") === "private"}
-                  />
-                )}
-              />
-            }
-            label={t("canvas.subnetForm.fields.autoAssignPublicIp")}
-          />
-          {errors.map_public_ip_on_launch && (
-            <FormHelperText error>{errors.map_public_ip_on_launch.message}</FormHelperText>
-          )}
-        </>
-      )}
-
-      {providerDefinition.subnet.showPrivateGoogleAccess && (
-        <FormControlLabel
-          sx={{ mt: 0.5 }}
-          control={
-            <Controller
-              name="privateGoogleAccess"
-              control={control}
-              render={({ field }) => (
-                <Checkbox
-                  {...field}
-                  checked={!!field.value}
-                  onChange={(e) => field.onChange(e.target.checked)}
-                />
-              )}
-            />
-          }
-          label={t("canvas.subnetForm.gcpFields.privateGoogleAccess")}
-        />
-      )}
-
-      {providerDefinition.subnet.showFlowLogs && (
-        <FormControlLabel
-          sx={{ mt: 0.5 }}
-          control={
-            <Controller
-              name="flowLogs"
-              control={control}
-              render={({ field }) => (
-                <Checkbox
-                  {...field}
-                  checked={!!field.value}
-                  onChange={(e) => field.onChange(e.target.checked)}
-                />
-              )}
-            />
-          }
-          label={t("canvas.subnetForm.gcpFields.flowLogs")}
-        />
-      )}
+      {toggleFields.map(renderToggleField)}
 
       <Box className="pt-node-form__actions">
         <Button type="submit" variant="contained" color="primary">
