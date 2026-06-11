@@ -1056,6 +1056,30 @@ const es = {
       masterCidrHelp: "Rango padre del que se derivarán los segmentos y zonas.",
       selectedRegion: "Región seleccionada: {{value}}",
       continue: "Continuar",
+      providerFields: {
+        gcpProjectProfile: "Perfil de proyecto GCP",
+        gcpProjectProfileHelp:
+          "Perfil referencial para el laboratorio. Sirve para mostrar cómo un provider puede exponer opciones predefinidas desde el catálogo.",
+        gcpProjectId: "Project ID de GCP",
+        gcpProjectIdHelp:
+          "Opcional por ahora. Sirve para dejar explícito qué proyecto quieres usar cuando el runtime real de GCP esté habilitado.",
+        gcpProjectIdPlaceholder: "ej: tesis-network-lab",
+        azureLandingZone: "Contexto de suscripción Azure",
+        azureLandingZoneHelp:
+          "Contexto referencial para el laboratorio. Permite demostrar selects específicos del provider definidos por configuración.",
+        azureSubscriptionAlias: "Alias de suscripción de Azure",
+        azureSubscriptionAliasHelp:
+          "Opcional por ahora. Puedes usarlo para documentar qué suscripción o contexto esperas asociar cuando se habilite el runtime real.",
+        azureSubscriptionAliasPlaceholder: "ej: tesis-azure-sandbox",
+        options: {
+          gcpSandbox: "Sandbox",
+          gcpSharedLab: "Laboratorio compartido",
+          gcpProductionLike: "Producción simulada",
+          azureStudentSubscription: "Suscripción de estudiante",
+          azureSharedCourseSubscription: "Suscripción compartida del curso",
+          azureNetworkSandbox: "Sandbox de redes",
+        },
+      },
       providerStatus: {
         ready: "Listo para validación y despliegue",
         planned: "Próximamente",
@@ -1359,6 +1383,8 @@ const es = {
       modeOptions: {
         peering: "Direct links (AWS: Peering)",
         tgw: "Hub routing (AWS: Transit Gateway)",
+        providerPeering: "Direct links ({{provider}}: {{directLabel}})",
+        providerHub: "Hub routing ({{provider}}: {{hubLabel}})",
       },
       gcpModeOptions: {
         peering: "Direct links (GCP: VPC Peering)",
@@ -1423,6 +1449,8 @@ const es = {
       chips: {
         awsHub: "AWS: 1 hub central",
         awsDirect: "AWS: enlaces directos por pares",
+        providerHub: "{{provider}}: {{hubLabel}}",
+        providerDirect: "{{provider}}: {{directLabel}}",
         readingHub: "Lectura: el tráfico pasa por el hub",
         readingDirect: "Lectura: el tráfico va directo entre segmentos",
         scales: "Escala mejor con varios segmentos",
@@ -1531,8 +1559,10 @@ const es = {
         "El canvas tiene errores de topología. Corrígelos y vuelve a validar antes del deploy real.",
       validatePlanFirst: "Primero valida el plan.",
       noDataToApply: "No hay datos transformados para aplicar.",
+      redeployWord: "REDESPLIEGUE",
+      deployWord: "DESPLIEGUE",
       redeployPrompt:
-        "Vas a aplicar cambios sobre infraestructura AWS ya activa. Para confirmar escribe: REDEPLOY",
+        "Vas a aplicar cambios sobre infraestructura AWS ya activa. Para confirmar escribe: REDESPLIEGUE",
       deployPrompt: "Para confirmar escribe: DESPLIEGUE",
       deployCancelled: "Despliegue cancelado por el usuario.",
       executionForbidden:
@@ -2171,6 +2201,7 @@ const es = {
         "El CIDR debe dejar espacio para subredes (por ejemplo /16 a /24)",
       invalidCloudProvider: "Cloud provider inválido",
       cloudProviderRequired: "Cloud provider es obligatorio",
+      requiredField: "Este campo es obligatorio",
       regionRequired: "La región es obligatoria",
       descriptionMax: "La descripción debe tener como máximo 4000 caracteres",
       vpcNameRequired: "El nombre de la VPC es obligatorio",

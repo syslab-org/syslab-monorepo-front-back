@@ -203,8 +203,9 @@ export const useFormValidationSchema = (
     /* ================= Subnet ================= */
     case TYPE_SUBNETWORK_NODE: {
       const providerSubnet = context?.providerSubnet || {};
-      const requiresAz = providerSubnet.showAvailabilityZone !== false;
-      const requiresSubnetType = providerSubnet.showZoneType !== false;
+      const subnetForm = providerSubnet.form || {};
+      const requiresAz = (subnetForm.availabilityScope || 'zone') === 'zone';
+      const requiresSubnetType = true;
 
       return yup.object({
         subnetName: yup

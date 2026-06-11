@@ -79,6 +79,17 @@ const executionSourceLabels = {
 
 const FALLBACK_REGION = 'us-east-1';
 
+const buildDynamicFieldDefaults = (fields = []) =>
+  (Array.isArray(fields) ? fields : []).reduce((acc, field) => {
+    if (!field?.name) return acc;
+    if (Object.prototype.hasOwnProperty.call(field, 'defaultValue')) {
+      acc[field.name] = field.defaultValue;
+      return acc;
+    }
+    acc[field.name] = field.control === 'select' ? '' : '';
+    return acc;
+  }, {});
+
 // eslint-disable-next-line react/prop-types
 const NewVLANForm = ({
   onSave,
@@ -113,7 +124,12 @@ const NewVLANForm = ({
     () => getCanvasProviderDefinition(defaultProviderValue),
     [defaultProviderValue],
   );
+  const defaultLabFormConfig = defaultProviderDefinition.lab?.form || {};
   const defaultRegionValue = defaultProviderDefinition.lab?.defaultRegion || FALLBACK_REGION;
+  const defaultLabFieldValues = useMemo(
+    () => buildDynamicFieldDefaults(defaultLabFormConfig.fields || []),
+    [defaultLabFormConfig.fields],
+  );
 
   const defaultCidr = useMemo(() => {
     // default “bonito” cuando wizard está activo
@@ -138,6 +154,7 @@ const NewVLANForm = ({
       courseId: '',
       cloudConnectionId: '',
       labNotes: '',
+      ...defaultLabFieldValues,
     },
   });
 
@@ -172,11 +189,58 @@ const NewVLANForm = ({
     () => getCanvasProviderDefinition(selectedProviderOption.provider),
     [selectedProviderOption.provider],
   );
-  const supportsExecutableTarget = selectedProvider === CLOUD_AWS_VALUE;
+  const selectedLabFormConfig = selectedProviderDefinition.lab?.form || {};
+  const selectedLabFields = Array.isArray(selectedLabFormConfig.fields) ? selectedLabFormConfig.fields : [];
+  const selectedLabProviderOverrideRules = Array.isArray(selectedLabFormConfig.providerOverrides)
+    ? selectedLabFormConfig.providerOverrides
+    : [];
+  const selectedWizardAlerts = Array.isArray(selectedLabFormConfig.wizardAlerts)
+    ? selectedLabFormConfig.wizardAlerts
+    : [];
+  const supportsExecutableTarget = selectedLabFormConfig.executionBindingMode === 'cloud_connection';
   const selectedRegionOptions = selectedProviderDefinition.lab?.regionOptions || [];
   const selectedProviderDefaultRegion = selectedProviderDefinition.lab?.defaultRegion || FALLBACK_REGION;
   const selectedExecutionTargetDescriptor =
     selectedProviderDefinition.lab?.executionTargetDescriptor || selectedProviderLabel;
+
+  const setNestedValue = (target, path, value) => {
+    const keys = String(path || '').split('.').filter(Boolean);
+    if (keys.length === 0) return target;
+    let cursor = target;
+    keys.forEach((key, index) => {
+      const isLeaf = index === keys.length - 1;
+      if (isLeaf) {
+        cursor[key] = value;
+        return;
+      }
+      if (!cursor[key] || typeof cursor[key] !== 'object' || Array.isArray(cursor[key])) {
+        cursor[key] = {};
+      }
+      cursor = cursor[key];
+    });
+    return target;
+  };
+
+  const resolveProviderOverrideValue = (rule, data) => {
+    if (!rule?.target) return undefined;
+    if (rule.source === '$literal') return rule.value;
+    const rawValue = data?.[rule.source];
+    if (rule.transform === 'boolean') return !!rawValue;
+    if (rule.transform === 'trim') return String(rawValue || '').trim();
+    if (rule.transform === 'arrayIfValue') {
+      const value = String(rawValue || '').trim();
+      return value ? [value] : [];
+    }
+    return rawValue;
+  };
+
+  const buildLabProviderOverrides = (data) =>
+    selectedLabProviderOverrideRules.reduce((acc, rule) => {
+      const value = resolveProviderOverrideValue(rule, data);
+      if (typeof value === 'undefined') return acc;
+      setNestedValue(acc, rule.target, value);
+      return acc;
+    }, {});
 
   useEffect(() => {
     const current = normalizeProviderValue(watch('cloudProvider'));
@@ -225,6 +289,16 @@ const NewVLANForm = ({
       setValue('cloudConnectionId', '', { shouldValidate: true, shouldDirty: true });
     }
   }, [filteredCloudConnections, selectedConnectionId, setValue]);
+
+  useEffect(() => {
+    selectedLabFields.forEach((field) => {
+      if (!field?.name || !Object.prototype.hasOwnProperty.call(field, 'defaultValue')) return;
+      const currentValue = watch(field.name);
+      if (currentValue === undefined || currentValue === null || currentValue === '') {
+        setValue(field.name, field.defaultValue, { shouldDirty: false });
+      }
+    });
+  }, [selectedLabFields, setValue, watch]);
 
   useEffect(() => {
     if (!selectedRegionOptions.length) return;
@@ -295,6 +369,58 @@ const NewVLANForm = ({
     };
   }, [filteredCloudConnections, selectedConnectionId, selectedProviderLabel, supportsExecutableTarget]);
 
+  const renderConfiguredField = (field) => {
+    if (!field?.name && field.control !== 'alert') return null;
+
+    if (field.control === 'text') {
+      return (
+        <TextField
+          key={field.name}
+          label={field.labelKey ? t(field.labelKey) : ''}
+          placeholder={field.placeholderKey ? t(field.placeholderKey) : (field.placeholder || '')}
+          {...register(field.name)}
+          error={!!errors[field.name]}
+          helperText={errors[field.name]?.message || (field.helpKey ? t(field.helpKey) : '')}
+          fullWidth
+          autoComplete="off"
+        />
+      );
+    }
+
+    if (field.control === 'select') {
+      return (
+        <FormControl key={field.name} fullWidth error={!!errors[field.name]}>
+          <InputLabel id={`${field.name}-label`}>{field.labelKey ? t(field.labelKey) : ''}</InputLabel>
+          <Select
+            labelId={`${field.name}-label`}
+            {...register(field.name)}
+            label={field.labelKey ? t(field.labelKey) : ''}
+            defaultValue={field.defaultValue ?? ''}
+          >
+            {(Array.isArray(field.options) ? field.options : []).map((option) => (
+              <MenuItem key={`${field.name}-${String(option.value)}`} value={option.value}>
+                {option.labelKey ? t(option.labelKey) : option.label || option.value}
+              </MenuItem>
+            ))}
+          </Select>
+          <FormHelperText>
+            {errors[field.name]?.message || (field.helpKey ? t(field.helpKey) : '')}
+          </FormHelperText>
+        </FormControl>
+      );
+    }
+
+    if (field.control === 'alert') {
+      return (
+        <Alert key={field.name || field.textKey} severity={field.severity || 'info'} variant="outlined">
+          {field.textKey ? t(field.textKey, field.textValues) : ''}
+        </Alert>
+      );
+    }
+
+    return null;
+  };
+
   const onSubmit = (data) => {
     if (requireCourseSelection && !data.courseId) {
       setError('courseId', { type: 'manual', message: t('canvas.form.courseRequired') });
@@ -308,7 +434,19 @@ const NewVLANForm = ({
 
     const { base, prefix } = cidrCheck;
     const provider = normalizeProviderValue(data.cloudProvider) || CLOUD_AWS_VALUE;
-    const canBindExecutionTarget = provider === CLOUD_AWS_VALUE;
+    const canBindExecutionTarget = supportsExecutableTarget;
+
+    for (const field of selectedLabFields) {
+      if (!field?.name || !field.required) continue;
+      const value = data[field.name];
+      if (value === undefined || value === null || String(value).trim() === '') {
+        setError(field.name, {
+          type: 'manual',
+          message: field.requiredMessageKey ? t(field.requiredMessageKey) : t('canvas.validation.requiredField'),
+        });
+        return;
+      }
+    }
 
     onSave({
       type: 'vlan',
@@ -335,6 +473,7 @@ const NewVLANForm = ({
       course_id: data.courseId || null,
       cloud_connection_id: canBindExecutionTarget ? (data.cloudConnectionId || null) : null,
       notes: String(data.labNotes || '').trim(),
+      provider_lab_overrides: buildLabProviderOverrides(data),
     });
   };
 
@@ -369,11 +508,11 @@ const NewVLANForm = ({
           </Alert>
         )}
 
-        {wizardMode && (
-          <Alert severity="info" sx={{ alignItems: 'center' }}>
-            {t('canvas.form.awsOnlyInfo')}
+        {wizardMode && selectedWizardAlerts.map((alert) => (
+          <Alert key={`${alert.textKey}-${selectedProvider}`} severity={alert.severity || 'info'} sx={{ alignItems: 'center' }}>
+            {alert.textKey ? t(alert.textKey, alert.textValues) : ''}
           </Alert>
-        )}
+        ))}
 
         {/* Cloud Provider */}
         <FormControl fullWidth>
@@ -473,6 +612,8 @@ const NewVLANForm = ({
           minRows={3}
           autoComplete="off"
         />
+
+        {selectedLabFields.map(renderConfiguredField)}
 
         {availableCourses.length > 0 && (
           <FormControl fullWidth error={requireCourseSelection && !watch('courseId')}>

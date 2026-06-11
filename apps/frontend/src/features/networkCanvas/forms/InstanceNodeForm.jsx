@@ -53,8 +53,17 @@ const InstanceNodeForm = ({
   const { t, i18n } = useTranslation();
   const providerDefinition = getCanvasProviderDefinition(provider);
   const providerOverride = getNodeProviderOverride(nodeData, provider);
-  const isGcp = provider === "gcp";
   const providerLabel = providerDefinition.label || String(provider || "aws").toUpperCase();
+  const instanceFormConfig = providerDefinition.instance?.form || {};
+  const imageFieldConfig = instanceFormConfig.imageField || {};
+  const providerOverrideRules = instanceFormConfig.providerOverrides || [];
+  const sshSectionConfig = instanceFormConfig.sshSection || {};
+  const sshFieldConfig = instanceFormConfig.sshField || {};
+  const sshManualField = instanceFormConfig.sshManualField || null;
+  const imageProjectField = instanceFormConfig.imageProjectField || null;
+  const systemValidationConfig = instanceFormConfig.systemValidation || {};
+  const usesCatalogImage = imageFieldConfig.control === "catalog-select";
+  const usesSshCatalog = sshFieldConfig.control === "catalog-autocomplete";
   const [mismatchSnackbarOpen, setMismatchSnackbarOpen] = useState(false);
   const formatScopeLabel = (scope) => {
     if (scope === "course_shared") return t("canvas.instanceForm.scope.courseShared");
@@ -240,6 +249,20 @@ const InstanceNodeForm = ({
     }
   }, [hasScopeMismatch, hasConnectionMismatch, mismatchSnackbarMessage]);
 
+  const resolveProviderOverrideValue = (rule, data) => {
+    if (!rule || !rule.target) return undefined;
+    const rawValue = data?.[rule.source];
+    if (rule.transform === "boolean") return !!rawValue;
+    return rawValue || undefined;
+  };
+
+  const buildProviderOverrides = (data) => providerOverrideRules.reduce((acc, rule) => {
+    const value = resolveProviderOverrideValue(rule, data);
+    if (typeof value === "undefined") return acc;
+    acc[rule.target] = value;
+    return acc;
+  }, {});
+
   const onSubmit = (data) => {
     const ipRaw = (data.ipAddress || '').trim();
     const amiRaw = (data.ami || '').trim();
@@ -273,20 +296,13 @@ const InstanceNodeForm = ({
       ssh_access: sshRaw || undefined,
       associatePublicIp: !!data.associatePublicIp,
       associate_public_ip: !!data.associatePublicIp,
-      provider_overrides: mergeNodeProviderOverrides(nodeData, provider, isGcp
-        ? {
-          machine_type: type,
-          image_family: amiRaw || undefined,
-          image_project: gcpImageProject || undefined,
-          external_ip: !!data.associatePublicIp,
-          ssh_user: sshRaw || undefined,
-        }
-        : {
-          instance_type: type,
-          ami: amiRaw || undefined,
-          associate_public_ip: !!data.associatePublicIp,
-          ssh_access: sshRaw || undefined,
-        }),
+      provider_overrides: mergeNodeProviderOverrides(nodeData, provider, buildProviderOverrides({
+        ...data,
+        ami: amiRaw || undefined,
+        gcpImageProject,
+        instanceType: type,
+        sshAccess: sshRaw || undefined,
+      })),
     });
   };
 
@@ -379,7 +395,7 @@ const InstanceNodeForm = ({
         {renderSectionHeader(
           t("canvas.instanceForm.sections.runtime.eyebrow"),
           t("canvas.instanceForm.sections.runtime.title"),
-          isGcp
+          instanceFormConfig.runtimeHelperMode === "provider"
             ? t("canvas.instanceForm.sections.runtime.helperProvider", {
               provider: providerLabel,
               imageLabel: providerDefinition.instance.imageLabel || "image",
@@ -389,7 +405,7 @@ const InstanceNodeForm = ({
         )}
 
         <Box className="pt-node-form__grid pt-node-form__grid--two">
-          {providerDefinition.instance.imageMode === "catalog_ami" ? (
+          {usesCatalogImage ? (
             <FormControl fullWidth margin="normal" error={!!errors.ami}>
               <InputLabel id="ami-label">{providerDefinition.instance.imageLabel}</InputLabel>
               <Select
@@ -400,7 +416,7 @@ const InstanceNodeForm = ({
                 displayEmpty
               >
                 <MenuItem value="">
-                  <em>{t("canvas.instanceForm.fields.useDefaultAmi")}</em>
+                  <em>{t(imageFieldConfig.emptyOptionKey || "canvas.instanceForm.fields.useDefaultAmi")}</em>
                 </MenuItem>
                 {amiOptions.map((ami) => (
                   <MenuItem key={ami.key} value={ami.value}>
@@ -411,17 +427,17 @@ const InstanceNodeForm = ({
               {errors.ami && <FormHelperText>{errors.ami.message}</FormHelperText>}
               {!errors.ami && amiOptions.length === 0 && (
                 <FormHelperText>
-                  {t("canvas.instanceForm.fields.amiFallback")}
+                  {t(imageFieldConfig.fallbackHelpKey || "canvas.instanceForm.fields.amiFallback")}
                 </FormHelperText>
               )}
             </FormControl>
           ) : (
             <TextField
-              label={t("canvas.instanceForm.gcpFields.imageFamily")}
+              label={providerDefinition.instance.imageLabel}
               {...register("ami")}
               error={!!errors.ami}
-              helperText={errors.ami?.message || t("canvas.instanceForm.gcpFields.imageFamilyHelp")}
-              placeholder="debian-12"
+              helperText={errors.ami?.message || t(instanceFormConfig.imageFieldHelpKey || "canvas.instanceForm.gcpFields.imageFamilyHelp")}
+              placeholder={imageFieldConfig.placeholder || "debian-12"}
               fullWidth
               margin="normal"
             />
@@ -445,12 +461,12 @@ const InstanceNodeForm = ({
           </FormControl>
         </Box>
 
-        {isGcp && (
+        {imageProjectField && (
           <TextField
-            label={t("canvas.instanceForm.gcpFields.imageProject")}
+            label={t(imageProjectField.labelKey)}
             {...register("gcpImageProject")}
-            helperText={t("canvas.instanceForm.gcpFields.imageProjectHelp")}
-            placeholder="debian-cloud"
+            helperText={t(imageProjectField.helpKey)}
+            placeholder={imageProjectField.placeholder || ""}
             fullWidth
             margin="normal"
           />
@@ -466,10 +482,10 @@ const InstanceNodeForm = ({
       <Box className="pt-node-form__section">
         {renderSectionHeader(
           t("canvas.instanceForm.sections.ssh.eyebrow"),
-          isGcp
+          sshSectionConfig.titleMode === "provider"
             ? t("canvas.instanceForm.sections.ssh.titleProvider", { provider: providerLabel })
             : t("canvas.instanceForm.sections.ssh.title"),
-          isGcp
+          sshSectionConfig.helperMode === "provider"
             ? t("canvas.instanceForm.sections.ssh.helperProvider", {
               provider: providerLabel,
               sshField: providerDefinition.instance.sshFieldLabel || "SSH access",
@@ -477,7 +493,7 @@ const InstanceNodeForm = ({
             : t("canvas.instanceForm.sections.ssh.helper")
         )}
 
-        {providerDefinition.instance.sshCatalogEnabled ? (
+        {usesSshCatalog ? (
           <Controller
             control={control}
             name="sshAccess"
@@ -571,28 +587,30 @@ const InstanceNodeForm = ({
         ) : (
           <>
             <TextField
-              label={t("canvas.instanceForm.gcpFields.sshUser")}
+              label={t(sshManualField?.labelKey || "canvas.instanceForm.gcpFields.sshUser")}
               {...register("sshAccess")}
               error={!!errors.sshAccess}
-              helperText={errors.sshAccess?.message || t("canvas.instanceForm.gcpFields.sshUserHelp")}
-              placeholder="syslab"
+              helperText={errors.sshAccess?.message || t(sshManualField?.helpKey || "canvas.instanceForm.gcpFields.sshUserHelp")}
+              placeholder={sshManualField?.placeholder || "syslab"}
               fullWidth
               margin="normal"
             />
-            <Alert severity="info" variant="outlined" sx={{ mt: 0.4 }}>
-              {t("canvas.instanceForm.gcpFields.metadataHint")}
-            </Alert>
+            {sshManualField?.alertKey && (
+              <Alert severity="info" variant="outlined" sx={{ mt: 0.4 }}>
+                {t(sshManualField.alertKey)}
+              </Alert>
+            )}
           </>
         )}
 
-        {providerDefinition.instance.sshCatalogEnabled && visibleKeyPairOptions.length > 0 && (
+        {usesSshCatalog && visibleKeyPairOptions.length > 0 && (
           <Box className="pt-node-form__microCopy">
             <Typography className="pt-node-form__microCopyText">
               {t("canvas.instanceForm.catalogHint")}
             </Typography>
           </Box>
         )}
-        {providerDefinition.instance.sshCatalogEnabled && selectedKeyPairMeta && !hasScopeMismatch && !hasConnectionMismatch && (
+        {usesSshCatalog && selectedKeyPairMeta && !hasScopeMismatch && !hasConnectionMismatch && (
           <Box className="pt-node-form__microCopy" sx={{ mt: 0.2 }}>
             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
               <Chip
@@ -611,19 +629,19 @@ const InstanceNodeForm = ({
             </Stack>
           </Box>
         )}
-        {providerDefinition.instance.sshCatalogEnabled && hiddenKeyPairCount > 0 && (
+        {usesSshCatalog && hiddenKeyPairCount > 0 && (
           <Alert severity="info" variant="outlined" sx={{ mt: 0.6 }}>
             {t("canvas.instanceForm.hiddenOptions", { count: hiddenKeyPairCount })}
           </Alert>
         )}
 
         <Stack spacing={1.1} sx={{ mt: 0.8 }}>
-          {providerDefinition.instance.sshCatalogEnabled && hasScopeMismatch && (
+          {usesSshCatalog && hasScopeMismatch && (
             <Alert severity="warning" variant="outlined">
               {t("canvas.instanceForm.alerts.scopeMismatch.before")} <b>{selectedKeyPairScopeLabel}</b>, {t("canvas.instanceForm.alerts.scopeMismatch.middle")} <b>{executionScopeLabel}</b>. {t("canvas.instanceForm.alerts.scopeMismatch.after")}
             </Alert>
           )}
-          {providerDefinition.instance.sshCatalogEnabled && !hasScopeMismatch && hasConnectionMismatch && (
+          {usesSshCatalog && !hasScopeMismatch && hasConnectionMismatch && (
             <Alert severity="warning" variant="outlined">
               {t("canvas.instanceForm.alerts.connectionMismatch")}
             </Alert>
@@ -632,15 +650,17 @@ const InstanceNodeForm = ({
           <Box className="pt-node-form__noteCard pt-node-form__noteCard--soft">
             <Typography className="pt-node-form__noteTitle">{t("canvas.instanceForm.systemValidation.title")}</Typography>
             <Typography className="pt-node-form__noteText">
-              {isGcp
-                ? t("canvas.instanceForm.systemValidation.deployProvider", { provider: providerLabel })
-                : t("canvas.instanceForm.systemValidation.deploy")}
+              {t(
+                systemValidationConfig.deployKey || "canvas.instanceForm.systemValidation.deploy",
+                systemValidationConfig.interpolateProvider ? { provider: providerLabel } : undefined
+              )}
             </Typography>
             <Divider flexItem sx={{ my: 0.9 }} />
             <Typography className="pt-node-form__noteText">
-              {isGcp
-                ? t("canvas.instanceForm.systemValidation.sshProvider", { provider: providerLabel })
-                : t("canvas.instanceForm.systemValidation.ssh")}
+              {t(
+                systemValidationConfig.sshKey || "canvas.instanceForm.systemValidation.ssh",
+                systemValidationConfig.interpolateProvider ? { provider: providerLabel } : undefined
+              )}
             </Typography>
           </Box>
         </Stack>
