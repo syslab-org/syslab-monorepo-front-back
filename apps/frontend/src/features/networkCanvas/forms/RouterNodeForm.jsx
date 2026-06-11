@@ -16,6 +16,7 @@ import {
 import DeleteOutline from "@mui/icons-material/DeleteOutline";
 import { Netmask } from "netmask";
 import { useTranslation } from "react-i18next";
+import { getCanvasProviderDefinition } from "@/features/networkCanvas/providers/providerCatalog";
 
 /* ========================= Helpers ========================= */
 
@@ -120,6 +121,7 @@ const routeError = (r, idx, routes, connectedVpcs, t) => {
 /* ========================= Componente ========================= */
 
 export default function RouterNodeForm({
+  provider = "aws",
   nodeData = {},
   onSave,
   deleteNode,
@@ -128,6 +130,13 @@ export default function RouterNodeForm({
   vlanRegion = "us-east-1",
 }) {
   const { t } = useTranslation();
+  const isGcp = provider === "gcp";
+  const providerDefinition = getCanvasProviderDefinition(provider);
+  const providerLabel = providerDefinition.label || String(provider || "aws").toUpperCase();
+  const effectiveVlanRegion =
+    String(nodeData.region || vlanRegion || providerDefinition.lab?.defaultRegion || "us-east-1").trim()
+    || providerDefinition.lab?.defaultRegion
+    || "us-east-1";
   // Rutas persistidas previamente
   const [routes, setRoutes] = useState(() =>
     Array.isArray(nodeData.routeTable) ? nodeData.routeTable : []
@@ -294,7 +303,12 @@ export default function RouterNodeForm({
             ? t("canvas.routerForm.modeSummary.tgw.detailLarge", { count: connectedVpcCount })
             : t("canvas.routerForm.modeSummary.tgw.detailSmall"),
         bullets: [
-          t("canvas.routerForm.modeSummary.tgw.bulletAws"),
+          isGcp
+            ? t("canvas.routerForm.modeSummary.tgw.bulletProvider", {
+              provider: providerLabel,
+              hubLabel: providerDefinition.router?.hubLabel || "hub routing",
+            })
+            : t("canvas.routerForm.modeSummary.tgw.bulletAws"),
           t("canvas.routerForm.modeSummary.tgw.bulletTraffic"),
           t("canvas.routerForm.modeSummary.tgw.bulletPing"),
         ],
@@ -306,7 +320,12 @@ export default function RouterNodeForm({
       title: t("canvas.routerForm.modeSummary.peering.title"),
       detail: t("canvas.routerForm.modeSummary.peering.detail", { count: potentialPairs }),
       bullets: [
-        t("canvas.routerForm.modeSummary.peering.bulletAws"),
+        isGcp
+          ? t("canvas.routerForm.modeSummary.peering.bulletProvider", {
+            provider: providerLabel,
+            directLabel: providerDefinition.router?.directLabel || "direct links",
+          })
+          : t("canvas.routerForm.modeSummary.peering.bulletAws"),
         t("canvas.routerForm.modeSummary.peering.bulletTransit"),
         connectedVpcCount > 2
           ? t("canvas.routerForm.modeSummary.peering.bulletManySegments")
@@ -318,6 +337,10 @@ export default function RouterNodeForm({
     connectedVpcCount,
     potentialPairs,
     hasPendingReverseForPeering,
+    isGcp,
+    providerDefinition.router?.directLabel,
+    providerDefinition.router?.hubLabel,
+    providerLabel,
     t,
   ]);
 
@@ -358,7 +381,7 @@ export default function RouterNodeForm({
         "",
       mode,
       routeTable: routes,
-      region: nodeData.region || vlanRegion,
+      region: effectiveVlanRegion,
     });
   };
 
@@ -368,7 +391,7 @@ export default function RouterNodeForm({
         <Typography className="pt-node-form__eyebrow">{t("canvas.routerForm.headerEyebrow")}</Typography>
         <Typography className="pt-node-form__title">{t("canvas.routerForm.headerTitle")}</Typography>
         <Typography className="pt-node-form__subtitle">
-          {t("canvas.routerForm.headerSubtitle")}
+          {t("canvas.routerForm.headerSubtitleProvider", { provider: providerLabel })}
         </Typography>
       </Box>
 
@@ -423,15 +446,19 @@ export default function RouterNodeForm({
           onChange={(e) => setMode(e.target.value)}
         >
           <MenuItem value="peering">
-            {t("canvas.routerForm.modeOptions.peering")}
+            {isGcp ? t("canvas.routerForm.gcpModeOptions.peering") : t("canvas.routerForm.modeOptions.peering")}
           </MenuItem>
           <MenuItem value="tgw">
-            {t("canvas.routerForm.modeOptions.tgw")}
+            {isGcp ? t("canvas.routerForm.gcpModeOptions.tgw") : t("canvas.routerForm.modeOptions.tgw")}
           </MenuItem>
         </Select>
 
         <Typography variant="caption" color="text.secondary">
-          {t("canvas.routerForm.modeHelp")}
+          {t("canvas.routerForm.modeHelpProvider", {
+            provider: providerLabel,
+            directLabel: providerDefinition.router?.directLabel || "direct links",
+            hubLabel: providerDefinition.router?.hubLabel || "hub routing",
+          })}
         </Typography>
       </Box>
 
@@ -454,7 +481,9 @@ export default function RouterNodeForm({
       <Stack direction="row" gap={1} flexWrap="wrap" sx={{ mb: 2 }}>
         <Chip
           size="small"
-          label={normalizedMode === "tgw" ? t("canvas.routerForm.chips.awsHub") : t("canvas.routerForm.chips.awsDirect")}
+          label={normalizedMode === "tgw"
+            ? (isGcp ? t("canvas.routerForm.gcpChips.hub") : t("canvas.routerForm.chips.awsHub"))
+            : (isGcp ? t("canvas.routerForm.gcpChips.direct") : t("canvas.routerForm.chips.awsDirect"))}
           color={normalizedMode === "tgw" ? "primary" : "secondary"}
           variant="filled"
         />
@@ -515,7 +544,7 @@ export default function RouterNodeForm({
 
       {hasPendingReverseForPeering && (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          {t("canvas.routerForm.alerts.pendingReverse.before")} <b>{t("canvas.routerForm.modeOptions.peering")}</b> {t("canvas.routerForm.alerts.pendingReverse.after")}
+          {t("canvas.routerForm.alerts.pendingReverse.before")} <b>{isGcp ? t("canvas.routerForm.gcpModeOptions.peering") : t("canvas.routerForm.modeOptions.peering")}</b> {t("canvas.routerForm.alerts.pendingReverse.after")}
         </Alert>
       )}
 
@@ -546,7 +575,7 @@ export default function RouterNodeForm({
       </Alert>
 
       <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
-        {t("canvas.routerForm.table.edgesMeaning")}
+        {t("canvas.routerForm.table.edgesMeaningProvider", { provider: providerLabel })}
       </Alert>
 
       <Alert severity="info" sx={{ mb: 2 }}>

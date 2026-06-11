@@ -17,7 +17,7 @@
         "region": "us-east-1",
         "cidrBlock": "10.30.0.0",
         "prefixLength": 16,
-        "cloudProvider": "AWS",
+        "cloudProvider": "aws",
         "internetGateway": true,
         "enableNatGateway": true,
         "natGatewayPublicSubnet": "public-a1",
@@ -53,7 +53,9 @@
         "subnetType": "public",
         "subnet_type": "public",
         "map_public_ip_on_launch": true,
-        "route_table": "public"
+        "route_table": "public",
+        "privateGoogleAccess": false,
+        "flowLogs": false
       }
     },
     {
@@ -79,6 +81,7 @@
         "instance_type": "t2.micro",
         "sshAccess": "tesis-key",
         "ssh_access": "tesis-key",
+        "associatePublicIp": true,
         "associate_public_ip": true
       }
     },
@@ -105,7 +108,9 @@
         "subnetType": "private",
         "subnet_type": "private",
         "map_public_ip_on_launch": false,
-        "route_table": "private"
+        "route_table": "private",
+        "privateGoogleAccess": false,
+        "flowLogs": false
       }
     },
     {
@@ -131,6 +136,7 @@
         "instance_type": "t2.micro",
         "sshAccess": "tesis-key",
         "ssh_access": "tesis-key",
+        "associatePublicIp": false,
         "associate_public_ip": false
       }
     }
@@ -165,7 +171,8 @@
   "meta": {
     "generated_from": "02-single-vpc-public-private-nat.json",
     "scenario_name": "scenario-02-single-vpc-public-private-nat",
-    "generated_at": "2026-03-12T11:20:13.782885+00:00",
+    "provider": "aws",
+    "generated_at": "2026-06-10T21:11:22.097049+00:00",
     "counts": {
       "nodes": 5,
       "edges": 4,

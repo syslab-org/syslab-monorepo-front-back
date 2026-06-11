@@ -52,6 +52,7 @@ import { useTheme } from "@mui/material/styles";
 import { useAmiList } from "@/features/networkCanvas/core/useAmiList";
 import { useKeyPairList } from "@/features/networkCanvas/core/useKeyPairList";
 import { useContext } from "react";
+import { getCanvasProviderDefinition } from "@/features/networkCanvas/providers/providerCatalog";
 
 const makeRandomId = (length) => {
   let result = ''
@@ -110,12 +111,18 @@ function CanvasFlowPage() {
 
   const [target, setTarget] = useState(null);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
+  const targetProvider = useCanvasLabStore((state) => state.targetProvider || "aws");
+  const labRegion = useCanvasLabStore((state) => state.labRegion || state.vlanRegion || null);
+  const providerDefaultRegion =
+    getCanvasProviderDefinition(targetProvider).lab?.defaultRegion || "us-east-1";
   const canvas = useCanvasRuntimeController({
     initialNodes,
     setCanvasUiError,
     reactFlowInstance,
     setTarget,
-    TYPE_SUBNETWORK_NODE
+    TYPE_SUBNETWORK_NODE,
+    provider: targetProvider,
+    defaultRegion: labRegion || providerDefaultRegion,
   });
 
   const {
@@ -142,8 +149,8 @@ function CanvasFlowPage() {
     [isValidConnection, nodes]
   );
 
-  const amiList = useAmiList();
-  const keyPairList = useKeyPairList();
+  const amiList = useAmiList(targetProvider);
+  const keyPairList = useKeyPairList(targetProvider);
 
   const {
     isCanvasDirty,
@@ -262,6 +269,8 @@ function CanvasFlowPage() {
     handleValidatePlan,
     handleApplyReal,
     handleOpenPlanDetails,
+    providerAvailabilityNotice,
+    handleCloseProviderAvailabilityNotice,
     planValidationOk,
     planCanvasHash,
   } = useNetworkPlanController({
@@ -303,6 +312,7 @@ function CanvasFlowPage() {
     canvasState,
     canvasPlanInfo,
     selectedNode,
+    targetProvider,
   });
 
   const location = useLocation();
@@ -407,7 +417,8 @@ function CanvasFlowPage() {
               onPreviewRoutes: openRoutesPreview,
               planStatus: canvasPlanInfo,
               canvasState,
-              validationState: validationStateForToolbar
+              validationState: validationStateForToolbar,
+              targetProvider,
             }}
             feedbackProps={{
               canvasUiError,
@@ -431,6 +442,9 @@ function CanvasFlowPage() {
               handleApplyReal,
               handleOpenPlanDetails,
               loadingFlow,
+              targetProvider,
+              providerAvailabilityNotice,
+              handleCloseProviderAvailabilityNotice,
               successMessage,
               errorMessage,
               handleCloseSnackbar
@@ -449,6 +463,7 @@ function CanvasFlowPage() {
           onClose={closeRoutesPreview}
           nodes={nodes}
           edges={edges}
+          targetProvider={targetProvider}
         />
 
         <NodeConfigModal
@@ -457,6 +472,7 @@ function CanvasFlowPage() {
           selectedNode={selectedNode}
           nodes={nodes}
           edges={edges}
+          provider={targetProvider}
           amiList={amiList}
           keyPairList={keyPairList}
           executionTarget={resolvedExecutionTarget}

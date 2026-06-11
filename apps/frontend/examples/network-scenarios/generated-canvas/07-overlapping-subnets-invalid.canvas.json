@@ -17,7 +17,7 @@
         "region": "us-east-1",
         "cidrBlock": "10.80.0.0",
         "prefixLength": 16,
-        "cloudProvider": "AWS",
+        "cloudProvider": "aws",
         "internetGateway": true,
         "enableNatGateway": false,
         "natGatewayPublicSubnet": "",
@@ -53,7 +53,9 @@
         "subnetType": "public",
         "subnet_type": "public",
         "map_public_ip_on_launch": true,
-        "route_table": "public"
+        "route_table": "public",
+        "privateGoogleAccess": false,
+        "flowLogs": false
       }
     },
     {
@@ -79,7 +81,9 @@
         "subnetType": "public",
         "subnet_type": "public",
         "map_public_ip_on_launch": true,
-        "route_table": "public"
+        "route_table": "public",
+        "privateGoogleAccess": false,
+        "flowLogs": false
       }
     }
   ],
@@ -103,7 +107,8 @@
   "meta": {
     "generated_from": "07-overlapping-subnets-invalid.json",
     "scenario_name": "scenario-07-overlapping-subnets-invalid",
-    "generated_at": "2026-03-12T11:20:13.785249+00:00",
+    "provider": "aws",
+    "generated_at": "2026-06-10T21:11:22.098970+00:00",
     "counts": {
       "nodes": 3,
       "edges": 2,
