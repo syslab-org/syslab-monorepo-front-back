@@ -1,4 +1,5 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
 import { api } from "@/infrastructure/http/api";
@@ -19,6 +20,7 @@ function sanitizeForStorage(value) {
 }
 
 const useSaveFlow = ({ reactFlowInstance, flowKey, labId, vpcid }) => {
+  const { t } = useTranslation();
   const { setLoadingFlow } = useContext(LoadingFlowContext);
   const resolvedLabId = labId || vpcid;
   const [saveState, setSaveState] = useState("idle");
@@ -42,7 +44,7 @@ const useSaveFlow = ({ reactFlowInstance, flowKey, labId, vpcid }) => {
       clearTimeout(resetTimerRef.current);
     }
     setSaveState("saving");
-    setSaveMessage("Guardando canvas...");
+    setSaveMessage(t("canvas.saveFlow.saving"));
 
     setLoadingFlow(true);
 
@@ -62,7 +64,7 @@ const useSaveFlow = ({ reactFlowInstance, flowKey, labId, vpcid }) => {
       const savedAt = new Date().toISOString();
       setLastSavedAt(savedAt);
       setSaveState("saved");
-      setSaveMessage("Guardado hace un momento");
+      setSaveMessage(t("canvas.saveFlow.savedRecently"));
       resetTimerRef.current = setTimeout(() => {
         setSaveState("idle");
         setSaveMessage("");
@@ -71,7 +73,7 @@ const useSaveFlow = ({ reactFlowInstance, flowKey, labId, vpcid }) => {
     } catch (error) {
       console.error("Error saving flow data:", error);
       setSaveState("error");
-      setSaveMessage("No se pudo guardar el canvas");
+      setSaveMessage(t("canvas.saveFlow.error"));
       resetTimerRef.current = setTimeout(() => {
         setSaveState("idle");
         setSaveMessage("");
@@ -80,7 +82,7 @@ const useSaveFlow = ({ reactFlowInstance, flowKey, labId, vpcid }) => {
     } finally {
       setLoadingFlow(false);
     }
-  }, [reactFlowInstance, setLoadingFlow, flowKey, resolvedLabId]);
+  }, [reactFlowInstance, setLoadingFlow, flowKey, resolvedLabId, t]);
 
   return {
     saveFlow,

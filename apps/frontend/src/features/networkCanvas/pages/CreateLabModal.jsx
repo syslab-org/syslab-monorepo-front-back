@@ -1,11 +1,13 @@
 import { Box, Modal } from '@mui/material';
 import { useContext, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/app/providers/AuthContext';
 import { LoadingFlowContext } from '@/app/providers/LoadingFlowContext';
 import { api } from '@/infrastructure/http/api';
 import { USER_ROL_STUDENT, USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER } from '@/shared/constants';
 import { useProviderCapabilities } from '@/features/networkCanvas/core/useProviderCapabilities';
+import { buildCanvasProviderOptions } from '@/features/networkCanvas/providers/providerCatalog';
 import { buildTemplateFlow, getLabTemplateByValue } from '@/features/networkCanvas/utils/labTemplates';
 import NewVLANForm from '../forms/NewVLANForm';
 import { useWizard } from "@/features/networkCanvas/context/WizardContext"
@@ -45,12 +47,14 @@ const normalizeProviderValue = (raw) => {
 }
 
 const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
+  const { t } = useTranslation();
   const { setLoadingFlow } = useContext(LoadingFlowContext)
   const { user } = useAuth()
   const { active, currentStep, steps } = useWizard()
   const [courses, setCourses] = useState([])
   const [cloudConnections, setCloudConnections] = useState([])
-  const { capabilities, getCapability, readyProviders } = useProviderCapabilities()
+  const { capabilities, getCapability } = useProviderCapabilities()
+  const providerOptions = buildCanvasProviderOptions(capabilities)
 
   useEffect(() => {
     let alive = true
@@ -59,7 +63,7 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
       try {
         const [coursesResponse, connectionsResponse] = await Promise.all([
           api.listCourses(),
-          api.listCloudConnections({ provider: 'aws' }),
+          api.listCloudConnections(),
         ])
         if (alive) {
           setCourses(Array.isArray(coursesResponse) ? coursesResponse : [])
@@ -77,7 +81,7 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
 
   const handleCreateVPC = async (vpcData) => {
     setLoadingFlow(true)
-    const { vlanName, cloudProvider, cidrBlock, prefixLength, region, type, course_id, labTemplate, cloud_connection_id, notes } = vpcData
+    const { vlanName, cloudProvider, cidrBlock, prefixLength, region, type, course_id, labTemplate, cloud_connection_id, notes, provider_lab_overrides } = vpcData
     const targetProvider = normalizeProviderValue(cloudProvider) || 'aws'
     const providerCapability = getCapability(targetProvider)
     const enabledFeatures = Object.entries(providerCapability.features || {})
@@ -108,6 +112,7 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
             template_seed: labTemplate || '',
             template_title: selectedTemplate?.title || '',
             template_recommended_cidr: selectedTemplate?.recommendedCidr || '',
+            provider_lab_overrides: provider_lab_overrides || {},
           },
         })
 
@@ -120,7 +125,7 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
         )
       } catch (error) {
         console.error('Error creating lab:', error)
-        alert(error?.message || 'No se pudo crear el laboratorio.')
+        alert(error?.message || t('canvas.createLab.error'))
         setLoadingFlow(false)
       }
     } else {
@@ -131,19 +136,19 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
 
   const isWizardActive = wizardMode && active;
 
-  let title = 'Crear laboratorio de red';
-  let subtitle = 'Crea un laboratorio para modelar topologías de red y dejarlo listo para validación y despliegue. Define nombre, región y CIDR maestro.';
+  let title = t('canvas.createLab.networkTitle');
+  let subtitle = t('canvas.createLab.networkSubtitle');
   let stepLabel = '';
 
   if (wizardMode) {
-    title = 'Crear laboratorio';
-    subtitle = 'Crea un laboratorio educativo guiado: modela topologías de red paso a paso y déjalo listo para una ejecución real.';
+    title = t('canvas.createLab.guidedTitle');
+    subtitle = t('canvas.createLab.guidedSubtitle');
     if (isWizardActive && Array.isArray(steps) && steps.length > 0) {
       const idx = steps.indexOf(currentStep);
       const stepNumber = idx >= 0 ? idx + 1 : 1;
-      stepLabel = `Paso ${stepNumber} de ${steps.length}`;
+      stepLabel = t('canvas.createLab.stepLabel', { current: stepNumber, total: steps.length });
     } else {
-      stepLabel = 'Laboratorio guiado';
+      stepLabel = t('canvas.createLab.guidedEyebrow');
     }
   }
 
@@ -170,8 +175,8 @@ const CreateLabModal = ({ open, onClose, wizardMode = false }) => {
             requireCourseSelection={user?.role === USER_ROL_TEACHER}
             currentUserRole={user?.role || ''}
             currentUserCourseId={user?.course?.id || ''}
-            providerCapabilities={capabilities}
-            defaultProvider={readyProviders[0] || 'aws'}
+            providerOptions={providerOptions}
+            defaultProvider={providerOptions.find((item) => item.designEnabled)?.provider || 'aws'}
           />
         </WizardModalLayout>
       </Box>

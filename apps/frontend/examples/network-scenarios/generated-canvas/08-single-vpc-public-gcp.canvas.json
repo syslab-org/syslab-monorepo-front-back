@@ -1,0 +1,149 @@
+{
+  "nodes": [
+    {
+      "id": "vpc-a-08",
+      "type": "vpc",
+      "position": {
+        "x": 80,
+        "y": 80
+      },
+      "width": 640,
+      "height": 560,
+      "data": {
+        "label": "vpc-vpc-a-08",
+        "title": "VPC",
+        "vpcName": "VPC-A",
+        "name": "VPC-A",
+        "region": "us-central1",
+        "cidrBlock": "10.120.0.0",
+        "prefixLength": 16,
+        "cloudProvider": "gcp",
+        "internetGateway": false,
+        "enableNatGateway": false,
+        "natGatewayPublicSubnet": "",
+        "natGatewayElasticIp": "",
+        "nat_gateway": {
+          "enabled": false,
+          "public_subnet": "",
+          "elastic_ip": ""
+        },
+        "allowedSshCidr": "190.20.221.154/32",
+        "provider_overrides": {
+          "gcp": {
+            "resource_kind": "vpc_network",
+            "cloud_nat": {
+              "enabled": false
+            },
+            "firewall": {
+              "ssh_source_ranges": [
+                "190.20.221.154/32"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "vpc-a-08--subnet--public-a1",
+      "type": "subnetwork",
+      "parentId": "vpc-a-08",
+      "parentNode": "vpc-a-08",
+      "extent": "parent",
+      "position": {
+        "x": 24,
+        "y": 182
+      },
+      "width": 400,
+      "height": 320,
+      "data": {
+        "label": "subnet-public-a1",
+        "title": "SUBNETWORK",
+        "subnetName": "public-a1",
+        "name": "public-a1",
+        "cidrBlock": "10.120.1.0/24",
+        "availabilityZone": "us-central1",
+        "availability_zone": "us-central1",
+        "subnetType": "public",
+        "subnet_type": "public",
+        "map_public_ip_on_launch": false,
+        "route_table": "public",
+        "privateGoogleAccess": false,
+        "flowLogs": true,
+        "provider_overrides": {
+          "gcp": {
+            "subnet_type": "public",
+            "private_google_access": false,
+            "flow_logs": true,
+            "region": "us-central1"
+          }
+        }
+      }
+    },
+    {
+      "id": "vm-a1",
+      "type": "server",
+      "parentId": "vpc-a-08--subnet--public-a1",
+      "parentNode": "vpc-a-08--subnet--public-a1",
+      "extent": "parent",
+      "position": {
+        "x": 16,
+        "y": 126
+      },
+      "width": 212,
+      "height": 168,
+      "data": {
+        "label": "instance-bastion-a1",
+        "title": "SERVER",
+        "name": "bastion-a1",
+        "ipAddress": "10.120.1.10",
+        "ip_address": "10.120.1.10",
+        "ami": "debian-12",
+        "instanceType": "e2-micro",
+        "instance_type": "e2-micro",
+        "sshAccess": "syslab",
+        "ssh_access": "syslab",
+        "associatePublicIp": true,
+        "associate_public_ip": true,
+        "gcpImageProject": "debian-cloud",
+        "provider_overrides": {
+          "gcp": {
+            "machine_type": "e2-micro",
+            "image_family": "debian-12",
+            "image_project": "debian-cloud",
+            "external_ip": true,
+            "ssh_user": "syslab"
+          }
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-1-vpc-a-08-vpc-a-08--subnet--public-a1",
+      "source": "vpc-a-08",
+      "target": "vpc-a-08--subnet--public-a1"
+    },
+    {
+      "id": "e-2-vpc-a-08--subnet--public-a1-vm-a1",
+      "source": "vpc-a-08--subnet--public-a1",
+      "target": "vm-a1"
+    }
+  ],
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 0.7
+  },
+  "meta": {
+    "generated_from": "08-single-vpc-public-gcp.json",
+    "scenario_name": "scenario-08-single-vpc-public-gcp",
+    "provider": "gcp",
+    "generated_at": "2026-06-10T21:11:22.099261+00:00",
+    "counts": {
+      "nodes": 3,
+      "edges": 2,
+      "vpcs": 1,
+      "routers": 0
+    }
+  }
+}

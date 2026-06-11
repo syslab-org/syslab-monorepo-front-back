@@ -1,8 +1,10 @@
 import { useContext } from 'react'
 import { LoadingFlowContext } from '@/app/providers/LoadingFlowContext'
 import { Box, CircularProgress, LinearProgress, Stack, Typography } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 const LoadingFlow = () => {
+    const { t } = useTranslation()
 
     const { loadingFlow, loadingMessage } = useContext(LoadingFlowContext)
 
@@ -67,10 +69,10 @@ const LoadingFlow = () => {
 
                         <Stack spacing={0.25} minWidth={0}>
                             <Typography variant="overline" sx={{ letterSpacing: "0.14em", opacity: 0.72 }}>
-                                SysLab en progreso
+                                {t('loading.title')}
                             </Typography>
                             <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.15 }}>
-                                {loadingMessage || "Procesando..."}
+                                {loadingMessage || t('loading.messages.processing')}
                             </Typography>
                         </Stack>
                     </Stack>
@@ -90,7 +92,7 @@ const LoadingFlow = () => {
                     />
 
                     <Typography variant="caption" sx={{ opacity: 0.78 }}>
-                        Estamos guardando el cambio y sincronizando la vista para que no pierdas contexto.
+                        {t('loading.description')}
                     </Typography>
                 </Stack>
             </Box>

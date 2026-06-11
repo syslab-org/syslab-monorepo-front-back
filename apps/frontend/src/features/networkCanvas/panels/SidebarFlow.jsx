@@ -1,8 +1,7 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Box, Tooltip, Typography } from '@mui/material';
 import {
-    TITLE_ROUTER,
-    TITLE_SUBNETWORK,
     TYPE_ROUTER_NODE,
     TYPE_SERVER_NODE,
     TYPE_SUBNETWORK_NODE,
@@ -15,54 +14,55 @@ import LanIcon from '@mui/icons-material/Lan';
 import DesktopWindowsIcon from '@mui/icons-material/DesktopWindows';
 import RouterIcon from '@mui/icons-material/Router';
 
-const ITEMS = [
-    {
-        category: "Networking",
-        items: [
-            {
-                key: 'vpc',
-                type: TYPE_VPC_NODE,
-                label: 'Network Segment',
-                description: 'Contenedor lógico que define un segmento principal de red. En AWS se traduce a una VPC.',
-                icon: <CloudIcon />
-            },
-            {
-                key: 'subnetwork',
-                type: TYPE_SUBNETWORK_NODE,
-                label: 'Zone Segment',
-                description: 'Zona CIDR dentro de un segmento de red donde viven los workloads.',
-                icon: <LanIcon />
-            },
-        ]
-    },
-    {
-        category: "Compute",
-        items: [
-            {
-                key: 'instance',
-                type: TYPE_SERVER_NODE,
-                label: 'Workload',
-                description: 'Carga de trabajo o máquina virtual dentro de una zona.',
-                icon: <DesktopWindowsIcon />
-            },
-        ]
-    },
-    {
-        category: "Routing",
-        items: [
-            {
-                key: 'router',
-                type: TYPE_ROUTER_NODE,
-                label: 'Connectivity Policy',
-                description: 'Nodo lógico que define cómo se comunican los segmentos entre sí.',
-                icon: <RouterIcon />
-            },
-        ]
-    }
-];
-
 const SidebarFlow = () => {
+    const { t } = useTranslation();
     const [dragging, setDragging] = useState(null);
+
+    const items = [
+        {
+            category: t('canvas.sidebar.categories.networking'),
+            items: [
+                {
+                    key: 'vpc',
+                    type: TYPE_VPC_NODE,
+                    label: t('canvas.sidebar.items.vpc.label'),
+                    description: t('canvas.sidebar.items.vpc.description'),
+                    icon: <CloudIcon />
+                },
+                {
+                    key: 'subnetwork',
+                    type: TYPE_SUBNETWORK_NODE,
+                    label: t('canvas.sidebar.items.subnetwork.label'),
+                    description: t('canvas.sidebar.items.subnetwork.description'),
+                    icon: <LanIcon />
+                },
+            ]
+        },
+        {
+            category: t('canvas.sidebar.categories.compute'),
+            items: [
+                {
+                    key: 'instance',
+                    type: TYPE_SERVER_NODE,
+                    label: t('canvas.sidebar.items.instance.label'),
+                    description: t('canvas.sidebar.items.instance.description'),
+                    icon: <DesktopWindowsIcon />
+                },
+            ]
+        },
+        {
+            category: t('canvas.sidebar.categories.routing'),
+            items: [
+                {
+                    key: 'router',
+                    type: TYPE_ROUTER_NODE,
+                    label: t('canvas.sidebar.items.router.label'),
+                    description: t('canvas.sidebar.items.router.description'),
+                    icon: <RouterIcon />
+                },
+            ]
+        }
+    ];
 
     const onDragStart = (event, nodeType, key) => {
         event.dataTransfer.setData('application/reactflow', nodeType);
@@ -100,7 +100,7 @@ const SidebarFlow = () => {
                             theme.palette.mode === "light" ? "#334155" : "#94a3b8",
                     }}
                 >
-                    TOOL PALETTE
+                    {t('canvas.sidebar.title')}
                 </Typography>
                 <Typography
                     variant="body2"
@@ -110,11 +110,11 @@ const SidebarFlow = () => {
                             theme.palette.mode === "light" ? "#64748b" : "#9ca3af",
                     }}
                 >
-                    Arrastra componentes al lienzo
+                    {t('canvas.sidebar.subtitle')}
                 </Typography>
             </Box>
 
-            {ITEMS.map((group) => (
+            {items.map((group) => (
                 <Box
                     key={group.category}
                     sx={{

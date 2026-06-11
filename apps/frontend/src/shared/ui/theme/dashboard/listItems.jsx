@@ -25,6 +25,7 @@ import {
   USER_ROL_TEACHER,
 } from "@/shared/constants";
 import { useAuth } from '@/app/providers/AuthContext';
+import { useTranslation } from "react-i18next";
 
 const activeItemStyle = (theme) => ({
   position: "relative",
@@ -52,6 +53,7 @@ const activeItemStyle = (theme) => ({
 
 
 export const MainListItems = () => {
+  const { t } = useTranslation();
   const { user } = useAuth();
 
   return (
@@ -77,7 +79,7 @@ export const MainListItems = () => {
         <ListItemIcon variant="whiteStyle">
           <DashboardIcon />
         </ListItemIcon>
-        <ListItemText primary="Dashboard" />
+        <ListItemText primary={t("navigation.dashboard")} />
       </ListItemButton>
       <ListItemButton
         variant="whiteStyle"
@@ -99,7 +101,7 @@ export const MainListItems = () => {
         <ListItemIcon variant="whiteStyle">
           <Hub />
         </ListItemIcon>
-        <ListItemText primary="Laboratorios" />
+        <ListItemText primary={t("navigation.labs")} />
       </ListItemButton>
       <ListItemButton
         variant="whiteStyle"
@@ -122,8 +124,8 @@ export const MainListItems = () => {
           <PlayCircleOutlineIcon />
         </ListItemIcon>
         <ListItemText
-          primary="Ejecuciones"
-          secondary="Infraestructura"
+          primary={t("navigation.executions")}
+          secondary={t("navigation.infrastructure")}
           secondaryTypographyProps={{ noWrap: true }}
           primaryTypographyProps={{ noWrap: false }}
           sx={{ whiteSpace: "normal" }}
@@ -136,6 +138,7 @@ export const MainListItems = () => {
 };
 
 export const SecondaryListItems = () => {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const role = user?.role;
 
@@ -158,7 +161,7 @@ export const SecondaryListItems = () => {
           px: 2,
         })}
       >
-        Configuración
+        {t("navigation.settings")}
       </ListSubheader>
       {(role === USER_ROL_SUPER_ADMIN || role === USER_ROL_TEACHER) && (
         <ListItemButton
@@ -181,7 +184,7 @@ export const SecondaryListItems = () => {
           <ListItemIcon variant="whiteStyle">
             <Storage />
           </ListItemIcon>
-          <ListItemText primary="AMIs" />
+          <ListItemText primary={t("layout.menu.amis")} />
         </ListItemButton>
       )}
       {(role === USER_ROL_SUPER_ADMIN || role === USER_ROL_TEACHER || role === USER_ROL_STUDENT) && (
@@ -205,7 +208,7 @@ export const SecondaryListItems = () => {
           <ListItemIcon variant="whiteStyle">
             <VpnKeyOutlinedIcon />
           </ListItemIcon>
-          <ListItemText primary="Key Pairs" />
+          <ListItemText primary={t("layout.menu.keyPairs")} />
         </ListItemButton>
       )}
       {(role === USER_ROL_SUPER_ADMIN ||
@@ -230,7 +233,7 @@ export const SecondaryListItems = () => {
             <ListItemIcon variant="whiteStyle">
               <ManageAccountsIcon />
             </ListItemIcon>
-            <ListItemText primary="User Management" />
+            <ListItemText primary={t("navigation.userManagement")} />
           </ListItemButton>
         )}
       {(role === USER_ROL_SUPER_ADMIN ||
@@ -255,7 +258,7 @@ export const SecondaryListItems = () => {
             <ListItemIcon variant="whiteStyle">
               <SchoolOutlinedIcon />
             </ListItemIcon>
-            <ListItemText primary="Gestión de Cursos" />
+            <ListItemText primary={t("navigation.courseManagement")} />
           </ListItemButton>
         )}
 
