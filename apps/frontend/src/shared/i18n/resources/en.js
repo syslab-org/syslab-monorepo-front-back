@@ -1567,6 +1567,8 @@ const en = {
         "The canvas has topology errors. Fix them and validate again before the real deploy.",
       validatePlanFirst: "Validate the plan first.",
       noDataToApply: "There is no transformed data to apply.",
+      redeployWord: "REDEPLOY",
+      deployWord: "DEPLOY",
       redeployPrompt:
         "You are about to apply changes over already active AWS infrastructure. To confirm, type: REDEPLOY",
       deployPrompt: "To confirm, type: DEPLOY",

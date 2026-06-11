@@ -1559,8 +1559,10 @@ const es = {
         "El canvas tiene errores de topología. Corrígelos y vuelve a validar antes del deploy real.",
       validatePlanFirst: "Primero valida el plan.",
       noDataToApply: "No hay datos transformados para aplicar.",
+      redeployWord: "REDESPLIEGUE",
+      deployWord: "DESPLIEGUE",
       redeployPrompt:
-        "Vas a aplicar cambios sobre infraestructura AWS ya activa. Para confirmar escribe: REDEPLOY",
+        "Vas a aplicar cambios sobre infraestructura AWS ya activa. Para confirmar escribe: REDESPLIEGUE",
       deployPrompt: "Para confirmar escribe: DESPLIEGUE",
       deployCancelled: "Despliegue cancelado por el usuario.",
       executionForbidden:

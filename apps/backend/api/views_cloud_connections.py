@@ -5,9 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .cloud_connections import test_aws_connection
 from .models import (
-    CLOUD_AUTH_AWS_ASSUME_ROLE,
     CLOUD_SCOPE_COURSE_SHARED,
     CLOUD_SCOPE_PERSONAL,
     Course,
@@ -16,6 +14,7 @@ from .models import (
     CloudConnection,
 )
 from .permissions import can_edit_cloud_connection, is_platform_admin, is_teacher, visible_cloud_connections_queryset
+from .providers import get_provider_connection_spec, test_cloud_connection
 from .secret_store import encrypt_secret
 from .serializers import CloudConnectionCreateSerializer, CloudConnectionSerializer, CloudConnectionUpdateSerializer
 
@@ -61,21 +60,28 @@ class CloudConnectionViewSet(viewsets.ViewSet):
         if getattr(user.profile, "canonical_role", user.profile.role) == ROLE_STUDENT and scope != CLOUD_SCOPE_PERSONAL:
             return Response({"detail": "Los estudiantes solo pueden registrar conexiones personales."}, status=status.HTTP_403_FORBIDDEN)
 
+        provider = data.get("provider", ProviderChoices.AWS)
+        connection_spec = get_provider_connection_spec(provider)
         connection = CloudConnection.objects.create(
             name=data["name"],
-            provider=data.get("provider", ProviderChoices.AWS),
+            provider=provider,
             scope=scope,
             auth_type=data["auth_type"],
             owner_user=owner_user,
             course=course,
             created_by=user,
             default_region=data.get("default_region", ""),
-            aws_access_key_id=str(data.get("aws_access_key_id") or "").strip(),
-            aws_secret_access_key_encrypted=encrypt_secret(data.get("aws_secret_access_key")),
-            aws_role_arn=str(data.get("aws_role_arn") or "").strip(),
-            aws_external_id_encrypted=encrypt_secret(data.get("aws_external_id")),
             is_active=bool(data.get("is_active", True)),
         )
+        connection_spec.apply_to_connection(
+            connection,
+            {
+                **data,
+                "aws_secret_access_key_encrypted": encrypt_secret(data.get("aws_secret_access_key")),
+                "aws_external_id_encrypted": encrypt_secret(data.get("aws_external_id")),
+            },
+        )
+        connection.save()
         out = CloudConnectionSerializer(connection, context={"request": request})
         return Response(out.data, status=status.HTTP_201_CREATED)
 
@@ -92,21 +98,30 @@ class CloudConnectionViewSet(viewsets.ViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        for field in ("name", "default_region", "aws_access_key_id", "aws_role_arn", "auth_type", "is_active"):
+        for field in ("name", "is_active"):
             if field in data:
                 setattr(connection, field, data[field])
-
-        if "aws_secret_access_key" in data and str(data["aws_secret_access_key"] or "").strip():
-            connection.aws_secret_access_key_encrypted = encrypt_secret(data["aws_secret_access_key"])
-        if "aws_external_id" in data:
-            connection.aws_external_id_encrypted = encrypt_secret(data["aws_external_id"])
-
-        if connection.auth_type == CLOUD_AUTH_AWS_ASSUME_ROLE:
-            connection.aws_access_key_id = ""
-            connection.aws_secret_access_key_encrypted = ""
-        else:
-            connection.aws_role_arn = ""
-            connection.aws_external_id_encrypted = ""
+        connection_spec = get_provider_connection_spec(connection.provider)
+        connection_spec.apply_to_connection(
+            connection,
+            {
+                **data,
+                **(
+                    {
+                        "aws_secret_access_key_encrypted": encrypt_secret(data["aws_secret_access_key"]),
+                    }
+                    if "aws_secret_access_key" in data and str(data["aws_secret_access_key"] or "").strip()
+                    else {}
+                ),
+                **(
+                    {
+                        "aws_external_id_encrypted": encrypt_secret(data.get("aws_external_id")),
+                    }
+                    if "aws_external_id" in data
+                    else {}
+                ),
+            },
+        )
 
         connection.save()
         out = CloudConnectionSerializer(connection, context={"request": request})
@@ -125,7 +140,7 @@ class CloudConnectionViewSet(viewsets.ViewSet):
         if not can_edit_cloud_connection(request.user, connection):
             return Response({"detail": "No autorizado para probar esta conexion."}, status=status.HTTP_403_FORBIDDEN)
 
-        ok, message, identity = test_aws_connection(connection)
+        ok, message, identity = test_cloud_connection(connection)
         connection.last_test_status = "success" if ok else "failure"
         connection.last_test_message = message
         connection.last_test_identity = identity or {}
