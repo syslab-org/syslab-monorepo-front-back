@@ -22,11 +22,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
+import { getCanvasProviderDefinition } from "@/features/networkCanvas/providers/providerCatalog";
+import { mergeNodeProviderOverrides } from "@/features/networkCanvas/providers/providerOverrides";
 import { VPC_CHILD_FORM, } from "@/features/networkCanvas/utils/constants";
 import CidrLearningGuideButton from '@/features/networkCanvas/ui/CidrLearningGuideButton';
 import { useFormValidationSchema } from "./validations/useFormValidations";
 
 const VPCNodeForm = ({
+  provider = "aws",
   nodeData,
   onSave,
   deleteNode,
@@ -37,11 +40,19 @@ const VPCNodeForm = ({
   privateSubnetNames = [], // nombres de subnets privadas en esta VPC
 }) => {
   const { t } = useTranslation();
+  const providerDefinition = getCanvasProviderDefinition(provider);
+  const isGcp = provider === "gcp";
+  const providerLabel = providerDefinition.label || String(provider || "aws").toUpperCase();
+  const regionOptions = providerDefinition.lab?.regionOptions || [];
+  const fallbackRegion = providerDefinition.lab?.defaultRegion || defaultRegion;
+  const resolvedRegionOptions = regionOptions.length > 0
+    ? regionOptions
+    : [{ value: fallbackRegion, label: fallbackRegion }];
   const validationSchema = useFormValidationSchema(
     VPC_CHILD_FORM,
     null,
     null,
-    { vlanCidr, siblingVpcCidrs },
+    { vlanCidr, siblingVpcCidrs, providerNetwork: providerDefinition.segment },
     true
   );
 
@@ -70,7 +81,7 @@ const VPCNodeForm = ({
     resolver: yupResolver(validationSchema),
     defaultValues: {
       vpcName: nodeData?.vpcName || "",
-      region: nodeData?.region || defaultRegion, // ej: "us-east-1"
+      region: nodeData?.region || fallbackRegion,
       cidrBlock:
         nodeData?.cidrBlock && nodeData?.prefixLength
           ? `${nodeData.cidrBlock}/${nodeData.prefixLength}`
@@ -94,12 +105,14 @@ const VPCNodeForm = ({
   const natSubnet = watch("natGatewayPublicSubnet");
   const internetGatewayEnabled = watch("internetGateway");
   const allowedSshCidr = watch("allowedSshCidr");
+  const region = watch("region");
+  const natRequiresPublicZone = providerDefinition.segment.natRequiresPublicZone !== false;
 
   // Cuando cambia el nodeData (o props clave), refresca el form SIN perder NAT fields
   useEffect(() => {
     reset({
       vpcName: nodeData?.vpcName || "",
-      region: nodeData?.region || defaultRegion,
+      region: nodeData?.region || fallbackRegion,
       cidrBlock:
         nodeData?.cidrBlock && nodeData?.prefixLength
           ? `${nodeData.cidrBlock}/${nodeData.prefixLength}`
@@ -112,13 +125,20 @@ const VPCNodeForm = ({
       natGatewayPublicSubnet: nodeData?.natGatewayPublicSubnet || "",
       natGatewayElasticIp: nodeData?.natGatewayElasticIp || "",
     });
-  }, [nodeData, reset, defaultRegion]);
+  }, [nodeData, reset, fallbackRegion]);
+
+  useEffect(() => {
+    const isVisibleRegion = resolvedRegionOptions.some((option) => option.value === region);
+    if (!isVisibleRegion) {
+      setValue("region", fallbackRegion, { shouldValidate: true, shouldDirty: true });
+    }
+  }, [fallbackRegion, region, resolvedRegionOptions, setValue]);
 
   // Al cambiar el estado de NAT o la disponibilidad de subnets públicas:
   // - Si NAT está activo y hay subnets públicas pero no hay seleccionada → autoselecciona la primera + snackbar
   // - Si NAT está activo y NO hay subnets públicas → snackbar de advertencia
   useEffect(() => {
-    if (enableNat && hasPublicSubnets && !natSubnet) {
+    if (natRequiresPublicZone && enableNat && hasPublicSubnets && !natSubnet) {
       const auto = publicSubnetNames[0];
       setValue("natGatewayPublicSubnet", auto, { shouldValidate: true });
       setSnackMsg(
@@ -128,7 +148,7 @@ const VPCNodeForm = ({
       setSnackOpen(true);
     }
 
-    if (enableNat && !hasPublicSubnets) {
+    if (natRequiresPublicZone && enableNat && !hasPublicSubnets) {
       setSnackMsg(t("canvas.vpcForm.snackbar.noPublicSubnetsForNat"));
       setSnackSeverity("warning");
       setSnackOpen(true);
@@ -143,6 +163,7 @@ const VPCNodeForm = ({
     enableNat,
     hasPublicSubnets,
     hasPrivateSubnets,
+    natRequiresPublicZone,
     natSubnet,
     publicSubnetNames,
     setValue,
@@ -151,7 +172,7 @@ const VPCNodeForm = ({
 
   const onSubmit = (data) => {
     // Bloqueo extra por UX: si NAT está activo, exige subnet pública
-    if (data.enableNatGateway && (!hasPublicSubnets || !data.natGatewayPublicSubnet)) {
+    if (natRequiresPublicZone && data.enableNatGateway && (!hasPublicSubnets || !data.natGatewayPublicSubnet)) {
       setSnackMsg(t("canvas.vpcForm.snackbar.selectNatPublicZoneBeforeSave"));
       setSnackSeverity("warning");
       setSnackOpen(true);
@@ -166,27 +187,46 @@ const VPCNodeForm = ({
       region: data.region,
       cidrBlock: base,
       prefixLength: Number(prefix),
-      internetGateway: data.internetGateway,
+      internetGateway: natRequiresPublicZone ? data.internetGateway : false,
       allowedSshCidr: data.allowedSshCidr || "",
 
       // NAT (camelCase para el builder)
       enableNatGateway: !!data.enableNatGateway,
-      natGatewayPublicSubnet: data.natGatewayPublicSubnet || "",
-      natGatewayElasticIp: (data.natGatewayElasticIp || "").trim(),
+      natGatewayPublicSubnet: natRequiresPublicZone ? (data.natGatewayPublicSubnet || "") : "",
+      natGatewayElasticIp: providerDefinition.segment.supportsElasticIp ? (data.natGatewayElasticIp || "").trim() : "",
 
       // snake_case (opcional)
       nat_gateway: {
         enabled: !!data.enableNatGateway,
-        public_subnet: data.natGatewayPublicSubnet || "",
-        elastic_ip: (data.natGatewayElasticIp || "").trim(),
+        public_subnet: natRequiresPublicZone ? (data.natGatewayPublicSubnet || "") : "",
+        elastic_ip: providerDefinition.segment.supportsElasticIp ? (data.natGatewayElasticIp || "").trim() : "",
       },
+      provider_overrides: mergeNodeProviderOverrides(nodeData, provider, isGcp
+        ? {
+          resource_kind: "vpc_network",
+          cloud_nat: {
+            enabled: !!data.enableNatGateway,
+          },
+          firewall: {
+            ssh_source_ranges: data.allowedSshCidr ? [data.allowedSshCidr] : [],
+          },
+        }
+        : {
+          resource_kind: "vpc",
+          internet_gateway: !!data.internetGateway,
+          nat_gateway: {
+            enabled: !!data.enableNatGateway,
+            public_subnet: data.natGatewayPublicSubnet || "",
+            elastic_ip: (data.natGatewayElasticIp || "").trim(),
+          },
+        }),
     };
 
     onSave(payload);
   };
 
   const disableSubmitForNat =
-    enableNat && (!hasPublicSubnets || !natSubnet || natSubnet === "");
+    natRequiresPublicZone && enableNat && (!hasPublicSubnets || !natSubnet || natSubnet === "");
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="pt-node-form">
@@ -194,7 +234,10 @@ const VPCNodeForm = ({
         <Typography className="pt-node-form__eyebrow">{t("canvas.vpcForm.headerEyebrow")}</Typography>
         <Typography className="pt-node-form__title">{t("canvas.vpcForm.headerTitle")}</Typography>
         <Typography className="pt-node-form__subtitle">
-          {t("canvas.vpcForm.headerSubtitle")}
+          {t("canvas.vpcForm.headerSubtitleProvider", {
+            provider: providerLabel,
+            kind: providerDefinition.segment?.kindLabel || "network",
+          })}
         </Typography>
       </Box>
       {/* Snackbar vistoso */}
@@ -242,11 +285,13 @@ const VPCNodeForm = ({
           labelId="vpc-region-label"
           {...register("region")}
           label={t("canvas.vpcForm.fields.region")}
-          defaultValue={defaultRegion}
+          defaultValue={fallbackRegion}
         >
-          <MenuItem value="us-east-1">US East (N. Virginia)</MenuItem>
-          <MenuItem value="us-west-2">US West (Oregon)</MenuItem>
-          <MenuItem value="eu-west-1">EU (Ireland)</MenuItem>
+          {resolvedRegionOptions.map((option) => (
+            <MenuItem key={option.value} value={option.value}>
+              {option.label}
+            </MenuItem>
+          ))}
         </Select>
         {errors.region && (
           <FormHelperText error>{errors.region.message}</FormHelperText>
@@ -254,23 +299,29 @@ const VPCNodeForm = ({
       </FormControl>
 
       {/* Internet Edge */}
-      <FormControl fullWidth margin="normal">
-        <InputLabel id="igw-label">{t("canvas.vpcForm.fields.internetEdge")}</InputLabel>
-        <Select
-          labelId="igw-label"
-          label={t("canvas.vpcForm.fields.internetEdge")}
-          {...register("internetGateway")}
-          defaultValue={nodeData?.internetGateway ?? false}
-        >
-          <MenuItem value={true}>{t("canvas.vpcForm.fields.enabled")}</MenuItem>
-          <MenuItem value={false}>{t("canvas.vpcForm.fields.disabled")}</MenuItem>
-        </Select>
-        {errors.internetGateway && (
-          <FormHelperText error>
-            {errors.internetGateway.message}
-          </FormHelperText>
-        )}
-      </FormControl>
+      {natRequiresPublicZone ? (
+        <FormControl fullWidth margin="normal">
+          <InputLabel id="igw-label">{t("canvas.vpcForm.fields.internetEdge")}</InputLabel>
+          <Select
+            labelId="igw-label"
+            label={t("canvas.vpcForm.fields.internetEdge")}
+            {...register("internetGateway")}
+            defaultValue={nodeData?.internetGateway ?? false}
+          >
+            <MenuItem value={true}>{t("canvas.vpcForm.fields.enabled")}</MenuItem>
+            <MenuItem value={false}>{t("canvas.vpcForm.fields.disabled")}</MenuItem>
+          </Select>
+          {errors.internetGateway && (
+            <FormHelperText error>
+              {errors.internetGateway.message}
+            </FormHelperText>
+          )}
+        </FormControl>
+      ) : (
+        <Alert severity="info" variant="outlined" sx={{ mt: 1, mb: 1 }}>
+          {t("canvas.vpcForm.gcpInternetHint")}
+        </Alert>
+      )}
 
       <Alert severity="info" variant="outlined" sx={{ mt: 1, mb: 1.5 }}>
         <Typography variant="body2" sx={{ fontWeight: 600 }}>
@@ -286,7 +337,7 @@ const VPCNodeForm = ({
           {t("canvas.vpcForm.info.managedEgress")}
         </Typography>
         <Typography variant="caption" display="block">
-          {t("canvas.vpcForm.info.elasticIp")}
+          {isGcp ? t("canvas.vpcForm.info.providerInternetModel") : t("canvas.vpcForm.info.elasticIp")}
         </Typography>
         <Typography variant="caption" display="block">
           {t("canvas.vpcForm.info.allowedSsh")}
@@ -300,16 +351,20 @@ const VPCNodeForm = ({
         <Chip
           size="small"
           label={
-            internetGatewayEnabled
-              ? t("canvas.vpcForm.chips.igwEnabled")
-              : t("canvas.vpcForm.chips.igwDisabled")
+            isGcp
+              ? t("canvas.vpcForm.gcpChips.internetModel")
+              : internetGatewayEnabled
+                ? t("canvas.vpcForm.chips.igwEnabled")
+                : t("canvas.vpcForm.chips.igwDisabled")
           }
           color={internetGatewayEnabled ? "primary" : "default"}
           variant={internetGatewayEnabled ? "filled" : "outlined"}
         />
         <Chip
           size="small"
-          label={enableNat ? t("canvas.vpcForm.chips.natEnabled") : t("canvas.vpcForm.chips.natDisabled")}
+          label={enableNat
+            ? (isGcp ? t("canvas.vpcForm.gcpChips.natEnabled") : t("canvas.vpcForm.chips.natEnabled"))
+            : (isGcp ? t("canvas.vpcForm.gcpChips.natDisabled") : t("canvas.vpcForm.chips.natDisabled"))}
           color={enableNat ? "warning" : "default"}
           variant={enableNat ? "filled" : "outlined"}
         />
@@ -329,27 +384,27 @@ const VPCNodeForm = ({
 
       {/* ---- NAT Gateway ---- */}
       <Box sx={{ mt: 1.5, mb: 0.5 }}>
-        {!hasPublicSubnets && (
+        {natRequiresPublicZone && !hasPublicSubnets && (
           <Alert severity="warning" sx={{ mb: 1 }}>
             {t("canvas.vpcForm.alerts.noPublicZones")}
           </Alert>
         )}
 
-        {!enableNat && hasPublicSubnets && hasPrivateSubnets && (
+        {!enableNat && (hasPublicSubnets || !natRequiresPublicZone) && hasPrivateSubnets && (
           <Alert severity="info" sx={{ mb: 1 }}>
-            {t("canvas.vpcForm.alerts.topologyReady")}<b> {t("canvas.vpcForm.switchLabel")}</b>.
+            {t("canvas.vpcForm.alerts.topologyReady")}<b> {isGcp ? t("canvas.vpcForm.gcpSwitchLabel") : t("canvas.vpcForm.switchLabel")}</b>.
           </Alert>
         )}
 
-        {enableNat && hasPublicSubnets && !hasPrivateSubnets && (
+        {enableNat && (hasPublicSubnets || !natRequiresPublicZone) && !hasPrivateSubnets && (
           <Alert severity="info" sx={{ mb: 1 }}>
             {t("canvas.vpcForm.alerts.natWithoutPrivateZones")}
           </Alert>
         )}
 
-        {enableNat && hasPublicSubnets && hasPrivateSubnets && (
+        {enableNat && (hasPublicSubnets || !natRequiresPublicZone) && hasPrivateSubnets && (
           <Alert severity="success" sx={{ mb: 1 }}>
-            {t("canvas.vpcForm.alerts.demoCase")}
+            {isGcp ? t("canvas.vpcForm.gcpAlerts.demoCase") : t("canvas.vpcForm.alerts.demoCase")}
           </Alert>
         )}
 
@@ -358,6 +413,7 @@ const VPCNodeForm = ({
           control={control}
           render={({ field: { value, onChange } }) => {
             const willBlockTurnOn =
+              natRequiresPublicZone &&
               !ALLOW_ENABLE_NAT_WITHOUT_PUBLIC_SUBNETS &&
               !hasPublicSubnets &&
               !value;
@@ -390,7 +446,7 @@ const VPCNodeForm = ({
                         disabled={willBlockTurnOn}
                       />
                     }
-                    label={t("canvas.vpcForm.switchLabel")}
+                    label={isGcp ? t("canvas.vpcForm.gcpSwitchLabel") : t("canvas.vpcForm.switchLabel")}
                   />
                 </span>
               </Tooltip>
@@ -400,69 +456,73 @@ const VPCNodeForm = ({
       </Box>
 
       {/* Select de Public Zone para egress */}
-      <FormControl
-        fullWidth
-        margin="normal"
-        disabled={!enableNat || !hasPublicSubnets}
-        error={!!errors.natGatewayPublicSubnet}
-      >
-        <InputLabel id="nat-subnet-label">{t("canvas.vpcForm.fields.publicZoneForEgress")}</InputLabel>
-        <Controller
-          name="natGatewayPublicSubnet"
-          control={control}
-          render={({ field }) => (
-            <Select
-              labelId="nat-subnet-label"
-              label={t("canvas.vpcForm.fields.publicZoneForEgress")}
-              {...field}
-              value={field.value || ""}
-            >
-              <MenuItem value="">
-                <em>{t("canvas.vpcForm.fields.selectPublicZone")}</em>
-              </MenuItem>
-              {publicSubnetNames.map((name) => (
-                <MenuItem key={name} value={name}>
-                  {name}
+      {natRequiresPublicZone && (
+        <FormControl
+          fullWidth
+          margin="normal"
+          disabled={!enableNat || !hasPublicSubnets}
+          error={!!errors.natGatewayPublicSubnet}
+        >
+          <InputLabel id="nat-subnet-label">{t("canvas.vpcForm.fields.publicZoneForEgress")}</InputLabel>
+          <Controller
+            name="natGatewayPublicSubnet"
+            control={control}
+            render={({ field }) => (
+              <Select
+                labelId="nat-subnet-label"
+                label={t("canvas.vpcForm.fields.publicZoneForEgress")}
+                {...field}
+                value={field.value || ""}
+              >
+                <MenuItem value="">
+                  <em>{t("canvas.vpcForm.fields.selectPublicZone")}</em>
                 </MenuItem>
-              ))}
-            </Select>
+                {publicSubnetNames.map((name) => (
+                  <MenuItem key={name} value={name}>
+                    {name}
+                  </MenuItem>
+                ))}
+              </Select>
+            )}
+          />
+          {!hasPublicSubnets && (
+            <FormHelperText>
+              {t("canvas.vpcForm.fields.publicZoneHelp")}
+            </FormHelperText>
           )}
-        />
-        {!hasPublicSubnets && (
-          <FormHelperText>
-            {t("canvas.vpcForm.fields.publicZoneHelp")}
-          </FormHelperText>
-        )}
-        {errors.natGatewayPublicSubnet && (
-          <FormHelperText>{errors.natGatewayPublicSubnet.message}</FormHelperText>
-        )}
-      </FormControl>
+          {errors.natGatewayPublicSubnet && (
+            <FormHelperText>{errors.natGatewayPublicSubnet.message}</FormHelperText>
+          )}
+        </FormControl>
+      )}
 
       {/* EIP opcional */}
-      <TextField
-        label={t("canvas.vpcForm.fields.natEip")}
-        {...register("natGatewayElasticIp")}
-        placeholder={t("canvas.vpcForm.fields.natEipPlaceholder")}
-        helperText={
-          enableNat
-            ? t("canvas.vpcForm.fields.natEipHelpEnabled")
-            : t("canvas.vpcForm.fields.natEipHelpDisabled")
-        }
-        fullWidth
-        margin="normal"
-        disabled={!enableNat}
-      />
+      {providerDefinition.segment.supportsElasticIp && (
+        <TextField
+          label={t("canvas.vpcForm.fields.natEip")}
+          {...register("natGatewayElasticIp")}
+          placeholder={t("canvas.vpcForm.fields.natEipPlaceholder")}
+          helperText={
+            enableNat
+              ? t("canvas.vpcForm.fields.natEipHelpEnabled")
+              : t("canvas.vpcForm.fields.natEipHelpDisabled")
+          }
+          fullWidth
+          margin="normal"
+          disabled={!enableNat}
+        />
+      )}
 
       {/* Allowed SSH */}
       <TextField
-        label={t("canvas.vpcForm.fields.allowedSsh")}
+        label={isGcp ? t("canvas.vpcForm.gcpFields.allowedSsh") : t("canvas.vpcForm.fields.allowedSsh")}
         {...register("allowedSshCidr")}
         error={!!errors.allowedSshCidr}
         helperText={
           errors.allowedSshCidr?.message ||
-          t("canvas.vpcForm.fields.allowedSshHelp")
+          (isGcp ? t("canvas.vpcForm.gcpFields.allowedSshHelp") : t("canvas.vpcForm.fields.allowedSshHelp"))
         }
-        placeholder={t("canvas.vpcForm.fields.allowedSshPlaceholder")}
+        placeholder={isGcp ? t("canvas.vpcForm.gcpFields.allowedSshPlaceholder") : t("canvas.vpcForm.fields.allowedSshPlaceholder")}
         fullWidth
         margin="normal"
       />

@@ -15,6 +15,7 @@ import {
   getNodeDefaultSize,
   toNumber,
 } from "@/features/networkCanvas/utils/nodeGeometry";
+import { getCanvasProviderDefinition } from "@/features/networkCanvas/providers/providerCatalog";
 
 const getRandomColor = () =>
   colorsBgSubnetworksNodes[
@@ -27,7 +28,14 @@ export default function useHandleDrop(
   reactFlowInstance,
   setNodes,
   setCanvasUiError,
+  options = {},
 ) {
+  const providerKey = String(options?.provider || "aws").trim().toLowerCase() || "aws";
+  const providerDefinition = getCanvasProviderDefinition(providerKey);
+  const defaultRegion =
+    String(options?.defaultRegion || providerDefinition.lab?.defaultRegion || "us-east-1").trim()
+    || providerDefinition.lab?.defaultRegion
+    || "us-east-1";
   return {
     onDrop: useCallback(
       (event) => {
@@ -89,6 +97,13 @@ export default function useHandleDrop(
 
           // 1) VPC se suelta libremente
           if (type === TYPE_VPC_NODE) {
+            newNode = {
+              ...newNode,
+              data: {
+                ...newNode.data,
+                region: defaultRegion,
+              },
+            };
             return [...nds, newNode];
           }
 
@@ -161,7 +176,7 @@ export default function useHandleDrop(
               data: {
                 ...newNode.data,
                 identifier: `router-${id}`,
-                region: "us-east-1",
+                region: defaultRegion,
                 routeTable: [], //lista vacía de rutas
               },
             };
@@ -257,7 +272,7 @@ export default function useHandleDrop(
           return nds;
         });
       },
-      [reactFlowInstance, setNodes, setCanvasUiError],
+      [defaultRegion, reactFlowInstance, setNodes, setCanvasUiError],
     ),
   };
 }

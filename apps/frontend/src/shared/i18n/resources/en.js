@@ -1006,10 +1006,12 @@ const en = {
       cidrTip:
         "Tip: use a /16 range so you have comfortable space for subnets (/24) without fighting the IP plan.",
       awsOnlyInfo:
-        "In this MVP, real deployment is enabled for AWS. Other providers are shown as roadmap references, but they are not available for execution yet.",
+        "In this MVP, AWS has real validation and deployment. GCP can already be modeled in the canvas to demonstrate frontend extensibility, even though its runtime is still planned.",
       cloudProvider: "Cloud provider",
       useAwsHint:
         "For this MVP, use AWS if you want to deploy real infrastructure.",
+      designRuntimeHint:
+        "{{provider}} can already be designed in the canvas, but its real runtime is still planned.",
       labTemplate: "Lab template",
       chooseTemplate: "Choose the use case you want to build step by step.",
       useRecommendedCidr: "Use recommended CIDR ({{value}})",
@@ -1029,11 +1031,19 @@ const en = {
       courseOptional: "Optional for administrators.",
       cloudConnectionHelp:
         "You can pin a specific AWS connection or let the backend resolve the owner's personal one and then the course shared one.",
+      executionTarget: "Execution target",
+      executionTargetPlannedTitle: "Planned execution binding for {{provider}}",
+      executionTargetPlannedBody:
+        "{{provider}} can already be designed in the canvas, but its real runtime is not yet bound from this form. When enabled, this step will link the effective provider target: {{target}}.",
+      executionTargetPlannedPreview:
+        "This lab will be ready for design in {{provider}}. The real execution binding will be connected later when its runtime becomes available.",
       accountLabel: "account",
       executionPreviewResolved:
         "Planned execution: {{name}}{{account}}. {{helper}}",
       awsOnlyExecution:
         "In this MVP, only AWS can resolve a real executable connection.",
+      designOnlyExecution:
+        "This provider is already enabled for topology design in the canvas, but its real execution path is not available yet.",
       executionSource: {
         explicit: "The explicitly selected connection will be used.",
         ownerPersonalAuto:
@@ -1062,6 +1072,8 @@ const en = {
       headerTitle: "Network Segment",
       headerSubtitle:
         "Define address space, internet exposure, and egress behavior for this segment. AWS translation: VPC.",
+      headerSubtitleProvider:
+        "Define address space, internet exposure, and egress behavior for this segment. {{provider}} reading: {{kind}}.",
       networkFallback: "network",
       snackbar: {
         autoSelectNatSubnet: 'The public zone "{{value}}" was selected automatically for the NAT.',
@@ -1104,6 +1116,8 @@ const en = {
           "- Managed egress gives outbound access to private zones, but not inbound Internet access.",
         elasticIp:
           "- In AWS, if you define an Elastic IP for egress, it must be a real Allocation ID (`eipalloc-...`), not a public IP.",
+        providerInternetModel:
+          "- In this provider, public exposure and egress are better explained with its own primitives such as Cloud NAT, default routes, or external IPs per workload.",
         allowedSsh:
           "- Allowed SSH CIDR opens TCP/22 only from the IP or network you declare.",
       },
@@ -1125,6 +1139,24 @@ const en = {
           "Managed egress is active, but this VPC has no private zones. The NAT can be created, but you will not be solving the main teaching case of controlled private egress.",
         demoCase:
           "Good demo case: the NAT will live in a public zone and provide egress to the private zones of this VPC.",
+      },
+      gcpInternetHint:
+        "In GCP we do not model an Internet Gateway per VPC. Public access is better explained with external VM IPs and Cloud NAT for private egress.",
+      gcpSwitchLabel: "Enable Cloud NAT",
+      gcpFields: {
+        allowedSsh: "SSH source ranges (Firewall)",
+        allowedSshPlaceholder: "203.0.113.5/32",
+        allowedSshHelp:
+          "In GCP this represents a conceptual firewall rule that allows SSH from that range.",
+      },
+      gcpChips: {
+        internetModel: "GCP: public egress via external IP / default routes",
+        natEnabled: "GCP: Cloud NAT enabled",
+        natDisabled: "GCP: no Cloud NAT",
+      },
+      gcpAlerts: {
+        demoCase:
+          "Good demo case: Cloud NAT will provide egress for private workloads without making the whole subnet public.",
       },
       tooltip: {
         enableNatBlocked:
@@ -1157,12 +1189,17 @@ const en = {
           title: "Image and size",
           helper:
             "Here you decide which AMI creates the instance and what machine size will be reserved.",
+          helperProvider:
+            "Here you decide which {{imageLabel}} to use and which {{instanceTypeLabel}} {{provider}} will model for this workload.",
         },
         ssh: {
           eyebrow: "SSH access",
           title: "Key pair and compatibility",
           helper:
             "Here you choose the key pair reference AWS will look for when launching the instance.",
+          titleProvider: "Administrative access",
+          helperProvider:
+            "Here you define the {{sshField}} value that {{provider}} will use to represent administrative access to the workload.",
         },
       },
       fields: {
@@ -1181,6 +1218,19 @@ const en = {
         sshAccessManualHelp:
           "Optional. You can manually type the name of an existing key pair in AWS.",
         sshAccessPlaceholder: "e.g. tesis-key",
+      },
+      gcpFields: {
+        imageFamily: "Image family",
+        imageFamilyHelp:
+          "Ex: debian-12, ubuntu-2204-lts, or cos-stable. In GCP the image is usually resolved through family + project.",
+        imageProject: "Image project",
+        imageProjectHelp:
+          "Ex: debian-cloud or ubuntu-os-cloud.",
+        sshUser: "SSH username",
+        sshUserHelp:
+          "Username that could later be propagated through metadata or OS Login, depending on the final provider strategy.",
+        metadataHint:
+          "In GCP, SSH access does not rely on an AWS-like key pair; it is usually modeled with metadata, OS Login, or keys managed outside the VM.",
       },
       quickTips: {
         title: "Quick tips",
@@ -1234,6 +1284,10 @@ const en = {
           "Deploy validates that the key pair exists in the effective account and region.",
         ssh:
           "Subsequent SSH access still depends on you having the .pem file outside the platform, on the machine from which you will connect.",
+        deployProvider:
+          "Payload validation checks that {{provider}} receives a coherent configuration for image, size, and administrative access.",
+        sshProvider:
+          "Later access will depend on the final provider strategy, for example metadata, OS Login, or keys managed outside the platform.",
       },
       actions: {
         save: "Save configuration",
@@ -1245,6 +1299,8 @@ const en = {
       headerTitle: "Zone Segment",
       headerSubtitle:
         "Define traffic behavior and addressing inside the parent network segment. AWS translation: subnet.",
+      headerSubtitleProvider:
+        "Define traffic behavior and addressing inside the parent network segment. {{provider}} reading: {{kind}}.",
       segmentFallback: "segment",
       info: {
         title: "What this zone means",
@@ -1253,6 +1309,12 @@ const en = {
           "- Zones must not overlap each other inside the same segment.",
         publicVsPrivate:
           "- Public zone allows broader ingress/egress by route policy. Private zone keeps traffic internal by default.",
+      },
+      gcpInfo: {
+        regional:
+          "- In GCP a subnet is usually regional, so you do not need to pin an Availability Zone at this level.",
+        externalIp:
+          "- In GCP public exposure is usually decided per instance through external IPs, not through an AWS-style public subnet.",
       },
       alerts: {
         privateZoneBefore:
@@ -1270,6 +1332,10 @@ const en = {
         autoAssignPublicIp:
           "Auto-assign public IPv4 (recommended for public zones)",
       },
+      gcpFields: {
+        privateGoogleAccess: "Enable Private Google Access",
+        flowLogs: "Enable Flow Logs",
+      },
       type: {
         public: "Public",
         private: "Private",
@@ -1284,6 +1350,8 @@ const en = {
       headerTitle: "Connectivity Policy",
       headerSubtitle:
         "Define the connectivity mode and traffic policies between connected network segments.",
+      headerSubtitleProvider:
+        "Define the connectivity mode and traffic policies between connected segments, with a {{provider}}-oriented reading.",
       identifier: "Identifier",
       connectedSegments: "Segments connected to this node:",
       cidrNa: "CIDR n/a",
@@ -1294,8 +1362,14 @@ const en = {
         peering: "Direct links (AWS: Peering)",
         tgw: "Hub routing (AWS: Transit Gateway)",
       },
+      gcpModeOptions: {
+        peering: "Direct links (GCP: VPC Peering)",
+        tgw: "Hub routing (GCP: Cloud Router / Hub-and-spoke)",
+      },
       modeHelp:
         "This selector defines the neutral connectivity model. The AWS translation can be pairwise peering or a central Transit Gateway. Final connectivity depends on the policies you declare.",
+      modeHelpProvider:
+        "This selector defines the neutral connectivity model. In {{provider}} it may be read as {{directLabel}} or {{hubLabel}}. Final connectivity depends on the policies you declare.",
       academic: {
         noConnectivity: {
           title: "No connectivity between segments",
@@ -1313,6 +1387,10 @@ const en = {
             "With more than 2 connected segments, this node centralizes connectivity. You should define clear policies to control which segment can communicate with which.",
         },
       },
+      gcpChips: {
+        direct: "GCP: VPC Peering",
+        hub: "GCP: Cloud Router hub",
+      },
       modeSummary: {
         tgw: {
           title: "Hub routing",
@@ -1322,6 +1400,8 @@ const en = {
             "With few segments, hub mode can be more complex than a direct link.",
           bulletAws:
             "AWS translation: 1 Transit Gateway + 1 attachment per connected segment.",
+          bulletProvider:
+            "{{provider}} reading: 1 {{hubLabel}} with 1 attachment per connected segment.",
           bulletTraffic:
             "Traffic passes through the central hub; there is no mesh of direct links between pairs.",
           bulletPing:
@@ -1333,6 +1413,8 @@ const en = {
             "With your current topology, the maximum is {{count}} direct link(s) between pairs.",
           bulletAws:
             "AWS translation: 1 peering connection per pair with routes declared in both directions.",
+          bulletProvider:
+            "{{provider}} reading: 1 {{directLabel}} per pair with routes declared in both directions.",
           bulletTransit:
             "It is not transitive: A↔B and B↔C do not automatically enable A↔C.",
           bulletManySegments:
@@ -1400,6 +1482,8 @@ const en = {
       table: {
         edgesMeaning:
           "Canvas edges only indicate which segments are connected to this policy node. The connectivity that will really translate to AWS comes from the routes/policies defined below.",
+        edgesMeaningProvider:
+          "Canvas edges only indicate which segments are connected to this policy node. Effective connectivity for {{provider}} comes from the routes/policies defined below.",
         title: "How to read this table",
         origin: "- Source: the segment from which traffic leaves.",
         destination: "- Destination: the network you want to reach.",
@@ -1548,15 +1632,15 @@ const en = {
         actionTooltip:
           "Open redeploy validation to review changes over already active infrastructure.",
         helper:
-          "There is active infrastructure. From here you will prepare a redeploy over the same stack.",
+          "There is active infrastructure. From here you will prepare a redeploy over the same stack, focused on {{provider}}.",
         helperOutdated:
-          "There is active infrastructure and the canvas changed. Revalidate to prepare a redeploy over the same stack.",
-        workspaceTitle: "Active infrastructure in AWS",
+          "There is active infrastructure and the canvas changed. Revalidate to prepare a redeploy over the same stack, focused on {{provider}}.",
+        workspaceTitle: "Active infrastructure for {{provider}}",
         workspaceTitleOutdated: "Outdated canvas compared to the active stack",
         workspaceDetail:
           "You can review the plan, validate changes, and then apply a redeploy over the existing infrastructure.",
         workspaceDetailOutdated:
-          "The canvas no longer matches the last validation. Revalidate before trying to update the stack.",
+          "The canvas no longer matches the last validation. Revalidate before trying to update the {{provider}} stack.",
         chipRedeploy: "Main action: REDEPLOY",
         chipDestroyAvailable: "Destroy available",
         chipDestroyUnavailable: "Destroy unavailable",
@@ -1564,12 +1648,12 @@ const en = {
       validated: {
         actionLabel: "Prepare deploy",
         actionTooltip:
-          "Open the final validation before the first deploy to AWS.",
+          "Open the final validation before the first deploy or runtime review for {{provider}}.",
         helper:
-          "The canvas is already validated and there is no active infrastructure. The next step is the first deploy.",
+          "The canvas is already validated and there is no active infrastructure. The next step is to review deploy for {{provider}}.",
         workspaceTitle: "Validated canvas ready for deploy",
         workspaceDetail:
-          "The topology already passed validation. If you are satisfied with the plan, the next step is to create the real infrastructure.",
+          "The topology already passed validation. If you are satisfied with the plan, the next step is to continue with review or real infrastructure for {{provider}}.",
         chipDeploy: "Main action: DEPLOY",
         chipDestroyUnavailable: "Destroy does not apply yet",
       },
@@ -1587,12 +1671,12 @@ const en = {
       default: {
         actionLabel: "Validate canvas",
         actionTooltip:
-          "Validate the current topology to see its AWS translation before creating resources.",
+          "Validate the current topology to see its {{provider}} reading before creating resources.",
         helper:
           "There is still no validated plan or active infrastructure. Start by validating the canvas.",
         workspaceTitle: "Canvas ready to validate",
         workspaceDetail:
-          "Start by validating the topology to see its AWS translation before creating real resources.",
+          "Start by validating the topology to see its {{provider}} reading before creating real resources.",
         chip: "Main action: VALIDATE",
       },
     },
@@ -1631,6 +1715,13 @@ const en = {
         sensitiveResources: "Sensitive resources detected:",
       },
       summaryTitle: "Summary",
+      providerSoonTitle: "{{provider}} will be available soon",
+      providerSoonBody:
+        "The {{action}} action for {{provider}} is not enabled yet at this stage of the project.",
+      providerSoonHelp:
+        "For now, you can use {{provider}} to model and present topology differences in the canvas. Real validation and deployment remain available in AWS first.",
+      providerSoonActionValidate: "validation",
+      providerSoonActionDeploy: "deploy",
       summary: {
         provider: "Provider: {{value}}",
         segments: "Segments: {{count}}",
@@ -1642,6 +1733,8 @@ const en = {
       },
       postDeployHint:
         "After deploy, validate connectivity in Plan Detail -> Tests using guided ping commands between segments.",
+      providerPreviewHint:
+        "This view summarizes how the topology would be modeled in {{provider}}. Real validation and deployment remain available in AWS first.",
       neutralTitle: "Neutral lab intent",
       neutral: {
         baseNetwork:
@@ -1658,6 +1751,10 @@ const en = {
           "Access and egress: external SSH usable on {{vpcsWithEffectivePublicSsh}} segment(s) and {{isolatedExposure}} segment(s) without declared Internet egress.",
       },
       awsTitle: "AWS translation",
+      gcpTitle: "GCP reading",
+      providerPreviewTitle: "{{provider}} reading",
+      providerPreviewBody:
+        "The topology is already prepared to show a {{provider}}-oriented reading, even though real validation and deployment are not enabled yet.",
       aws: {
         created:
           "AWS will create {{segments}} VPC(s), {{zones}} subnet(s), and {{workloads}} instance(s).",
@@ -1672,14 +1769,35 @@ const en = {
         directRouting:
           "Routing through direct links: {{directLinks}} declared link(s).",
       },
+      gcp: {
+        created:
+          "GCP would model {{segments}} VPC Network(s), {{zones}} regional subnet(s), and {{workloads}} VM(s).",
+        externalAccess:
+          "External access: {{workloadsWithExternalIp}} workload(s) with external IPs and SSH rules declared on {{segmentsWithSshRanges}} segment(s).",
+        privateServices:
+          "Private services: Private Google Access on {{subnetsWithPrivateGoogleAccess}} subnet(s) and Flow Logs on {{subnetsWithFlowLogs}} subnet(s).",
+        centralRouting:
+          "Central connectivity: {{hubLabel}} across {{hubRouters}} hub(s) with {{hubAttachments}} attachment(s).",
+        directRouting:
+          "Direct connectivity: {{directLabel}} across {{directLinks}} link(s) between segments.",
+        privateEgress:
+          "Managed egress: {{managedEgressLabel}} enabled on {{segmentsWithCloudNat}} segment(s).",
+      },
       segment: {
         cidr: "CIDR: {{value}}",
         region: "Region: {{value}}",
         model: "Model: {{value}}",
+        providerNetwork: "{{provider}}: {{kind}}",
         awsVpc: "AWS: VPC",
         igw: "IGW",
         nat: "NAT",
         natEip: "NAT EIP: {{value}}",
+        cloudNat: "Cloud NAT",
+        sshRanges: "SSH source ranges: {{count}}",
+        sshRangesDetail: "Configured SSH ranges: {{value}}",
+        privateGoogleAccess: "Private Google Access: {{count}}",
+        flowLogs: "Flow Logs: {{count}}",
+        externalIps: "External IPs: {{count}}",
         natHelp:
           "If you define an EIP for the NAT, it must be a real AWS Allocation ID (`eipalloc-...`), not a public IP.",
       },
@@ -1705,11 +1823,14 @@ const en = {
         selectedElement: "Selected element",
         neutralReading: "Neutral reading",
         awsReading: "AWS translation",
+        providerReading: "{{provider}} reading",
         conceptComparison: "Concept comparison",
         neutralView: "Neutral view",
         awsView: "AWS implementation view",
+        providerView: "{{provider}} implementation view",
         neutralLabel: "Neutral:",
         awsLabel: "AWS:",
+        providerLabel: "{{provider}}:",
         blockers: "Detected blockers",
         moreErrors: "+ {{count}} additional errors.",
         openValidation: "Open validation",
@@ -1725,14 +1846,14 @@ const en = {
           optional: "Optional in a single-segment lab.",
         },
         validate: { title: "Validate topology", description: "Run the simulation (Terraform plan) before deployment." },
-        deploy: { title: "Deploy on AWS", description: "Apply real infrastructure when the lab is validated." },
+        deploy: { title: "Review deploy", description: "Review the next deploy or runtime step for {{provider}} when the lab is validated." },
       },
       nextAction: {
         completed: "Lab completed. You can review outputs and logs.",
         running: "There is an execution in progress. Wait for the result before continuing.",
         fixTopology: "Fix topology errors first to continue with validation.",
         validate: "Run Validate to simulate the topology and review the plan before applying.",
-        deploy: "When you are satisfied with the simulation, run Deploy to create resources in AWS.",
+        deploy: "When you are satisfied with the simulation, open Deploy to review the next runtime step for {{provider}}.",
         nextStep: "Next step: {{title}}.",
       },
       contrast: {
@@ -1749,6 +1870,21 @@ const en = {
           routers: "Routers in AWS mode: Peering {{peering}} / TGW {{tgw}}.",
           routesReady: "Defined routes are transformed into route tables and links between VPCs.",
           routesMissing: "Without explicit routes, AWS will only apply local connectivity per VPC.",
+          oneWayPairs:
+            "We detected {{count}} pair(s) with one-way routes; review the return path for bidirectional tests.",
+          noOneWayPairs: "No pairs with one-way routes were detected.",
+        },
+        providerLines: {
+          vpcs:
+            "This translates into {{segments}} {{networkKind}} and {{zones}} {{subnetKind}} in {{provider}}.",
+          egress:
+            "Egress connectivity: {{internetEdgeLabel}} {{internetEdgeCount}} / {{managedEgressLabel}} {{managedEgressCount}}.",
+          routers:
+            "Provider connectivity: {{directLabel}} {{directCount}} / {{hubLabel}} {{hubCount}}.",
+          routesReady:
+            "Defined routes are materialized using {{provider}} networking primitives.",
+          routesMissing:
+            "Without explicit routes, {{provider}} will only maintain local connectivity per segment.",
           oneWayPairs:
             "We detected {{count}} pair(s) with one-way routes; review the return path for bidirectional tests.",
           noOneWayPairs: "No pairs with one-way routes were detected.",
@@ -1779,6 +1915,8 @@ const en = {
       focus: {
         element: "Element",
         segmentSubtitle: "What it means in the neutral model and how it translates to AWS.",
+        segmentSubtitleProvider:
+          "What it means in the neutral model and how it translates to {{provider}}.",
         internetEdgeOn: "Internet edge enabled",
         internetEdgeOff: "No Internet edge",
         managedEgressOn: "Managed egress enabled",
@@ -1812,6 +1950,16 @@ const en = {
         sshRule: "The Security Group will open TCP/22 from {{value}}.",
         noSshRule:
           "Administrative SSH from the Internet will not be opened unless you enable it explicitly.",
+        segmentProviderNetwork:
+          "{{provider}} will create 1 real {{networkKind}} in {{region}} with the indicated CIDR.",
+        providerManagedEgressOn:
+          "{{managedEgressLabel}} will be enabled for managed segment egress.",
+        providerManagedEgressOff:
+          "Without {{managedEgressLabel}}, this segment will not have managed egress through that service.",
+        providerFirewallRule:
+          "{{provider}} will apply the administrative access policy from {{value}}.",
+        providerNoFirewallRule:
+          "No explicit administrative policy from the Internet will be configured unless you declare it.",
         segmentWhy:
           "This segment defines the main boundary of the lab. From here you decide segmentation, exposure, and connectivity toward other networks.",
         routerHub: "Central connectivity hub",
@@ -1836,6 +1984,14 @@ const en = {
           "Each policy toward the TGW sends traffic to the central hub; then the hub forwards it to the destination segment.",
         routerPeeringRoute:
           "In peering there is no implicit transit: A↔B and B↔C do not automatically connect A↔C.",
+        routerHubProvider:
+          "{{provider}} will model 1 {{hubLabel}} with {{count}} attachment(s) for the connected segments.",
+        routerDirectProvider:
+          "{{provider}} will model {{directLabel}} between the pairs actually declared by policies.",
+        routerHubRouteProvider:
+          "Each policy toward {{hubLabel}} will send traffic to the central hub before it is forwarded to the destination segment.",
+        routerDirectRouteProvider:
+          "With {{directLabel}}, there is no implicit transit between pairs that are not directly connected.",
         routerWhy:
           "Here the difference between a point-to-point topology and a centralized topology is defined. That changes both scalability and how you reason about traffic.",
         zoneSubtitle: "Internal zone inside a main segment.",
@@ -1852,6 +2008,12 @@ const en = {
           "It will be public only if its route table points to an Internet Gateway.",
         subnetPrivateRule:
           "It will be private while it has no direct public route.",
+        subnetProvider:
+          "{{provider}} will create 1 {{subnetKind}} with the indicated CIDR.",
+        subnetProviderPublicRule:
+          "Public exposure will depend on routes, external access, and provider policies.",
+        subnetProviderPrivateRule:
+          "It will remain oriented to internal access while you do not declare egress or external exposure.",
         zoneWhy:
           "The subnet does not define connectivity by itself; the combination of route table and Security Group determines its real behavior.",
         workloadSubtitle: "Host where the practice materializes.",
@@ -1869,6 +2031,12 @@ const en = {
           "You will be able to manage it from outside if the public route and security group allow it.",
         workloadPrivateAccess:
           "It will only be reachable from inside the network or through intermediate hops.",
+        workloadProvider:
+          "{{provider}} will create 1 compute workload with the defined image and size.",
+        workloadProviderPublicAccess:
+          "You will be able to manage it from outside if you declare external access and compatible rules.",
+        workloadProviderPrivateAccess:
+          "It will remain reachable only from the internal network or through intermediate hops.",
         workloadWhy:
           "Ping and SSH access tests end up happening here. If the workload is badly placed or badly protected, the lab will not be verifiable.",
         defaultSubtitle: "Contextual explanation of the selected element.",

@@ -47,6 +47,7 @@ export default function FlowWorkspace({
         toolbarProps?.planStatus,
         toolbarProps?.canvasState,
         toolbarProps?.validationState,
+        toolbarProps?.targetProvider,
     );
     const isExpandedWorkspaceState =
         toolbarProps?.canvasState === "PLAN_OUTDATED" ||

@@ -1,0 +1,108 @@
+{
+  "name": "scenario-10-two-vpcs-peering-bidirectional-gcp",
+  "cloud": "gcp",
+  "simulate_only": true,
+  "vlan": {
+    "name": "lab-peering-valid-gcp",
+    "region": "us-central1",
+    "master_cidr": "10.122.0.0/15"
+  },
+  "vpcs": [
+    {
+      "id": "vpc-a-10",
+      "name": "VPC-A",
+      "region": "us-central1",
+      "cidr_block": "10.122.0.0/16",
+      "allowed_ssh_cidr": "190.20.220.72/32",
+      "internet_gateway": false,
+      "nat_gateway": {
+        "enabled": false,
+        "public_subnet": "",
+        "elastic_ip": ""
+      },
+      "route_tables": [
+        {
+          "name": "public",
+          "routes": []
+        }
+      ],
+      "subnets": [
+        {
+          "name": "public-a1",
+          "cidr_block": "10.122.1.0/24",
+          "subnet_type": "public",
+          "availability_zone": "us-central1",
+          "map_public_ip_on_launch": false,
+          "route_table": "public",
+          "private_google_access": false,
+          "flow_logs": true,
+          "instances": [
+            {
+              "id": "vm-a1",
+              "name": "bastion-a1",
+              "ami": "debian-12",
+              "image_project": "debian-cloud",
+              "instance_type": "e2-micro",
+              "ip_address": "10.122.1.10",
+              "ssh_access": "syslab",
+              "associate_public_ip": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "vpc-b-10",
+      "name": "VPC-B",
+      "region": "us-central1",
+      "cidr_block": "10.123.0.0/16",
+      "allowed_ssh_cidr": "190.20.220.72/32",
+      "internet_gateway": false,
+      "nat_gateway": {
+        "enabled": false,
+        "public_subnet": "",
+        "elastic_ip": ""
+      },
+      "route_tables": [
+        {
+          "name": "public",
+          "routes": []
+        }
+      ],
+      "subnets": [
+        {
+          "name": "public-b1",
+          "cidr_block": "10.123.1.0/24",
+          "subnet_type": "public",
+          "availability_zone": "us-central1",
+          "map_public_ip_on_launch": false,
+          "route_table": "public",
+          "private_google_access": false,
+          "flow_logs": true,
+          "instances": [
+            {
+              "id": "vm-b1",
+              "name": "bastion-b1",
+              "ami": "debian-12",
+              "image_project": "debian-cloud",
+              "instance_type": "e2-micro",
+              "ip_address": "10.123.1.10",
+              "ssh_access": "syslab",
+              "associate_public_ip": true
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "type": "peering",
+      "via_router_id": "router-p-10",
+      "vpc_a_id": "vpc-a-10",
+      "vpc_b_id": "vpc-b-10"
+    }
+  ],
+  "routers": [],
+  "allow_cross_vpc_ping": true
+}

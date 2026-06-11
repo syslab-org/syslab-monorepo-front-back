@@ -4,6 +4,7 @@ import InstanceNodeForm from "@/features/networkCanvas/forms/InstanceNodeForm";
 import RouterNodeForm from "@/features/networkCanvas/forms/RouterNodeForm";
 import SubNetworkNodeForm from "@/features/networkCanvas/forms/SubNetworkNodeForm";
 import VPCNodeForm from "@/features/networkCanvas/forms/VPCNodeForm";
+import { getCanvasProviderDefinition } from "@/features/networkCanvas/providers/providerCatalog";
 
 import {
     TYPE_COMPUTER_NODE,
@@ -209,7 +210,7 @@ function getInstanceNodeProps(selectedNode, nodes, restrictedNodes) {
     return { parentSubnetCidr, siblingIpsInSameSubnet };
 }
 
-function getSubnetNodeProps(selectedNode, nodes) {
+function getSubnetNodeProps(selectedNode, nodes, fallbackRegion = "us-east-1") {
     const parentVpcNode = nodes.find(n => n.id === selectedNode.parentId);
     const parentVpcData = parentVpcNode?.data || {};
 
@@ -231,7 +232,9 @@ function getSubnetNodeProps(selectedNode, nodes) {
         .map(n => n.data?.cidrBlock)
         .filter(Boolean);
 
-    return { parentVpcCidr, siblingSubnetCidrsInSameVpc };
+    const parentVpcRegion = String(parentVpcData.region || fallbackRegion).trim() || fallbackRegion;
+
+    return { parentVpcCidr, siblingSubnetCidrsInSameVpc, parentVpcRegion };
 }
 
 function getRouterNodeProps(selectedNode, nodes, edges) {
@@ -256,7 +259,8 @@ function getRouterNodeProps(selectedNode, nodes, edges) {
             connectedVpcsSet.add(JSON.stringify({
                 id: other.id,
                 name: other.data?.vpcName || other.data?.title || other.id,
-                cidr
+                cidr,
+                region: other.data?.region || "",
             }));
         }
     });
@@ -322,6 +326,7 @@ function NodeConfigModal({
     selectedNode,
     nodes,
     edges,
+    provider = "aws",
     amiList,
     keyPairList,
     executionTarget,
@@ -332,6 +337,8 @@ function NodeConfigModal({
 }) {
 
     if (!selectedNode) return null;
+    const providerDefinition = getCanvasProviderDefinition(provider);
+    const providerDefaultRegion = providerDefinition.lab?.defaultRegion || "us-east-1";
     const formMeta = NODE_FORM_META[selectedNode.type] || {
         label: "Node",
         title: "Node Configuration",
@@ -380,6 +387,7 @@ function NodeConfigModal({
                         getInstanceNodeProps(selectedNode, nodes, restrictedNodes);
                     return (
                         <InstanceNodeForm
+                            provider={provider}
                             nodeData={selectedNode.data}
                             onSave={saveNodeData}
                             deleteNode={deleteNodeInstance}
@@ -395,15 +403,17 @@ function NodeConfigModal({
 
                 {/* If node type is Subnetwork, show SubNetworkNodeForm */}
                 {selectedNode && selectedNode.type === TYPE_SUBNETWORK_NODE && (() => {
-                    const { parentVpcCidr, siblingSubnetCidrsInSameVpc } =
-                        getSubnetNodeProps(selectedNode, nodes);
+                    const { parentVpcCidr, siblingSubnetCidrsInSameVpc, parentVpcRegion } =
+                        getSubnetNodeProps(selectedNode, nodes, providerDefaultRegion);
                     return (
                         <SubNetworkNodeForm
+                            provider={provider}
                             nodeData={selectedNode.data}
                             onSave={saveNodeData}
                             deleteNode={deleteNodeInstance}
                             parentVpcCidr={parentVpcCidr}
                             siblingSubnetCidrsInSameVpc={siblingSubnetCidrsInSameVpc}
+                            region={parentVpcRegion}
                         />
                     )
                 })()}
@@ -413,9 +423,13 @@ function NodeConfigModal({
                 {selectedNode && selectedNode.type === TYPE_ROUTER_NODE && (() => {
                     const { connectedVpcs, allVpcCidrs } =
                         getRouterNodeProps(selectedNode, nodes, edges);
-                    const vlanRegion = "us-east-1";
+                    const vlanRegion =
+                        connectedVpcs.find((vpc) => String(vpc.region || "").trim())?.region
+                        || selectedNode.data?.region
+                        || providerDefaultRegion;
                     return (
                         <RouterNodeForm
+                            provider={provider}
                             node={selectedNode}
                             nodeData={selectedNode.data}
                             onSave={saveNodeData}
@@ -433,6 +447,7 @@ function NodeConfigModal({
                         getVpcNodeProps(selectedNode, nodes, cidrBlockVPC, prefixLength);
                     return (
                         <VPCNodeForm
+                            provider={provider}
                             nodeData={selectedNode.data}
                             onSave={saveNodeData}
                             deleteNode={deleteNodeInstance}
@@ -440,6 +455,7 @@ function NodeConfigModal({
                             siblingVpcCidrs={siblingVpcCidrs}
                             publicSubnetNames={publicSubnetNames}
                             privateSubnetNames={privateSubnetNames}
+                            defaultRegion={providerDefaultRegion}
                         />
                     );
                 })()}
