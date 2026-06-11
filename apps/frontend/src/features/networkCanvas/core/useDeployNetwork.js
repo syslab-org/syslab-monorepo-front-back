@@ -938,12 +938,14 @@ const useDeployNetwork = ({
       return;
     }
 
-    const confirmationWord = validationResult?.is_redeploy_preview ? "REDEPLOY" : "DEPLOY";
+    const confirmationWord = validationResult?.is_redeploy_preview
+      ? t("canvas.deployRuntime.redeployWord")
+      : t("canvas.deployRuntime.deployWord");
     const confirmationPrompt = validationResult?.is_redeploy_preview
       ? t("canvas.deployRuntime.redeployPrompt")
       : t("canvas.deployRuntime.deployPrompt");
     const txt = window.prompt(confirmationPrompt);
-    if (txt !== confirmationWord) {
+    if (String(txt || "").trim().toLocaleUpperCase() !== String(confirmationWord || "").trim().toLocaleUpperCase()) {
       setErrorMessage(t("canvas.deployRuntime.deployCancelled"));
       return;
     }
