@@ -1,0 +1,30 @@
+# Copia este archivo a infra/terraform/dev.auto.tfvars
+# y ajusta los valores antes del primer deploy real.
+
+aws_profile = "tesis"
+region      = "us-east-1"
+
+secret_key   = "reemplaza-esta-clave-django"
+django_debug = false
+
+allowed_hosts = [
+  "localhost",
+]
+
+cors_allowed_origins = [
+  "http://localhost:5173",
+]
+
+csrf_trusted_origins = [
+  "http://localhost:5173",
+]
+
+backend_desired_count = 1
+celery_desired_count  = 1
+
+# Si quieres HTTPS en el ALB, descomenta y completa:
+# acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxx"
+
+# Solo para debug puntual de RDS desde tu IP publica:
+# allow_rds_from_my_ip = true
+# my_ip_cidr           = "203.0.113.10/32"

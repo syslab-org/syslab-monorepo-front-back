@@ -1,5 +1,6 @@
 import { Box, Button, Chip, Stack, Tooltip, Typography } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import ViewSidebarIcon from "@mui/icons-material/ViewSidebar";
 import SchoolIcon from "@mui/icons-material/School";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
@@ -35,8 +36,10 @@ export default function FlowWorkspace({
     theme,
     toolbarProps,
     feedbackProps,
-    learningGuideProps
+    learningGuideProps,
+    labNotes
 }) {
+    const { t } = useTranslation();
     const [isPaletteOpen, setIsPaletteOpen] = useState(false);
     const [isGuideOpen, setIsGuideOpen] = useState(false);
     const hasAutoOpenedPalette = useRef(false);
@@ -44,6 +47,7 @@ export default function FlowWorkspace({
         toolbarProps?.planStatus,
         toolbarProps?.canvasState,
         toolbarProps?.validationState,
+        toolbarProps?.targetProvider,
     );
     const isExpandedWorkspaceState =
         toolbarProps?.canvasState === "PLAN_OUTDATED" ||
@@ -218,6 +222,38 @@ export default function FlowWorkspace({
                     )}
                 </Box>
 
+                {labNotes && (
+                    <Box
+                        sx={{
+                            px: { xs: 1.5, md: 2 },
+                            py: 1.1,
+                            borderBottom: "1px solid",
+                            borderColor: "divider",
+                            backgroundColor: (t) =>
+                                t.palette.mode === "light" ? "rgba(255,255,255,0.92)" : "rgba(15,23,42,0.82)",
+                        }}
+                    >
+                        <Stack spacing={0.45}>
+                            <Typography variant="caption" sx={{ fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase" }}>
+                                {t("common.labNotes")}
+                            </Typography>
+                            <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{
+                                    whiteSpace: "pre-wrap",
+                                    display: "-webkit-box",
+                                    WebkitLineClamp: 3,
+                                    WebkitBoxOrient: "vertical",
+                                    overflow: "hidden",
+                                }}
+                            >
+                                {labNotes}
+                            </Typography>
+                        </Stack>
+                    </Box>
+                )}
+
                 <Box
                     data-tour="canvas-drop-area"
                     sx={{
@@ -229,29 +265,29 @@ export default function FlowWorkspace({
                     }}
                 >
                     <Box sx={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 18 }}>
-                        <Tooltip title={isPaletteOpen ? "Ocultar herramientas para modelar" : "Abrir herramientas para modelar"} placement="right">
+                        <Tooltip title={isPaletteOpen ? t("canvas.workspace.palette.hide") : t("canvas.workspace.palette.open")} placement="right">
                             <Button
                                 variant="outlined"
                                 onClick={() => setIsPaletteOpen((prev) => !prev)}
                                 aria-expanded={isPaletteOpen}
                                 aria-controls="tool-palette-panel"
-                                aria-label={isPaletteOpen ? "Ocultar herramientas para modelar" : "Abrir herramientas para modelar"}
+                                aria-label={isPaletteOpen ? t("canvas.workspace.palette.hide") : t("canvas.workspace.palette.open")}
                                 data-tour="canvas-tools-toggle"
                                 sx={getFloatingToggleSx("left", isPaletteOpen, "primary")}
                                 startIcon={<ViewSidebarIcon fontSize="small" />}
                                 endIcon={isPaletteOpen ? <ChevronLeftIcon /> : <ChevronRightIcon />}
                             >
-                                Herramientas
+                                {t("canvas.toolbar.palette.label")}
                             </Button>
                         </Tooltip>
 
-                        <Tooltip title={isGuideOpen ? "Ocultar guía de modelado" : "Abrir guía de modelado"} placement="left">
+                        <Tooltip title={isGuideOpen ? t("canvas.workspace.guide.hide") : t("canvas.workspace.guide.open")} placement="left">
                             <Button
                                 variant="outlined"
                                 onClick={() => setIsGuideOpen((prev) => !prev)}
                                 aria-expanded={isGuideOpen}
                                 aria-controls="learning-guide-panel"
-                                aria-label={isGuideOpen ? "Ocultar guía de modelado" : "Abrir guía de modelado"}
+                                aria-label={isGuideOpen ? t("canvas.workspace.guide.hide") : t("canvas.workspace.guide.open")}
                                 data-tour="canvas-guide-toggle"
                                 sx={{
                                     ...getFloatingToggleSx("right", isGuideOpen, "secondary"),
@@ -260,7 +296,7 @@ export default function FlowWorkspace({
                                 startIcon={<SchoolIcon fontSize="small" />}
                                 endIcon={isGuideOpen ? <ChevronRightIcon /> : <ChevronLeftIcon />}
                             >
-                                Guía
+                                {t("canvas.toolbar.guide.label")}
                             </Button>
                         </Tooltip>
                     </Box>
@@ -281,15 +317,15 @@ export default function FlowWorkspace({
                         >
                             <Box sx={{ pointerEvents: "auto" }}>
                                 <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                                    Diseña tu laboratorio de red
+                                    {t("canvas.workspace.emptyTitle")}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                                    Modela la topología en lenguaje neutral, valida su traducción a AWS y decide si corresponde un deploy o un redeploy.
+                                    {t("canvas.workspace.emptyDescription")}
                                 </Typography>
                                 {!isPaletteOpen && (
                                     <Stack spacing={1} alignItems="center" sx={{ mt: 1.25 }}>
                                         <Typography variant="caption" color="text.secondary">
-                                            Usa el boton flotante Herramientas para abrir la paleta y comenzar a arrastrar componentes.
+                                            {t("canvas.workspace.emptyHint")}
                                         </Typography>
                                     </Stack>
                                 )}

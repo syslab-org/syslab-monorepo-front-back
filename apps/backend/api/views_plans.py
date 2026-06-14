@@ -12,6 +12,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .helpers import ensure_lab_for_canvas, visible_plans_queryset
+from .i18n import tr
 from .models import Plan
 from .serializers import PlanDetailSerializer, PlanListSerializer
 from .validators import validate_network_plan
@@ -79,9 +80,9 @@ def _reconcile_running_plan(plan: Plan) -> bool:
 
 
 
-def _sanitize_payload_for_storage(payload: dict, fallback_canvas_id=None) -> dict:
+def _sanitize_payload_for_storage(payload: dict, fallback_canvas_id=None, request=None) -> dict:
     """Valida y normaliza payloads del plan usando `canvas_id` como clave canónica."""
-    sanitized = validate_network_plan(payload)
+    sanitized = validate_network_plan(payload, request=request)
     raw = payload if isinstance(payload, dict) else {}
     out = dict(sanitized)
 
@@ -147,7 +148,7 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
             data = request.data or {}
             canvas_id = data.get("canvas_id") or data.get("firestore_vpc_id") or data.get("vpcId")
             if not canvas_id:
-                return Response({"ok": False, "error": "canvas_id es requerido."}, status=400)
+                return Response({"ok": False, "error": tr("missing_canvas_id_short", request=request)}, status=400)
 
             payload = data.get("payload")
             if payload is None:
@@ -155,7 +156,7 @@ class PlanViewSet(viewsets.ReadOnlyModelViewSet):
                 payload.pop("payload", None)
 
             try:
-                payload = _sanitize_payload_for_storage(payload, fallback_canvas_id=canvas_id)
+                payload = _sanitize_payload_for_storage(payload, fallback_canvas_id=canvas_id, request=request)
             except Exception as e:
                 return Response({"ok": False, "error": str(e)}, status=400)
 

@@ -26,12 +26,14 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined';
 import AutorenewRoundedIcon from '@mui/icons-material/AutorenewRounded';
 import BoltRoundedIcon from '@mui/icons-material/BoltRounded';
+import { useTranslation } from 'react-i18next';
 
 import { TASK_STATE_PENDING, TASK_STATE_RUNNING } from '@/shared/constants';
 import { api } from '@/infrastructure/http/api';
 import { parseTerraformPlanSummary } from '@/features/plans/utils/parseTerraformPlanSummary';
 import TourLauncherButton from '@/shared/ui/onboarding/TourLauncherButton';
 import useOnboardingTour from '@/shared/ui/onboarding/useOnboardingTour';
+import { translate as tr } from '@/shared/i18n';
 
 const POLL_MS = 2000;
 
@@ -73,7 +75,7 @@ function computeLifecycle(plan) {
     return {
       key: 'DESTROYING',
       label: 'DESTROYING',
-      helper: 'Destroy en ejecución: eliminando infraestructura en AWS.',
+      helper: tr('plans.detail.lifecycleHelper.destroying'),
       chip: { variant: 'filled', color: 'warning' },
       allowDestroy: false,
     };
@@ -83,7 +85,7 @@ function computeLifecycle(plan) {
     return {
       key: 'DEPLOYING',
       label: 'DEPLOYING',
-      helper: 'Deploy en ejecución: aplicando cambios en AWS.',
+      helper: tr('plans.detail.lifecycleHelper.deploying'),
       chip: { variant: 'filled', color: 'info' },
       allowDestroy: false,
     };
@@ -95,8 +97,8 @@ function computeLifecycle(plan) {
       key: 'ACTIVE',
       label: 'ACTIVE',
       helper: hasPendingActivePreview
-        ? 'Infraestructura activa en AWS. El último plan fue una previsualización sobre el stack existente; el próximo apply actualizará recursos en el mismo despliegue.'
-        : 'Infraestructura activa en AWS.',
+        ? tr('plans.detail.lifecycleHelper.activePreview')
+        : tr('plans.detail.lifecycleHelper.active'),
       chip: { variant: 'filled', color: 'success' },
       allowDestroy: true,
     };
@@ -107,7 +109,7 @@ function computeLifecycle(plan) {
     return {
       key: 'DESTROYED',
       label: 'DESTROYED',
-      helper: 'Infraestructura eliminada en AWS.',
+      helper: tr('plans.detail.lifecycleHelper.destroyed'),
       chip: { variant: 'outlined', color: 'default' },
       allowDestroy: false,
     };
@@ -118,7 +120,7 @@ function computeLifecycle(plan) {
     return {
       key: 'PREVIEW',
       label: 'PREVIEW',
-      helper: 'Simulado: nunca se aplicó en AWS.',
+      helper: tr('plans.detail.lifecycleHelper.preview'),
       chip: { variant: 'outlined', color: 'info' },
       allowDestroy: false,
     };
@@ -129,7 +131,7 @@ function computeLifecycle(plan) {
     return {
       key: 'FAILED_REAL_APPLY',
       label: 'RECOVERY',
-      helper: 'El apply real falló. Puede haber recursos parciales en AWS: ejecuta Destroy antes de reintentar.',
+      helper: tr('plans.detail.lifecycleHelper.recovery'),
       chip: { variant: 'outlined', color: 'error' },
       allowDestroy: true,
     };
@@ -141,8 +143,8 @@ function computeLifecycle(plan) {
     label: 'NOT APPLIED',
     helper:
       lastAction === 'canvas_update'
-        ? 'Cambios detectados desde el canvas: listo para aplicar en AWS.'
-        : 'Plan real aún no aplicado.',
+        ? tr('plans.detail.lifecycleHelper.notAppliedCanvas')
+        : tr('plans.detail.lifecycleHelper.notApplied'),
     chip: { variant: 'outlined', color: 'warning' },
     allowDestroy: false,
   };
@@ -151,13 +153,13 @@ function computeLifecycle(plan) {
 function statusChipProps(status) {
   switch (status) {
     case 'SUCCESS':
-      return { label: 'SUCCESS', color: 'success', variant: 'filled' };
+      return { label: tr('plans.status.success'), color: 'success', variant: 'filled' };
     case 'FAILURE':
-      return { label: 'FAILURE', color: 'error', variant: 'filled' };
+      return { label: tr('plans.status.failure'), color: 'error', variant: 'filled' };
     case 'RUNNING':
-      return { label: 'RUNNING', color: 'info', variant: 'filled' };
+      return { label: tr('plans.status.running'), color: 'info', variant: 'filled' };
     case 'PENDING':
-      return { label: 'PENDING', color: 'warning', variant: 'filled' };
+      return { label: tr('plans.status.pending'), color: 'warning', variant: 'filled' };
     default:
       return { label: status || '—', color: 'default', variant: 'outlined' };
   }
@@ -201,36 +203,35 @@ function describeRunningPhase(plan, lifecycle) {
 
   if (lastAction === 'apply') {
     return {
-      title: 'Aplicando cambios en AWS',
-      description:
-        'Terraform está ejecutando el apply real sobre la infraestructura. Los recursos pueden tardar unos minutos en completarse y esta vista se actualizará automáticamente.',
-      nextStep: 'Si quieres detalle técnico, abre la pestaña Logs y sigue el progreso del apply.',
+      title: tr('plans.detail.runningPhase.applyTitle'),
+      description: tr('plans.detail.runningPhase.applyDescription'),
+      nextStep: tr('plans.detail.runningPhase.applyNext'),
     };
   }
 
   if (lastAction === 'destroy') {
     return {
-      title: 'Eliminando infraestructura en AWS',
-      description:
-        'El destroy está desmontando el stack actual. Durante esta fase bloqueamos nuevas acciones para evitar estados inconsistentes.',
-      nextStep: 'Cuando termine, revisa Outputs y Logs para confirmar que no quedaron recursos activos.',
+      title: tr('plans.detail.runningPhase.destroyTitle'),
+      description: tr('plans.detail.runningPhase.destroyDescription'),
+      nextStep: tr('plans.detail.runningPhase.destroyNext'),
     };
   }
 
   if (lastAction === 'plan') {
     return {
-      title: 'Generando previsualización del plan',
-      description:
-        'Terraform está calculando el impacto del cambio antes de aplicar nada en AWS. En cuanto termine, podrás revisar el resumen de riesgo.',
-      nextStep: 'Espera a que aparezca SUCCESS o FAILURE antes de lanzar otra acción.',
+      title: tr('plans.detail.runningPhase.planTitle'),
+      description: tr('plans.detail.runningPhase.planDescription'),
+      nextStep: tr('plans.detail.runningPhase.planNext'),
     };
   }
 
   return {
-    title: lifecycle.key === 'DEPLOYING' ? 'Procesando ejecución del plan' : 'Procesando solicitud',
-    description:
-      'Hay una operación en curso sobre este plan y la página está haciendo polling automático para reflejar el resultado en cuanto esté disponible.',
-    nextStep: 'Mientras tanto, evita cerrar el flujo o lanzar acciones paralelas sobre el mismo plan.',
+    title:
+      lifecycle.key === 'DEPLOYING'
+        ? tr('plans.detail.runningPhase.genericDeployTitle')
+        : tr('plans.detail.runningPhase.genericTitle'),
+    description: tr('plans.detail.runningPhase.genericDescription'),
+    nextStep: tr('plans.detail.runningPhase.genericNext'),
   };
 }
 
@@ -242,37 +243,32 @@ function describeExecutionHero(plan, lifecycle, runningPhase) {
   switch (lifecycle.key) {
     case 'ACTIVE':
       return {
-        title: 'Infraestructura activa en AWS',
-        description:
-          'El stack está desplegado y listo para seguir validando, actualizarse con un redeploy o destruirse cuando quieras limpiar el laboratorio.',
+        title: tr('plans.detail.hero.activeTitle'),
+        description: tr('plans.detail.hero.activeDescription'),
       };
     case 'DESTROYED':
       return {
-        title: 'Infraestructura eliminada',
-        description:
-          'El último destroy terminó correctamente. Este plan queda como historial operativo y puedes volver a lanzar un deploy real cuando lo necesites.',
+        title: tr('plans.detail.hero.destroyedTitle'),
+        description: tr('plans.detail.hero.destroyedDescription'),
       };
     case 'PREVIEW':
       return {
-        title: 'Plan listo para validación',
-        description:
-          'Todavía no hay infraestructura real en AWS. Puedes seguir revisando el preview o convertirlo en un APPLY real cuando estés conforme.',
+        title: tr('plans.detail.hero.previewTitle'),
+        description: tr('plans.detail.hero.previewDescription'),
       };
     case 'FAILED_REAL_APPLY':
       return {
-        title: 'Recuperación recomendada',
-        description:
-          'El apply real falló y podría haber recursos parciales. La siguiente acción recomendada es limpiar el stack antes de reintentar.',
+        title: tr('plans.detail.hero.recoveryTitle'),
+        description: tr('plans.detail.hero.recoveryDescription'),
       };
     case 'NOT_APPLIED':
       return {
-        title: 'Listo para primer deploy',
-        description:
-          'El plan está preparado pero aún no ha sido aplicado en AWS. Puedes lanzar un preview o el primer APPLY real según el caso.',
+        title: tr('plans.detail.hero.firstDeployTitle'),
+        description: tr('plans.detail.hero.firstDeployDescription'),
       };
     default:
       return {
-        title: 'Estado operativo del plan',
+        title: tr('plans.detail.hero.defaultTitle'),
         description: lifecycle.helper,
       };
   }
@@ -292,10 +288,11 @@ const splitInstanceKey = (key) => {
 };
 
 const executionSourceLabels = {
-  lab_explicit: 'Conexión fijada explícitamente en el laboratorio.',
-  owner_personal_auto: 'Auto resolverá la cuenta personal del owner del laboratorio.',
-  course_shared_auto: 'Auto resolverá la cuenta compartida del curso.',
-  unresolved: 'No hay una conexión cloud ejecutable resuelta para este laboratorio.',
+  lab_explicit: tr('labs.executionSourceLabels.lab_explicit'),
+  owner_personal_auto: tr('labs.executionSourceLabels.owner_personal_auto'),
+  course_shared_auto: tr('labs.executionSourceLabels.course_shared_auto'),
+  environment: tr('labs.executionSourceLabels.environment'),
+  unresolved: tr('labs.executionSourceLabels.unresolved'),
 };
 
 function buildInstanceCatalog(outputs) {
@@ -428,15 +425,15 @@ function buildConnectivityOverview(plan, outputsResponse, connectivityScenarios)
   const tgwActive = Object.keys(safeObject(outputs?.tgw_ids)).length;
   const tgwAttachmentsActive = Object.keys(safeObject(outputs?.tgw_attachment_ids)).length;
 
-  let modeLabel = 'Aislado';
+  let modeKey = 'isolated';
   if (tgwDeclared > 0 || tgwActive > 0 || tgwAttachmentsDeclared > 0 || tgwAttachmentsActive > 0) {
-    modeLabel = 'Transit Gateway';
+    modeKey = 'transitGateway';
   } else if (peeringDeclared > 0 || peeringActive > 0) {
-    modeLabel = 'Peering';
+    modeKey = 'peering';
   }
 
   return {
-    modeLabel,
+    modeKey,
     connectedPairs: connectivityScenarios.length,
     peeringDeclared,
     peeringActive,
@@ -447,71 +444,74 @@ function buildConnectivityOverview(plan, outputsResponse, connectivityScenarios)
   };
 }
 
-function describeConnectivityMode(modeLabel, overview) {
-  if (modeLabel === 'Transit Gateway') {
-    return `El laboratorio usa un hub central en AWS para enrutar tráfico entre segmentos. TGW activos: ${overview.tgwActive}.`;
+function describeConnectivityMode(modeKey, overview) {
+  if (modeKey === 'transitGateway') {
+    return tr('plans.detail.outputs.modeDescriptions.transitGateway', {
+      count: overview.tgwActive,
+    });
   }
-  if (modeLabel === 'Peering') {
-    return `Las VPC se comunican por enlaces directos entre pares. Peerings activos: ${overview.peeringActive}.`;
+  if (modeKey === 'peering') {
+    return tr('plans.detail.outputs.modeDescriptions.peering', {
+      count: overview.peeringActive,
+    });
   }
-  return 'No hay conectividad cruzada activa entre segmentos; cada VPC funciona de forma aislada.';
+  return tr('plans.detail.outputs.modeDescriptions.isolated');
 }
 
 function AwsOutputsInfoDialog({ open, onClose }) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>Guía rápida de infraestructura AWS</DialogTitle>
+      <DialogTitle>{tr('plans.detail.guide.awsTitle')}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
           <Alert severity="info" variant="outlined">
-            Esta vista resume la traducción del canvas a recursos reales en AWS. Los códigos como
-            `vpc-...`, `igw-...`, `tgw-...` y `tgw-attach-...` son IDs reales creados por AWS.
+            {tr('plans.detail.outputs.awsInfoIntro')}
           </Alert>
 
           <Box>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>
-              Conectividad
+              {tr('plans.detail.guide.connectivityTitle')}
             </Typography>
             <Stack spacing={1}>
-              <Typography variant="body2"><b>Modo declarado</b>: el modelo de conectividad que el canvas está pidiendo. Puede ser Aislado, Peering o Transit Gateway.</Typography>
-              <Typography variant="body2"><b>Pares conectados esperados</b>: cuántos pares de segmentos deberían poder comunicarse según el payload y las rutas definidas.</Typography>
-              <Typography variant="body2"><b>Peerings activos</b>: cantidad de conexiones VPC Peering realmente creadas en AWS.</Typography>
-              <Typography variant="body2"><b>TGW activos</b>: cantidad de Transit Gateways realmente creados en AWS.</Typography>
-              <Typography variant="body2"><b>Attachments TGW</b>: uniones entre una VPC y el Transit Gateway. Sin attachment, la VPC no entra al hub.</Typography>
+              <Typography variant="body2">{tr('plans.detail.outputs.awsGuideConnectivity.mode')}</Typography>
+              <Typography variant="body2">{tr('plans.detail.outputs.awsGuideConnectivity.expectedPairs')}</Typography>
+              <Typography variant="body2">{tr('plans.detail.outputs.awsGuideConnectivity.peerings')}</Typography>
+              <Typography variant="body2">{tr('plans.detail.outputs.awsGuideConnectivity.tgws')}</Typography>
+              <Typography variant="body2">{tr('plans.detail.outputs.awsGuideConnectivity.attachments')}</Typography>
             </Stack>
           </Box>
 
           <Box>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>
-              Infraestructura por VPC
+              {tr('plans.detail.guide.vpcInfraTitle')}
             </Typography>
             <Stack spacing={1}>
-              <Typography variant="body2"><b>VPC</b>: red virtual principal del segmento en AWS.</Typography>
-              <Typography variant="body2"><b>IGW</b>: Internet Gateway. Permite salida/entrada a internet para subredes públicas con rutas adecuadas.</Typography>
-              <Typography variant="body2"><b>NAT</b>: NAT Gateway. Permite que subredes privadas salgan a internet sin volverse públicas.</Typography>
-              <Typography variant="body2"><b>NAT EIP</b>: Elastic IP asociada al NAT Gateway.</Typography>
+              <Typography variant="body2">{tr('plans.detail.outputs.awsGuideVpc.vpc')}</Typography>
+              <Typography variant="body2">{tr('plans.detail.outputs.awsGuideVpc.igw')}</Typography>
+              <Typography variant="body2">{tr('plans.detail.outputs.awsGuideVpc.nat')}</Typography>
+              <Typography variant="body2">{tr('plans.detail.outputs.awsGuideVpc.natEip')}</Typography>
             </Stack>
           </Box>
 
           <Box>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>
-              Infraestructura Transit Gateway
+              {tr('plans.detail.guide.tgwInfraTitle')}
             </Typography>
             <Stack spacing={1}>
-              <Typography variant="body2"><b>Router lógico</b>: identificador del nodo del canvas. Sirve para relacionar el diseño con los recursos AWS.</Typography>
-              <Typography variant="body2"><b>TGW</b>: Transit Gateway de AWS. Actúa como hub central de conectividad.</Typography>
-              <Typography variant="body2"><b>TGW RT</b>: tabla de rutas interna del Transit Gateway.</Typography>
-              <Typography variant="body2"><b>Attachment</b>: conexión física/lógica entre una VPC y el TGW.</Typography>
+              <Typography variant="body2">{tr('plans.detail.outputs.awsGuideTgw.logicalRouter')}</Typography>
+              <Typography variant="body2">{tr('plans.detail.outputs.awsGuideTgw.tgw')}</Typography>
+              <Typography variant="body2">{tr('plans.detail.outputs.awsGuideTgw.routeTable')}</Typography>
+              <Typography variant="body2">{tr('plans.detail.outputs.awsGuideTgw.attachment')}</Typography>
             </Stack>
           </Box>
 
           <Alert severity="warning" variant="outlined">
-            Regla práctica: primero mira el modo de conectividad y los pares esperados; después baja a IDs solo si necesitas depurar o verificar un recurso puntual en AWS.
+            {tr('plans.detail.guide.practicalRule')}
           </Alert>
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cerrar</Button>
+        <Button onClick={onClose}>{tr('actions.close')}</Button>
       </DialogActions>
     </Dialog>
   );
@@ -565,79 +565,82 @@ function buildPlanAdvisories(plan, outputsResponse, lifecycle) {
   if (lifecycle.key === 'ACTIVE' || lifecycle.key === 'DEPLOYING' || lifecycle.key === 'FAILED_REAL_APPLY') {
     costs.push({
       severity: 'warning',
-      text: 'Este plan usa APPLY real o quedó parcialmente aplicado: puede generar costo monetario en AWS mientras existan recursos activos.',
+      text: tr('plans.detail.summary.advisoriesText.realApply'),
     });
   } else if (lifecycle.key === 'PREVIEW' || lifecycle.key === 'NOT_APPLIED') {
     costs.push({
       severity: 'info',
-      text: 'En modo PLAN/preview no se crean recursos reales, por lo que este plan no debería generar costo directo en AWS.',
+      text: tr('plans.detail.summary.advisoriesText.preview'),
     });
   } else if (lifecycle.key === 'DESTROYED') {
     costs.push({
       severity: 'success',
-      text: 'El stack principal figura destruido. Si no dejaste recursos externos o residuales, este plan ya no debería seguir generando costo principal.',
+      text: tr('plans.detail.summary.advisoriesText.destroyed'),
     });
   }
 
   if (instanceCount > 0) {
     costs.push({
       severity: lifecycle.key === 'ACTIVE' ? 'warning' : 'info',
-      text: `${instanceCount} instancia(s) EC2 declarada(s): generan costo de compute y, normalmente, de almacenamiento mientras existan.`,
+      text: tr('plans.detail.summary.advisoriesText.instances', { count: instanceCount }),
     });
   }
   if (natCount > 0) {
     costs.push({
       severity: lifecycle.key === 'ACTIVE' ? 'warning' : 'info',
-      text: `${natCount} NAT Gateway(s): AWS cobra por hora aprovisionada y por tráfico procesado mientras estén activos.`,
+      text: tr('plans.detail.summary.advisoriesText.nat', { count: natCount }),
     });
   }
   if (publicIpv4InUse > 0) {
     costs.push({
       severity: lifecycle.key === 'ACTIVE' ? 'warning' : 'info',
-      text: `${publicIpv4InUse} IPv4 pública(s) en uso según outputs: AWS cobra las IPv4 públicas en uso.`,
+      text: tr('plans.detail.summary.advisoriesText.publicIpv4', { count: publicIpv4InUse }),
     });
   }
   if (tgwCount > 0 || tgwAttachmentCount > 0) {
     costs.push({
       severity: lifecycle.key === 'ACTIVE' ? 'warning' : 'info',
-      text: `${tgwCount} TGW router(s) y ${tgwAttachmentCount} attachment(s): Transit Gateway agrega cobro por attachment/hora y por tráfico procesado.`,
+      text: tr('plans.detail.summary.advisoriesText.tgw', {
+        routers: tgwCount,
+        attachments: tgwAttachmentCount,
+      }),
     });
   }
   if (peeringCount > 0) {
     costs.push({
       severity: 'info',
-      text: `${peeringCount} peering link(s): crear el peering no agrega cargo fijo, pero el tráfico por peering puede generar cobros según el patrón de transferencia.`,
+      text: tr('plans.detail.summary.advisoriesText.peering', { count: peeringCount }),
     });
   }
   costs.push({
     severity: 'info',
-    text: 'La VPC en sí no tiene cargo adicional por existir, pero algunos componentes asociados sí lo tienen.',
+    text: tr('plans.detail.summary.advisoriesText.vpcBase'),
   });
 
   const residuals = [];
   if (providedNatEips.length > 0) {
     residuals.push({
       severity: 'warning',
-      text: `${providedNatEips.length} EIP(s) fue/fueron aportada(s) manualmente al NAT. Destroy no las libera por seguridad; pueden seguir generando cobro por IPv4 pública mientras permanezcan reservadas en tu cuenta.`,
+      text: tr('plans.detail.summary.advisoriesText.providedEips', { count: providedNatEips.length }),
     });
   } else if (natCount > 0) {
     residuals.push({
       severity: 'info',
-      text: 'Si el NAT usó una EIP autogenerada por el stack, Destroy intenta eliminar tanto el NAT como esa EIP. Si aún ves una Elastic IP, revisa si pertenece a otro recurso o a un deploy previo.',
+      text: tr('plans.detail.summary.advisoriesText.autoEip'),
     });
   }
   residuals.push({
     severity: 'info',
-    text: 'Los outputs guardados en esta página son históricos para auditoría/debug. No son recursos vivos en AWS y no generan costo por sí mismos.',
+    text: tr('plans.detail.summary.advisoriesText.outputsHistorical'),
   });
   residuals.push({
     severity: 'info',
-    text: 'AWS mantiene un DHCP option set por defecto por región. Este proyecto no crea uno dedicado, así que verlo en consola no implica que el destroy haya dejado un residuo de este stack.',
+    text: tr('plans.detail.summary.advisoriesText.dhcpDefault'),
   });
   if (lifecycle.key === 'FAILED_REAL_APPLY') {
     residuals.push({
       severity: 'warning',
-      text: 'Si un APPLY real falla, puede quedar infraestructura parcial. En ese estado debes ejecutar Destroy y revisar logs antes de volver a aplicar.',
+      text: tr('plans.detail.summary.advisoriesText.failedApply'),
     });
   }
 
@@ -645,37 +648,40 @@ function buildPlanAdvisories(plan, outputsResponse, lifecycle) {
   if (natCount > 0 && privateSubnetCount > 0) {
     pedagogy.push({
       severity: 'info',
-      text: 'Pedagógicamente, este laboratorio separa salida y exposición: NAT permite salida desde subnets privadas, pero no acceso entrante desde Internet.',
+      text: tr('plans.detail.summary.advisoriesText.natPrivate'),
     });
   }
   if (publicSubnetCount > 0 && privateSubnetCount > 0) {
     pedagogy.push({
       severity: 'info',
-      text: `Tienes ${publicSubnetCount} subnet(s) pública(s) y ${privateSubnetCount} privada(s): es un buen caso para observar bastion pública + workload privada.`,
+      text: tr('plans.detail.summary.advisoriesText.publicPrivateMix', {
+        publicCount: publicSubnetCount,
+        privateCount: privateSubnetCount,
+      }),
     });
   }
   if (providedNatEips.length > 0) {
     pedagogy.push({
       severity: 'info',
-      text: 'Usar una EIP propia fija la identidad de salida del NAT, pero también deja su ciclo de vida bajo responsabilidad del operador.',
+      text: tr('plans.detail.summary.advisoriesText.fixedEip'),
     });
   }
   if (peeringCount > 0) {
     pedagogy.push({
       severity: 'info',
-      text: 'El peering enseña conectividad punto a punto: necesitas rutas explícitas de ida y vuelta para obtener comunicación completa.',
+      text: tr('plans.detail.summary.advisoriesText.peeringLearning'),
     });
   }
   if (tgwCount > 0) {
     pedagogy.push({
       severity: 'info',
-      text: 'Transit Gateway enseña un modelo hub-and-spoke: simplifica topologías multipunto, pero añade costo y una capa adicional de routing.',
+      text: tr('plans.detail.summary.advisoriesText.tgwLearning'),
     });
   }
   if (instanceCount === 0) {
     pedagogy.push({
       severity: 'info',
-      text: 'Sin instancias, este plan sirve para estudiar topología y rutas, pero no para validar conectividad extremo a extremo dentro del laboratorio.',
+      text: tr('plans.detail.summary.advisoriesText.noInstances'),
     });
   }
 
@@ -754,32 +760,50 @@ function buildConnectivityScenarios(plan, outputsResponse) {
     const reverseDst = aInstances[0] || null;
 
     const modeNames = Array.from(pair.modes);
-    const modeLabel =
+    const modeKey =
       modeNames.length === 0
-        ? 'Sin modo'
+        ? 'none'
         : modeNames.length > 1
-          ? 'Mixto'
+          ? 'mixed'
           : modeNames[0] === 'tgw'
-            ? 'Transit Gateway'
-            : 'Peering';
+            ? 'transitGateway'
+            : 'peering';
 
     const checks = [];
     if (src?.privateIp && dst?.privateIp) {
       checks.push({
-        title: `Prueba ida (${aVpc.name} -> ${bVpc.name})`,
+        title: tr('plans.detail.tests.forwardCheckTitle', {
+          from: aVpc.name,
+          to: bVpc.name,
+        }),
         command: `ping -c 4 ${dst.privateIp}`,
         context: src.publicIp
-          ? `Ejecutar dentro de ${src.instanceName} (${src.publicIp})`
-          : `Ejecutar dentro de ${src.instanceName} (${src.instanceId || 'sin instance_id'})`,
+          ? tr('plans.detail.tests.runInsidePublic', {
+            name: src.instanceName,
+            value: src.publicIp,
+          })
+          : tr('plans.detail.tests.runInsideInstance', {
+            name: src.instanceName,
+            value: src.instanceId || 'sin instance_id',
+          }),
       });
     }
     if (reverseSrc?.privateIp && reverseDst?.privateIp) {
       checks.push({
-        title: `Prueba retorno (${bVpc.name} -> ${aVpc.name})`,
+        title: tr('plans.detail.tests.returnCheckTitle', {
+          from: bVpc.name,
+          to: aVpc.name,
+        }),
         command: `ping -c 4 ${reverseDst.privateIp}`,
         context: reverseSrc.publicIp
-          ? `Ejecutar dentro de ${reverseSrc.instanceName} (${reverseSrc.publicIp})`
-          : `Ejecutar dentro de ${reverseSrc.instanceName} (${reverseSrc.instanceId || 'sin instance_id'})`,
+          ? tr('plans.detail.tests.runInsidePublic', {
+            name: reverseSrc.instanceName,
+            value: reverseSrc.publicIp,
+          })
+          : tr('plans.detail.tests.runInsideInstance', {
+            name: reverseSrc.instanceName,
+            value: reverseSrc.instanceId || 'sin instance_id',
+          }),
       });
     }
 
@@ -787,7 +811,7 @@ function buildConnectivityScenarios(plan, outputsResponse) {
       ...pair,
       aVpc,
       bVpc,
-      modeLabel,
+      modeKey,
       routers: Array.from(pair.routers),
       src,
       dst,
@@ -897,18 +921,28 @@ function buildManagedEgressScenarios(plan, outputsResponse) {
       const checks = [];
       if (bastion?.privateIp && privateWorkload?.privateIp) {
         checks.push({
-          title: `Desde ${bastion.instanceName} hacia ${privateWorkload.instanceName}`,
+          title: tr('plans.detail.tests.bastionToWorkloadTitle', {
+            bastion: bastion.instanceName,
+            workload: privateWorkload.instanceName,
+          }),
           command: `ping -c 4 ${privateWorkload.privateIp}`,
           context: bastion.publicIp
-            ? `Ejecutar dentro de ${bastion.instanceName} (${bastion.publicIp}) para validar alcance privado dentro de la VPC`
-            : `Ejecutar dentro de ${bastion.instanceName} (${bastion.instanceId || 'sin instance_id'})`,
+            ? tr('plans.detail.tests.runInsidePublicVpc', {
+              name: bastion.instanceName,
+              value: bastion.publicIp,
+            })
+            : tr('plans.detail.tests.runInsideInstance', {
+              name: bastion.instanceName,
+              value: bastion.instanceId || 'sin instance_id',
+            }),
         });
       } else if (bastion?.publicIp) {
         checks.push({
-          title: `Confirmar acceso SSH a ${bastion.instanceName}`,
-          command: `ssh -i ~/.ssh/tesis-key-new.pem ec2-user@${bastion.publicIp}`,
-          context:
-            'Úsalo para verificar que la instancia pública quedó accesible y contrastar que el NAT existe aunque no haya subnets privadas que lo aprovechen.',
+          title: tr('plans.detail.tests.confirmSshTitle', {
+            name: bastion.instanceName,
+          }),
+          command: `ssh -i ~/.ssh/<tu-clave-privada> ec2-user@${bastion.publicIp}`,
+          context: tr('plans.detail.tests.confirmSshContext'),
         });
       }
 
@@ -983,10 +1017,13 @@ function buildPublicAccessScenarios(plan, outputsResponse) {
         bastion,
         checks: [
           {
-            title: `Confirmar acceso SSH a ${bastion.instanceName}`,
-            command: `ssh -i ~/.ssh/${bastion.keyPair}.pem ec2-user@${bastion.publicIp}`,
-            context:
-              'Úsalo para validar que la instancia pública quedó expuesta correctamente y que tu IP está permitida en Allowed SSH CIDR.',
+            title: tr('plans.detail.tests.confirmSshTitle', {
+              name: bastion.instanceName,
+            }),
+            command: `ssh -i ~/.ssh/<tu-clave-privada> ec2-user@${bastion.publicIp}`,
+            context: tr('plans.detail.tests.publicSshContext', {
+              keyPair: bastion.keyPair,
+            }),
           },
         ],
         readyForRun: true,
@@ -1013,13 +1050,13 @@ function buildPostDeployConsoleGuide(
     ...managedEgressScenarios.map((scenario) => ({
       key: `${scenario.vpcId}:managed-egress`,
       kind: 'managed-egress',
-      title: `${scenario.vpcName} · salida privada con NAT`,
+      title: tr('plans.detail.tests.managedEgressTitle', { name: scenario.vpcName }),
       checks: scenario.checks,
     })),
     ...publicAccessScenarios.map((scenario) => ({
       key: `${scenario.vpcId}:public-access`,
       kind: 'public-access',
-      title: `${scenario.vpcName} · acceso público directo`,
+      title: tr('plans.detail.tests.publicAccessTitle', { name: scenario.vpcName }),
       checks: scenario.checks,
     })),
   ];
@@ -1034,6 +1071,7 @@ export default function PlanDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { startTourIfNeeded, restartTour } = useOnboardingTour();
+  const { t } = useTranslation();
 
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1126,6 +1164,7 @@ export default function PlanDetailPage() {
     plan?.payload?.canvasId ||
     plan?.lab?.id ||
     null;
+  const labNotes = String(plan?.lab?.notes || '').trim();
   const resolvedExecutionTarget = safeObject(plan?.resolved_execution_target);
   const hasResolvedExecutionTarget = Object.keys(resolvedExecutionTarget).length > 0;
   const lastApplyContext = safeObject(plan?.last_apply_context);
@@ -1201,7 +1240,7 @@ export default function PlanDetailPage() {
         if (nowRunning && !msg) {
           setMsg({
             severity: 'info',
-            text: `Plan en ejecución. Espera a que termine antes de lanzar otra acción.${data?.task_id ? ` (task_id=${data.task_id})` : ''}`,
+            text: t('plans.detail.runningConflict') + (data?.task_id ? ` (task_id=${data.task_id})` : ''),
           });
         }
 
@@ -1209,14 +1248,17 @@ export default function PlanDetailPage() {
         // igual queremos limpiar el banner “iniciado” cuando detectemos estado terminal.
         const msgLooksLikeStarted =
           typeof msg === 'object' &&
-          typeof msg?.text === 'string' &&
-          msg.text.toLowerCase().includes('iniciado');
+          msg?.meta === 'started';
 
         if ((wasRunning && nowTerminal) || (msgLooksLikeStarted && nowTerminal)) {
           const terminalSeverity = nowStatus === 'SUCCESS' ? 'success' : 'error';
           setMsg({
+            meta: 'terminal',
             severity: terminalSeverity,
-            text: `Terminó: ${nowStatus}${nowStatus === 'FAILURE' && data?.error ? ` — ${data.error}` : ''}`,
+            text: t('plans.detail.finishedStatus', {
+              status: nowStatus,
+              error: nowStatus === 'FAILURE' && data?.error ? ` — ${data.error}` : '',
+            }),
           });
         }
 
@@ -1238,7 +1280,7 @@ export default function PlanDetailPage() {
         }
       } catch (e) {
         setLoading(false);
-        setErr(`Error cargando plan: ${e?.message || String(e)}`);
+        setErr(t('plans.list.loadingError') + `: ${e?.message || String(e)}`);
         // eslint-disable-next-line no-console
         console.error(e);
       }
@@ -1261,8 +1303,8 @@ export default function PlanDetailPage() {
     } catch (e) {
       // Axios-style errors: e.response?.data suele traer {error, detail, ...}
       const backendMsg = e?.response?.data?.error || e?.response?.data?.detail;
-      const msg = backendMsg || e?.message || String(e);
-      setErr(`No pude cargar outputs: ${msg}`);
+      const errorText = backendMsg || e?.message || String(e);
+      setErr(t('plans.detail.outputsLoadError', { error: errorText }));
       // eslint-disable-next-line no-console
       console.error('getPlanOutputs failed', e?.response?.status, e?.response?.data, e);
     } finally {
@@ -1279,7 +1321,7 @@ export default function PlanDetailPage() {
       setLogUpdatedAt(new Date().toISOString());
       setPlanRiskSummary(parseTerraformPlanSummary(log));
     } catch (e) {
-      setLogText(`No se pudo leer el log: ${String(e)}`);
+      setLogText(t('plans.detail.logReadError', { error: String(e) }));
       setLogUpdatedAt(null);
       setPlanRiskSummary(null);
     }
@@ -1303,8 +1345,8 @@ export default function PlanDetailPage() {
         return;
       }
       const backendMsg = e?.response?.data?.error || e?.response?.data?.detail;
-      const msg = backendMsg || e?.message || String(e);
-      setErr(`No pude cargar logs: ${msg}`);
+      const errorText = backendMsg || e?.message || String(e);
+      setErr(t('plans.detail.logsLoadError', { error: errorText }));
       setLogUpdatedAt(null);
       setPlanRiskSummary(null);
     }
@@ -1337,7 +1379,7 @@ export default function PlanDetailPage() {
   useEffect(() => {
     // Auto-oculta el mensaje de término (SUCCESS/FAILURE) luego de 5s.
     const isTerminalMsg =
-      msg && typeof msg === 'object' && typeof msg.text === 'string' && msg.text.startsWith('Terminó:');
+      msg && typeof msg === 'object' && msg.meta === 'terminal';
 
     if (!isTerminalMsg) return undefined;
 
@@ -1389,14 +1431,12 @@ export default function PlanDetailPage() {
       if (cloudTargetMismatch) {
         setErr(
           cloudTargetState?.message ||
-          'La conexión cloud actual ya no coincide con la usada en el último APPLY real. Revisa la cuenta actual antes de ejecutar infraestructura real.',
+          t('plans.detail.cloudMismatchApply'),
         );
         actionLockRef.current = false;
         return;
       }
-      setErr(
-        'El APPLY real y el Destroy solo están permitidos al owner, al platform admin o al docente cuando la conexión efectiva del laboratorio es course_shared. Puedes seguir usando PLAN para revisión.',
-      );
+      setErr(t('plans.detail.realExecutionForbidden'));
       actionLockRef.current = false;
       return;
     }
@@ -1411,8 +1451,12 @@ export default function PlanDetailPage() {
       // backend espera simulate_only; api.deployPlan en tu proyecto ya hace el mapeo.
       const res = await api.deployPlan(id, { applyMode });
       setMsg({
+        meta: 'started',
         severity: 'info',
-        text: `Deploy ${applyMode ? 'APPLY' : 'PLAN'} iniciado.${res?.task_id ? ` task_id=${res.task_id}` : ''} (actualizando estado…)`,
+        text: t('plans.detail.deployStarted', {
+          mode: applyMode ? 'APPLY' : 'PLAN',
+          task: res?.task_id ? ` task_id=${res.task_id}` : '',
+        }),
       });
       await fetchPlan();
       // Si estamos en tab logs, auto-carga el log
@@ -1423,7 +1467,7 @@ export default function PlanDetailPage() {
       const status = e?.status ?? e?.response?.status;
       const payload = e?.data ?? e?.response?.data;
       if (status === 409 && payload?.code === 'CLOUD_TARGET_CHANGED') {
-        setErr(payload?.error || 'La cuenta cloud actual ya no coincide con la usada en el último APPLY real.');
+        setErr(payload?.error || t('plans.detail.cloudMismatchApply'));
         await fetchPlan();
         return;
       }
@@ -1434,21 +1478,21 @@ export default function PlanDetailPage() {
           severity: 'info',
           text: getConflictMessage(
             e,
-            'Plan en ejecución. Espera a que termine antes de lanzar otra acción.'
+            t('plans.detail.runningConflict'),
           ),
         });
         await fetchPlan();
         return;
       }
       if (status === 403 && payload?.code === 'PLAN_EXECUTION_FORBIDDEN') {
-        setErr(payload?.error || 'No tienes permiso para ejecutar infraestructura real en este laboratorio.');
+        setErr(payload?.error || t('plans.detail.noRealExecutionPermission'));
         return;
       }
       const backendMsg =
         payload?.error ||
         payload?.detail ||
         (typeof payload === 'string' ? payload : null);
-      setErr(`Fallo al iniciar deploy: ${backendMsg || e?.message || String(e)}`);
+      setErr(t('plans.detail.deployFailed', { error: backendMsg || e?.message || String(e) }));
     } finally {
       actionLockRef.current = false;
       setDeploying(false);
@@ -1466,7 +1510,7 @@ export default function PlanDetailPage() {
       if (cloudTargetMismatch) {
         setErr(
           cloudTargetState?.message ||
-          'La conexión cloud actual ya no coincide con la usada en el último APPLY real. Destroy real se bloquea para evitar operar en una cuenta equivocada.',
+          t('plans.detail.cloudMismatchDestroy'),
         );
       }
       actionLockRef.current = false;
@@ -1474,7 +1518,7 @@ export default function PlanDetailPage() {
     }
     if (
       !window.confirm(
-        'Esto destruirá los recursos en AWS asociados a ESTE plan.\n\n¿Continuar?'
+        t('plans.detail.destroyConfirm')
       )
     ) {
       actionLockRef.current = false;
@@ -1495,8 +1539,11 @@ export default function PlanDetailPage() {
       const tid = res?.task_id;
       setLastDestroyTaskId(tid || null);
       setMsg({
+        meta: 'started',
         severity: 'info',
-        text: `Destroy encolado${tid ? ` (task_id=${tid})` : ''}. Revisa Logs para ver el progreso.`,
+        text: t('plans.detail.destroyQueued', {
+          task: tid ? ` (task_id=${tid})` : '',
+        }),
       });
       await fetchPlan();
       if (tid && tab === 'logs') {
@@ -1506,7 +1553,7 @@ export default function PlanDetailPage() {
       const status = e?.status ?? e?.response?.status;
       const payload = e?.data ?? e?.response?.data;
       if (status === 409 && payload?.code === 'CLOUD_TARGET_CHANGED') {
-        setErr(payload?.error || 'La cuenta cloud actual ya no coincide con la usada en el último APPLY real.');
+        setErr(payload?.error || t('plans.detail.cloudMismatchDestroy'));
         await fetchPlan();
         return;
       }
@@ -1516,21 +1563,21 @@ export default function PlanDetailPage() {
           severity: 'info',
           text: getConflictMessage(
             e,
-            'Plan en ejecución. Espera a que termine antes de lanzar otra acción.'
+            t('plans.detail.runningConflict'),
           ),
         });
         await fetchPlan();
         return;
       }
       if (status === 403 && payload?.code === 'PLAN_EXECUTION_FORBIDDEN') {
-        setErr(payload?.error || 'No tienes permiso para destruir infraestructura real en este laboratorio.');
+        setErr(payload?.error || t('plans.detail.noDestroyPermission'));
         return;
       }
       const backendMsg =
         payload?.error ||
         payload?.detail ||
         (typeof payload === 'string' ? payload : null);
-      setErr(`Fallo al iniciar destroy: ${backendMsg || e?.message || String(e)}`);
+      setErr(t('plans.detail.destroyFailed', { error: backendMsg || e?.message || String(e) }));
     } finally {
       actionLockRef.current = false;
       setDestroying(false);
@@ -1545,42 +1592,42 @@ export default function PlanDetailPage() {
   const isRedeployAvailable = lifecycle.key === 'ACTIVE' || lifecycle.key === 'FAILED_REAL_APPLY';
   const deployActionLabel = isRedeployAvailable
     ? applyMode
-      ? 'Redeploy (APPLY)'
-      : 'Redeploy (PLAN)'
+      ? t('plans.detail.redeployApply')
+      : t('plans.detail.redeployPlan')
     : applyMode
-      ? 'Deploy (APPLY)'
-      : 'Deploy (PLAN)';
+      ? t('plans.detail.deployApply')
+      : t('plans.detail.deployPlan');
   const actionAvailability = isRunning
     ? {
         severity: 'info',
-        text: 'Hay una ejecución en curso. Espera a que termine para lanzar otra acción.',
+        text: t('plans.detail.actionAvailability.running'),
       }
     : applyMode && !canApply
       ? {
           severity: 'warning',
           text: cloudTargetMismatch
-            ? (cloudTargetState?.message || 'La cuenta cloud actual ya no coincide con la usada en el último APPLY real.')
-            : 'Este plan es visible para revisión. El APPLY real y el Destroy solo están permitidos al owner, al platform admin o al docente cuando la conexión efectiva es course_shared.',
+            ? (cloudTargetState?.message || t('plans.detail.cloudMismatchApply'))
+            : t('plans.detail.actionAvailability.applyForbidden'),
         }
     : canDestroy && isRedeployAvailable
       ? {
           severity: 'warning',
-          text: 'Infraestructura activa: puedes revalidar, redeployar sobre el mismo stack o destruirlo.',
+          text: t('plans.detail.actionAvailability.activeInfra'),
         }
       : canDeploy && lifecycle.key === 'NOT_APPLIED'
         ? {
             severity: 'info',
-            text: 'Plan listo para su primer deploy. Destroy no aplica todavía porque no hay infraestructura activa.',
+            text: t('plans.detail.actionAvailability.firstDeploy'),
           }
         : canDeploy && lifecycle.key === 'PREVIEW'
           ? {
               severity: 'info',
-              text: 'Plan en modo preview: puedes seguir validando o lanzar el primer deploy real.',
+              text: t('plans.detail.actionAvailability.preview'),
             }
           : canDestroy
             ? {
                 severity: 'warning',
-                text: 'Hay recursos o estado recuperable: destroy está disponible para limpiar el stack.',
+                text: t('plans.detail.actionAvailability.recoverable'),
               }
             : null;
 
@@ -1588,7 +1635,7 @@ export default function PlanDetailPage() {
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
       <Box sx={{ flex: 1 }}>
         <Typography variant="h4" sx={{ fontWeight: 700 }}>
-          {plan?.name || 'Plan'}
+          {plan?.name || t('plans.list.columns.plan')}
         </Typography>
         <Typography component="div" variant="body2" color="text.secondary">
           ID: <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{id}</Box>
@@ -1627,14 +1674,14 @@ export default function PlanDetailPage() {
         />
 
         <Button variant="outlined" onClick={() => navigate('/admin/plans')}>
-          Volver
+          {t('plans.detail.back')}
         </Button>
         {linkedCanvasId && (
           <Button
             variant="contained"
             onClick={() => navigate(`/admin/labs/${linkedCanvasId}/canvas`)}
           >
-            Ir al canvas
+            {t('plans.detail.goToCanvas')}
           </Button>
         )}
       </Stack>
@@ -1649,7 +1696,7 @@ export default function PlanDetailPage() {
         <Paper sx={{ p: 3 }}>
           <Stack direction="row" spacing={2} alignItems="center">
             <CircularProgress size={20} />
-            <Typography>Cargando plan…</Typography>
+            <Typography>{t('plans.detail.loading')}</Typography>
           </Stack>
         </Paper>
       </Container>
@@ -1660,10 +1707,10 @@ export default function PlanDetailPage() {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <Paper sx={{ p: 3 }}>
-          <Alert severity="warning">Plan no encontrado.</Alert>
+          <Alert severity="warning">{t('plans.status.notFound')}</Alert>
           <Box sx={{ mt: 2 }}>
             <Button variant="outlined" onClick={() => navigate('/admin/plans')}>
-              Volver
+              {t('plans.detail.back')}
             </Button>
           </Box>
         </Paper>
@@ -1725,12 +1772,12 @@ export default function PlanDetailPage() {
           )}
           {(String(plan?.last_action || plan?.lastAction || '').toLowerCase() === 'canvas_update') && (
             <Alert severity="warning" sx={{ mb: 2 }}>
-              Plan actualizado desde canvas. Hay cambios pendientes; ejecuta <b>Deploy</b> para aplicar la nueva infraestructura.
+              {t('plans.detail.canvasUpdatedAlert')}
             </Alert>
           )}
           {cloudTargetMismatch && (
             <Alert severity="warning" sx={{ mb: 2 }}>
-              {cloudTargetState?.message || 'La conexión cloud actual ya no coincide con la usada en el último APPLY real.'}
+              {cloudTargetState?.message || t('plans.detail.cloudMismatchAlert')}
             </Alert>
           )}
 
@@ -1761,7 +1808,7 @@ export default function PlanDetailPage() {
 
                 <Stack spacing={0.5}>
                   <Typography variant="overline" sx={{ letterSpacing: '0.14em', opacity: 0.72 }}>
-                    Control de ejecución
+                    {t('plans.detail.controlTitle')}
                   </Typography>
                   <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.12 }}>
                     {executionHero.title}
@@ -1774,15 +1821,15 @@ export default function PlanDetailPage() {
 
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} useFlexGap flexWrap="wrap">
                 <Paper variant="outlined" sx={{ px: 1.5, py: 1.1, borderRadius: 3, minWidth: 180, bgcolor: 'rgba(255,255,255,0.66)' }}>
-                  <Typography variant="caption" color="text.secondary">Actualizado</Typography>
+                  <Typography variant="caption" color="text.secondary">{t('plans.detail.updated')}</Typography>
                   <Typography variant="body2" sx={{ fontWeight: 700 }}>{formatDateTime(plan?.updated_at)}</Typography>
                 </Paper>
                 <Paper variant="outlined" sx={{ px: 1.5, py: 1.1, borderRadius: 3, minWidth: 160, bgcolor: 'rgba(255,255,255,0.66)' }}>
-                  <Typography variant="caption" color="text.secondary">Última acción</Typography>
+                  <Typography variant="caption" color="text.secondary">{t('plans.list.lastAction', { value: '' }).replace(/\s*$/, '')}</Typography>
                   <Typography variant="body2" sx={{ fontWeight: 700 }}>{plan?.last_action || plan?.lastAction || '—'}</Typography>
                 </Paper>
                 <Paper variant="outlined" sx={{ px: 1.5, py: 1.1, borderRadius: 3, minWidth: 260, bgcolor: 'rgba(255,255,255,0.66)' }}>
-                  <Typography variant="caption" color="text.secondary">Task actual</Typography>
+                  <Typography variant="caption" color="text.secondary">{t('plans.detail.currentTask')}</Typography>
                   <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                     {plan?.task_id || '—'}
                   </Typography>
@@ -1791,7 +1838,7 @@ export default function PlanDetailPage() {
 
               {String(plan?.last_action || plan?.lastAction || '').toLowerCase() === 'canvas_update' && (
                 <Typography variant="caption" color="warning.main" sx={{ display: 'block' }}>
-                  El canvas cambió: la infraestructura desplegada (si existía) ya no coincide con este plan.
+                  {t('plans.detail.canvasChanged')}
                 </Typography>
               )}
               <Typography variant="caption" color="text.secondary">
@@ -1809,7 +1856,7 @@ export default function PlanDetailPage() {
                       disabled={busy || isRunning}
                     />
                   }
-                  label={applyMode ? 'Modo APPLY (real)' : 'Modo PLAN (preview)'}
+                  label={applyMode ? t('plans.detail.applyMode') : t('plans.detail.planMode')}
                 />
 
                 <Button
@@ -1818,7 +1865,7 @@ export default function PlanDetailPage() {
                   disabled={!canDeploy || busy || (applyMode && !canApply)}
                   color={isRedeployAvailable ? 'warning' : 'primary'}
                 >
-                  {deploying ? 'Lanzando…' : deployActionLabel}
+                  {deploying ? t('plans.detail.launching') : deployActionLabel}
                 </Button>
 
                 {canDestroy && (
@@ -1828,7 +1875,7 @@ export default function PlanDetailPage() {
                     onClick={handleDestroy}
                     disabled={!canDestroy || busy}
                   >
-                    {destroying ? 'Destruyendo…' : 'Destroy'}
+                    {destroying ? t('plans.detail.destroying') : t('plans.list.destroy')}
                   </Button>
                 )}
               </>
@@ -1839,6 +1886,25 @@ export default function PlanDetailPage() {
             <Alert severity={actionAvailability.severity} sx={{ mt: 2 }}>
               {actionAvailability.text}
             </Alert>
+          )}
+
+          {labNotes && (
+            <Paper
+              variant="outlined"
+              sx={{
+                mt: 2,
+                p: 2,
+                borderRadius: 3,
+                bgcolor: 'rgba(255,255,255,0.72)',
+              }}
+            >
+              <Typography variant="subtitle2" sx={{ mb: 0.75, fontWeight: 700 }}>
+                {t('plans.detail.labNotes')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                {labNotes}
+              </Typography>
+            </Paper>
           )}
 
           {isRunning && (
@@ -1888,7 +1954,7 @@ export default function PlanDetailPage() {
                     size="small"
                     color="primary"
                     variant="filled"
-                    label="Actualización automática activa"
+                    label={t('plans.detail.activeAutoRefresh')}
                     sx={{ fontWeight: 700 }}
                   />
                 </Stack>
@@ -1919,14 +1985,14 @@ export default function PlanDetailPage() {
                       size="small"
                       variant="filled"
                       color="default"
-                      label={`Task: ${plan?.task_id || 'pendiente'}`}
+                      label={t('plans.detail.taskLabel', { value: plan?.task_id || t('labels.pending').toLowerCase() })}
                       sx={{ bgcolor: 'rgba(255,255,255,0.84)' }}
                     />
                     <Chip
                       size="small"
                       variant="filled"
                       color="default"
-                      label={`Última acción: ${plan?.last_action || plan?.lastAction || '—'}`}
+                      label={t('plans.detail.lastActionLabel', { value: plan?.last_action || plan?.lastAction || '—' })}
                       sx={{ bgcolor: 'rgba(255,255,255,0.84)' }}
                     />
                   </Stack>
@@ -1944,11 +2010,11 @@ export default function PlanDetailPage() {
             variant="scrollable"
             scrollButtons="auto"
           >
-            <Tab value="summary" label="Resumen" />
-            <Tab value="outputs" label="Outputs" />
-            <Tab value="tests" label="Pruebas" />
-            <Tab value="logs" label="Logs" />
-            <Tab value="payload" label="Payload" />
+            <Tab value="summary" label={t('plans.detail.tabs.summary')} />
+            <Tab value="outputs" label={t('plans.detail.tabs.outputs')} />
+            <Tab value="tests" label={t('plans.detail.tabs.tests')} />
+            <Tab value="logs" label={t('plans.detail.tabs.logs')} />
+            <Tab value="payload" label={t('plans.detail.tabs.payload')} />
           </Tabs>
 
           <Divider />
@@ -1969,10 +2035,10 @@ export default function PlanDetailPage() {
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }} justifyContent="space-between">
                   <Box>
                     <Typography variant="h6" sx={{ mb: 0.5 }}>
-                      Estado del plan
+                      {t('plans.detail.summary.sectionTitle')}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Lectura rápida del resultado reciente y del estado operativo actual.
+                      {t('plans.detail.summary.sectionSubtitle')}
                     </Typography>
                   </Box>
                   <Stack direction="row" spacing={1} flexWrap="wrap">
@@ -1983,38 +2049,37 @@ export default function PlanDetailPage() {
               </Paper>
 
               <Typography component="div" variant="body2" color="text.secondary">
-                Este detalle sirve para entender <b>qué pasó</b> (status), <b>qué existe hoy</b> (lifecycle) y
-                <b> qué acciones son válidas</b> (deploy/destroy).
+                {t('plans.detail.summary.intro')}
               </Typography>
 
               {/* Microcopy aclaratorio */}
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                El estado indica la última ejecución; el lifecycle indica qué existe hoy en AWS.
+                {t('plans.detail.summary.introCaption')}
               </Typography>
 
               {/* Bloque Última ejecución */}
               <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  Última ejecución
+                  {t('plans.detail.summary.lastExecution')}
                 </Typography>
                 <Divider sx={{ mb: 1 }} />
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                   <Stack spacing={0.5}>
                     <Typography component="div" variant="body2" color="text.secondary">
-                      Última acción:{' '}
+                      {t('plans.detail.lastActionLabel', { value: '' }).replace(/\s*$/, '')}{' '}
                       <b>{plan?.last_action || plan?.lastAction || '—'}</b>
                     </Typography>
                     {String(plan?.last_action || plan?.lastAction || '').toLowerCase() === 'canvas_update' && (
                       <Typography variant="caption" color="warning.main" sx={{ display: 'block' }}>
-                        El canvas cambió: la infraestructura desplegada (si existía) ya no coincide con este plan.
+                        {t('plans.detail.canvasChanged')}
                       </Typography>
                     )}
                     <Typography component="div" variant="body2" color="text.secondary">
-                      Resultado:{' '}
+                      {t('plans.detail.summary.result')}{' '}
                       <Chip size="small" {...statusChipProps(plan?.status)} />
                     </Typography>
                     <Typography component="div" variant="body2" color="text.secondary">
-                      Fecha:{' '}
+                      {t('plans.detail.summary.date')}{' '}
                       <b>{formatDateTime(plan?.updated_at)}</b>
                     </Typography>
                   </Stack>
@@ -2023,7 +2088,7 @@ export default function PlanDetailPage() {
 
               <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  Próxima ejecución real
+                  {t('plans.detail.summary.nextRealExecution')}
                 </Typography>
                 {!hasResolvedExecutionTarget || resolvedExecutionTarget.status === 'missing' ? (
                   <Alert severity="warning" variant="outlined">
@@ -2042,7 +2107,7 @@ export default function PlanDetailPage() {
                       )}
                     </Stack>
                     <Typography component="div" variant="body2" color="text.secondary">
-                      Conexión efectiva:{' '}
+                      {t('plans.detail.summary.effectiveConnection')}{' '}
                       <b>{resolvedExecutionTarget.name || '—'}</b>
                       {resolvedExecutionTarget.id ? ` (${resolvedExecutionTarget.id})` : ''}
                     </Typography>
@@ -2051,7 +2116,7 @@ export default function PlanDetailPage() {
                     </Typography>
                     {resolvedExecutionTarget.account_id && (
                       <Typography component="div" variant="body2" color="text.secondary">
-                        Cuenta AWS prevista:{' '}
+                        {t('plans.detail.summary.plannedAwsAccount')}{' '}
                         <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                           {resolvedExecutionTarget.account_id}
                         </Box>
@@ -2059,7 +2124,7 @@ export default function PlanDetailPage() {
                     )}
                     {resolvedExecutionTarget.arn && (
                       <Typography component="div" variant="body2" color="text.secondary">
-                        ARN conocido:{' '}
+                        {t('plans.detail.summary.knownArn')}{' '}
                         <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                           {resolvedExecutionTarget.arn}
                         </Box>
@@ -2067,7 +2132,7 @@ export default function PlanDetailPage() {
                     )}
                     {!resolvedExecutionTarget.account_id && (
                       <Alert severity="info" variant="outlined">
-                        La conexión está resuelta, pero aún no tenemos identidad STS visible. Usa “Probar” en Cloud Connections para registrar cuenta y ARN.
+                        {t('plans.detail.summary.executionResolvedNoIdentity')}
                       </Alert>
                     )}
                   </Stack>
@@ -2076,23 +2141,23 @@ export default function PlanDetailPage() {
 
               <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  Reconciliación de cuenta cloud
+                  {t('plans.detail.summary.cloudAccountReconciliation')}
                 </Typography>
                 <Alert
                   severity={cloudTargetMismatch ? 'warning' : 'success'}
                   variant="outlined"
                 >
-                  {cloudTargetState?.message || 'Sin información suficiente para reconciliar la cuenta cloud.'}
+                  {cloudTargetState?.message || t('plans.detail.summary.cloudAccountNoInfo')}
                 </Alert>
               </Paper>
 
               <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  Evidencia del último APPLY real
+                  {t('plans.detail.summary.lastApplyEvidence')}
                 </Typography>
                 {!hasLastApplyContext ? (
                   <Alert severity="info" variant="outlined">
-                    Aún no hay snapshot de ejecución real guardado para este plan. Aparecerá después del primer APPLY real.
+                    {t('plans.detail.summary.noRealSnapshot')}
                   </Alert>
                 ) : (
                   <Stack spacing={1.5}>
@@ -2112,37 +2177,37 @@ export default function PlanDetailPage() {
 
                     <Stack spacing={0.5}>
                       <Typography component="div" variant="body2" color="text.secondary">
-                        Conexión usada:{' '}
-                        <b>{lastApplyContext.cloud_connection_name || 'Credenciales del entorno'}</b>
+                        {t('plans.detail.summary.usedConnection')}{' '}
+                        <b>{lastApplyContext.cloud_connection_name || t('plans.detail.summary.envCredentials')}</b>
                         {lastApplyContext.cloud_connection_id ? ` (${lastApplyContext.cloud_connection_id})` : ''}
                       </Typography>
                       <Typography component="div" variant="body2" color="text.secondary">
-                        Cuenta AWS:{' '}
+                        {t('plans.detail.summary.awsAccount')}{' '}
                         <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                           {lastApplyContext.account_id || '—'}
                         </Box>
                       </Typography>
                       <Typography component="div" variant="body2" color="text.secondary">
-                        ARN:{' '}
+                        {t('plans.detail.summary.arn')}{' '}
                         <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                           {lastApplyContext.arn || '—'}
                         </Box>
                       </Typography>
                       <Typography component="div" variant="body2" color="text.secondary">
-                        UserId STS:{' '}
+                        {t('plans.detail.summary.stsUserId')}{' '}
                         <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                           {lastApplyContext.user_id || '—'}
                         </Box>
                       </Typography>
                       <Typography component="div" variant="body2" color="text.secondary">
-                        Capturado:{' '}
+                        {t('plans.detail.summary.capturedAt')}{' '}
                         <b>{formatDateTime(lastApplyContext.captured_at)}</b>
                       </Typography>
                     </Stack>
 
                     {lastApplyContext.identity_error && (
                       <Alert severity="warning" variant="outlined">
-                        No se pudo resolver STS al capturar la auditoría: {lastApplyContext.identity_error}
+                        {t('plans.detail.summary.auditIdentityError', { error: lastApplyContext.identity_error })}
                       </Alert>
                     )}
                   </Stack>
@@ -2151,11 +2216,11 @@ export default function PlanDetailPage() {
 
               <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  Historial reciente de ejecuciones
+                  {t('plans.detail.summary.recentHistory')}
                 </Typography>
                 {executionHistory.length === 0 ? (
                   <Alert severity="info" variant="outlined">
-                    Aún no hay ejecuciones registradas para este plan.
+                    {t('plans.detail.summary.noHistory')}
                   </Alert>
                 ) : (
                   <Stack spacing={1.5}>
@@ -2171,7 +2236,7 @@ export default function PlanDetailPage() {
                             <Chip size="small" label={item.status || '—'} {...statusChipProps(String(item.status || '').toUpperCase())} />
                             <Chip
                               size="small"
-                              label={item.simulate_only ? 'PREVIEW' : 'REAL'}
+                              label={item.simulate_only ? t('plans.list.mode.preview') : t('plans.list.mode.real')}
                               color={item.simulate_only ? 'info' : 'success'}
                               variant={item.simulate_only ? 'outlined' : 'filled'}
                             />
@@ -2180,18 +2245,18 @@ export default function PlanDetailPage() {
                             )}
                           </Stack>
                           <Typography component="div" variant="body2" color="text.secondary">
-                            Solicitado por:{' '}
+                            {t('plans.detail.summary.requestedBy')}{' '}
                             <b>{item.requested_by?.display_name || item.requested_by?.email || '—'}</b>
                             {item.delegation_id ? ` · delegación ${item.delegation_id}` : ''}
                           </Typography>
                           <Typography component="div" variant="body2" color="text.secondary">
-                            Conexión:{' '}
-                            <b>{item.cloud_connection_name || 'Credenciales del entorno'}</b>
+                            {t('plans.detail.summary.connection')}{' '}
+                            <b>{item.cloud_connection_name || t('plans.detail.summary.envCredentials')}</b>
                             {item.resolved_execution_source ? ` · source ${item.resolved_execution_source}` : ''}
                           </Typography>
                           {(item.account_id || item.arn) && (
                             <Typography component="div" variant="body2" color="text.secondary">
-                              Identidad:{' '}
+                              {t('plans.detail.summary.identity')}{' '}
                               <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                                 {item.account_id || '—'}
                                 {item.arn ? ` · ${item.arn}` : ''}
@@ -2199,8 +2264,8 @@ export default function PlanDetailPage() {
                             </Typography>
                           )}
                           <Typography component="div" variant="body2" color="text.secondary">
-                            Inicio: <b>{formatDateTime(item.started_at || item.created_at)}</b>
-                            {item.completed_at ? ` · Fin: ${formatDateTime(item.completed_at)}` : ''}
+                            {t('plans.detail.summary.start')} <b>{formatDateTime(item.started_at || item.created_at)}</b>
+                            {item.completed_at ? ` · ${t('plans.detail.summary.end')} ${formatDateTime(item.completed_at)}` : ''}
                           </Typography>
                           {item.error && (
                             <Alert severity="warning" variant="outlined">
@@ -2216,22 +2281,22 @@ export default function PlanDetailPage() {
 
               <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  Riesgo del último plan
+                  {t('plans.detail.summary.riskTitle')}
                 </Typography>
                 {!planRiskSummary ? (
                   <Alert severity="info" variant="outlined">
-                    Carga la pestaña de logs para resumir qué detectó Terraform en el último plan.
+                    {t('plans.detail.summary.loadLogsHint')}
                   </Alert>
                 ) : (
                   <Stack spacing={1.5}>
                     <Alert severity={riskAlertSeverity} variant="outlined">
                       {riskSeverity === 'destructive'
-                        ? 'Se detectaron cambios con destrucción o reemplazo de recursos.'
+                        ? t('plans.detail.summary.riskDestructive')
                         : riskSeverity === 'caution'
-                          ? 'Se detectaron cambios sobre recursos existentes.'
+                          ? t('plans.detail.summary.riskCaution')
                           : riskSeverity === 'safe'
-                            ? 'Se detectaron cambios aditivos.'
-                            : 'No se detectaron cambios en el último plan.'}
+                            ? t('plans.detail.summary.riskSafe')
+                            : t('plans.detail.summary.riskNone')}
                     </Alert>
                     <Stack direction="row" spacing={1} flexWrap="wrap">
                       <Chip label={`Add: ${planRiskSummary.add}`} size="small" />
@@ -2254,16 +2319,16 @@ export default function PlanDetailPage() {
 
               <Paper variant="outlined" sx={{ mt: 3, mb: 2, p: 2 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  Costo, residuos y lectura técnica
+                  {t('plans.detail.summary.advisoryTitle')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-                  Este bloque se calcula desde el payload, los outputs cargados y el estado actual del plan.
+                  {t('plans.detail.summary.advisoryCaption')}
                 </Typography>
 
                 <Stack spacing={2}>
                   <Box>
                     <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-                      1. Costo potencial
+                      {t('plans.detail.summary.advisoryCost')}
                     </Typography>
                     <Stack spacing={1}>
                       {planAdvisories.costs.map((item, idx) => (
@@ -2276,7 +2341,7 @@ export default function PlanDetailPage() {
 
                   <Box>
                     <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-                      2. Qué puede quedar tras Destroy
+                      {t('plans.detail.summary.advisoryResidual')}
                     </Typography>
                     <Stack spacing={1}>
                       {planAdvisories.residuals.map((item, idx) => (
@@ -2289,7 +2354,7 @@ export default function PlanDetailPage() {
 
                   <Box>
                     <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-                      3. Lectura pedagógica y técnica
+                      {t('plans.detail.summary.advisoryPedagogy')}
                     </Typography>
                     <Stack spacing={1}>
                       {planAdvisories.pedagogy.map((item, idx) => (
@@ -2309,9 +2374,9 @@ export default function PlanDetailPage() {
             <Box sx={{ p: 3 }}>
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
                 <Box sx={{ flex: 1 }}>
-                  <Typography variant="h6">Outputs</Typography>
+                  <Typography variant="h6">{t('plans.detail.outputs.title')}</Typography>
                   <Typography component="div" variant="body2" color="text.secondary">
-                    Resumen pensado para entender rápido qué quedó creado en AWS sin perderte en demasiados IDs.
+                    {t('plans.detail.outputs.subtitle')}
                   </Typography>
                 </Box>
                 <Button
@@ -2319,21 +2384,21 @@ export default function PlanDetailPage() {
                   startIcon={<InfoOutlinedIcon />}
                   onClick={() => setOutputsInfoOpen(true)}
                 >
-                  Info AWS
+                  {t('plans.detail.outputs.infoAws')}
                 </Button>
                 <Button
                   variant="outlined"
                   onClick={fetchOutputs}
                   disabled={outputsLoading}
                 >
-                  {outputsLoading ? 'Cargando…' : 'Cargar outputs'}
+                  {outputsLoading ? t('plans.detail.outputs.loadingOutputs') : t('plans.detail.outputs.loadOutputs')}
                 </Button>
               </Stack>
 
               <Box sx={{ mt: 2 }}>
                 {!outputsResponse && (
                   <Alert severity="info">
-                    Aún no se han cargado outputs. Haz clic en “Cargar outputs”.
+                    {t('plans.detail.outputs.notLoaded')}
                   </Alert>
                 )}
 
@@ -2343,7 +2408,7 @@ export default function PlanDetailPage() {
                       <Chip size="small" label={`backend_status: ${outputsResponse?.status ?? '—'}`} variant="outlined" />
                       <Chip
                         size="small"
-                        label={outputsResponse?.applied ? 'APPLIED: true' : 'APPLIED: false'}
+                        label={outputsResponse?.applied ? t('plans.detail.outputs.appliedTrue') : t('plans.detail.outputs.appliedFalse')}
                         color={outputsResponse?.applied ? 'success' : 'default'}
                         variant={outputsResponse?.applied ? 'filled' : 'outlined'}
                       />
@@ -2351,42 +2416,45 @@ export default function PlanDetailPage() {
 
                     {outputsResponse?.outputs && Object.keys(outputsResponse.outputs).length === 0 ? (
                       <Alert severity="info" sx={{ mt: 2 }}>
-                        El backend respondió correctamente, pero no hay outputs guardados para este plan.
+                        {t('plans.detail.outputs.empty')}
                       </Alert>
                     ) : null}
 
                     <Box sx={{ mt: 2 }}>
                       <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                        Resumen de conectividad
+                        {t('plans.detail.outputs.connectivitySummary')}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                        Primero mira estas tres tarjetas. Si necesitas depurar algo puntual, baja luego a los IDs por VPC o TGW.
+                        {t('plans.detail.outputs.connectivityCaption')}
                       </Typography>
                       <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
                         <Paper variant="outlined" sx={{ p: 1.5, flex: 1 }}>
-                          <Typography variant="caption" color="text.secondary">Modelo</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5 }}>{connectivityOverview.modeLabel}</Typography>
+                          <Typography variant="caption" color="text.secondary">{t('plans.detail.outputs.model')}</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5 }}>{t(`plans.detail.outputs.modeLabels.${connectivityOverview.modeKey}`)}</Typography>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-                            {describeConnectivityMode(connectivityOverview.modeLabel, connectivityOverview)}
+                            {describeConnectivityMode(connectivityOverview.modeKey, connectivityOverview)}
                           </Typography>
                         </Paper>
                         <Paper variant="outlined" sx={{ p: 1.5, flex: 1 }}>
-                          <Typography variant="caption" color="text.secondary">Conectividad esperada</Typography>
+                          <Typography variant="caption" color="text.secondary">{t('plans.detail.outputs.expectedConnectivity')}</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5 }}>
-                            {connectivityOverview.connectedPairs} par(es) conectados
+                            {t('plans.detail.outputs.connectedPairs', { count: connectivityOverview.connectedPairs })}
                           </Typography>
                           <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
-                            <Chip size="small" label={`Peerings activos: ${connectivityOverview.peeringActive}`} variant="outlined" />
-                            <Chip size="small" label={`TGW activos: ${connectivityOverview.tgwActive}`} variant="outlined" />
+                            <Chip size="small" label={t('plans.detail.outputs.activePeerings', { count: connectivityOverview.peeringActive })} variant="outlined" />
+                            <Chip size="small" label={t('plans.detail.outputs.activeTgw', { count: connectivityOverview.tgwActive })} variant="outlined" />
                           </Stack>
                         </Paper>
                         <Paper variant="outlined" sx={{ p: 1.5, flex: 1 }}>
-                          <Typography variant="caption" color="text.secondary">Traducción AWS</Typography>
+                          <Typography variant="caption" color="text.secondary">{t('plans.detail.outputs.awsTranslation')}</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5 }}>
-                            {connectivityOverview.tgwAttachmentsActive || connectivityOverview.tgwAttachmentsDeclared} attachment(s) TGW
+                            {t('plans.detail.outputs.attachments', { count: connectivityOverview.tgwAttachmentsActive || connectivityOverview.tgwAttachmentsDeclared })}
                           </Typography>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-                            Declarados: peerings {connectivityOverview.peeringDeclared}, TGW {connectivityOverview.tgwDeclared}.
+                            {t('plans.detail.outputs.declaredPeeringsTgw', {
+                              peerings: connectivityOverview.peeringDeclared,
+                              tgw: connectivityOverview.tgwDeclared,
+                            })}
                           </Typography>
                         </Paper>
                       </Stack>
@@ -2395,10 +2463,10 @@ export default function PlanDetailPage() {
                     {vpcInfraCatalog.length > 0 && (
                       <Box sx={{ mt: 2 }}>
                         <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                          Infraestructura destacada por VPC
+                          {t('plans.detail.outputs.vpcInfra')}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                          Aquí ves solo los identificadores más útiles de cada segmento en AWS.
+                          {t('plans.detail.outputs.vpcInfraCaption')}
                         </Typography>
                         <Stack spacing={1.5}>
                           {vpcInfraCatalog.map((item) => (
@@ -2416,7 +2484,7 @@ export default function PlanDetailPage() {
                                 />
                                 <Chip
                                   size="small"
-                                  label={item.natGatewayId ? `NAT: ${item.natGatewayId}` : 'NAT: —'}
+                                  label={item.natGatewayId ? `NAT: ${item.natGatewayId}` : `NAT: —`}
                                   color={item.natGatewayId ? 'secondary' : 'default'}
                                   variant={item.natGatewayId ? 'filled' : 'outlined'}
                                 />
@@ -2435,7 +2503,7 @@ export default function PlanDetailPage() {
                               {(instanceCatalog.get(item.logicalVpcId) || []).length > 0 && (
                                 <Stack spacing={1} sx={{ mt: 1.5 }}>
                                   <Typography variant="caption" color="text.secondary">
-                                    Instancias detectadas
+                                    {t('plans.detail.outputs.instancesDetected')}
                                   </Typography>
                                   {(instanceCatalog.get(item.logicalVpcId) || []).map((instance) => (
                                     <Paper
@@ -2454,13 +2522,13 @@ export default function PlanDetailPage() {
                                         />
                                         <Chip
                                           size="small"
-                                          label={`Privada: ${instance.privateIp || '—'}`}
+                                          label={t('plans.detail.outputs.privateIp', { value: instance.privateIp || '—' })}
                                           color={instance.privateIp ? 'info' : 'default'}
                                           variant={instance.privateIp ? 'filled' : 'outlined'}
                                         />
                                         <Chip
                                           size="small"
-                                          label={`Pública: ${instance.publicIp || '—'}`}
+                                          label={t('plans.detail.outputs.publicIp', { value: instance.publicIp || '—' })}
                                           color={instance.publicIp ? 'success' : 'default'}
                                           variant={instance.publicIp ? 'filled' : 'outlined'}
                                         />
@@ -2478,10 +2546,10 @@ export default function PlanDetailPage() {
                     {transitGatewayCatalog.length > 0 && (
                       <Box sx={{ mt: 2 }}>
                         <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                          Infraestructura Transit Gateway
+                          {t('plans.detail.outputs.transitGatewayInfra')}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                          Este bloque solo aparece si el laboratorio usa un hub central de AWS Transit Gateway.
+                          {t('plans.detail.outputs.transitGatewayCaption')}
                         </Typography>
                         <Stack spacing={1.5}>
                           {transitGatewayCatalog.map((item) => (
@@ -2490,7 +2558,7 @@ export default function PlanDetailPage() {
                                 {item.name}
                               </Typography>
                               <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: item.attachments.length > 0 ? 1.5 : 0 }}>
-                                <Chip size="small" label={`Router lógico: ${item.routerId}`} variant="outlined" />
+                                <Chip size="small" label={t('plans.detail.outputs.logicalRouter', { value: item.routerId })} variant="outlined" />
                                 <Chip
                                   size="small"
                                   label={item.tgwId ? `TGW: ${item.tgwId}` : 'TGW: —'}
@@ -2510,7 +2578,7 @@ export default function PlanDetailPage() {
                                   {item.attachments.map((attachment) => (
                                     <Paper key={attachment.key} variant="outlined" sx={{ p: 1.5, bgcolor: 'background.default' }}>
                                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                                        Attachment
+                                        {t('plans.detail.outputs.attachment')}
                                       </Typography>
                                       <Stack direction="row" spacing={1} flexWrap="wrap">
                                         <Chip size="small" label={`VPC: ${attachment.vpcName}`} variant="outlined" />
@@ -2535,9 +2603,9 @@ export default function PlanDetailPage() {
                         sx={{ mb: outputsJsonOpen ? 1.5 : 0 }}
                       >
                         <Box>
-                          <Typography variant="subtitle2">JSON completo</Typography>
+                          <Typography variant="subtitle2">{t('plans.detail.outputs.fullJsonTitle')}</Typography>
                           <Typography variant="caption" color="text.secondary">
-                            Solo si necesitas inspeccionar todos los outputs crudos del backend.
+                            {t('plans.detail.outputs.jsonCaption')}
                           </Typography>
                         </Box>
                         <Button
@@ -2545,7 +2613,7 @@ export default function PlanDetailPage() {
                           variant={outputsJsonOpen ? 'contained' : 'outlined'}
                           onClick={() => setOutputsJsonOpen((prev) => !prev)}
                         >
-                          {outputsJsonOpen ? 'Ocultar JSON' : 'Ver JSON completo'}
+                          {outputsJsonOpen ? t('plans.detail.outputs.hideJson') : t('plans.detail.outputs.showJson')}
                         </Button>
                       </Stack>
 
@@ -2580,10 +2648,9 @@ export default function PlanDetailPage() {
             <Box sx={{ p: 3 }}>
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
                 <Box sx={{ flex: 1 }}>
-                  <Typography variant="h6">Guía de pruebas post-deploy</Typography>
+                  <Typography variant="h6">{t('plans.detail.tests.title')}</Typography>
                   <Typography component="div" variant="body2" color="text.secondary">
-                    Define pruebas de conectividad entre VPCs, validaciones guiadas para una VPC con NAT o comprobaciones
-                    básicas de acceso directo a una bastion pública.
+                    {t('plans.detail.tests.subtitle')}
                   </Typography>
                 </Box>
                 <Button
@@ -2591,34 +2658,31 @@ export default function PlanDetailPage() {
                   onClick={fetchOutputs}
                   disabled={outputsLoading}
                 >
-                  {outputsLoading ? 'Cargando…' : 'Cargar outputs para pruebas'}
+                  {outputsLoading ? t('plans.detail.outputs.loadingOutputs') : t('plans.detail.tests.loadOutputs')}
                 </Button>
                 <Button
                   variant="contained"
                   onClick={() => setConsoleGuideOpen(true)}
                   disabled={!canOpenConsoleGuide}
                 >
-                  Cómo probar en consola
+                  {t('plans.detail.tests.consoleGuide')}
                 </Button>
               </Stack>
 
               <Box sx={{ mt: 2 }}>
                 <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
-                  Abre el modal de instrucciones para ver el paso a paso por consola: cómo entrar por SSH a una bastion
-                  y luego cómo ejecutar los comandos sugeridos, ya sea entre VPCs, dentro de una VPC con NAT o en un
-                  laboratorio single-VPC con exposición pública directa.
+                  {t('plans.detail.tests.introAlert')}
                 </Alert>
 
                 {!hasOutputsData && (
                   <Alert severity="info" sx={{ mb: 2 }}>
-                    Carga outputs para identificar instancias/IPs reales y ejecutar pruebas guiadas.
+                    {t('plans.detail.tests.needOutputs')}
                   </Alert>
                 )}
 
                 {connectivityScenarios.length === 0 && managedEgressScenarios.length === 0 && publicAccessScenarios.length === 0 && (
                   <Alert severity="warning">
-                    Este plan no expone pares de VPC conectados por peering/TGW, un caso single-VPC con NAT ni una
-                    bastion pública con salida directa que podamos guiar desde aquí.
+                    {t('plans.detail.tests.empty')}
                   </Alert>
                 )}
 
@@ -2628,17 +2692,19 @@ export default function PlanDetailPage() {
                       <Typography variant="subtitle2" sx={{ flex: 1 }}>
                         {scenario.aVpc.name} ↔ {scenario.bVpc.name}
                       </Typography>
-                      <Chip size="small" label={scenario.modeLabel} color="primary" variant="outlined" />
+                      <Chip size="small" label={t(`plans.detail.tests.modeLabels.${scenario.modeKey}`)} color="primary" variant="outlined" />
                       <Chip size="small" label={`${scenario.aVpc.cidr} / ${scenario.bVpc.cidr}`} variant="outlined" />
                     </Stack>
 
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                      Routers implicados: {scenario.routers.length > 0 ? scenario.routers.join(', ') : 'n/a'}
+                      {t('plans.detail.tests.routersInvolved', {
+                        value: scenario.routers.length > 0 ? scenario.routers.join(', ') : 'n/a',
+                      })}
                     </Typography>
 
                     {!scenario.readyForRun && (
                       <Alert severity="warning" sx={{ mt: 1.5 }}>
-                        No hay suficientes outputs de instancias para generar prueba ida/vuelta en este par.
+                        {t('plans.detail.tests.insufficientRoundTrip')}
                       </Alert>
                     )}
 
@@ -2679,20 +2745,25 @@ export default function PlanDetailPage() {
                   <Paper key={`${scenario.vpcId}:managed-egress`} variant="outlined" sx={{ p: 2, mb: 2 }}>
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'center' }}>
                       <Typography variant="subtitle2" sx={{ flex: 1 }}>
-                        {scenario.vpcName} · {scenario.hasPrivateSubnets ? 'salida privada con NAT' : 'NAT sin zonas privadas'}
+                        {scenario.hasPrivateSubnets
+                          ? t('plans.detail.tests.managedEgressTitle', { name: scenario.vpcName })
+                          : t('plans.detail.tests.managedEgressNoPrivateTitle', { name: scenario.vpcName })}
                       </Typography>
-                      <Chip size="small" label="Single VPC" variant="outlined" />
-                      <Chip size="small" label="Managed egress" color="info" variant="outlined" />
+                      <Chip size="small" label={t('plans.detail.tests.singleVpc')} variant="outlined" />
+                      <Chip size="small" label={t('plans.detail.tests.managedEgress')} color="info" variant="outlined" />
                       <Chip size="small" label={scenario.cidr} variant="outlined" />
                     </Stack>
 
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                      NAT en zona pública: {scenario.egressSubnetName || 'n/a'} · NAT ID: {scenario.natGatewayId || 'n/a'}
+                      {t('plans.detail.tests.natZone', {
+                        subnet: scenario.egressSubnetName || 'n/a',
+                        natId: scenario.natGatewayId || 'n/a',
+                      })}
                     </Typography>
 
                     {!scenario.readyForRun && (
                       <Alert severity="warning" sx={{ mt: 1.5 }}>
-                        Faltan outputs de bastion o workload privada para generar el comando sugerido.
+                        {t('plans.detail.tests.missingManagedOutputs')}
                       </Alert>
                     )}
 
@@ -2729,24 +2800,28 @@ export default function PlanDetailPage() {
 
                     <Stack spacing={1} sx={{ mt: 1.5 }}>
                       <Alert severity="info" variant="outlined">
-                        Qué observar: la bastion pública debería tener IP pública{scenario.hasPrivateWorkload ? ' y la workload privada no.' : '.'}
+                        {t(
+                          scenario.hasPrivateWorkload
+                            ? 'plans.detail.tests.observeBastionAndPrivate'
+                            : 'plans.detail.tests.observeBastionPublic',
+                        )}
                       </Alert>
                       {scenario.hasPrivateWorkload ? (
                         <>
                           <Alert severity="info" variant="outlined">
-                            Qué observar: la bastion debe alcanzar la IP privada de la workload dentro de la misma VPC.
+                            {t('plans.detail.tests.observePrivateReachability')}
                           </Alert>
                           <Alert severity="info" variant="outlined">
-                            Qué observar: el NAT da salida a la subnet privada, pero no vuelve pública a la workload.
+                            {t('plans.detail.tests.observeNatBehavior')}
                           </Alert>
                         </>
                       ) : (
                         <>
                           <Alert severity="warning" variant="outlined">
-                            Qué observar: el NAT fue creado correctamente, pero en este diseño no hay subnets privadas que lo aprovechen.
+                            {t('plans.detail.tests.observeNatNoPrivate')}
                           </Alert>
                           <Alert severity="info" variant="outlined">
-                            Qué observar: este caso sirve para enseñar costo/beneficio. El segmento sigue funcionando, pero el NAT aquí agrega complejidad sin aportar aislamiento privado.
+                            {t('plans.detail.tests.observeCostBenefit')}
                           </Alert>
                         </>
                       )}
@@ -2758,15 +2833,18 @@ export default function PlanDetailPage() {
                   <Paper key={`${scenario.vpcId}:public-access`} variant="outlined" sx={{ p: 2, mb: 2 }}>
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ md: 'center' }}>
                       <Typography variant="subtitle2" sx={{ flex: 1 }}>
-                        {scenario.vpcName} · acceso público directo
+                        {t('plans.detail.tests.publicAccessTitle', { name: scenario.vpcName })}
                       </Typography>
-                      <Chip size="small" label="Single VPC" variant="outlined" />
-                      <Chip size="small" label="Public bastion" color="success" variant="outlined" />
+                      <Chip size="small" label={t('plans.detail.tests.singleVpc')} variant="outlined" />
+                      <Chip size="small" label={t('plans.detail.tests.publicBastion')} color="success" variant="outlined" />
                       <Chip size="small" label={scenario.cidr} variant="outlined" />
                     </Stack>
 
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                      Bastion: {scenario.bastion.instanceName} · IP pública: {scenario.bastion.publicIp || 'n/a'}
+                      {t('plans.detail.tests.bastionPublicIp', {
+                        name: scenario.bastion.instanceName,
+                        value: scenario.bastion.publicIp || 'n/a',
+                      })}
                     </Typography>
 
                     <Stack spacing={1.2} sx={{ mt: 1.5 }}>
@@ -2800,21 +2878,17 @@ export default function PlanDetailPage() {
 
                     <Stack spacing={1} sx={{ mt: 1.5 }}>
                       <Alert severity="info" variant="outlined">
-                        Qué observar: la bastion debería aceptar SSH solo desde el rango definido en `Allowed SSH CIDR`.
+                        {t('plans.detail.tests.observePublicSsh')}
                       </Alert>
                       <Alert severity="warning" variant="outlined">
-                        Qué observar: este diseño expone una instancia directamente a Internet. Es útil para una prueba
-                        rápida, pero ofrece menos aislamiento que un patrón con workload privada.
+                        {t('plans.detail.tests.observePublicExposure')}
                       </Alert>
                     </Stack>
                   </Paper>
                 ))}
 
                 <Alert severity="info" variant="outlined">
-                  Resultado esperado: cada par conectado debe responder ping en ida y retorno; en un caso single-VPC con
-                  NAT, la bastion debe alcanzar la workload privada y esta última debe permanecer sin IP pública. En un
-                  caso con bastion pública directa, la validación mínima es confirmar acceso SSH y entender que el
-                  aislamiento es menor que en un patrón con subnet privada.
+                  {t('plans.detail.tests.expectedResult')}
                 </Alert>
               </Box>
             </Box>
@@ -2825,9 +2899,9 @@ export default function PlanDetailPage() {
             <Box sx={{ p: 3 }}>
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
                 <Box sx={{ flex: 1 }}>
-                  <Typography variant="h6">Logs del plan</Typography>
+                  <Typography variant="h6">{t('plans.detail.logs.title')}</Typography>
                   <Typography component="div" variant="body2" color="text.secondary">
-                    El log corresponde siempre a la última ejecución (deploy o destroy).
+                    {t('plans.detail.logs.subtitle')}
                   </Typography>
                 </Box>
                 {isRunning && (
@@ -2835,25 +2909,25 @@ export default function PlanDetailPage() {
                     size="small"
                     color="info"
                     variant="filled"
-                    label="Streaming activo"
+                    label={t('plans.detail.logs.streaming')}
                   />
                 )}
                 <Button variant="contained" onClick={fetchPlanLogs}>
-                  Ver log del plan
+                  {t('plans.detail.logs.viewLog')}
                 </Button>
               </Stack>
 
               <Box sx={{ mt: 2 }}>
                 {!logText && (
                   <Alert severity="info">
-                    Haz clic en “Ver log del plan” para mostrar el log de la última ejecución.
+                    {t('plans.detail.logs.empty')}
                   </Alert>
                 )}
 
                 {logText && (
                   <>
                     <Alert severity="info" sx={{ mb: 1 }}>
-                      Este log corresponde a la última ejecución del plan.
+                      {t('plans.detail.logs.currentLog')}
                     </Alert>
                     <Stack
                       direction={{ xs: 'column', sm: 'row' }}
@@ -2863,23 +2937,28 @@ export default function PlanDetailPage() {
                       sx={{ mb: 1 }}
                     >
                       <Typography variant="caption" color="text.secondary">
-                        Última actualización del log:{' '}
+                        {t('plans.detail.logs.updatedAt')}{' '}
                         <b>{logUpdatedAt ? formatDateTime(logUpdatedAt) : '—'}</b>
                       </Typography>
                       {isRunning && (
                         <Typography variant="caption" color="info.main">
-                          El visor baja automáticamente al final mientras la ejecución sigue activa.
+                          {t('plans.detail.logs.autoScroll')}
                         </Typography>
                       )}
                     </Stack>
                     {planRiskSummary && (
                       <Alert severity={riskAlertSeverity} sx={{ mb: 1 }}>
-                        Resumen Terraform: {planRiskSummary.add} add, {planRiskSummary.change} change, {planRiskSummary.destroy} destroy, {planRiskSummary.replace} replace.
+                        {t('plans.detail.logs.terraformSummary', {
+                          add: planRiskSummary.add,
+                          change: planRiskSummary.change,
+                          destroy: planRiskSummary.destroy,
+                          replace: planRiskSummary.replace,
+                        })}
                       </Alert>
                     )}
                     {highlightedLogLineStart !== null && (
                       <Alert severity="success" variant="outlined" sx={{ mb: 1 }}>
-                        Se resaltan las líneas nuevas recién agregadas al log.
+                        {t('plans.detail.logs.newLines')}
                       </Alert>
                     )}
                     <Paper
@@ -2931,7 +3010,7 @@ export default function PlanDetailPage() {
           {tab === 'payload' && (
             <Box sx={{ p: 3 }}>
               <Typography variant="h6" sx={{ mb: 2 }}>
-                Payload
+                {t('plans.detail.payload.title')}
               </Typography>
               <Paper
                 variant="outlined"
@@ -2955,7 +3034,7 @@ export default function PlanDetailPage() {
       </Stack>
       <TourLauncherButton
         onClick={() => restartTour('plan-detail-overview')}
-        label="Ver tour del plan"
+        label={t('plans.detail.tourLabel')}
       />
       <Dialog
         open={consoleGuideOpen}
@@ -2963,27 +3042,25 @@ export default function PlanDetailPage() {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>Cómo probar conectividad desde consola</DialogTitle>
+        <DialogTitle>{t('plans.detail.guide.consoleTitle')}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
             <Alert severity="info" variant="outlined">
-              Primero entra por SSH a una bastion pública. Después, desde esa instancia, ejecuta los comandos sugeridos
-              en esta misma pestaña para validar conectividad cruzada entre VPCs o alcance privado dentro de una VPC con NAT.
+              {t('plans.detail.guide.consoleIntro')}
             </Alert>
 
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                1. Requisitos previos
+                {t('plans.detail.guide.step1')}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Necesitas `aws` CLI, acceso a la key pair con la que desplegaste la instancia y que tu IP pública esté
-                permitida en `Allowed SSH CIDR`.
+                {t('plans.detail.guide.step1Text')}
               </Typography>
             </Box>
 
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                2. Bastions detectadas en este laboratorio
+                {t('plans.detail.guide.step2')}
               </Typography>
               <Stack spacing={1}>
                 {consoleGuide.bastions.map((item) => (
@@ -2992,13 +3069,23 @@ export default function PlanDetailPage() {
                       {item.vpcName}
                     </Typography>
                     <Typography variant="caption" display="block" color="text.secondary">
-                      Instancia: {item.instanceName} · instance_id: {item.instanceId || 'n/a'}
+                      {t('plans.detail.guide.instanceLabel', {
+                        name: item.instanceName,
+                        value: item.instanceId || 'n/a',
+                      })}
                     </Typography>
                     <Typography variant="caption" display="block" color="text.secondary">
-                      IP pública: {item.publicIp || 'n/a'} · IP privada: {item.privateIp || 'n/a'}
+                      {t('plans.detail.guide.publicPrivateIp', {
+                        publicIp: item.publicIp || 'n/a',
+                        privateIp: item.privateIp || 'n/a',
+                      })}
                     </Typography>
                     <Typography variant="caption" display="block" color="text.secondary">
-                      Región/AZ: {item.region} / {item.availabilityZone} · Key pair: {item.keyPair}
+                      {t('plans.detail.guide.regionAzKeyPair', {
+                        region: item.region,
+                        az: item.availabilityZone,
+                        keyPair: item.keyPair,
+                      })}
                     </Typography>
                   </Paper>
                 ))}
@@ -3007,7 +3094,10 @@ export default function PlanDetailPage() {
 
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                3. Si ya tienes el archivo `.pem`, conéctate por SSH
+                {t('plans.detail.guide.step3')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                {t('plans.detail.guide.step3Text')}
               </Typography>
               <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'background.default' }}>
                 <Box
@@ -3019,19 +3109,18 @@ export default function PlanDetailPage() {
                     fontSize: 12,
                   }}
                 >
-{`chmod 400 ~/.ssh/tesis-key-new.pem
-ssh -i ~/.ssh/tesis-key-new.pem ec2-user@${consoleGuide.bastions[0]?.publicIp || 'IP_PUBLICA_BASTION'}`}
+{`chmod 400 ~/.ssh/<tu-clave-privada>
+ssh -i ~/.ssh/<tu-clave-privada> ec2-user@${consoleGuide.bastions[0]?.publicIp || 'IP_PUBLICA_BASTION'}`}
                 </Box>
               </Paper>
             </Box>
 
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                4. Si no tienes la llave privada, usa EC2 Instance Connect
+                {t('plans.detail.guide.step4')}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                AWS no permite descargar la private key de una key pair existente. En ese caso, puedes inyectar una
-                clave pública temporal y entrar con una llave efímera.
+                {t('plans.detail.guide.step4Text')}
               </Typography>
               <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'background.default' }}>
                 <Box
@@ -3060,7 +3149,7 @@ ssh -i "$TMPK" ec2-user@${consoleGuide.bastions[0]?.publicIp || 'IP_PUBLICA_BAST
 
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                5. Ejecuta las comprobaciones desde la bastion
+                {t('plans.detail.guide.step5')}
               </Typography>
               <Stack spacing={1}>
                 {consoleGuide.scenarios.flatMap((scenario) =>
@@ -3093,16 +3182,12 @@ ssh -i "$TMPK" ec2-user@${consoleGuide.bastions[0]?.publicIp || 'IP_PUBLICA_BAST
             </Box>
 
             <Alert severity="success" variant="outlined">
-              Resultado esperado: cada par conectado debería responder ping en ida y retorno. En un laboratorio con NAT,
-              la bastion debe alcanzar la workload privada y esta no debería tener IP pública. Si el laboratorio solo
-              tiene zona pública, la comprobación útil es confirmar acceso a la bastion y entender que el NAT quedó
-              desplegado pero no está aportando salida a una subnet privada. Si algo falla, revisa route tables,
-              Security Groups, key pair y `Allowed SSH CIDR`.
+              {t('plans.detail.guide.consoleExpected')}
             </Alert>
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConsoleGuideOpen(false)}>Cerrar</Button>
+          <Button onClick={() => setConsoleGuideOpen(false)}>{t('actions.close')}</Button>
         </DialogActions>
       </Dialog>
     </Container>

@@ -23,9 +23,17 @@ CSRF_TRUSTED_ORIGINS = [
 
 # Django detrás de ALB / proxy
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-if not DEBUG:
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+
+
+def env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
+SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", default=not DEBUG)
+CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", default=not DEBUG)
 
 # =========================
 # CORS
@@ -75,7 +83,9 @@ REST_FRAMEWORK = {
 # =========================
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.locale.LocaleMiddleware',
 
     'corsheaders.middleware.CorsMiddleware',
 
@@ -143,7 +153,14 @@ DATABASES = {
 # =========================
 # Internacionalización
 # =========================
-LANGUAGE_CODE = config('LANGUAGE_CODE', default='en-us')
+LANGUAGE_CODE = config('LANGUAGE_CODE', default='es')
+LANGUAGES = [
+    ('es', 'Spanish'),
+    ('en', 'English'),
+]
+LOCALE_PATHS = [
+    BASE_DIR / 'locale',
+]
 TIME_ZONE = config('TIME_ZONE', default='UTC')
 USE_I18N = True
 USE_TZ = True
@@ -153,6 +170,7 @@ USE_TZ = True
 # =========================
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

@@ -125,6 +125,6 @@ Este caso es especialmente útil para la tesis porque muestra:
 
 ## Relación con otros documentos
 
-- [Modelo de Ejecución Cloud por Usuario](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/cloud-execution-model.md)
-- [Playbook de Conexiones Cloud AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/aws-cloud-connections-playbook.md)
-- [Matriz Formal de Permisos y Control de Usuarios](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/thesis-validation/user-control-permissions-matrix.md)
+- [Modelo de Ejecución Cloud por Usuario](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/tesis/validacion/cloud-execution-model.md)
+- [Playbook de Conexiones Cloud AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/tesis/validacion/aws-cloud-connections-playbook.md)
+- [Matriz Formal de Permisos y Control de Usuarios](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/tesis/validacion/user-control-permissions-matrix.md)

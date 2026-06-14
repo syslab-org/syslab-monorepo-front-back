@@ -33,8 +33,10 @@ import {
 } from "@/shared/ui/theme/dashboard/listItems.jsx";
 import { useAuth } from '@/app/providers/AuthContext';
 import LoadingFlow from "@/shared/ui/organisms/LoadingFlow";
+import LanguageSwitcher from "@/shared/ui/i18n/LanguageSwitcher";
 import { useThemeMode } from "@/shared/ui/theme/AppThemeProvider";
 import { USER_ROL_STUDENT, USER_ROL_SUPER_ADMIN, USER_ROL_TEACHER } from "@/shared/constants";
+import { useTranslation } from "react-i18next";
 
 export const PageHeader = ({ title, subtitle, actions }) => {
   return (
@@ -91,6 +93,7 @@ export const PageHeader = ({ title, subtitle, actions }) => {
 };
 
 function MainLayout() {
+  const { t } = useTranslation();
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [anchorElUser, setAnchorElUser] = useState(null);
   const location = useLocation();
@@ -102,16 +105,16 @@ function MainLayout() {
   const role = user?.role;
   const settings = useMemo(() => {
     const items = [
-      { label: "Profile", url: "/admin/settings/profile" },
-      { label: "Cloud Connections", url: "/admin/settings/cloud-connections" },
-      { label: "Key Pairs", url: "/admin/settings/key-pairs" },
-      { label: "Dashboard", url: "/admin/dashboard" },
+      { label: t("layout.menu.profile"), url: "/admin/settings/profile" },
+      { label: t("layout.menu.cloudConnections"), url: "/admin/settings/cloud-connections" },
+      { label: t("layout.menu.keyPairs"), url: "/admin/settings/key-pairs" },
+      { label: t("layout.menu.dashboard"), url: "/admin/dashboard" },
     ];
     if (role === USER_ROL_SUPER_ADMIN || role === USER_ROL_TEACHER) {
-      items.splice(2, 0, { label: "AMIs", url: "/admin/settings/amis" });
+      items.splice(2, 0, { label: t("layout.menu.amis"), url: "/admin/settings/amis" });
     }
     return items;
-  }, [role]);
+  }, [role, t]);
 
   const isCanvasRoute = useMemo(
     () => /^\/admin\/(labs\/[^/]+\/canvas|vpcs\/[^/]+\/mainflow)$/.test(location.pathname),
@@ -149,7 +152,7 @@ function MainLayout() {
             <IconButton
               edge="start"
               color="inherit"
-              aria-label="open drawer"
+              aria-label={t("layout.openDrawer")}
               onClick={toggleDrawer}
               sx={{ marginRight: "36px" }}
             >
@@ -172,14 +175,15 @@ function MainLayout() {
               variant="caption"
               sx={{ opacity: 0.7, letterSpacing: 0.5 }}
             >
-              {/* Multi-Cloud Orchestrator */}
-              Cloud Orchestrator
+              {t("layout.cloudOrchestrator")}
             </Typography>
           </Box>
 
           <Box sx={{ display: { md: "flex" } }}>
-            <Tooltip title={mode === "light" ? "Activar modo oscuro" : "Activar modo claro"}>
-              <IconButton size="large" color="inherit" onClick={toggle} aria-label={mode === "light" ? "Activar modo oscuro" : "Activar modo claro"}>
+            <LanguageSwitcher compact />
+
+            <Tooltip title={mode === "light" ? t("layout.themeToDark") : t("layout.themeToLight")}>
+              <IconButton size="large" color="inherit" onClick={toggle} aria-label={mode === "light" ? t("layout.themeToDark") : t("layout.themeToLight")}>
                 {mode === "light" ? <DarkModeIcon /> : <LightModeIcon />}
               </IconButton>
             </Tooltip>
@@ -196,7 +200,7 @@ function MainLayout() {
               </Badge>
             </IconButton>
 
-            <Tooltip title="Cuenta">
+            <Tooltip title={t("common.account")}>
               <IconButton
                 size="large"
                 edge="end"
@@ -241,7 +245,7 @@ function MainLayout() {
                   logout();
                 }}
               >
-                Logout
+                {t("actions.closeSession")}
               </MenuItem>
             </Menu>
           </Box>
@@ -265,7 +269,7 @@ function MainLayout() {
         </List>
 
         {/* Fixed logout button at bottom */}
-        <Tooltip title={drawerOpen ? "" : "Cerrar sesión"} placement="right">
+        <Tooltip title={drawerOpen ? "" : t("actions.closeSession")} placement="right">
           <Button
             sx={(theme) => ({
               position: "absolute",
@@ -296,9 +300,9 @@ function MainLayout() {
             })}
             startIcon={<LogoutIcon />}
             onClick={logout}
-            aria-label="Cerrar sesión"
+            aria-label={t("actions.closeSession")}
           >
-            {drawerOpen ? "Cerrar sesión" : null}
+            {drawerOpen ? t("actions.closeSession") : null}
           </Button>
         </Tooltip>
       </DrawerStyle>

@@ -11,8 +11,14 @@ import {
   VPC_CHILD_FORM,
   VPC_FORM,
 } from '@/features/networkCanvas/utils/constants';
+import {
+  CLOUD_AWS_VALUE,
+  CLOUD_AZURE_VALUE,
+  CLOUD_GCP_VALUE,
+} from '@/shared/constants';
 import { INSTANCE_TYPE_OPTIONS } from '../options/instanceTypes';
 import { cidrsOverlap, isSubnetOf } from './cidrUtils';
+import { translate as tr } from '@/shared/i18n';
 
 // ------------ Reglas base reutilizables ------------
 
@@ -52,47 +58,55 @@ export const useFormValidationSchema = (
         vlanName: yup
           .string()
           .trim()
-          .min(3, 'VLAN Name must be at least 3 characters')
-          .max(60, 'VLAN Name must be at most 60 characters')
-          .required('VLAN Name is required'),
+          .min(3, tr('canvas.validation.vlanNameMin'))
+          .max(60, tr('canvas.validation.vlanNameMax'))
+          .required(tr('canvas.validation.vlanNameRequired')),
 
         cidrBlock: validateCidr
           ? yup
             .string()
-            .required('CIDR Block is required')
-            .matches(cidrRegex, 'CIDR Block must be in format 192.168.0.0/24')
-            .test('is-valid-cidr', 'CIDR block is invalid', (value) => isCidrValid(value))
-            .test('prefix-range', 'CIDR should leave room for subnets (e.g. /16 to /24)', (value) => {
+            .required(tr('canvas.validation.cidrRequired'))
+            .matches(cidrRegex, tr('canvas.validation.cidrFormat'))
+            .test('is-valid-cidr', tr('canvas.validation.cidrInvalid'), (value) => isCidrValid(value))
+            .test('prefix-range', tr('canvas.validation.cidrPrefixRoom'), (value) => {
               if (!value) return false;
               const [, p] = value.split('/');
               const prefix = Number(p);
               return prefix >= 8 && prefix <= 28;
             })
-          : yup.string().required('CIDR Block is required'),
+          : yup.string().required(tr('canvas.validation.cidrRequired')),
 
         cloudProvider: yup
           .string()
-          .transform((v) => (typeof v === 'string' ? v.toUpperCase() : v))
-          .oneOf(['AWS'], 'Invalid Cloud Provider')
-          .required('Cloud Provider is required'),
+          .transform((v) => (typeof v === 'string' ? v.trim().toLowerCase() : v))
+          .oneOf(
+            context?.allowedProviders || [CLOUD_AWS_VALUE, CLOUD_GCP_VALUE, CLOUD_AZURE_VALUE],
+            tr('canvas.validation.invalidCloudProvider'),
+          )
+          .required(tr('canvas.validation.cloudProviderRequired')),
 
-        region: yup.string().required('Region is required'),
+        region: yup.string().required(tr('canvas.validation.regionRequired')),
+
+        labNotes: yup
+          .string()
+          .max(4000, tr('canvas.validation.descriptionMax'))
+          .optional(),
       });
 
     /* ================= VPC (legacy) ================= */
     case VPC_FORM:
       return yup.object({
-        cloudProvider: yup.string().required('Cloud Provider is required'),
+        cloudProvider: yup.string().required(tr('canvas.validation.cloudProviderRequired')),
         vpcName: yup
           .string()
           .trim()
-          .min(1, 'Name VPC is required')
-          .required('Name VPC is required'),
+          .min(1, tr('canvas.validation.vpcNameRequired'))
+          .required(tr('canvas.validation.vpcNameRequired')),
         cidrBlock: yup
           .string()
-          .required('CIDR Block is required')
-          .matches(cidrRegex, 'CIDR Block must be in format 192.168.0.0/24')
-          .test('is-valid-cidr', 'CIDR block is invalid', (value) => isCidrValid(value)),
+          .required(tr('canvas.validation.cidrRequired'))
+          .matches(cidrRegex, tr('canvas.validation.cidrFormat'))
+          .test('is-valid-cidr', tr('canvas.validation.cidrInvalid'), (value) => isCidrValid(value)),
       });
 
     /* ================= VPC hija ================= */
@@ -101,20 +115,23 @@ export const useFormValidationSchema = (
       const siblingVpcCidrs = (context?.siblingVpcCidrs || [])
         .map((c) => (c || '').trim())
         .filter(Boolean);
+      const providerNetwork = context?.providerNetwork || {};
+      const natRequiresPublicSubnet = providerNetwork.natRequiresPublicZone !== false;
+      const supportsElasticIp = providerNetwork.supportsElasticIp !== false;
 
       return yup.object({
         vpcName: yup
           .string()
           .trim()
-          .min(3, 'Min 3 characters')
-          .max(60, 'Max 60')
-          .required('Name is required'),
+          .min(3, tr('canvas.validation.minThree'))
+          .max(60, tr('canvas.validation.maxSixty'))
+          .required(tr('canvas.validation.nameRequired')),
 
         cidrBlock: yup
           .string()
-          .required('CIDR is required')
-          .matches(cidrRegex, 'CIDR is invalid (e.g.: 10.0.1.0/24)')
-          .test('is-in-vlan', vlanCidr ? `Must be within VLAN range ${vlanCidr}` : 'CIDR is invalid', (val) => {
+          .required(tr('canvas.validation.cidrShortRequired'))
+          .matches(cidrRegex, tr('canvas.validation.cidrExample'))
+          .test('is-in-vlan', vlanCidr ? tr('canvas.validation.mustBeWithinVlan', { value: vlanCidr }) : tr('canvas.validation.cidrInvalid'), (val) => {
             if (!val) return false;
             if (!vlanCidr) return true;
             try {
@@ -123,7 +140,7 @@ export const useFormValidationSchema = (
               return false;
             }
           })
-          .test('no-overlap', 'CIDR overlaps with another VPC in the VLAN', (val) => {
+          .test('no-overlap', tr('canvas.validation.cidrOverlapVpc'), (val) => {
             if (!val || !siblingVpcCidrs.length) return true;
             try {
               return !siblingVpcCidrs.some((cidr) => cidrsOverlap(val, cidr));
@@ -132,14 +149,14 @@ export const useFormValidationSchema = (
             }
           }),
 
-        region: yup.string().required('Region is required'),
+        region: yup.string().required(tr('canvas.validation.regionRequired')),
 
         internetGateway: yup
           .boolean()
           .default(false)
-          .test('igw-required', 'Enable Internet Gateway to use NAT Gateway', function (v) {
+          .test('igw-required', tr('canvas.validation.enableIgwForNat'), function (v) {
             const nat = this.parent?.enableNatGateway;
-            return nat ? v === true : true;
+            return nat && natRequiresPublicSubnet ? v === true : true;
           }),
 
         allowedSshCidr: yup
@@ -147,7 +164,7 @@ export const useFormValidationSchema = (
           .trim()
           .nullable()
           .transform((v) => (v === '' ? null : v))
-          .matches(/^((\d{1,3}\.){3}\d{1,3}\/(3[0-2]|[12]?\d))$/, 'CIDR inválido (ej: 203.0.113.5/32)')
+          .matches(/^((\d{1,3}\.){3}\d{1,3}\/(3[0-2]|[12]?\d))$/, tr('canvas.validation.cidrInvalidExample'))
           .optional(),
 
         /* -------- NAT Gateway -------- */
@@ -156,31 +173,40 @@ export const useFormValidationSchema = (
         natGatewayPublicSubnet: yup.string().when('enableNatGateway', {
           is: true,
           then: (s) =>
-            s
-              .required('Select the public subnet for NAT')
-              .min(1, 'Subnet must be selected'),
+            (natRequiresPublicSubnet
+              ? s
+                .required(tr('canvas.validation.selectPublicSubnetNat'))
+                .min(1, tr('canvas.validation.subnetMustBeSelected'))
+              : s.optional()),
           otherwise: (s) => s.optional(),
         }),
 
         natGatewayElasticIp: yup.string().when('enableNatGateway', {
           is: true,
           then: (s) =>
-            s
-              .nullable()
-              .transform((v) => (v === '' ? null : v))
-              .test(
-                'nat-eip-allocation-id',
-                'Elastic IP inválida. Usa un Allocation ID, por ejemplo: eipalloc-0123456789abcdef0',
-                (value) => value == null || /^eipalloc-[a-z0-9]+$/.test(value)
-              )
-              .notRequired(),
+            (supportsElasticIp
+              ? s
+                .nullable()
+                .transform((v) => (v === '' ? null : v))
+                .test(
+                  'nat-eip-allocation-id',
+                  tr('canvas.validation.elasticIpInvalid'),
+                  (value) => value == null || /^eipalloc-[a-z0-9]+$/.test(value)
+                )
+                .notRequired()
+              : s.optional()),
           otherwise: (s) => s.optional(),
         }),
       });
     }
 
     /* ================= Subnet ================= */
-    case TYPE_SUBNETWORK_NODE:
+    case TYPE_SUBNETWORK_NODE: {
+      const providerSubnet = context?.providerSubnet || {};
+      const subnetForm = providerSubnet.form || {};
+      const requiresAz = (subnetForm.availabilityScope || 'zone') === 'zone';
+      const requiresSubnetType = true;
+
       return yup.object({
         subnetName: yup
           .string()
@@ -220,8 +246,12 @@ export const useFormValidationSchema = (
             return !sibs.some((cidr) => cidrsOverlap(val, cidr));
           }),
 
-        availabilityZone: yup.string().required('Zone is required'),
-        subnetType: yup.string().oneOf(['public', 'private']).required('Subnet Type is required'),
+        availabilityZone: requiresAz
+          ? yup.string().required('Zone is required')
+          : yup.string().optional(),
+        subnetType: requiresSubnetType
+          ? yup.string().oneOf(['public', 'private']).required('Subnet Type is required')
+          : yup.string().optional(),
 
         map_public_ip_on_launch: yup
           .boolean()
@@ -230,6 +260,7 @@ export const useFormValidationSchema = (
             return t === 'public' ? v === true : true;
           }),
       });
+    }
 
     /* ================= Instancias ================= */
     case TYPE_COMPUTER_NODE:
@@ -238,12 +269,13 @@ export const useFormValidationSchema = (
     case TYPE_INSTANCE_NODE: {
       const emptyToUndef = (v) =>
         v === null || v === undefined || String(v).trim() === '' ? undefined : v;
+      const allowedInstanceTypes = (context?.instanceTypeOptions || INSTANCE_TYPE_OPTIONS).map((o) => o.value);
 
       return yup.object({
         ami: yup.string().transform(emptyToUndef).notRequired(),
         instanceType: yup
           .string()
-          .oneOf(INSTANCE_TYPE_OPTIONS.map((o) => o.value), 'Invalid instance type')
+          .oneOf(allowedInstanceTypes, 'Invalid instance type')
           .required('Instance type is required'),
         ipAddress: yup
           .string()

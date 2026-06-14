@@ -105,8 +105,8 @@ Entregable:
 
 - decisión de alcance explícita: `deploy real AWS-first con owner de ejecución y separación entre revisión y apply real`
 - nota de tesis sobre extensibilidad multi-cloud vía adapters/executors
-- referencia detallada: `docs/thesis-validation/cloud-execution-model.md`
-- playbook operativo para repetir pruebas `Static Keys` y `AssumeRole`: `docs/thesis-validation/aws-cloud-connections-playbook.md`
+- referencia detallada: `docs/tesis/validacion/cloud-execution-model.md`
+- playbook operativo para repetir pruebas `Static Keys` y `AssumeRole`: `docs/tesis/validacion/aws-cloud-connections-playbook.md`
 
 ### 1.2. Hacer útil la opción “Plantilla de laboratorio”
 

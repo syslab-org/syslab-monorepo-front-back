@@ -17,7 +17,7 @@
         "region": "us-east-1",
         "cidrBlock": "10.40.0.0",
         "prefixLength": 16,
-        "cloudProvider": "AWS",
+        "cloudProvider": "aws",
         "internetGateway": true,
         "enableNatGateway": false,
         "natGatewayPublicSubnet": "",
@@ -27,7 +27,7 @@
           "public_subnet": "",
           "elastic_ip": ""
         },
-        "allowedSshCidr": "190.20.221.154/32"
+        "allowedSshCidr": "190.20.220.72/32"
       }
     },
     {
@@ -53,7 +53,9 @@
         "subnetType": "public",
         "subnet_type": "public",
         "map_public_ip_on_launch": true,
-        "route_table": "public"
+        "route_table": "public",
+        "privateGoogleAccess": false,
+        "flowLogs": false
       }
     },
     {
@@ -79,6 +81,7 @@
         "instance_type": "t2.micro",
         "sshAccess": "tesis-key",
         "ssh_access": "tesis-key",
+        "associatePublicIp": true,
         "associate_public_ip": true
       }
     },
@@ -99,7 +102,7 @@
         "region": "us-east-1",
         "cidrBlock": "10.41.0.0",
         "prefixLength": 16,
-        "cloudProvider": "AWS",
+        "cloudProvider": "aws",
         "internetGateway": true,
         "enableNatGateway": false,
         "natGatewayPublicSubnet": "",
@@ -109,7 +112,7 @@
           "public_subnet": "",
           "elastic_ip": ""
         },
-        "allowedSshCidr": "190.20.221.154/32"
+        "allowedSshCidr": "190.20.220.72/32"
       }
     },
     {
@@ -135,7 +138,9 @@
         "subnetType": "public",
         "subnet_type": "public",
         "map_public_ip_on_launch": true,
-        "route_table": "public"
+        "route_table": "public",
+        "privateGoogleAccess": false,
+        "flowLogs": false
       }
     },
     {
@@ -161,6 +166,7 @@
         "instance_type": "t2.micro",
         "sshAccess": "tesis-key",
         "ssh_access": "tesis-key",
+        "associatePublicIp": true,
         "associate_public_ip": true
       }
     },
@@ -235,7 +241,8 @@
   "meta": {
     "generated_from": "03-two-vpcs-peering-bidirectional.json",
     "scenario_name": "scenario-03-two-vpcs-peering-bidirectional",
-    "generated_at": "2026-03-12T11:20:13.783282+00:00",
+    "provider": "aws",
+    "generated_at": "2026-06-10T21:11:22.097534+00:00",
     "counts": {
       "nodes": 7,
       "edges": 6,

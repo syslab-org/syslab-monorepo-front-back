@@ -12,9 +12,11 @@ from .domain.network_intent import normalize_network_intent
 from .models import CLOUD_AUTH_AWS_ASSUME_ROLE, CLOUD_SCOPE_COURSE_SHARED, CLOUD_SCOPE_PERSONAL, CloudConnection, CloudExecutionDelegation, Course, KeyPairCatalogEntry, Lab, Plan, PlanExecutionRecord, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, STATUS_ACTIVE, VISIBILITY_COURSE, VISIBILITY_OWNER
 from .providers import get_provider_adapter, get_provider_executor
 from .cloud_connections import build_aws_runtime_env
+from .providers.runtime_registry import get_provider_runtime_hooks, test_cloud_connection
 from .providers.aws.runtime import build_nat_cleanup_targets, check_key_pairs_preflight, collect_required_key_pairs
 from .providers.aws.terraform import render_workspace
 from .secret_store import encrypt_secret
+from .serializers import CloudConnectionCreateSerializer, CloudConnectionSerializer
 from .tasks import _build_last_apply_context
 from .validators import validate_network_plan
 
@@ -106,6 +108,26 @@ class ValidateNetworkPlanTests(SimpleTestCase):
             "Elastic IP must be an allocation ID",
         ):
             validate_network_plan(payload)
+
+    def test_rejects_invalid_payload_in_english(self):
+        with self.assertRaisesMessage(
+            ValueError,
+            "Invalid payload: it must be a JSON object.",
+        ):
+            validate_network_plan([], language="en")
+
+
+class AuthI18nTests(APITestCase):
+    def test_login_with_invalid_credentials_respects_accept_language(self):
+        response = self.client.post(
+            "/api/auth/login/",
+            {"email": "nobody@example.com", "password": "bad-password"},
+            format="json",
+            HTTP_ACCEPT_LANGUAGE="en",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["detail"], "Invalid credentials.")
 
 
 class NatCleanupTargetTests(SimpleTestCase):
@@ -472,6 +494,45 @@ class AssumeRoleConnectionTests(SimpleTestCase):
         self.assertEqual(env["AWS_SECRET_ACCESS_KEY"], "temp-secret")
         self.assertEqual(env["AWS_SESSION_TOKEN"], "temp-token")
         self.assertEqual(env["AWS_REGION"], "us-east-1")
+
+
+class ProviderRuntimeRegistryTests(SimpleTestCase):
+    def test_gcp_runtime_hooks_expose_planned_runtime_contract(self):
+        hooks = get_provider_runtime_hooks("gcp")
+        connection = CloudConnection(name="GCP planned", provider="gcp")
+
+        self.assertEqual(hooks.label, "GCP")
+        self.assertEqual(hooks.environment_target_name, "Application Default Credentials")
+        self.assertFalse(hooks.can_run_real_execution({}))
+
+        ok, message, identity = test_cloud_connection(connection)
+
+        self.assertFalse(ok)
+        self.assertEqual(identity, {})
+        self.assertIn("not implemented yet", message)
+
+    def test_gcp_connection_serializer_reports_planned_runtime_support(self):
+        connection = CloudConnection(name="GCP planned", provider="gcp")
+
+        data = CloudConnectionSerializer(connection).data
+
+        self.assertEqual(data["provider_support"]["provider"], "gcp")
+        self.assertEqual(data["provider_support"]["runtime_status"], "planned")
+        self.assertFalse(data["provider_support"]["supports_real_connections"])
+        self.assertEqual(data["provider_details"]["label"], "GCP")
+
+    def test_gcp_connection_create_serializer_fails_through_provider_spec(self):
+        serializer = CloudConnectionCreateSerializer(
+            data={
+                "name": "GCP personal",
+                "provider": "gcp",
+                "scope": "personal",
+                "auth_type": "gcp_service_account",
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("backend", str(serializer.errors))
 
 
 class VisibilityApiTests(APITestCase):
@@ -1037,6 +1098,52 @@ class VisibilityApiTests(APITestCase):
         self.assertEqual(res.status_code, 409)
         self.assertEqual(res.json()["code"], "CLOUD_TARGET_CHANGED")
 
+    @patch("api.views.destroy_last_deploy.delay")
+    @patch("api.serializers.get_aws_identity_from_runtime_env")
+    @patch("api.views._can_run_real_terraform", return_value=True)
+    def test_destroy_is_allowed_when_last_real_apply_used_environment_and_runtime_identity_matches(
+        self,
+        _can_run_real_terraform,
+        mocked_identity,
+        mocked_delay,
+    ):
+        mocked_delay.return_value = SimpleNamespace(id="task-env-destroy-1")
+        mocked_identity.return_value = {
+            "Account": "123456789012",
+            "Arn": "arn:aws:iam::123456789012:user/syslab-admin",
+        }
+        self.student_lab.cloud_connection = None
+        self.student_lab.save(update_fields=["cloud_connection", "updated_at"])
+        self.student_connection.is_active = False
+        self.student_connection.save(update_fields=["is_active", "updated_at"])
+        self.course_connection.is_active = False
+        self.course_connection.save(update_fields=["is_active", "updated_at"])
+        plan = Plan.objects.get(name="Plan alumno")
+        plan.applied = True
+        plan.status = Plan.Status.SUCCESS
+        plan.last_action = Plan.LastAction.APPLY
+        plan.last_apply_context = {
+            "provider": "aws",
+            "credential_source": "environment",
+            "region": "us-east-1",
+            "cloud_connection_id": "",
+            "cloud_connection_name": "",
+            "cloud_connection_scope": "",
+            "account_id": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/syslab-admin",
+            "user_id": "AIDAEXAMPLE",
+            "captured_at": "2026-04-07T20:00:00Z",
+        }
+        plan.save(update_fields=["applied", "status", "last_action", "last_apply_context", "updated_at"])
+
+        self.client.force_authenticate(self.student)
+        res = self.client.post(f"/api/network/plans/{plan.id}/destroy/", format="json")
+
+        self.assertEqual(res.status_code, 202)
+        plan.refresh_from_db()
+        self.assertEqual(plan.status, Plan.Status.RUNNING)
+        self.assertEqual(plan.last_action, Plan.LastAction.DESTROY)
+
     def test_plan_list_exposes_apply_capability_to_teacher_when_student_lab_uses_course_shared(self):
         self.student_lab.cloud_connection = self.course_connection
         self.student_lab.save(update_fields=["cloud_connection", "updated_at"])
@@ -1141,6 +1248,45 @@ class VisibilityApiTests(APITestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["cloud_target_state"]["status"], "target_changed")
         self.assertTrue(res.json()["cloud_target_state"]["is_mismatch"])
+
+    @patch("api.serializers.get_aws_identity_from_runtime_env")
+    def test_plan_detail_exposes_environment_target_when_runtime_identity_matches_last_apply(
+        self,
+        mocked_identity,
+    ):
+        mocked_identity.return_value = {
+            "Account": "123456789012",
+            "Arn": "arn:aws:iam::123456789012:user/syslab-admin",
+        }
+        plan = Plan.objects.get(name="Plan alumno")
+        self.student_lab.cloud_connection = None
+        self.student_lab.save(update_fields=["cloud_connection", "updated_at"])
+        self.student_connection.is_active = False
+        self.student_connection.save(update_fields=["is_active", "updated_at"])
+        self.course_connection.is_active = False
+        self.course_connection.save(update_fields=["is_active", "updated_at"])
+        plan.last_apply_context = {
+            "provider": "aws",
+            "credential_source": "environment",
+            "region": "us-east-1",
+            "cloud_connection_id": "",
+            "cloud_connection_name": "",
+            "cloud_connection_scope": "",
+            "account_id": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/syslab-admin",
+            "user_id": "AIDAEXAMPLE",
+            "captured_at": "2026-04-07T20:00:00Z",
+        }
+        plan.save(update_fields=["last_apply_context", "updated_at"])
+
+        self.client.force_authenticate(self.student)
+        res = self.client.get(f"/api/network/plans/{plan.id}/")
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["resolved_execution_target"]["source"], "environment")
+        self.assertEqual(res.json()["resolved_execution_target"]["account_id"], "123456789012")
+        self.assertEqual(res.json()["cloud_target_state"]["status"], "aligned")
+        self.assertFalse(res.json()["cloud_target_state"]["is_mismatch"])
 
     def test_plan_detail_exposes_resolved_execution_target(self):
         plan = Plan.objects.get(name="Plan alumno")

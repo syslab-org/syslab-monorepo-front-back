@@ -14,6 +14,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+import { useTranslation } from 'react-i18next';
 
 const maxIssuesToShow = 2;
 
@@ -22,9 +23,10 @@ export default function LearningGuidePanel({
   onOpenValidation,
   onOpenDeploy,
 }) {
+  const { t } = useTranslation();
   if (!guide) return null;
 
-  const { stats, progress, steps, nextStep, nextAction, issues, focused } = guide;
+  const { stats, progress, steps, nextStep, nextAction, issues, focused, providerLabel } = guide;
   const canOpenValidation = nextStep?.id === "validate";
   const canOpenDeploy = nextStep?.id === "deploy";
 
@@ -43,17 +45,17 @@ export default function LearningGuidePanel({
         <Stack direction="row" spacing={1} alignItems="center">
           <AutoStoriesIcon fontSize="small" color="primary" />
           <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-            Guia de modelado
+            {t('canvas.learningGuide.panel.title')}
           </Typography>
         </Stack>
         <Typography variant="body2" color="text.secondary">
-          Sigue los pasos para construir y entender la topologia antes de validar o desplegar.
+          {t('canvas.learningGuide.panel.subtitle')}
         </Typography>
       </Stack>
 
       <Box>
         <Typography variant="caption" color="text.secondary">
-          Progreso {progress.completed}/{progress.total}
+          {t('canvas.learningGuide.panel.progress', { completed: progress.completed, total: progress.total })}
         </Typography>
         <LinearProgress
           variant="determinate"
@@ -63,12 +65,12 @@ export default function LearningGuidePanel({
       </Box>
 
       <Stack direction="row" spacing={0.8} flexWrap="wrap">
-        <Chip size="small" label={`Segmentos: ${stats.vpcs}`} />
-        <Chip size="small" label={`Zonas: ${stats.subnets}`} />
-        <Chip size="small" label={`Nodos de conectividad: ${stats.routers}`} />
-        <Chip size="small" label={`Direct links: ${stats.peeringRouters || 0}`} variant="outlined" />
-        <Chip size="small" label={`Hub routing: ${stats.tgwRouters || 0}`} variant="outlined" />
-        <Chip size="small" label={`Workloads: ${stats.instances}`} />
+        <Chip size="small" label={t('canvas.learningGuide.panel.stats.segments', { count: stats.vpcs })} />
+        <Chip size="small" label={t('canvas.learningGuide.panel.stats.zones', { count: stats.subnets })} />
+        <Chip size="small" label={t('canvas.learningGuide.panel.stats.routers', { count: stats.routers })} />
+        <Chip size="small" label={t('canvas.learningGuide.panel.stats.directLinks', { count: stats.peeringRouters || 0 })} variant="outlined" />
+        <Chip size="small" label={t('canvas.learningGuide.panel.stats.hubRouting', { count: stats.tgwRouters || 0 })} variant="outlined" />
+        <Chip size="small" label={t('canvas.learningGuide.panel.stats.workloads', { count: stats.instances })} />
       </Stack>
 
       {focused && (
@@ -77,7 +79,7 @@ export default function LearningGuidePanel({
 
           <Stack spacing={1}>
             <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-              Elemento seleccionado
+              {t('canvas.learningGuide.panel.selectedElement')}
             </Typography>
 
             <Box
@@ -117,7 +119,7 @@ export default function LearningGuidePanel({
               <Stack spacing={1} sx={{ mt: 1.2 }}>
                 <Box>
                   <Typography variant="caption" sx={{ fontWeight: 700 }} display="block">
-                    Lectura neutral
+                    {t('canvas.learningGuide.panel.neutralReading')}
                   </Typography>
                   {focused.labLines.map((line) => (
                     <Typography key={line} variant="caption" display="block" color="text.secondary">
@@ -128,9 +130,9 @@ export default function LearningGuidePanel({
 
                 <Box>
                   <Typography variant="caption" sx={{ fontWeight: 700 }} display="block">
-                    Traduccion AWS
+                    {t('canvas.learningGuide.panel.providerReading', { provider: providerLabel || "AWS" })}
                   </Typography>
-                  {focused.awsLines.map((line) => (
+                  {focused.providerLines.map((line) => (
                     <Typography key={line} variant="caption" display="block" color="text.secondary">
                       - {line}
                     </Typography>
@@ -152,7 +154,7 @@ export default function LearningGuidePanel({
 
       <Stack spacing={1}>
         <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-          Comparacion conceptual
+          {t('canvas.learningGuide.panel.conceptComparison')}
         </Typography>
         <Stack direction={{ xs: "column", xl: "row" }} spacing={1}>
           <Box
@@ -168,7 +170,7 @@ export default function LearningGuidePanel({
             <Stack direction="row" spacing={0.8} alignItems="center" sx={{ mb: 0.8 }}>
               <SchoolIcon fontSize="small" color="primary" />
               <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                Vista neutral
+                {t('canvas.learningGuide.panel.neutralView')}
               </Typography>
             </Stack>
             {guide.contrast.vlanLines.map((line) => (
@@ -191,10 +193,10 @@ export default function LearningGuidePanel({
             <Stack direction="row" spacing={0.8} alignItems="center" sx={{ mb: 0.8 }}>
               <CloudQueueIcon fontSize="small" color="success" />
               <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                Vista implementacion AWS
+                {t('canvas.learningGuide.panel.providerView', { provider: providerLabel || "AWS" })}
               </Typography>
             </Stack>
-            {guide.contrast.awsLines.map((line) => (
+            {guide.contrast.providerLines.map((line) => (
               <Typography key={line} variant="caption" display="block">
                 - {line}
               </Typography>
@@ -218,10 +220,10 @@ export default function LearningGuidePanel({
                 {row.concept}
               </Typography>
               <Typography variant="caption" display="block" color="text.secondary">
-                Neutral: {row.vlanView}
+                {t('canvas.learningGuide.panel.neutralLabel')} {row.vlanView}
               </Typography>
               <Typography variant="caption" display="block" color="text.secondary">
-                AWS: {row.awsView}
+                {t('canvas.learningGuide.panel.providerLabel', { provider: providerLabel || "AWS" })} {row.providerView}
               </Typography>
             </Box>
           ))}
@@ -255,7 +257,7 @@ export default function LearningGuidePanel({
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                 {step.title}
               </Typography>
-              {step.optional && <Chip size="small" label="Opcional" variant="outlined" />}
+              {step.optional && <Chip size="small" label={t('common.optional')} variant="outlined" />}
             </Stack>
             <Typography variant="caption" color="text.secondary" sx={{ ml: 3.2 }}>
               {step.description}
@@ -271,7 +273,7 @@ export default function LearningGuidePanel({
       {issues.errors.length > 0 && (
         <Alert severity="error" variant="outlined">
           <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            Bloqueos detectados
+            {t('canvas.learningGuide.panel.blockers')}
           </Typography>
           {issues.errors.slice(0, maxIssuesToShow).map((err) => (
             <Typography key={err} variant="caption" display="block">
@@ -280,7 +282,7 @@ export default function LearningGuidePanel({
           ))}
           {issues.errors.length > maxIssuesToShow && (
             <Typography variant="caption" display="block">
-              + {issues.errors.length - maxIssuesToShow} errores adicionales.
+              {t('canvas.learningGuide.panel.moreErrors', { count: issues.errors.length - maxIssuesToShow })}
             </Typography>
           )}
         </Alert>
@@ -292,7 +294,7 @@ export default function LearningGuidePanel({
           startIcon={<PlayArrowIcon />}
           onClick={onOpenValidation}
         >
-          Abrir validacion
+          {t('canvas.learningGuide.panel.openValidation')}
         </Button>
       )}
 
@@ -303,7 +305,7 @@ export default function LearningGuidePanel({
           startIcon={<PlayArrowIcon />}
           onClick={onOpenDeploy}
         >
-          Abrir despliegue
+          {t('canvas.learningGuide.panel.openDeploy')}
         </Button>
       )}
     </Box>

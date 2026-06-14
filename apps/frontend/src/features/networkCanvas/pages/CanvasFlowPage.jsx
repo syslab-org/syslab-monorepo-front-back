@@ -4,6 +4,7 @@ import { useCanvasRuntimeController } from "@/features/networkCanvas/core/useCan
 import { useRoutingPreview } from "@/features/networkCanvas/core/useRoutingPreview";
 import { useReactFlow } from "@xyflow/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 import { initialNodes } from '../utils/initials-elements';
 // mui
@@ -51,6 +52,7 @@ import { useTheme } from "@mui/material/styles";
 import { useAmiList } from "@/features/networkCanvas/core/useAmiList";
 import { useKeyPairList } from "@/features/networkCanvas/core/useKeyPairList";
 import { useContext } from "react";
+import { getCanvasProviderDefinition } from "@/features/networkCanvas/providers/providerCatalog";
 
 const makeRandomId = (length) => {
   let result = ''
@@ -79,6 +81,7 @@ const useBodyClass = (className, enabled = true) => {
 
 // eslint-disable-next-line react-refresh/only-export-components
 function CanvasFlowPage() {
+  const { t } = useTranslation();
   const params = useParams();
   const { labId: routeLabId, vpcid: legacyLabId } = params;
   const labId = routeLabId || legacyLabId;
@@ -108,12 +111,18 @@ function CanvasFlowPage() {
 
   const [target, setTarget] = useState(null);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
+  const targetProvider = useCanvasLabStore((state) => state.targetProvider || "aws");
+  const labRegion = useCanvasLabStore((state) => state.labRegion || state.vlanRegion || null);
+  const providerDefaultRegion =
+    getCanvasProviderDefinition(targetProvider).lab?.defaultRegion || "us-east-1";
   const canvas = useCanvasRuntimeController({
     initialNodes,
     setCanvasUiError,
     reactFlowInstance,
     setTarget,
-    TYPE_SUBNETWORK_NODE
+    TYPE_SUBNETWORK_NODE,
+    provider: targetProvider,
+    defaultRegion: labRegion || providerDefaultRegion,
   });
 
   const {
@@ -140,8 +149,8 @@ function CanvasFlowPage() {
     [isValidConnection, nodes]
   );
 
-  const amiList = useAmiList();
-  const keyPairList = useKeyPairList();
+  const amiList = useAmiList(targetProvider);
+  const keyPairList = useKeyPairList(targetProvider);
 
   const {
     isCanvasDirty,
@@ -173,6 +182,7 @@ function CanvasFlowPage() {
     state.setMasterCidrBlock,
     state.setPrefixLength
   ]);
+  const labNotes = useCanvasLabStore((state) => state.labNotes);
   const resolvedExecutionTarget = useCanvasLabStore((state) => state.resolvedExecutionTarget);
 
   // eslint-disable-next-line no-unused-vars
@@ -259,6 +269,8 @@ function CanvasFlowPage() {
     handleValidatePlan,
     handleApplyReal,
     handleOpenPlanDetails,
+    providerAvailabilityNotice,
+    handleCloseProviderAvailabilityNotice,
     planValidationOk,
     planCanvasHash,
   } = useNetworkPlanController({
@@ -300,6 +312,7 @@ function CanvasFlowPage() {
     canvasState,
     canvasPlanInfo,
     selectedNode,
+    targetProvider,
   });
 
   const location = useLocation();
@@ -400,11 +413,12 @@ function CanvasFlowPage() {
               onZoomIn: handleZoomIn,
               onZoomOut: handleZoomOut,
               onFitView: handleFitView,
-              title: "Canvas de arquitectura",
+              title: t("canvas.workspace.title"),
               onPreviewRoutes: openRoutesPreview,
               planStatus: canvasPlanInfo,
               canvasState,
-              validationState: validationStateForToolbar
+              validationState: validationStateForToolbar,
+              targetProvider,
             }}
             feedbackProps={{
               canvasUiError,
@@ -428,6 +442,9 @@ function CanvasFlowPage() {
               handleApplyReal,
               handleOpenPlanDetails,
               loadingFlow,
+              targetProvider,
+              providerAvailabilityNotice,
+              handleCloseProviderAvailabilityNotice,
               successMessage,
               errorMessage,
               handleCloseSnackbar
@@ -437,6 +454,7 @@ function CanvasFlowPage() {
               onOpenValidation: guardBeforeEdit(processJsonToCloud),
               onOpenDeploy: guardBeforeEdit(processJsonToCloud),
             }}
+            labNotes={labNotes}
           />
 
         </Grid>
@@ -445,6 +463,7 @@ function CanvasFlowPage() {
           onClose={closeRoutesPreview}
           nodes={nodes}
           edges={edges}
+          targetProvider={targetProvider}
         />
 
         <NodeConfigModal
@@ -453,6 +472,7 @@ function CanvasFlowPage() {
           selectedNode={selectedNode}
           nodes={nodes}
           edges={edges}
+          provider={targetProvider}
           amiList={amiList}
           keyPairList={keyPairList}
           executionTarget={resolvedExecutionTarget}

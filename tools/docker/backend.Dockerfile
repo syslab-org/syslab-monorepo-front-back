@@ -19,4 +19,5 @@ EXPOSE 8000
 
 # Nota: mantener migrate aquí es válido para dev; en prod suele correrse desde el pipeline.
 CMD python manage.py migrate && \
+  python manage.py collectstatic --noinput && \
   gunicorn teg.wsgi:application --bind 0.0.0.0:8000 --workers=2

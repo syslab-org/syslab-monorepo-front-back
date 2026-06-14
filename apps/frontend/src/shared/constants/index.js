@@ -61,8 +61,10 @@ export const TASK_STATES_ARRAY = [
 // CLOUD PROVIDERS
 export const CLOUD_AWS_VALUE = "aws";
 export const CLOUD_GCP_VALUE = "gcp";
+export const CLOUD_AZURE_VALUE = "azure";
 export const CLOUD_AWS_LABEL = "AWS";
 export const CLOUD_GCP_LABEL = "GCP";
+export const CLOUD_AZURE_LABEL = "Azure";
 
 // FORMS
 export const TYPE_FORM_AMI = "amilistform";
