@@ -77,6 +77,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
 
     'api.apps.ApiConfig',
+    'intent_plugin.apps.IntentPluginConfig',
 ]
 
 REST_FRAMEWORK = {
@@ -198,3 +199,14 @@ DEFAULT_COURSE_AUTO_DESTROY_MINUTES = env_positive_int("DEFAULT_COURSE_AUTO_DEST
 
 
 S3_PLANS_BUCKET = os.environ.get("S3_PLANS_BUCKET", "")
+
+# =========================
+# Intent Plugin
+# =========================
+INTENT_PLUGIN_ENABLED = env_bool("INTENT_PLUGIN_ENABLED", default=True)
+INTENT_PLUGIN_DEFAULT_REGION = os.getenv("INTENT_PLUGIN_DEFAULT_REGION", "us-east-1").strip() or "us-east-1"
+INTENT_PLUGIN_MAX_WORKLOADS = env_positive_int("INTENT_PLUGIN_MAX_WORKLOADS", 6)
+INTENT_PLUGIN_PROVIDER = os.getenv(
+    "INTENT_PLUGIN_PROVIDER",
+    "intent_plugin.providers.heuristic.HeuristicIntentProvider",
+).strip() or "intent_plugin.providers.heuristic.HeuristicIntentProvider"

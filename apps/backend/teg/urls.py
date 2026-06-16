@@ -9,5 +9,6 @@ def healthz(_):
 urlpatterns = [
     path("django-admin/", admin.site.urls),
     path("api/", include("api.urls")),
+    path("api/intent-plugin/", include("intent_plugin.urls")),
     path("healthz/", healthz),
 ]

@@ -267,4 +267,13 @@ export const api = {
   destroyLast() {
     return jsonFetch("/api/network/plans/destroy-last/", { method: "POST" });
   },
+  getIntentPluginManifest() {
+    return jsonFetch("/api/intent-plugin/manifest/");
+  },
+  generateIntentFromPrompt(payload) {
+    return jsonFetch("/api/intent-plugin/generate/", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
 };

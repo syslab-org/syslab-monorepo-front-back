@@ -2,6 +2,9 @@
 import { useCanvasInitialization } from "@/features/networkCanvas/core/useCanvasInitialization";
 import { useCanvasRuntimeController } from "@/features/networkCanvas/core/useCanvasRuntimeController";
 import { useRoutingPreview } from "@/features/networkCanvas/core/useRoutingPreview";
+import useIntentPluginManifest from "@/features/intentPlugin/hooks/useIntentPluginManifest";
+import GenerateIntentDialog from "@/features/intentPlugin/modals/GenerateIntentDialog";
+import { parseCidrParts, topologyToCanvasFlow } from "@/features/intentPlugin/utils/topologyToCanvasFlow";
 import { useReactFlow } from "@xyflow/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -44,6 +47,7 @@ import { useNetworkPlanController } from "@/features/networkCanvas/core/useNetwo
 import { usePlanMeta } from "@/features/networkCanvas/core/usePlanMeta";
 import { usePlanPolling } from "@/features/networkCanvas/core/usePlanPolling";
 import { useLearningGuide } from "@/features/networkCanvas/core/useLearningGuide";
+import { api } from "@/infrastructure/http/api";
 import RoutePreviewPanel from "@/features/networkCanvas/panels/RoutePreviewPanel";
 // import { buildRoutingPreview } from "@/features/networkCanvas/utils/buildRoutingPreview";
 import TourLauncherButton from "@/shared/ui/onboarding/TourLauncherButton";
@@ -105,6 +109,10 @@ function CanvasFlowPage() {
   const [canvasUiError, setCanvasUiError] = useState(null);
   const [validatedPlanHash, setValidatedPlanHash] = useState(null);
   const [hasValidatedInSession, setHasValidatedInSession] = useState(false);
+  const [intentDialogOpen, setIntentDialogOpen] = useState(false);
+  const [intentDialogBusy, setIntentDialogBusy] = useState(false);
+  const [intentDialogError, setIntentDialogError] = useState("");
+  const { manifest: intentPluginManifest, loading: intentPluginLoading, enabled: intentPluginEnabled } = useIntentPluginManifest();
 
   const { loadingFlow } = useContext(LoadingFlowContext);
   const { startTourIfNeeded, restartTour } = useOnboardingTour();
@@ -115,6 +123,12 @@ function CanvasFlowPage() {
   const labRegion = useCanvasLabStore((state) => state.labRegion || state.vlanRegion || null);
   const providerDefaultRegion =
     getCanvasProviderDefinition(targetProvider).lab?.defaultRegion || "us-east-1";
+  const intentPluginDefaultRegion =
+    intentPluginManifest?.defaults?.region || labRegion || providerDefaultRegion;
+  const intentPluginMaxWorkloads = Math.max(
+    1,
+    Number(intentPluginManifest?.constraints?.max_workloads) || 6,
+  );
   const canvas = useCanvasRuntimeController({
     initialNodes,
     setCanvasUiError,
@@ -176,11 +190,20 @@ function CanvasFlowPage() {
   // eslint-disable-next-line no-unused-vars
   const [clickedNodeId, setClickedNodeId] = useClickedNodeIdStore(state => [state.clickedNodeId, state.setClickedNodeId])
 
-  const [masterCidrBlock, prefixLength, setMasterCidrBlock, setPrefixLength] = useCanvasLabStore(state => [
+  const [
+    masterCidrBlock,
+    prefixLength,
+    setMasterCidrBlock,
+    setPrefixLength,
+    setLabName,
+    setLabRegion,
+  ] = useCanvasLabStore(state => [
     state.masterCidrBlock || state.cidrBlockVPC,
     state.prefixLength,
     state.setMasterCidrBlock,
-    state.setPrefixLength
+    state.setPrefixLength,
+    state.setLabName,
+    state.setLabRegion,
   ]);
   const labNotes = useCanvasLabStore((state) => state.labNotes);
   const resolvedExecutionTarget = useCanvasLabStore((state) => state.resolvedExecutionTarget);
@@ -364,6 +387,114 @@ function CanvasFlowPage() {
     setNodes,
     initialNodes
   });
+
+  const handleOpenIntentDialog = useCallback(() => {
+    if (!intentPluginEnabled) {
+      setCanvasUiError(t("canvas.intentPlugin.unavailable"));
+      return;
+    }
+    setIntentDialogError("");
+    setIntentDialogOpen(true);
+  }, [intentPluginEnabled, t]);
+
+  const handleCloseIntentDialog = useCallback(() => {
+    if (intentDialogBusy) return;
+    setIntentDialogOpen(false);
+    setIntentDialogError("");
+  }, [intentDialogBusy]);
+
+  const handleGenerateIntent = useCallback(async ({
+    prompt,
+    region,
+    maxWorkloads,
+  }) => {
+    setIntentDialogBusy(true);
+    setIntentDialogError("");
+
+    try {
+      const response = await api.generateIntentFromPrompt({
+        prompt,
+        target_provider: targetProvider || "aws",
+        region: region || intentPluginDefaultRegion,
+        canvas_id: labId || "",
+        max_workloads: Math.max(1, Math.min(maxWorkloads, intentPluginMaxWorkloads)),
+      });
+
+      const topology = response?.intent?.topology;
+      if (!topology || !Array.isArray(topology?.segments)) {
+        throw new Error(t("canvas.intentPlugin.invalidResponse"));
+      }
+
+      const nextTargetProvider = response?.intent?.target_provider || targetProvider || "aws";
+      const flow = topologyToCanvasFlow(topology, {
+        provider: nextTargetProvider,
+      });
+      if (!Array.isArray(flow?.nodes) || flow.nodes.length === 0) {
+        throw new Error(t("canvas.intentPlugin.invalidResponse"));
+      }
+
+      const flowToPersist = {
+        ...flow,
+        expiration: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+      };
+
+      setNodes(flow.nodes || []);
+      setEdges(flow.edges || []);
+      setCanvasUiError(null);
+      setHasValidatedInSession(false);
+      setValidatedPlanHash(null);
+
+      const network = topology?.network || {};
+      const { cidrBlock, prefixLength: nextPrefix } = parseCidrParts(network?.cidr);
+      const nextLabName = network?.name || response?.draft_name || "";
+      const nextLabRegion = network?.region || region || intentPluginDefaultRegion;
+      const nextPrefixNumber = nextPrefix ? Number(nextPrefix) : null;
+      if (cidrBlock) setMasterCidrBlock(cidrBlock);
+      if (nextPrefix) setPrefixLength(nextPrefixNumber);
+      if (nextLabName) setLabName(nextLabName);
+      if (nextLabRegion) setLabRegion(nextLabRegion);
+
+      try {
+        localStorage.setItem(flowKey, JSON.stringify(flowToPersist));
+      } catch (storageError) {
+        console.warn("Could not persist generated flow to localStorage:", storageError);
+      }
+
+      if (Array.isArray(response?.warnings) && response.warnings.length > 0) {
+        setCanvasUiError(response.warnings.join(" "));
+      }
+
+      setIntentDialogOpen(false);
+
+      window.setTimeout(() => {
+        reactFlowInstance?.fitView?.({ padding: 0.16, duration: 350 });
+      }, 60);
+    } catch (error) {
+      setIntentDialogError(
+        error?.data?.error ||
+        error?.message ||
+        t("canvas.intentPlugin.genericError"),
+      );
+    } finally {
+      setIntentDialogBusy(false);
+    }
+  }, [
+    labId,
+    intentPluginDefaultRegion,
+    intentPluginMaxWorkloads,
+    reactFlowInstance,
+    setEdges,
+    setHasValidatedInSession,
+    setLabName,
+    setLabRegion,
+    setMasterCidrBlock,
+    setNodes,
+    setPrefixLength,
+    setValidatedPlanHash,
+    t,
+    targetProvider,
+  ]);
+
   return (
     <NetworkProvider>
       <Grid
@@ -409,6 +540,8 @@ function CanvasFlowPage() {
               lastSavedAt,
               onRestore: onRestoreFlow,
               onRestoreInitial: restoreInitialNodes,
+              onGenerateFromPrompt: intentPluginEnabled ? handleOpenIntentDialog : undefined,
+              generateDisabled: intentDialogBusy || intentPluginLoading,
               onDeploy: guardBeforeEdit(processJsonToCloud),
               onZoomIn: handleZoomIn,
               onZoomOut: handleZoomOut,
@@ -480,6 +613,16 @@ function CanvasFlowPage() {
           deleteNodeInstance={deleteNodeInstance}
           cidrBlockVPC={masterCidrBlock}
           prefixLength={prefixLength}
+        />
+        <GenerateIntentDialog
+          open={intentDialogOpen}
+          onClose={handleCloseIntentDialog}
+          onSubmit={handleGenerateIntent}
+          isSubmitting={intentDialogBusy}
+          error={intentDialogError}
+          defaultRegion={intentPluginDefaultRegion}
+          targetProvider={targetProvider}
+          manifest={intentPluginManifest}
         />
         <TourLauncherButton
           onClick={() => restartTour("canvas-overview")}

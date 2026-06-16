@@ -1578,6 +1578,26 @@ const es = {
       backendRejectedRedeploy:
         "El backend rechazó el redespliegue de este plan. Revisa el estado y vuelve a intentar.",
     },
+    intentPlugin: {
+      title: "Generar topología desde prompt",
+      subtitle: "Describe la intención de infraestructura para {{provider}} y la dibujaremos en el canvas.",
+      info:
+        "Esta primera versión genera un borrador editable. Después puedes ajustar nodos, validar y desplegar con el flujo normal.",
+      providerActive: "Plugin activo: {{provider}} · modo {{kind}}.",
+      promptLabel: "Prompt de infraestructura",
+      promptPlaceholder:
+        "Ejemplo: Quiero una VPC con una subnet pública, una privada, NAT y 2 instancias para una app web.",
+      regionLabel: "Región",
+      maxWorkloadsLabel: "Máx. instancias",
+      cancel: "Cancelar",
+      submit: "Generar borrador",
+      generating: "Generando...",
+      genericError: "No se pudo generar la topología desde el prompt.",
+      invalidResponse: "El plugin devolvió una topología incompleta o inválida.",
+      unavailable: "El plugin de intención no está disponible en este entorno.",
+      persistWarning:
+        "La topología se generó en el canvas, pero no pude persistirla todavía en el laboratorio.",
+    },
     toolbar: {
       defaultTitle: "Topología Lógica",
       chips: {
@@ -1642,6 +1662,9 @@ const es = {
         restoreInitialTooltip:
           "Restablecer canvas al estado inicial de la plantilla",
         restoreInitial: "Restaurar inicial",
+        generateTooltip:
+          "Generar una topología base desde un prompt de infraestructura",
+        generate: "Generar con IA",
         routesTooltip: "Generar y revisar el plan de ruteo sin aplicar cambios",
         viewRoutes: "Ver ruteo",
       },

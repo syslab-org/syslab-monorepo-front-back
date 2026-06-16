@@ -30,6 +30,7 @@ const within = (childCidr, parentCidr) => {
   const child = parseCidr(childCidr);
   const parent = parseCidr(parentCidr);
   if (!child || !parent) return false;
+  if (child.base === undefined || child.broadcast === undefined) return false;
   return parent.contains(child.base) && parent.contains(child.broadcast);
 };
 
@@ -77,22 +78,24 @@ const INSTANCE_TYPES = new Set([
  * Devuelve { errors: string[], warnings: string[] }
  */
 export function validateTopology(nodes, edges) {
+  const safeNodes = Array.isArray(nodes) ? nodes : [];
+  const safeEdges = Array.isArray(edges) ? edges : [];
   const errors = [];
   const warnings = [];
 
-  const vpcs = nodes.filter((n) => n.type === TYPE_VPC_NODE);
-  const subnets = nodes.filter((n) => n.type === TYPE_SUBNETWORK_NODE);
-  const routers = nodes.filter((n) => n.type === TYPE_ROUTER_NODE);
-  const instances = nodes.filter((n) => INSTANCE_TYPES.has(n.type));
+  const vpcs = safeNodes.filter((n) => n.type === TYPE_VPC_NODE);
+  const subnets = safeNodes.filter((n) => n.type === TYPE_SUBNETWORK_NODE);
+  const routers = safeNodes.filter((n) => n.type === TYPE_ROUTER_NODE);
+  const instances = safeNodes.filter((n) => INSTANCE_TYPES.has(n.type));
 
-  const idToNode = indexById(nodes);
-  const idToType = new Map(nodes.map((n) => [n.id, n.type]));
+  const idToNode = indexById(safeNodes);
+  const idToType = new Map(safeNodes.map((n) => [n.id, n.type]));
 
   /* --- VPC -> routers y Router -> VPCs (a partir de edges) --- */
   const vpcToRouters = new Map();
   const routerToVpcs = new Map();
 
-  edges.forEach((e) => {
+  safeEdges.forEach((e) => {
     const sType = idToType.get(e.source);
     const tType = idToType.get(e.target);
     const isVpcRouter =

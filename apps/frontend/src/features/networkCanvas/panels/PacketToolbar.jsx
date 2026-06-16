@@ -1,5 +1,6 @@
 // apps/frontend/src/components/flow/PacketToolbar.jsx
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
@@ -28,6 +29,7 @@ export default function PacketToolbar({
   lastSavedAt = null,
   onRestore,
   onRestoreInitial,
+  onGenerateFromPrompt,
   onDeploy,
   onZoomIn,
   onZoomOut,
@@ -43,6 +45,7 @@ export default function PacketToolbar({
   onTogglePalette,
   onToggleGuide,
   showPanelToggles = true,
+  generateDisabled = false,
 }) {
   const { t } = useTranslation();
   const { mode } = useThemeMode();
@@ -402,6 +405,22 @@ export default function PacketToolbar({
               </Button>
             </span>
           </Tooltip>
+          {typeof onGenerateFromPrompt === "function" && (
+            <Tooltip title={t("canvas.toolbar.actions.generateTooltip")}>
+              <span data-tour="canvas-toolbar-generate">
+                <Button
+                  variant="outlined"
+                  className="pt-btn"
+                  startIcon={<AutoAwesomeIcon />}
+                  onClick={onGenerateFromPrompt}
+                  size="small"
+                  disabled={canvasState === "PLAN_RUNNING" || generateDisabled}
+                >
+                  {t("canvas.toolbar.actions.generate")}
+                </Button>
+              </span>
+            </Tooltip>
+          )}
           <Tooltip title={actionState.actionTooltip}>
             <span data-tour="canvas-toolbar-deploy">
               <Button

@@ -1586,6 +1586,26 @@ const en = {
       backendRejectedRedeploy:
         "The backend rejected redeploy for this plan. Review the state and try again.",
     },
+    intentPlugin: {
+      title: "Generate topology from prompt",
+      subtitle: "Describe the infrastructure intent for {{provider}} and we will draw it on the canvas.",
+      info:
+        "This first version generates an editable draft. You can then adjust nodes, validate, and deploy with the normal flow.",
+      providerActive: "Plugin active: {{provider}} · {{kind}} mode.",
+      promptLabel: "Infrastructure prompt",
+      promptPlaceholder:
+        "Example: I want one VPC with one public subnet, one private subnet, NAT, and 2 instances for a web app.",
+      regionLabel: "Region",
+      maxWorkloadsLabel: "Max instances",
+      cancel: "Cancel",
+      submit: "Generate draft",
+      generating: "Generating...",
+      genericError: "Could not generate topology from the prompt.",
+      invalidResponse: "The plugin returned an incomplete or invalid topology.",
+      unavailable: "The intent plugin is not available in this environment.",
+      persistWarning:
+        "The topology was generated on the canvas, but I could not persist it to the lab yet.",
+    },
     toolbar: {
       defaultTitle: "Logical Topology",
       chips: {
@@ -1649,6 +1669,8 @@ const en = {
         restore: "Restore",
         restoreInitialTooltip: "Reset canvas to the initial template state",
         restoreInitial: "Restore initial",
+        generateTooltip: "Generate a base topology from an infrastructure prompt",
+        generate: "Generate with AI",
         routesTooltip: "Generate and review the routing plan without applying changes",
         viewRoutes: "View routing",
       },
