@@ -537,6 +537,10 @@ const es = {
         "Esto destruirá los recursos en AWS asociados a ESTE plan.\n\n¿Continuar?",
       destroyQueued:
         "Destruir encolado{{task}}. Revisa Logs para ver el progreso.",
+      autoDestroyScheduled:
+        "Destroy automático programado para {{date}}. Esta vista se refresca sola para detectar cuando arranque.{{task}}",
+      autoDestroyStarted:
+        "Se activó el destroy automático. La infraestructura entró en destrucción{{task}}.",
       destroyFailed: "Fallo al iniciar destrucción: {{error}}",
       noDestroyPermission:
         "No tienes permiso para destruir infraestructura real en este laboratorio.",
