@@ -37,7 +37,7 @@ class LabAdmin(admin.ModelAdmin):
 
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "teacher", "is_active", "updated_at")
+    list_display = ("id", "name", "teacher", "auto_destroy_minutes", "is_active", "updated_at")
     list_filter = ("is_active",)
     search_fields = ("name", "code", "teacher__email")
 

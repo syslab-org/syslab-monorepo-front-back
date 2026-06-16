@@ -203,6 +203,10 @@ const es = {
       editTitle: "Editar curso",
       createTitle: "Crear curso",
       teacher: "Profesor",
+      autoDestroyColumn: "Auto destroy",
+      autoDestroyMinutes: "Tiempo de auto destroy (minutos)",
+      autoDestroyMinutesHelp:
+        "Si lo dejas vacío al crear, se usará el valor por defecto del sistema. Ejemplo: 120 = 2 horas.",
       noReassign: "Sin reasignar",
       activeCourse: "Curso activo",
       loadError: "No se pudieron cargar los cursos.",
