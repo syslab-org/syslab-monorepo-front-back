@@ -1603,6 +1603,40 @@ const en = {
       promptLabel: "Describe your infrastructure",
       promptPlaceholder:
         "Example: I want one VPC with one public subnet, one private subnet, NAT, and 2 instances for a web app.",
+      suggestionsTitle: "Quick examples",
+      suggestions: {
+        webAppLabel: "Web app",
+        webAppPrompt:
+          "I want one VPC with one public subnet, one private subnet, NAT, and 2 instances for a web app.",
+        publicPrivateLabel: "Public and private",
+        publicPrivatePrompt:
+          "I need one network with one public subnet, one private subnet, and 3 instances for frontend and backend.",
+        privateLabLabel: "Private lab",
+        privateLabPrompt:
+          "I want one private VPC with 2 internal instances for a lab without public access.",
+      },
+      previewInfo:
+        "Review this summary before applying the topology to the canvas.",
+      previewTitle: "Topology preview",
+      previewSubtitle:
+        "This is what the assistant understood from your prompt.",
+      previewFields: {
+        provider: "Provider",
+        region: "Region",
+        network: "Network",
+        cidr: "CIDR",
+        segments: "VPCs",
+        publicSubnets: "Public subnets",
+        privateSubnets: "Private subnets",
+        workloads: "Instances",
+        natGateways: "NAT gateways",
+        internetGateways: "Internet gateways",
+      },
+      previewBack: "Edit prompt",
+      previewApply: "Apply to canvas",
+      previewApplyReplace: "Replace canvas",
+      previewReplaceWarning:
+        "If you apply this preview, it will replace the topology currently visible on the canvas.",
       regionLabel: "Region",
       maxWorkloadsLabel: "Max instances",
       cancel: "Cancel",
@@ -1612,6 +1646,8 @@ const en = {
       invalidResponse: "The plugin returned an incomplete or invalid topology.",
       localDraftNotice:
         "AI draft generated only for this session. Use Save to persist it to the lab.",
+      replaceWarning:
+        "If you generate a new topology, it will replace what is currently visible on the canvas. Your saved lab will not change until you use Save.",
       unavailable: "The intent plugin is not available in this environment.",
       persistWarning:
         "The topology was generated on the canvas, but I could not persist it to the lab yet.",

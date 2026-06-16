@@ -194,4 +194,45 @@ export function topologyToCanvasFlow(topology, options = {}) {
   };
 }
 
+export function summarizeIntentTopology(topology, options = {}) {
+  const provider = options.provider || "aws";
+  const network = topology?.network || {};
+  const segments = Array.isArray(topology?.segments) ? topology.segments : [];
+
+  let publicSubnets = 0;
+  let privateSubnets = 0;
+  let totalWorkloads = 0;
+  let natGateways = 0;
+  let internetGateways = 0;
+
+  segments.forEach((segment) => {
+    const aws = segment?.provider_overrides?.aws || {};
+    if (aws?.internet_gateway) internetGateways += 1;
+    if (aws?.nat_gateway?.enabled) natGateways += 1;
+
+    const zones = Array.isArray(segment?.zones) ? segment.zones : [];
+    zones.forEach((zone) => {
+      const subnetType = String(zone?.kind || zone?.provider_overrides?.aws?.subnet_type || "").toLowerCase();
+      if (subnetType === "public") publicSubnets += 1;
+      else privateSubnets += 1;
+
+      const workloads = Array.isArray(zone?.workloads) ? zone.workloads : [];
+      totalWorkloads += workloads.length;
+    });
+  });
+
+  return {
+    provider,
+    networkName: network?.name || "",
+    region: network?.region || "",
+    cidr: network?.cidr || "",
+    segments: segments.length,
+    publicSubnets,
+    privateSubnets,
+    workloads: totalWorkloads,
+    natGateways,
+    internetGateways,
+  };
+}
+
 export { parseCidrParts };

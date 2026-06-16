@@ -1595,6 +1595,40 @@ const es = {
       promptLabel: "Describe tu infraestructura",
       promptPlaceholder:
         "Ejemplo: Quiero una VPC con una subnet pública, una privada, NAT y 2 instancias para una app web.",
+      suggestionsTitle: "Ejemplos rápidos",
+      suggestions: {
+        webAppLabel: "App web",
+        webAppPrompt:
+          "Quiero una VPC con una subnet pública, una privada, NAT y 2 instancias para una app web.",
+        publicPrivateLabel: "Pública y privada",
+        publicPrivatePrompt:
+          "Necesito una red con una subnet pública, una privada y 3 instancias para frontend y backend.",
+        privateLabLabel: "Laboratorio privado",
+        privateLabPrompt:
+          "Quiero una VPC privada con 2 instancias internas para un laboratorio sin acceso público.",
+      },
+      previewInfo:
+        "Revisa este resumen antes de aplicar la topología al canvas.",
+      previewTitle: "Vista previa de la topología",
+      previewSubtitle:
+        "Esto es lo que el asistente entendió a partir de tu prompt.",
+      previewFields: {
+        provider: "Proveedor",
+        region: "Región",
+        network: "Red",
+        cidr: "CIDR",
+        segments: "VPCs",
+        publicSubnets: "Subnets públicas",
+        privateSubnets: "Subnets privadas",
+        workloads: "Instancias",
+        natGateways: "NAT Gateways",
+        internetGateways: "Internet Gateways",
+      },
+      previewBack: "Editar prompt",
+      previewApply: "Aplicar al canvas",
+      previewApplyReplace: "Reemplazar canvas",
+      previewReplaceWarning:
+        "Si aplicas esta vista previa, reemplazarás la topología visible actualmente en el canvas.",
       regionLabel: "Región",
       maxWorkloadsLabel: "Máx. instancias",
       cancel: "Cancelar",
@@ -1604,6 +1638,8 @@ const es = {
       invalidResponse: "El plugin devolvió una topología incompleta o inválida.",
       localDraftNotice:
         "Borrador generado con IA solo en esta sesión. Usa Guardar para persistirlo en el laboratorio.",
+      replaceWarning:
+        "Si generas una nueva topología, reemplazarás lo que ves actualmente en el canvas. Tu laboratorio guardado no cambiará hasta que uses Guardar.",
       unavailable: "El plugin de intención no está disponible en este entorno.",
       persistWarning:
         "La topología se generó en el canvas, pero no pude persistirla todavía en el laboratorio.",

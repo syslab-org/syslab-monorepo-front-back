@@ -4,7 +4,11 @@ import { useCanvasRuntimeController } from "@/features/networkCanvas/core/useCan
 import { useRoutingPreview } from "@/features/networkCanvas/core/useRoutingPreview";
 import useIntentPluginManifest from "@/features/intentPlugin/hooks/useIntentPluginManifest";
 import GenerateIntentDialog from "@/features/intentPlugin/modals/GenerateIntentDialog";
-import { parseCidrParts, topologyToCanvasFlow } from "@/features/intentPlugin/utils/topologyToCanvasFlow";
+import {
+  parseCidrParts,
+  summarizeIntentTopology,
+  topologyToCanvasFlow,
+} from "@/features/intentPlugin/utils/topologyToCanvasFlow";
 import { useReactFlow } from "@xyflow/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -113,6 +117,7 @@ function CanvasFlowPage() {
   const [intentDialogOpen, setIntentDialogOpen] = useState(false);
   const [intentDialogBusy, setIntentDialogBusy] = useState(false);
   const [intentDialogError, setIntentDialogError] = useState("");
+  const [intentPreview, setIntentPreview] = useState(null);
   const { manifest: intentPluginManifest, loading: intentPluginLoading, enabled: intentPluginEnabled } = useIntentPluginManifest();
 
   const { loadingFlow } = useContext(LoadingFlowContext);
@@ -402,6 +407,7 @@ function CanvasFlowPage() {
       return;
     }
     setIntentDialogError("");
+    setIntentPreview(null);
     setIntentDialogOpen(true);
   }, [intentPluginEnabled, t]);
 
@@ -409,6 +415,7 @@ function CanvasFlowPage() {
     if (intentDialogBusy) return;
     setIntentDialogOpen(false);
     setIntentDialogError("");
+    setIntentPreview(null);
   }, [intentDialogBusy]);
 
   const handleGenerateIntent = useCallback(async ({
@@ -441,43 +448,13 @@ function CanvasFlowPage() {
         throw new Error(t("canvas.intentPlugin.invalidResponse"));
       }
 
-      const flowToPersist = {
-        ...flow,
-        expiration: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
-      };
-
-      setNodes(flow.nodes || []);
-      setEdges(flow.edges || []);
-      setCanvasUiError(null);
-      setCanvasUiInfo(t("canvas.intentPlugin.localDraftNotice"));
-      setHasValidatedInSession(false);
-      setValidatedPlanHash(null);
-
-      const network = topology?.network || {};
-      const { cidrBlock, prefixLength: nextPrefix } = parseCidrParts(network?.cidr);
-      const nextLabName = network?.name || response?.draft_name || "";
-      const nextLabRegion = network?.region || region || intentPluginDefaultRegion;
-      const nextPrefixNumber = nextPrefix ? Number(nextPrefix) : null;
-      if (cidrBlock) setMasterCidrBlock(cidrBlock);
-      if (nextPrefix) setPrefixLength(nextPrefixNumber);
-      if (nextLabName) setLabName(nextLabName);
-      if (nextLabRegion) setLabRegion(nextLabRegion);
-
-      try {
-        localStorage.setItem(flowKey, JSON.stringify(flowToPersist));
-      } catch (storageError) {
-        console.warn("Could not persist generated flow to localStorage:", storageError);
-      }
-
-      if (Array.isArray(response?.warnings) && response.warnings.length > 0) {
-        setCanvasUiError(response.warnings.join(" "));
-      }
-
-      setIntentDialogOpen(false);
-
-      window.setTimeout(() => {
-        reactFlowInstance?.fitView?.({ padding: 0.16, duration: 350 });
-      }, 60);
+      setIntentPreview({
+        response,
+        flow,
+        summary: summarizeIntentTopology(topology, {
+          provider: nextTargetProvider,
+        }),
+      });
     } catch (error) {
       setIntentDialogError(
         error?.data?.error ||
@@ -491,6 +468,57 @@ function CanvasFlowPage() {
     labId,
     intentPluginDefaultRegion,
     intentPluginMaxWorkloads,
+    t,
+    targetProvider,
+  ]);
+
+  const handleApplyIntentPreview = useCallback(() => {
+    if (!intentPreview?.response || !intentPreview?.flow) return;
+
+    const response = intentPreview.response;
+    const flow = intentPreview.flow;
+    const topology = response?.intent?.topology;
+    const flowToPersist = {
+      ...flow,
+      expiration: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+
+    setNodes(flow.nodes || []);
+    setEdges(flow.edges || []);
+    setCanvasUiError(null);
+    setCanvasUiInfo(t("canvas.intentPlugin.localDraftNotice"));
+    setHasValidatedInSession(false);
+    setValidatedPlanHash(null);
+
+    const network = topology?.network || {};
+    const { cidrBlock, prefixLength: nextPrefix } = parseCidrParts(network?.cidr);
+    const nextLabName = network?.name || response?.draft_name || "";
+    const nextLabRegion = network?.region || intentPluginDefaultRegion;
+    const nextPrefixNumber = nextPrefix ? Number(nextPrefix) : null;
+    if (cidrBlock) setMasterCidrBlock(cidrBlock);
+    if (nextPrefix) setPrefixLength(nextPrefixNumber);
+    if (nextLabName) setLabName(nextLabName);
+    if (nextLabRegion) setLabRegion(nextLabRegion);
+
+    try {
+      localStorage.setItem(flowKey, JSON.stringify(flowToPersist));
+    } catch (storageError) {
+      console.warn("Could not persist generated flow to localStorage:", storageError);
+    }
+
+    if (Array.isArray(response?.warnings) && response.warnings.length > 0) {
+      setCanvasUiError(response.warnings.join(" "));
+    }
+
+    setIntentPreview(null);
+    setIntentDialogOpen(false);
+
+    window.setTimeout(() => {
+      reactFlowInstance?.fitView?.({ padding: 0.16, duration: 350 });
+    }, 60);
+  }, [
+    intentPluginDefaultRegion,
+    intentPreview,
     reactFlowInstance,
     setEdges,
     setHasValidatedInSession,
@@ -501,8 +529,13 @@ function CanvasFlowPage() {
     setPrefixLength,
     setValidatedPlanHash,
     t,
-    targetProvider,
   ]);
+
+  const handleBackFromIntentPreview = useCallback(() => {
+    if (intentDialogBusy) return;
+    setIntentPreview(null);
+    setIntentDialogError("");
+  }, [intentDialogBusy]);
 
   return (
     <NetworkProvider>
@@ -629,6 +662,10 @@ function CanvasFlowPage() {
           open={intentDialogOpen}
           onClose={handleCloseIntentDialog}
           onSubmit={handleGenerateIntent}
+          onApplyPreview={handleApplyIntentPreview}
+          onBackFromPreview={handleBackFromIntentPreview}
+          preview={intentPreview}
+          hasExistingTopology={Array.isArray(nodes) && nodes.length > 0}
           isSubmitting={intentDialogBusy}
           error={intentDialogError}
           defaultRegion={intentPluginDefaultRegion}
