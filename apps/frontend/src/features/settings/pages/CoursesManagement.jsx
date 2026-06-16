@@ -35,6 +35,7 @@ const EMPTY_FORM = {
   name: '',
   code: '',
   teacher_id: '',
+  auto_destroy_minutes: '',
   is_active: true,
 }
 
@@ -61,6 +62,16 @@ const CourseForm = ({ form, setForm, teachers, canAssignTeacher, isEditing, onSu
           value={form.code}
           onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value }))}
           fullWidth
+        />
+
+        <TextField
+          label={t('settings.courses.autoDestroyMinutes')}
+          type="number"
+          value={form.auto_destroy_minutes}
+          onChange={(event) => setForm((prev) => ({ ...prev, auto_destroy_minutes: event.target.value }))}
+          fullWidth
+          inputProps={{ min: 1 }}
+          helperText={t('settings.courses.autoDestroyMinutesHelp')}
         />
 
         {canAssignTeacher && (
@@ -183,6 +194,7 @@ export const CoursesManagement = () => {
       name: course.name || '',
       code: course.code || '',
       teacher_id: course.teacher_id ? String(course.teacher_id) : '',
+      auto_destroy_minutes: course.auto_destroy_minutes ? String(course.auto_destroy_minutes) : '',
       is_active: !!course.is_active,
     })
     setIsModalOpen(true)
@@ -206,6 +218,10 @@ export const CoursesManagement = () => {
       name: form.name.trim(),
       code: form.code.trim(),
       is_active: !!form.is_active,
+    }
+
+    if (String(form.auto_destroy_minutes || '').trim()) {
+      payload.auto_destroy_minutes = Number(form.auto_destroy_minutes)
     }
 
     if (canAssignTeacher && form.teacher_id) {
@@ -284,6 +300,7 @@ export const CoursesManagement = () => {
                   <TableCell>{t('labels.course')}</TableCell>
                   <TableCell>{t('labels.code')}</TableCell>
                   <TableCell>{t('settings.courses.teacher')}</TableCell>
+                  <TableCell>{t('settings.courses.autoDestroyColumn')}</TableCell>
                   <TableCell>{t('labels.state')}</TableCell>
                   <TableCell>{t('settings.courses.students')}</TableCell>
                   <TableCell align="right">{t('labels.actions')}</TableCell>
@@ -303,6 +320,7 @@ export const CoursesManagement = () => {
                       <TableCell>{course.name}</TableCell>
                       <TableCell>{course.code || '-'}</TableCell>
                       <TableCell>{course.teacher_email || '-'}</TableCell>
+                      <TableCell>{course.auto_destroy_minutes ? `${course.auto_destroy_minutes} min` : '-'}</TableCell>
                       <TableCell>
                         <Chip
                           size="small"

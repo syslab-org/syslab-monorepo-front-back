@@ -41,7 +41,12 @@ class CourseViewSet(viewsets.ViewSet):
             teacher = User.objects.filter(id=data["teacher_id"]).first()
             if not teacher:
                 return Response({"detail": "Profesor no encontrado."}, status=status.HTTP_404_NOT_FOUND)
-        course = Course.objects.create(name=data["name"], code=data.get("code", ""), teacher=teacher)
+        course = Course.objects.create(
+            name=data["name"],
+            code=data.get("code", ""),
+            teacher=teacher,
+            auto_destroy_minutes=data.get("auto_destroy_minutes", Course._meta.get_field("auto_destroy_minutes").get_default()),
+        )
         return Response(CourseSummarySerializer(course).data, status=status.HTTP_201_CREATED)
 
     def partial_update(self, request, pk=None):
@@ -53,7 +58,7 @@ class CourseViewSet(viewsets.ViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        for field in ("name", "code", "is_active"):
+        for field in ("name", "code", "is_active", "auto_destroy_minutes"):
             if field in data:
                 setattr(course, field, data[field])
         if "teacher_id" in data:

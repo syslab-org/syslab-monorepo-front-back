@@ -206,6 +206,7 @@ class PlanListSerializer(serializers.ModelSerializer):
             "status",
             "applied",
             "last_action",
+            "auto_destroy_at",
             "created_at",
             "can_apply",
             "simulate_only",
@@ -289,12 +290,14 @@ class PlanDetailSerializer(serializers.ModelSerializer):
             "outputs",
             "applied",
             "last_action",
+            "auto_destroy_at",
             "error",
             "can_apply",
             "simulate_only",
             "can_destroy",
             "last_deploy_task_id",
             "last_destroy_task_id",
+            "auto_destroy_task_id",
             "last_apply_context",
             "resolved_execution_target",
             "execution_history",
@@ -369,7 +372,15 @@ class CourseSummarySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Course
-        fields = ("id", "name", "code", "teacher_id", "teacher_email", "is_active")
+        fields = (
+            "id",
+            "name",
+            "code",
+            "teacher_id",
+            "teacher_email",
+            "auto_destroy_minutes",
+            "is_active",
+        )
         read_only_fields = fields
 
 
@@ -466,12 +477,14 @@ class CourseCreateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=120)
     code = serializers.CharField(required=False, allow_blank=True, default="")
     teacher_id = serializers.IntegerField(required=False)
+    auto_destroy_minutes = serializers.IntegerField(required=False, min_value=1)
 
 
 class CourseUpdateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=120, required=False)
     code = serializers.CharField(required=False, allow_blank=True)
     teacher_id = serializers.IntegerField(required=False)
+    auto_destroy_minutes = serializers.IntegerField(required=False, min_value=1)
     is_active = serializers.BooleanField(required=False)
 
 

@@ -17,7 +17,7 @@ from .providers.aws.runtime import build_nat_cleanup_targets, check_key_pairs_pr
 from .providers.aws.terraform import render_workspace
 from .secret_store import encrypt_secret
 from .serializers import CloudConnectionCreateSerializer, CloudConnectionSerializer
-from .tasks import _build_last_apply_context
+from .tasks import _build_last_apply_context, auto_destroy_plan, schedule_auto_destroy_for_plan
 from .validators import validate_network_plan
 
 
@@ -785,6 +785,94 @@ class VisibilityApiTests(APITestCase):
         self.assertIn("student@example.com", emails)
         self.assertIn("unassigned@example.com", emails)
         self.assertNotIn("other-student@example.com", emails)
+
+    def test_teacher_can_create_course_with_custom_auto_destroy_minutes(self):
+        self.client.force_authenticate(self.teacher)
+        res = self.client.post(
+            "/api/courses/",
+            {
+                "name": "Redes 3",
+                "code": "R3",
+                "auto_destroy_minutes": 45,
+            },
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.json()["auto_destroy_minutes"], 45)
+        self.assertEqual(Course.objects.get(name="Redes 3").auto_destroy_minutes, 45)
+
+    def test_course_list_exposes_auto_destroy_minutes(self):
+        self.client.force_authenticate(self.teacher)
+        res = self.client.get("/api/courses/")
+
+        self.assertEqual(res.status_code, 200)
+        courses_by_name = {item["name"]: item for item in res.json()}
+        self.assertIn("auto_destroy_minutes", courses_by_name["Redes 1"])
+        self.assertEqual(
+            courses_by_name["Redes 1"]["auto_destroy_minutes"],
+            self.course.auto_destroy_minutes,
+        )
+
+    @patch("api.tasks.auto_destroy_plan.apply_async")
+    def test_schedule_auto_destroy_for_plan_persists_eta_and_token(self, mocked_apply_async):
+        mocked_apply_async.return_value = SimpleNamespace(id="task-auto-schedule-1")
+        self.course.auto_destroy_minutes = 45
+        self.course.save(update_fields=["auto_destroy_minutes", "updated_at"])
+        plan = Plan.objects.get(name="Plan alumno")
+
+        schedule = schedule_auto_destroy_for_plan(plan)
+
+        plan.refresh_from_db()
+        self.assertEqual(schedule["minutes"], 45)
+        self.assertEqual(plan.auto_destroy_task_id, "task-auto-schedule-1")
+        self.assertEqual(plan.auto_destroy_at, schedule["scheduled_for"])
+        self.assertEqual(plan.auto_destroy_token, schedule["token"])
+        self.assertEqual(mocked_apply_async.call_args.kwargs["eta"], schedule["scheduled_for"])
+
+    @patch("api.tasks.destroy_last_deploy.delay")
+    def test_auto_destroy_task_enqueues_destroy_when_plan_is_due_and_aligned(self, mocked_delay):
+        mocked_delay.return_value = SimpleNamespace(id="task-auto-destroy-1")
+        plan = Plan.objects.get(name="Plan alumno")
+        plan.applied = True
+        plan.status = Plan.Status.SUCCESS
+        plan.last_action = Plan.LastAction.APPLY
+        plan.auto_destroy_at = timezone.now() - timedelta(minutes=1)
+        plan.auto_destroy_token = "auto-token-1"
+        plan.last_apply_context = {
+            "provider": "aws",
+            "credential_source": "cloud_connection",
+            "region": "us-east-1",
+            "cloud_connection_id": str(self.student_connection.id),
+            "cloud_connection_name": self.student_connection.name,
+            "cloud_connection_scope": self.student_connection.scope,
+            "account_id": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/alumno22-syslab",
+            "user_id": "AIDAEXAMPLE",
+            "captured_at": "2026-04-07T20:00:00Z",
+        }
+        plan.save(
+            update_fields=[
+                "applied",
+                "status",
+                "last_action",
+                "auto_destroy_at",
+                "auto_destroy_token",
+                "last_apply_context",
+                "updated_at",
+            ]
+        )
+
+        result = auto_destroy_plan.run(str(plan.id), "auto-token-1")
+
+        self.assertTrue(result["queued"])
+        plan.refresh_from_db()
+        self.assertEqual(plan.status, Plan.Status.RUNNING)
+        self.assertEqual(plan.last_action, Plan.LastAction.DESTROY)
+        self.assertEqual(plan.task_id, "task-auto-destroy-1")
+        execution = PlanExecutionRecord.objects.filter(plan=plan, action=Plan.LastAction.DESTROY).latest("created_at")
+        self.assertEqual(execution.requested_by_id, None)
+        self.assertEqual(execution.request_summary["trigger"], "auto_destroy")
 
     def test_lab_create_accepts_legacy_provider_payload_shapes(self):
         self.client.force_authenticate(self.teacher)
