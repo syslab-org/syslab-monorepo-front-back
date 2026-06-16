@@ -26,6 +26,8 @@ export default function GenerateIntentDialog({
   manifest = null,
 }) {
   const { t } = useTranslation();
+  const providerKey = String(targetProvider || manifest?.defaults?.target_provider || "aws").toLowerCase();
+  const providerKindKey = String(manifest?.provider?.kind || "deterministic").toLowerCase();
   const configuredRegion = manifest?.defaults?.region || defaultRegion || "us-east-1";
   const configuredMaxWorkloads = Math.max(1, Number(manifest?.constraints?.max_workloads) || 6);
   const initialMaxWorkloads = Math.min(3, configuredMaxWorkloads);
@@ -49,7 +51,12 @@ export default function GenerateIntentDialog({
     });
   };
 
-  const providerLabel = manifest?.provider?.label || String(targetProvider || "aws").toUpperCase();
+  const providerLabel = t(`canvas.intentPlugin.providerLabels.${providerKey}`, {
+    defaultValue: String(targetProvider || "aws").toUpperCase(),
+  });
+  const providerKindLabel = t(`canvas.intentPlugin.providerKinds.${providerKindKey}`, {
+    defaultValue: providerKindKey,
+  });
 
   return (
     <Dialog
@@ -77,7 +84,10 @@ export default function GenerateIntentDialog({
           <Alert severity="info">{t("canvas.intentPlugin.info")}</Alert>
           {manifest?.provider?.kind ? (
             <Alert severity="success">
-              {t("canvas.intentPlugin.providerActive", { provider: providerLabel, kind: manifest.provider.kind })}
+              {t("canvas.intentPlugin.providerActive", {
+                provider: providerLabel,
+                kind: providerKindLabel,
+              })}
             </Alert>
           ) : null}
           {error ? <Alert severity="error">{error}</Alert> : null}

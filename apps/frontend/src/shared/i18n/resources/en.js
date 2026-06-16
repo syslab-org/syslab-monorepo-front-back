@@ -1587,21 +1587,31 @@ const en = {
         "The backend rejected redeploy for this plan. Review the state and try again.",
     },
     intentPlugin: {
-      title: "Generate topology from prompt",
-      subtitle: "Describe the infrastructure intent for {{provider}} and we will draw it on the canvas.",
+      title: "Generate topology with AI",
+      subtitle: "Describe the infrastructure you need on {{provider}} and we will draw it on the canvas.",
       info:
-        "This first version generates an editable draft. You can then adjust nodes, validate, and deploy with the normal flow.",
-      providerActive: "Plugin active: {{provider}} · {{kind}} mode.",
-      promptLabel: "Infrastructure prompt",
+        "An editable draft will be generated. You can then adjust nodes, validate, and deploy with the normal flow.",
+      providerActive: "Active assistant: {{kind}} generation for {{provider}}.",
+      providerLabels: {
+        aws: "AWS",
+        gcp: "GCP",
+        azure: "Azure",
+      },
+      providerKinds: {
+        deterministic: "deterministic",
+      },
+      promptLabel: "Describe your infrastructure",
       promptPlaceholder:
         "Example: I want one VPC with one public subnet, one private subnet, NAT, and 2 instances for a web app.",
       regionLabel: "Region",
       maxWorkloadsLabel: "Max instances",
       cancel: "Cancel",
-      submit: "Generate draft",
-      generating: "Generating...",
+      submit: "Generate topology",
+      generating: "Generating topology...",
       genericError: "Could not generate topology from the prompt.",
       invalidResponse: "The plugin returned an incomplete or invalid topology.",
+      localDraftNotice:
+        "AI draft generated only for this session. Use Save to persist it to the lab.",
       unavailable: "The intent plugin is not available in this environment.",
       persistWarning:
         "The topology was generated on the canvas, but I could not persist it to the lab yet.",

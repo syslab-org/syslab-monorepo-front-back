@@ -1579,21 +1579,31 @@ const es = {
         "El backend rechazó el redespliegue de este plan. Revisa el estado y vuelve a intentar.",
     },
     intentPlugin: {
-      title: "Generar topología desde prompt",
-      subtitle: "Describe la intención de infraestructura para {{provider}} y la dibujaremos en el canvas.",
+      title: "Generar topología con IA",
+      subtitle: "Describe la infraestructura que necesitas en {{provider}} y la dibujaremos en el canvas.",
       info:
-        "Esta primera versión genera un borrador editable. Después puedes ajustar nodos, validar y desplegar con el flujo normal.",
-      providerActive: "Plugin activo: {{provider}} · modo {{kind}}.",
-      promptLabel: "Prompt de infraestructura",
+        "Se generará un borrador editable. Después podrás ajustar nodos, validar y desplegar con el flujo normal.",
+      providerActive: "Asistente activo: generación {{kind}} para {{provider}}.",
+      providerLabels: {
+        aws: "AWS",
+        gcp: "GCP",
+        azure: "Azure",
+      },
+      providerKinds: {
+        deterministic: "determinística",
+      },
+      promptLabel: "Describe tu infraestructura",
       promptPlaceholder:
         "Ejemplo: Quiero una VPC con una subnet pública, una privada, NAT y 2 instancias para una app web.",
       regionLabel: "Región",
       maxWorkloadsLabel: "Máx. instancias",
       cancel: "Cancelar",
-      submit: "Generar borrador",
-      generating: "Generando...",
+      submit: "Generar topología",
+      generating: "Generando topología...",
       genericError: "No se pudo generar la topología desde el prompt.",
       invalidResponse: "El plugin devolvió una topología incompleta o inválida.",
+      localDraftNotice:
+        "Borrador generado con IA solo en esta sesión. Usa Guardar para persistirlo en el laboratorio.",
       unavailable: "El plugin de intención no está disponible en este entorno.",
       persistWarning:
         "La topología se generó en el canvas, pero no pude persistirla todavía en el laboratorio.",

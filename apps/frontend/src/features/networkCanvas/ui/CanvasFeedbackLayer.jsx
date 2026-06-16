@@ -15,6 +15,8 @@ import ConfirmDeployDialog from "@/features/networkCanvas/modals/ConfirmDeployDi
 export default function CanvasFeedbackLayer({
     canvasUiError,
     setCanvasUiError,
+    canvasUiInfo,
+    setCanvasUiInfo,
     editGuardOpen,
     setEditGuardOpen,
     canvasPlanId,
@@ -56,6 +58,20 @@ export default function CanvasFeedbackLayer({
             >
                 <Alert severity="warning" variant="filled" sx={{ width: "100%" }}>
                     {canvasUiError}
+                </Alert>
+            </Snackbar>
+
+            <Snackbar
+                open={!!canvasUiInfo}
+                autoHideDuration={6500}
+                onClose={(_e, reason) => {
+                    if (reason === "clickaway") return;
+                    setCanvasUiInfo?.(null);
+                }}
+                anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+            >
+                <Alert severity="info" variant="filled" sx={{ width: "100%" }}>
+                    {canvasUiInfo}
                 </Alert>
             </Snackbar>
 

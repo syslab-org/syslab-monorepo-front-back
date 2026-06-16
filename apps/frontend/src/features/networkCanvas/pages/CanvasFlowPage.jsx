@@ -107,6 +107,7 @@ function CanvasFlowPage() {
   const [canvasPlanInfo, setCanvasPlanInfo] = useState(null);
   const [isCanvasLocked, setIsCanvasLocked] = useState(false);
   const [canvasUiError, setCanvasUiError] = useState(null);
+  const [canvasUiInfo, setCanvasUiInfo] = useState(null);
   const [validatedPlanHash, setValidatedPlanHash] = useState(null);
   const [hasValidatedInSession, setHasValidatedInSession] = useState(false);
   const [intentDialogOpen, setIntentDialogOpen] = useState(false);
@@ -263,6 +264,13 @@ function CanvasFlowPage() {
     saveMessage,
     lastSavedAt,
   } = useSaveFlow({ reactFlowInstance, flowKey, labId });
+  const handleSaveFlow = useCallback(async () => {
+    const saved = await onSaveFlow();
+    if (saved) {
+      setCanvasUiInfo(null);
+    }
+    return saved;
+  }, [onSaveFlow]);
   const onRestoreFlow = useRestoreFlow({ setNodes, setEdges, setViewport, flowKey, getId, setCanvasPlanId, labId });
   const { saveNodeData, deleteNodeInstance } = useNodeActions({
     nodes,
@@ -270,7 +278,7 @@ function CanvasFlowPage() {
     selectedNode,
     clickedNodeId,
     closeModal,
-    onSaveFlow
+    onSaveFlow: handleSaveFlow
   });
 
   const {
@@ -441,6 +449,7 @@ function CanvasFlowPage() {
       setNodes(flow.nodes || []);
       setEdges(flow.edges || []);
       setCanvasUiError(null);
+      setCanvasUiInfo(t("canvas.intentPlugin.localDraftNotice"));
       setHasValidatedInSession(false);
       setValidatedPlanHash(null);
 
@@ -534,7 +543,7 @@ function CanvasFlowPage() {
             reactFlowInstance={reactFlowInstance}
             theme={theme}
             toolbarProps={{
-              onSave: onSaveFlow,
+              onSave: handleSaveFlow,
               saveState,
               saveMessage,
               lastSavedAt,
@@ -556,6 +565,8 @@ function CanvasFlowPage() {
             feedbackProps={{
               canvasUiError,
               setCanvasUiError,
+              canvasUiInfo,
+              setCanvasUiInfo,
               editGuardOpen,
               setEditGuardOpen,
               canvasPlanId,
