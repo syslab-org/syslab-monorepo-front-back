@@ -535,6 +535,10 @@ const en = {
       destroyConfirm:
         "This will destroy the AWS resources associated with THIS plan.\n\nContinue?",
       destroyQueued: "Destroy queued{{task}}. Check Logs to follow progress.",
+      autoDestroyScheduled:
+        "Automatic destroy scheduled for {{date}}. This view refreshes itself to detect when it starts.{{task}}",
+      autoDestroyStarted:
+        "Automatic destroy has started. The infrastructure is now being destroyed{{task}}.",
       destroyFailed: "Failed to start destroy: {{error}}",
       noDestroyPermission:
         "You do not have permission to destroy real infrastructure in this lab.",
