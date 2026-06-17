@@ -88,6 +88,7 @@ python3 scripts/upload_canvas_flows_firestore.py \
 Luego ejecuta la carga real:
 
 ```bash
+FIREBASE_API_KEY="tu_web_api_key" \
 FIREBASE_EMAIL="tu_email" FIREBASE_PASSWORD="tu_password" \
 python3 scripts/upload_canvas_flows_firestore.py \
   --input-dir apps/frontend/examples/network-scenarios/generated-canvas \
