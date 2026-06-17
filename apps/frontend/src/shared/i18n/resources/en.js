@@ -1599,6 +1599,7 @@ const en = {
       },
       providerKinds: {
         deterministic: "deterministic",
+        llm: "AI-assisted",
       },
       promptLabel: "Describe your infrastructure",
       promptPlaceholder:

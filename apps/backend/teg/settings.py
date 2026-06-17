@@ -210,3 +210,12 @@ INTENT_PLUGIN_PROVIDER = os.getenv(
     "INTENT_PLUGIN_PROVIDER",
     "intent_plugin.providers.heuristic.HeuristicIntentProvider",
 ).strip() or "intent_plugin.providers.heuristic.HeuristicIntentProvider"
+INTENT_PLUGIN_OPENAI_API_KEY = os.getenv("INTENT_PLUGIN_OPENAI_API_KEY", "").strip()
+INTENT_PLUGIN_OPENAI_MODEL = os.getenv("INTENT_PLUGIN_OPENAI_MODEL", "gpt-5.5").strip() or "gpt-5.5"
+INTENT_PLUGIN_OPENAI_TIMEOUT_SECONDS = env_positive_int("INTENT_PLUGIN_OPENAI_TIMEOUT_SECONDS", 45)
+INTENT_PLUGIN_OPENAI_REASONING_EFFORT = (
+    os.getenv("INTENT_PLUGIN_OPENAI_REASONING_EFFORT", "low").strip().lower() or "low"
+)
+INTENT_PLUGIN_OPENAI_TEXT_VERBOSITY = (
+    os.getenv("INTENT_PLUGIN_OPENAI_TEXT_VERBOSITY", "low").strip().lower() or "low"
+)

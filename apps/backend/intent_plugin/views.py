@@ -4,7 +4,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
 
-from intent_plugin.exceptions import IntentPluginDisabled, IntentProviderConfigurationError
+from intent_plugin.exceptions import (
+    IntentPluginDisabled,
+    IntentProviderConfigurationError,
+    IntentProviderExecutionError,
+)
 from intent_plugin.serializers import IntentGenerateRequestSerializer, IntentGenerateResponseSerializer
 from intent_plugin.service import generate_intent, get_manifest
 
@@ -32,6 +36,8 @@ class IntentGenerateView(APIView):
             return Response({"ok": False, "error": str(exc)}, status=status.HTTP_409_CONFLICT)
         except IntentProviderConfigurationError as exc:
             return Response({"ok": False, "error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except IntentProviderExecutionError as exc:
+            return Response({"ok": False, "error": str(exc)}, status=status.HTTP_424_FAILED_DEPENDENCY)
 
         out = IntentGenerateResponseSerializer(payload)
         return Response(out.data, status=status.HTTP_200_OK)

@@ -9,3 +9,6 @@ class IntentPluginDisabled(IntentPluginError):
 class IntentProviderConfigurationError(IntentPluginError):
     pass
 
+
+class IntentProviderExecutionError(IntentPluginError):
+    pass

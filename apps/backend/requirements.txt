@@ -15,3 +15,4 @@ dj-database-url>=2
 Jinja2
 google-auth
 cryptography
+openai>=1.88.0,<2

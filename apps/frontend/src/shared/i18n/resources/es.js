@@ -1591,6 +1591,7 @@ const es = {
       },
       providerKinds: {
         deterministic: "determinística",
+        llm: "asistida por IA",
       },
       promptLabel: "Describe tu infraestructura",
       promptPlaceholder:
