@@ -18,6 +18,7 @@ media/
 staticfiles/
 
 # Docker
+.env
 *.log
 *.pid
 .env.dev
