@@ -52,7 +52,34 @@ Si en tu maquina no haras despliegues reales a AWS, puedes dejar:
 ALLOW_LOCAL_APPLY=0
 ```
 
-## 3. Configurar AWS en el host
+## 3. Cuándo hace falta `AWS_PROFILE`
+
+En local existen dos caminos posibles para ejecutar infraestructura AWS:
+
+1. `Cloud Connection` con `AWS Static Keys`
+2. `Cloud Connection` con `AWS AssumeRole`
+
+Regla practica:
+
+- si la conexion usa `AWS Static Keys`, el backend usa esas keys guardadas en la conexion
+- si la conexion usa `AWS AssumeRole`, el backend necesita una identidad base en runtime para llamar `sts:AssumeRole`
+- esa identidad base normalmente viene de `~/.aws` + `AWS_PROFILE`
+
+Por eso, en local:
+
+- `AWS_PROFILE` si es necesario cuando el laboratorio resuelve una conexion `AssumeRole`
+- `AWS_PROFILE` no es estrictamente necesario si la conexion efectiva usa `Static Keys`
+- si no hay `Cloud Connection` activa y quieres usar el modo runtime/legacy, tambien necesitas credenciales en el contenedor
+
+Ejemplo de flujo `AssumeRole`:
+
+1. `.env.dev` define `AWS_PROFILE=tesis`
+2. `docker compose` monta `~/.aws` dentro de `backend` y `celery`
+3. boto3 resuelve la identidad base del perfil `tesis`
+4. SysLab usa esa identidad base para ejecutar `sts:AssumeRole`
+5. el deploy real se hace con las credenciales temporales del role asumido
+
+## 4. Configurar AWS en el host
 
 Solo hace falta si ejecutarás `apply` real desde tu laptop:
 
@@ -66,7 +93,7 @@ Eso crea o actualiza:
 - `~/.aws/credentials`
 - `~/.aws/config`
 
-## 4. Levantar el stack
+## 5. Levantar el stack
 
 ```bash
 make up
@@ -80,13 +107,13 @@ Servicios expuestos:
 
 `postgres` y `redis` quedan dentro del mismo stack.
 
-## 5. Aplicar migraciones
+## 6. Aplicar migraciones
 
 ```bash
 make migrate
 ```
 
-## 6. Verificar el entorno
+## 7. Verificar el entorno
 
 ```bash
 curl http://localhost:8000/healthz/
@@ -94,7 +121,7 @@ make ps
 PLAN_FILE=case-01-single-vpc.json make smoke-local
 ```
 
-## 7. Operacion diaria
+## 8. Operacion diaria
 
 ```bash
 make logs

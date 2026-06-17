@@ -12,12 +12,18 @@ En el estado actual del proyecto hay dos capas distintas:
 Cuando la `Cloud Connection` usa `AWS Static Keys`:
 
 - SysLab usa las keys guardadas en esa conexion
+- no hace falta un `AWS_PROFILE` del contenedor para esa conexion en particular
 
 Cuando la `Cloud Connection` usa `AWS AssumeRole`:
 
 - SysLab no usa las static keys guardadas en esa fila como credencial base
 - SysLab usa la identidad base del backend, tomada desde `~/.aws` y `AWS_PROFILE`
 - con esa identidad base hace `sts:AssumeRole`
+
+En otras palabras:
+
+- `Static Keys` => la conexion ya trae la credencial efectiva
+- `AssumeRole` => la conexion trae el role destino, pero el runtime debe aportar la credencial base
 
 ## Flujo real en servidor
 

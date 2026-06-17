@@ -12,7 +12,7 @@ export function computePlanActionState(planStatus, canvasState, validationState,
   const applied = planStatus?.applied === true;
   const canDestroy = Boolean(planStatus?.can_destroy ?? (applied && lastAction !== "destroy"));
   const isRunning =
-    status === "RUNNING" || status === "PENDING" || canvasState === "PLAN_RUNNING";
+    status === "RUNNING" || status === "STARTED" || canvasState === "PLAN_RUNNING";
   const normalizedValidation = String(validationState || "").toUpperCase();
 
   if (isRunning) {
