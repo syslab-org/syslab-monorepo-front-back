@@ -95,12 +95,22 @@ Conclusion operativa:
 - la ruta validada sigue siendo Compose con volumen persistente,
 - si se quiere operar este flujo en otro runtime, conviene definir un `TF_STATE_ROOT` escribible y persistente.
 
-## 7. Verificaciones ejecutadas
+## 7. Mejora futura documentada
+
+Area: `apps/backend/api/providers/runtime_registry.py`, `apps/backend/api/providers/aws/runtime.py` y `apps/backend/api/providers/aws/executor.py`
+
+Pendiente tecnico:
+
+- hoy el backend todavia usa una deteccion de runtime AWS basada en variables de entorno del contenedor para decidir parte de la habilitacion de `apply` y `destroy` reales.
+- esa logica no afecta el flujo validado actual, porque `compose.dev` y `compose.server` operan con `AWS_PROFILE`, `AWS_SDK_LOAD_CONFIG=1`, `~/.aws` montado y `ALLOW_LOCAL_APPLY=1`.
+- si en el futuro se quisiera endurecer este criterio, la mejora recomendada es reemplazar esa deteccion por una comprobacion mas robusta basada en `STS`, de forma que la habilitacion dependa de credenciales realmente resolubles y no del tipo de runtime.
+
+## 8. Verificaciones ejecutadas
 
 - `pnpm build` en `apps/frontend/`: exitoso.
 - `python apps/backend/manage.py test api.tests`: 56 tests OK.
 
-## 8. Hallazgos importantes
+## 9. Hallazgos importantes
 
 - la guia de instalacion local esta razonablemente alineada con `compose.dev.yml`.
 - la guia AWS quedo acotada a la infraestructura auxiliar que hoy si existe en Terraform.

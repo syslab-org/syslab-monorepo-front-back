@@ -974,6 +974,11 @@ Esta seccion resume donde la documentacion sigue bien y donde ya no describe fie
 4. Documentacion de infra plataforma
    - la documentacion actual no refleja la cantidad real de recursos Terraform hoy presentes en `infra/terraform/`
 
+5. Habilitacion de ejecucion real en AWS
+   - el backend actual combina `ALLOW_LOCAL_APPLY`, credenciales resueltas y una deteccion de runtime AWS basada en variables de entorno del contenedor
+   - eso no rompe el flujo validado de `Docker Compose` local ni de servidor Ubuntu, porque ambos usan `AWS_PROFILE`, `AWS_SDK_LOAD_CONFIG=1` y `~/.aws` montado
+   - mejora futura recomendada: reemplazar esa deteccion por una verificacion basada en `STS` para que la decision dependa solo de credenciales realmente utilizables
+
 ## 12. Recomendacion de lectura si quieres entender el codigo rapido
 
 Si alguien nuevo entra al repo, este es el mejor recorrido:
