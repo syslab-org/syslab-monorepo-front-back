@@ -84,9 +84,7 @@ Tecnologias principales:
 ### Infra y runtime
 
 - Docker Compose como ruta operativa validada para entorno local y servidor Ubuntu
-- Arquitectura AWS definida en Terraform para una posible operacion administrada:
-  - AWS ECS/Fargate para backend y celery
-  - AWS ALB
+- Infraestructura AWS auxiliar definida en Terraform:
   - AWS RDS Postgres
   - AWS ElastiCache Redis
   - AWS ECR
@@ -152,7 +150,7 @@ Esa separacion evita que un hard reload del navegador en rutas del dashboard del
 2. si no existe `DATABASE_URL`, puede armarse desde variables `POSTGRES_*`
 3. si tampoco existen, cae a SQLite
 
-En desarrollo Docker local, el backend usa Postgres local del compose. En ECS, la idea es usar `DATABASE_URL` via env o via Secrets Manager.
+En desarrollo Docker local, el backend usa Postgres local del compose. Fuera de compose, la idea es usar `DATABASE_URL` via env o via Secrets Manager.
 
 Tambien se configura:
 
@@ -857,10 +855,9 @@ Comandos representativos:
 - `make up`
 - `make migrate`
 - `make push`
-- `make aws-bootstrap`
-- `make aws-redeploy`
-- `make aws-stop`
 - `make aws-down`
+- `make aws-status`
+- `make tf-outputs`
 
 ### 9.3 Terraform del entorno plataforma
 
@@ -869,23 +866,18 @@ Carpeta:
 - `infra/terraform/`
 
 Esta capa no despliega laboratorios del usuario. Despliega la plataforma donde corren backend y celery.
+Esta capa no despliega laboratorios del usuario. Hoy se usa como infraestructura auxiliar de red, datos, secretos y artefactos.
 
 Recursos actuales que si existen en codigo:
 
 - VPC del entorno
 - subnets publicas
 - Internet Gateway
-- ALB
-- target group
-- ECS cluster
-- servicios ECS para backend y celery
-- task definitions
 - ECR para backend y celery
 - RDS Postgres
 - ElastiCache Redis
 - bucket S3 de planes
 - secrets para `DATABASE_URL`
-- IAM task role y execution role
 - IAM OIDC para GitHub Actions
 
 ### 9.4 Bootstrap de Terraform
@@ -964,7 +956,7 @@ Esta seccion resume donde la documentacion sigue bien y donde ya no describe fie
   - no documenta nada del sistema real
 - `infra/terraform/README.md`
   - hoy describe basicamente ECR y el backend remoto de Terraform
-  - pero el codigo actual ya provisiona una plataforma bastante mas completa: VPC, ALB, ECS, RDS, Redis, IAM, S3 y secrets
+  - todavia puede ampliarse para reflejar mejor la capa auxiliar actual: VPC, RDS, Redis, IAM, S3 y secrets
 
 ### 11.4 Hallazgos concretos de desalineacion
 

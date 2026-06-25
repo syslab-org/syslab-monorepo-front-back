@@ -10,7 +10,7 @@ Esta seccion separa la instalacion por entorno para evitar mezclar pasos de desa
 - Si vas a usar `Cloud Connections` con `AssumeRole` en ese servidor: [AWS runtime y AssumeRole](./servidor-ubuntu/aws-runtime-assumerole.md)
 - Si quieres publicar temporalmente ese servidor con Cloudflare: [Deploy LAN con Caddy](./servidor-ubuntu/deploy-lan-caddy.md)
 - Si quieres repetir los escenarios validados de `Key Pairs`, `Allowed SSH CIDR` y acceso SSH real: [Playbook de Key Pairs y Acceso SSH en AWS](../operacion/aws/key-pairs-ssh-playbook.md)
-- Si vas a desplegar la plataforma completa en AWS: [Plataforma en AWS](./aws.md)
+- Si vas a preparar infraestructura auxiliar en AWS: [Infraestructura AWS auxiliar](./aws.md)
 
 ## Arquitectura por entorno
 
@@ -30,11 +30,9 @@ En `servidor Ubuntu` hay una regla importante para AWS:
 - `AWS_PROFILE` del backend define la identidad base real del runtime
 - una `Cloud Connection` en modo `AssumeRole` no reemplaza esa identidad base; la usa para asumir el role configurado
 
-En `AWS`, `infra/terraform/` define una arquitectura de despliegue de plataforma:
+En `AWS`, `infra/terraform/` hoy define una capa de infraestructura auxiliar:
 
 - VPC y subnets
-- ALB
-- ECS/Fargate para `backend` y `celery`
 - RDS PostgreSQL
 - ElastiCache Redis
 - ECR para imagenes Docker
@@ -62,10 +60,6 @@ Versiones recomendadas:
 - `terraform >= 1.6`
 - `jq`
 - `curl`
-- `session-manager-plugin`
-
-`session-manager-plugin` es necesario porque `make aws-migrate` usa `aws ecs execute-command`.
-
 ## Politica recomendada para archivos `.env`
 
 - Los archivos `*.example` si pueden vivir en git porque solo traen valores de ejemplo.
@@ -92,7 +86,7 @@ Estado recomendado:
 - `AWS_PROFILE`: nombre del perfil configurado con `aws configure --profile <nombre>`.
 - `AWS_DEFAULT_REGION`: region objetivo del proyecto. En este repo, `us-east-1`.
 - `AWS_SDK_LOAD_CONFIG=1`: hace que boto3 lea `~/.aws/config` y `~/.aws/credentials`.
-- `ALLOW_LOCAL_APPLY=1`: permite `terraform apply` y `destroy` fuera de ECS.
+- `ALLOW_LOCAL_APPLY=1`: permite `terraform apply` y `destroy` fuera del runtime con rol administrado.
 - `KEEP_TF_DIRS=1`: conserva directorios temporales de Terraform para depuracion.
 
 ## Dónde viven las credenciales AWS

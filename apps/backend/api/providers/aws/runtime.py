@@ -171,7 +171,7 @@ def aws_creds_diagnostics(runtime_env: dict | None = None) -> dict:
     )
     allow_local = os.getenv("ALLOW_LOCAL_APPLY") == "1"
 
-    running_in_ecs = bool(
+    running_with_task_runtime = bool(
         os.getenv("ECS_TASK_DEFINITION")
         or os.getenv("ECS_CONTAINER_METADATA_URI")
         or os.getenv("ECS_CONTAINER_METADATA_URI_V4")
@@ -184,7 +184,7 @@ def aws_creds_diagnostics(runtime_env: dict | None = None) -> dict:
     )
 
     return {
-        "running_in_ecs": running_in_ecs,
+        "running_with_task_runtime": running_with_task_runtime,
         "allow_local_apply": allow_local,
         "has_static_creds": has_static_creds,
         "credential_source": "cloud_connection" if runtime_env else "environment",

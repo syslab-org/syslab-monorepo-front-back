@@ -41,10 +41,8 @@ resource "aws_iam_role" "github_deploy" {
 
 # Permisos mínimos para:
 # - ECR: login/push
-# - ECS/ELB: actualizar servicios y esperar
-# - CloudWatch: logs (lectura)
-# - SSM: ECS Exec
-# - Terraform en tu carpeta (crea/actualiza recursos existentes)
+# - Terraform sobre recursos de infraestructura definidos en esta carpeta
+# - Lectura de logs y secretos
 data "aws_iam_policy_document" "github_deploy" {
   statement {
     sid    = "ECRPush"
@@ -55,16 +53,9 @@ data "aws_iam_policy_document" "github_deploy" {
     resources = ["*"]
   }
   statement {
-    sid    = "ECSUpdate"
+    sid    = "InfraRead"
     effect = "Allow"
-    actions = ["ecs:Describe*", "ecs:UpdateService", "ecs:RegisterTaskDefinition", "ecs:ListTasks",
-    "ecs:ExecuteCommand", "iam:PassRole"]
-    resources = ["*"]
-  }
-  statement {
-    sid    = "ELBDescribeCWRead"
-    effect = "Allow"
-    actions = ["elasticloadbalancing:Describe*", "cloudwatch:GetMetricData", "cloudwatch:GetMetricStatistics",
+    actions = ["cloudwatch:GetMetricData", "cloudwatch:GetMetricStatistics",
     "logs:DescribeLogGroups", "logs:DescribeLogStreams", "logs:GetLogEvents", "logs:FilterLogEvents"]
     resources = ["*"]
   }

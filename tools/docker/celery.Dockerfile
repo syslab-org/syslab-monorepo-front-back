@@ -17,6 +17,6 @@ USER app
 
 # Arranque del worker Celery
 # -E: enviar eventos (para Flower)
-# --pool=solo: más estable en Fargate y entornos limitados
+# --pool=solo: más estable en entornos limitados
 # --concurrency=2: ajusta según necesidad
 CMD celery -A teg worker -E --loglevel=INFO --pool=solo --concurrency=2

@@ -3,10 +3,10 @@
 # RDS Postgres (dev)
 #########################
 
-# SG de RDS (solo 5432 desde ECS)
+# SG de RDS (solo 5432 desde runtimes autorizados)
 resource "aws_security_group" "rds" {
   name        = "${var.project}-${var.env}-rds-sg"
-  description = "Permite acceso a Postgres solo desde ECS"
+  description = "Permite acceso a Postgres solo desde runtimes autorizados"
   vpc_id      = aws_vpc.main.id
 
   egress {
@@ -24,15 +24,15 @@ resource "aws_security_group" "rds" {
   }
 }
 
-# Regla: ECS -> RDS (5432)
-resource "aws_security_group_rule" "rds_ingress_from_ecs" {
+# Regla: runtime de app -> RDS (5432)
+resource "aws_security_group_rule" "rds_ingress_from_app_runtime" {
   type                     = "ingress"
-  description              = "ECS to Postgres 5432"
+  description              = "App runtime to Postgres 5432"
   from_port                = 5432
   to_port                  = 5432
   protocol                 = "tcp"
   security_group_id        = aws_security_group.rds.id
-  source_security_group_id = aws_security_group.ecs_service.id
+  source_security_group_id = aws_security_group.app_runtime.id
 }
 
 # Subnet group para RDS (para dev usamos subnets públicas)

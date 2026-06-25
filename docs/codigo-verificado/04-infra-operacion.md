@@ -33,7 +33,7 @@ Runbooks efectivos identificados:
 
 - desarrollo local,
 - publicacion a ECR,
-- despliegue AWS con ECS/RDS,
+- infraestructura AWS auxiliar,
 - smoke tests,
 - tunnels para acceso publico o temporal,
 - utilidades de migracion y debugging.
@@ -45,9 +45,6 @@ Carpeta principal: `infra/terraform/`
 Recursos definidos por archivos:
 
 - red base y seguridad,
-- ALB,
-- ECS,
-- task definitions,
 - ECR,
 - RDS,
 - ElastiCache Redis,
@@ -63,8 +60,8 @@ Bootstrap remoto separado:
 
 Lo que se puede afirmar leyendo codigo:
 
-- existe una arquitectura AWS suficientemente definida para operar backend y celery en ECS,
-- el `Makefile` contiene flujo de bootstrap, redeploy, migraciones y chequeos,
+- existe una infraestructura AWS auxiliar para base de datos, red, secretos, artefactos e imagenes,
+- el `Makefile` contiene flujo de bootstrap remoto, gestion de state, ECR y chequeos locales,
 - el backend contempla credenciales runtime y `AssumeRole`,
 - la documentacion prudente debe seguir diciendo "arquitectura soportada" y no "entorno siempre activo".
 
@@ -106,5 +103,5 @@ Conclusion operativa:
 ## 8. Hallazgos importantes
 
 - la guia de instalacion local esta razonablemente alineada con `compose.dev.yml`.
-- la guia AWS tambien esta bastante alineada con el `Makefile` y Terraform actuales.
+- la guia AWS quedo acotada a la infraestructura auxiliar que hoy si existe en Terraform.
 - el README raiz ya fue reducido a una entrada corta y vigente.
