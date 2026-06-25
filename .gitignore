@@ -34,7 +34,10 @@ staticfiles/
 crash.log
 terraform.tfvars
 *.tfplan
+**/tfplan
+**/tf.plan
 infra/terraform/*.tfvars
+**/var.database_url_secret_arn
 
 
 # VSCode / Devcontainer
