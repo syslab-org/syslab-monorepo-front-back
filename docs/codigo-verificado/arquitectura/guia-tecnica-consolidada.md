@@ -935,14 +935,14 @@ Esta seccion resume donde la documentacion sigue bien y donde ya no describe fie
 
 ### 11.1 Documentacion que sigue alineada
 
-- `docs/operacion/aws/redeploy-matrix.md`
+- `docs/codigo-verificado/operacion/aws/redeploy-matrix.md`
   - sigue alineado con el foco `AWS-first`
   - sigue siendo coherente con la idea de `redeploy`, `OUTDATED`, `Plan Detail` y comportamiento Terraform
-- `docs/tesis/validacion/cloud-execution-model.md`
+- `docs/codigo-verificado/05-cloud-execution-model.md`
   - sigue alineado con la logica de permisos reales en backend
-- `docs/tesis/validacion/aws-cloud-connections-playbook.md`
+- `docs/codigo-verificado/operacion/aws/cloud-connections-playbook.md`
   - sigue alineado con `Static Keys`, `AssumeRole` y evidencia en `Plan Detail`
-- `docs/tesis/validacion/user-control-permissions-matrix.md`
+- `docs/codigo-verificado/06-permissions-matrix.md`
   - sigue alineado con `can_execute_plan`, `course_shared` y delegacion
 
 ### 11.2 Documentacion parcialmente desactualizada
@@ -953,7 +953,7 @@ Esta seccion resume donde la documentacion sigue bien y donde ya no describe fie
 - `apps/backend/README.md`
   - da una buena intuicion del dominio neutral y la compatibilidad legacy
   - pero no cubre en detalle el flujo real de `CloudConnection`, `PlanExecutionRecord` y delegaciones
-- `docs/tesis/mvp-thesis-plan.md`
+- el plan academico historico ya no forma parte de la documentacion activa del repo
   - describe correctamente varias decisiones de producto
   - pero contiene trabajo futuro que en codigo ya fue avanzado, por ejemplo la parte de plantillas de laboratorio
 

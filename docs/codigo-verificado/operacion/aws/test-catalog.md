@@ -20,11 +20,11 @@ Aqui "todos los posibles escenarios" significa todos los casos funcionales que h
 
 Fuentes base de este catalogo:
 
-- [Playbook de Conexiones Cloud AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/tesis/validacion/aws-cloud-connections-playbook.md)
-- [Playbook de Key Pairs y Acceso SSH en AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/tesis/validacion/aws-key-pairs-ssh-playbook.md)
-- [Matriz de Managed Egress AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/tesis/validacion/managed-egress-matrix.md)
-- [Matriz de Redeploy AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/operacion/aws/redeploy-matrix.md)
-- [Modelo de Ejecucion Cloud por Usuario](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/tesis/validacion/cloud-execution-model.md)
+- [Playbook de Conexiones Cloud AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/operacion/aws/cloud-connections-playbook.md)
+- [Playbook de Key Pairs y Acceso SSH en AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/operacion/aws/key-pairs-ssh-playbook.md)
+- [Matriz de Managed Egress AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/operacion/aws/managed-egress-matrix.md)
+- [Matriz de Redeploy AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/operacion/aws/redeploy-matrix.md)
+- [Modelo de Ejecucion Cloud por Usuario](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/05-cloud-execution-model.md)
 - [Escenarios versionados del frontend](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/frontend/examples/network-scenarios/README.md)
 
 ## Vista rapida de la suite

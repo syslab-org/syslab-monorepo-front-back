@@ -3,7 +3,7 @@
 Este documento sintetiza los casos de uso funcionales del MVP a partir del comportamiento real del monorepo `frontend + backend`, con foco en el flujo academico de modelado, validacion y despliegue de laboratorios de red sobre AWS.
 
 Complemento visual:
-- [Graficas de Casos de Uso - SysLab](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/producto/casos-de-uso-graficas.md)
+- [Graficas de Casos de Uso - SysLab](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/producto/casos-de-uso-graficas.md)
 
 ## Objetivo del sistema
 
@@ -169,7 +169,7 @@ Permitir que estudiantes, docentes y administradores modelen laboratorios de red
 
 Escenarios validados y consideraciones practicas:
 
-- [Playbook de Key Pairs y Acceso SSH en AWS](../tesis/validacion/aws-key-pairs-ssh-playbook.md)
+- [Playbook de Key Pairs y Acceso SSH en AWS](../operacion/aws/key-pairs-ssh-playbook.md)
 - hallazgo operativo importante: `Allowed SSH CIDR` puede impedir SSH real aunque el deploy haya sido correcto
 
 ### UC-08. Crear laboratorio de red

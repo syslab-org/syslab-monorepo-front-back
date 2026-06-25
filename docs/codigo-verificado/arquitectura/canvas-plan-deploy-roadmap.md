@@ -7,8 +7,8 @@ Este documento resume, de forma visual y tecnica, el recorrido que hace el siste
 ![Vista general del flujo Canvas a Deploy](./assets/01-canvas-plan-deploy-overview.svg)
 
 Fuente:
-- [01-canvas-plan-deploy-overview.mmd](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/arquitectura/assets/01-canvas-plan-deploy-overview.mmd)
-- [01-canvas-plan-deploy-overview.svg](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/arquitectura/assets/01-canvas-plan-deploy-overview.svg)
+- [01-canvas-plan-deploy-overview.mmd](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/arquitectura/assets/01-canvas-plan-deploy-overview.mmd)
+- [01-canvas-plan-deploy-overview.svg](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/arquitectura/assets/01-canvas-plan-deploy-overview.svg)
 
 ## Capas del flujo
 
@@ -58,8 +58,8 @@ Esta capa toma una entrada relativamente flexible y la convierte a un formato es
 ![Flujo de validacion y compilacion](./assets/02-validacion-compilacion.svg)
 
 Fuente:
-- [02-validacion-compilacion.mmd](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/arquitectura/assets/02-validacion-compilacion.mmd)
-- [02-validacion-compilacion.svg](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/arquitectura/assets/02-validacion-compilacion.svg)
+- [02-validacion-compilacion.mmd](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/arquitectura/assets/02-validacion-compilacion.mmd)
+- [02-validacion-compilacion.svg](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/arquitectura/assets/02-validacion-compilacion.svg)
 
 #### Que significa "compilar el payload"
 
@@ -122,8 +122,8 @@ Celery no sabe Terraform por si mismo. Celery ejecuta una tarea Python en backgr
 ![Secuencia Celery y Terraform](./assets/03-celery-sequence.svg)
 
 Fuente:
-- [03-celery-sequence.mmd](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/arquitectura/assets/03-celery-sequence.mmd)
-- [03-celery-sequence.svg](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/arquitectura/assets/03-celery-sequence.svg)
+- [03-celery-sequence.mmd](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/arquitectura/assets/03-celery-sequence.mmd)
+- [03-celery-sequence.svg](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/arquitectura/assets/03-celery-sequence.svg)
 
 Cadena real para `terraform init`:
 

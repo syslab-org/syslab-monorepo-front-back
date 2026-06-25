@@ -9,7 +9,7 @@ Esta seccion separa la instalacion por entorno para evitar mezclar pasos de desa
 - Si el mismo Ubuntu Server alojara varios proyectos: [Servidor Ubuntu con multiples proyectos](./servidor-ubuntu/multiples-proyectos.md)
 - Si vas a usar `Cloud Connections` con `AssumeRole` en ese servidor: [AWS runtime y AssumeRole](./servidor-ubuntu/aws-runtime-assumerole.md)
 - Si quieres publicar temporalmente ese servidor con Cloudflare: [Deploy LAN con Caddy](./servidor-ubuntu/deploy-lan-caddy.md)
-- Si quieres repetir los escenarios validados de `Key Pairs`, `Allowed SSH CIDR` y acceso SSH real: [Playbook de Key Pairs y Acceso SSH en AWS](../tesis/validacion/aws-key-pairs-ssh-playbook.md)
+- Si quieres repetir los escenarios validados de `Key Pairs`, `Allowed SSH CIDR` y acceso SSH real: [Playbook de Key Pairs y Acceso SSH en AWS](../operacion/aws/key-pairs-ssh-playbook.md)
 - Si vas a desplegar la plataforma completa en AWS: [Plataforma en AWS](./aws.md)
 
 ## Arquitectura por entorno
