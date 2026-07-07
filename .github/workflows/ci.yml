@@ -16,26 +16,32 @@ jobs:
         with:
           python-version: "3.11"
       - name: Backend deps
+        working-directory: apps/backend
         run: |
-          pip install -r backend/requirements.txt
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
       - name: Lint backend
+        working-directory: apps/backend
         run: |
-          ruff --version || pip install ruff
-          ruff backend
+          python -m pip install ruff
+          ruff check .
       - name: Tests backend
+        working-directory: apps/backend
         run: |
-          pytest -q || true   # ajusta cuando estén listos los tests
+          python manage.py test api.tests
 
       # Frontend: Node
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "pnpm"
+          cache-dependency-path: apps/frontend/pnpm-lock.yaml
       - name: Enable corepack
         run: |
           corepack enable
-      - name: Front deps + lint
+      - name: Front deps + lint + build
         working-directory: apps/frontend
         run: |
           pnpm install --frozen-lockfile
           pnpm lint
+          pnpm build
