@@ -1,12 +1,16 @@
 import json
 import time
+import uuid
+from datetime import timedelta
 
 from celery import shared_task
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
 from .cloud_connections import (
     resolve_lab_cloud_connection,
+    resolve_lab_cloud_connection_with_source,
 )
 from .models import Plan, PlanExecutionRecord
 from .providers import (
@@ -16,6 +20,7 @@ from .providers import (
     get_provider_runtime_hooks,
     get_runtime_identity,
 )
+from .serializers import serialize_cloud_target_state
 
 
 LOG_FLUSH_MIN_INTERVAL_SECONDS = 1.0
@@ -118,6 +123,84 @@ def _mark_execution_record_finished(
         updates["arn"] = identity_summary["arn"]
         updates["sts_user_id"] = identity_summary["user_id"]
     PlanExecutionRecord.objects.filter(id=record_id).update(**updates)
+
+
+def _resolve_auto_destroy_minutes(plan: Plan) -> int:
+    course = getattr(getattr(plan, "lab", None), "course", None)
+    configured = getattr(course, "auto_destroy_minutes", None)
+    if configured:
+        try:
+            return max(1, int(configured))
+        except (TypeError, ValueError):
+            pass
+
+    fallback = getattr(settings, "DEFAULT_COURSE_AUTO_DESTROY_MINUTES", 120)
+    try:
+        return max(1, int(fallback))
+    except (TypeError, ValueError):
+        return 120
+
+
+def schedule_auto_destroy_for_plan(plan: Plan):
+    minutes = _resolve_auto_destroy_minutes(plan)
+    scheduled_for = timezone.now() + timedelta(minutes=minutes)
+    token = uuid.uuid4().hex
+    task = auto_destroy_plan.apply_async(args=[str(plan.id), token], eta=scheduled_for)
+    plan.set_auto_destroy_schedule(
+        scheduled_for=scheduled_for,
+        task_id=getattr(task, "id", "") or "",
+        token=token,
+    )
+    return {
+        "minutes": minutes,
+        "scheduled_for": scheduled_for,
+        "task_id": getattr(task, "id", "") or "",
+        "token": token,
+    }
+
+
+def _append_plan_log(plan: Plan, message: str):
+    base_log = plan.last_log or ""
+    suffix = message if message.endswith("\n") else f"{message}\n"
+    plan.last_log = f"{base_log}{suffix}"
+    plan.last_log_updated_at = timezone.now()
+    plan.updated_at = timezone.now()
+    plan.save(update_fields=["last_log", "last_log_updated_at", "updated_at"])
+
+
+def _queue_destroy_execution(plan: Plan, *, requested_by=None, trigger: str = "manual"):
+    resolved_connection, resolved_source = resolve_lab_cloud_connection_with_source(
+        getattr(plan, "lab", None),
+        (plan.payload or {}).get("cloud"),
+    )
+    execution_record = PlanExecutionRecord.objects.create(
+        plan=plan,
+        lab=getattr(plan, "lab", None),
+        requested_by=requested_by,
+        delegation=None,
+        action=Plan.LastAction.DESTROY,
+        simulate_only=False,
+        provider=((plan.payload or {}).get("cloud") or getattr(getattr(plan, "lab", None), "target_provider", "aws") or "aws"),
+        status=PlanExecutionRecord.Status.PENDING,
+        cloud_connection=resolved_connection,
+        cloud_connection_name=getattr(resolved_connection, "name", "") or "",
+        cloud_connection_scope=getattr(resolved_connection, "scope", "") or "",
+        resolved_execution_source=resolved_source,
+        request_summary={
+            "plan_id": str(plan.id),
+            "canvas_id": str(plan.canvas_id or ""),
+            "name": (plan.payload or {}).get("name") or plan.name or "",
+            "trigger": trigger,
+        },
+    )
+
+    task = destroy_last_deploy.delay(str(plan.id), execution_record_id=str(execution_record.id))
+    plan.task_id = task.id
+    plan.updated_at = timezone.now()
+    plan.save(update_fields=["task_id", "updated_at"])
+    execution_record.task_id = task.id
+    execution_record.save(update_fields=["task_id", "updated_at"])
+    return execution_record, task
 
 
 # === TAREAS CELERY ===
@@ -317,6 +400,24 @@ def process_network_plan(self, plan_id: str, payload: dict, execution_record_id:
             last_action="apply" if applied else "plan",
             outputs=outputs,
         )
+        if applied:
+            try:
+                auto_destroy_meta = schedule_auto_destroy_for_plan(plan_obj)
+                _append_plan_log(
+                    plan_obj,
+                    (
+                        "[auto-destroy] scheduled "
+                        f"minutes={auto_destroy_meta['minutes']} "
+                        f"at={auto_destroy_meta['scheduled_for'].isoformat()} "
+                        f"task_id={auto_destroy_meta['task_id']}"
+                    ),
+                )
+            except Exception as schedule_exc:
+                plan_obj.clear_auto_destroy_schedule()
+                _append_plan_log(
+                    plan_obj,
+                    f"[auto-destroy][warning] no se pudo programar el destroy automático: {schedule_exc}",
+                )
         _mark_execution_record_finished(
             execution_record_id,
             status_value=PlanExecutionRecord.Status.SUCCESS,
@@ -363,6 +464,89 @@ def process_network_plan(self, plan_id: str, payload: dict, execution_record_id:
             executor.cleanup_workspace(bundle)
 
 
+@shared_task(bind=True, max_retries=12, default_retry_delay=300)
+def auto_destroy_plan(self, plan_id: str, schedule_token: str):
+    plan = Plan.objects.select_related(
+        "lab",
+        "lab__cloud_connection",
+        "lab__course",
+        "lab__owner_user",
+    ).filter(id=plan_id).first()
+    if not plan:
+        return {"ok": False, "reason": "plan_not_found", "plan_id": plan_id}
+
+    if not schedule_token or schedule_token != (plan.auto_destroy_token or ""):
+        return {"ok": True, "noop": True, "reason": "stale_schedule_token", "plan_id": str(plan.id)}
+
+    if not plan.auto_destroy_at:
+        return {"ok": True, "noop": True, "reason": "no_schedule", "plan_id": str(plan.id)}
+
+    now = timezone.now()
+    if now < plan.auto_destroy_at:
+        seconds_until_due = max(30, int((plan.auto_destroy_at - now).total_seconds()))
+        raise self.retry(countdown=seconds_until_due)
+
+    if plan.status == Plan.Status.RUNNING:
+        raise self.retry()
+
+    if not bool(plan.applied):
+        plan.clear_auto_destroy_schedule()
+        return {"ok": True, "noop": True, "reason": "plan_not_applied", "plan_id": str(plan.id)}
+
+    cloud_target_state = serialize_cloud_target_state(plan)
+    if cloud_target_state.get("is_mismatch"):
+        _append_plan_log(
+            plan,
+            "[auto-destroy][blocked] La cuenta cloud actual ya no coincide con la usada en el ultimo APPLY real.",
+        )
+        plan.clear_auto_destroy_schedule()
+        return {
+            "ok": False,
+            "blocked": True,
+            "reason": "cloud_target_changed",
+            "plan_id": str(plan.id),
+        }
+
+    provider = get_provider_key((plan.payload or {}).get("cloud"))
+    connection = resolve_lab_cloud_connection(getattr(plan, "lab", None), provider)
+    runtime_env = build_connection_runtime_env(connection, provider) if connection else {}
+    runtime_hooks = get_provider_runtime_hooks(provider)
+    if not runtime_hooks.can_run_real_execution(runtime_env):
+        _append_plan_log(
+            plan,
+            "[auto-destroy][blocked] No hay una conexion cloud activa ni credenciales runtime compatibles para ejecutar destroy real.",
+        )
+        plan.clear_auto_destroy_schedule()
+        return {
+            "ok": False,
+            "blocked": True,
+            "reason": "missing_runtime_credentials",
+            "plan_id": str(plan.id),
+        }
+
+    merged_payload = dict(plan.payload or {})
+    merged_payload["simulate_only"] = False
+    plan.payload = merged_payload
+    plan.status = Plan.Status.RUNNING
+    plan.error = ""
+    plan.last_action = Plan.LastAction.DESTROY
+    plan.updated_at = timezone.now()
+    plan.save(update_fields=["payload", "status", "error", "last_action", "updated_at"])
+
+    execution_record, task = _queue_destroy_execution(plan, trigger="auto_destroy")
+    _append_plan_log(
+        plan,
+        f"[auto-destroy] destroy encolado task_id={getattr(task, 'id', '')} execution_record_id={execution_record.id}",
+    )
+    return {
+        "ok": True,
+        "queued": True,
+        "plan_id": str(plan.id),
+        "task_id": getattr(task, "id", ""),
+        "execution_record_id": str(execution_record.id),
+    }
+
+
 @shared_task(bind=True)
 def destroy_last_deploy(self, plan_id: str, execution_record_id: str | None = None):
     plan = Plan.objects.select_related("lab", "lab__cloud_connection", "lab__course", "lab__owner_user").get(id=plan_id)
@@ -378,6 +562,7 @@ def destroy_last_deploy(self, plan_id: str, execution_record_id: str | None = No
         # No-op idempotente: no hay recursos reales que destruir.
         msg = "Plan en modo simulación: no hay infraestructura real que destruir."
         plan.mark_destroy_noop(message=msg, full_log=bundle.full_log)
+        plan.clear_auto_destroy_schedule()
         _mark_execution_record_finished(
             execution_record_id,
             status_value=PlanExecutionRecord.Status.NOOP,
@@ -468,6 +653,7 @@ def destroy_last_deploy(self, plan_id: str, execution_record_id: str | None = No
         # Importante: NO borramos outputs en destroy.
         # Se conservan como "últimos outputs cuando estuvo ACTIVE" para auditoría/debug.
         plan.mark_success(full_log=bundle.full_log, applied=False, last_action="destroy", outputs=plan.outputs)
+        plan.clear_auto_destroy_schedule()
         _mark_execution_record_finished(
             execution_record_id,
             status_value=PlanExecutionRecord.Status.SUCCESS,

@@ -2,6 +2,7 @@ import uuid
 from datetime import timedelta
 
 from django.contrib.auth.models import User
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -27,6 +28,15 @@ CLOUD_SCOPE_COURSE_SHARED = "course_shared"
 
 CLOUD_AUTH_AWS_STATIC = "aws_static_keys"
 CLOUD_AUTH_AWS_ASSUME_ROLE = "aws_assume_role"
+
+
+def default_course_auto_destroy_minutes() -> int:
+    raw_value = getattr(settings, "DEFAULT_COURSE_AUTO_DESTROY_MINUTES", 120)
+    try:
+        minutes = int(raw_value)
+    except (TypeError, ValueError):
+        minutes = 120
+    return max(1, minutes)
 
 
 class RoleChoices(models.TextChoices):
@@ -70,6 +80,10 @@ class Course(models.Model):
         User,
         on_delete=models.CASCADE,
         related_name="teaching_courses",
+    )
+    auto_destroy_minutes = models.PositiveIntegerField(
+        default=default_course_auto_destroy_minutes,
+        help_text="Tiempo por defecto en minutos para destruir automáticamente planes desplegados del curso.",
     )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -479,6 +493,23 @@ class Plan(models.Model):
         null=True,
         help_text="task_id de la ultima ejecucion destroy.",
     )
+    auto_destroy_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Fecha/hora programada para el destroy automático del despliegue activo.",
+    )
+    auto_destroy_task_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="task_id de la tarea diferida que encola el destroy automático.",
+    )
+    auto_destroy_token = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Token de correlación para invalidar auto-destroys diferidos obsoletos.",
+    )
     last_apply_context = models.JSONField(
         blank=True,
         default=dict,
@@ -601,6 +632,34 @@ class Plan(models.Model):
                 "last_action",
                 "last_log",
                 "last_log_updated_at",
+                "updated_at",
+            ]
+        )
+
+    def set_auto_destroy_schedule(self, *, scheduled_for, task_id: str = "", token: str = ""):
+        self.auto_destroy_at = scheduled_for
+        self.auto_destroy_task_id = task_id or ""
+        self.auto_destroy_token = token or ""
+        self.updated_at = timezone.now()
+        self.save(
+            update_fields=[
+                "auto_destroy_at",
+                "auto_destroy_task_id",
+                "auto_destroy_token",
+                "updated_at",
+            ]
+        )
+
+    def clear_auto_destroy_schedule(self):
+        self.auto_destroy_at = None
+        self.auto_destroy_task_id = ""
+        self.auto_destroy_token = ""
+        self.updated_at = timezone.now()
+        self.save(
+            update_fields=[
+                "auto_destroy_at",
+                "auto_destroy_task_id",
+                "auto_destroy_token",
                 "updated_at",
             ]
         )

@@ -1,0 +1,40 @@
+flowchart LR
+    ADM[Platform admin]
+    AWS[AWS]
+    ENG[Celery + Terraform]
+
+    subgraph SYS[SysLab]
+        UC01([Administrar usuarios])
+        UC01A([Invitar usuarios])
+        UC02([Administrar cursos])
+        UC03([Administrar entorno cloud])
+        UC03A([Configurar conexiones])
+        UC03B([Configurar catalogos])
+        UC04([Administrar laboratorios])
+        UC05([Validar laboratorio])
+        UC06([Desplegar laboratorio])
+        UC07([Destruir laboratorio])
+        UC08([Auditar ejecuciones])
+        UC09([Delegar o revocar ejecucion])
+    end
+
+    ADM --> UC01
+    ADM --> UC02
+    ADM --> UC03
+    ADM --> UC04
+    ADM --> UC05
+    ADM --> UC06
+    ADM --> UC07
+    ADM --> UC08
+    ADM --> UC09
+
+    UC01 -. "<<include>>" .-> UC01A
+    UC03 -. "<<include>>" .-> UC03A
+    UC03 -. "<<include>>" .-> UC03B
+    UC06 -. "<<include>>" .-> UC05
+    UC08 -. "<<include>>" .-> UC09
+
+    UC03A --> AWS
+    UC05 --> ENG
+    UC06 --> ENG
+    UC07 --> ENG

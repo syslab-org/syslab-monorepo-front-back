@@ -203,6 +203,10 @@ const es = {
       editTitle: "Editar curso",
       createTitle: "Crear curso",
       teacher: "Profesor",
+      autoDestroyColumn: "Auto destroy",
+      autoDestroyMinutes: "Tiempo de auto destroy (minutos)",
+      autoDestroyMinutesHelp:
+        "Si lo dejas vacío al crear, se usará el valor por defecto del sistema. Ejemplo: 120 = 2 horas.",
       noReassign: "Sin reasignar",
       activeCourse: "Curso activo",
       loadError: "No se pudieron cargar los cursos.",
@@ -533,6 +537,10 @@ const es = {
         "Esto destruirá los recursos en AWS asociados a ESTE plan.\n\n¿Continuar?",
       destroyQueued:
         "Destruir encolado{{task}}. Revisa Logs para ver el progreso.",
+      autoDestroyScheduled:
+        "Destroy automático programado para {{date}}. Esta vista se refresca sola para detectar cuando arranque.{{task}}",
+      autoDestroyStarted:
+        "Se activó el destroy automático. La infraestructura entró en destrucción{{task}}.",
       destroyFailed: "Fallo al iniciar destrucción: {{error}}",
       noDestroyPermission:
         "No tienes permiso para destruir infraestructura real en este laboratorio.",

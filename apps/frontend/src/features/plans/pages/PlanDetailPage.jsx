@@ -36,6 +36,7 @@ import useOnboardingTour from '@/shared/ui/onboarding/useOnboardingTour';
 import { translate as tr } from '@/shared/i18n';
 
 const POLL_MS = 2000;
+const AUTO_DESTROY_WATCH_MS = 10000;
 
 function formatDateTime(value) {
   if (!value) return '—';
@@ -46,6 +47,14 @@ function formatDateTime(value) {
   } catch {
     return String(value);
   }
+}
+
+function hasScheduledAutoDestroy(plan) {
+  if (!plan) return false;
+  const autoDestroyAt = plan?.auto_destroy_at || plan?.autoDestroyAt;
+  if (!autoDestroyAt) return false;
+  const lastAction = String(plan?.last_action || plan?.lastAction || '').toLowerCase();
+  return plan?.applied === true && lastAction !== 'destroy';
 }
 
 function computeLifecycle(plan) {
@@ -1102,6 +1111,10 @@ export default function PlanDetailPage() {
   const msgTimerRef = useRef(null);
   const logHighlightTimerRef = useRef(null);
   const prevStatusRef = useRef(null);
+  const prevTaskIdRef = useRef(null);
+  const planRef = useRef(null);
+  const msgRef = useRef(null);
+  const tabRef = useRef('summary');
   const actionLockRef = useRef(false);
   const logContainerRef = useRef(null);
   const lastLogLineCountRef = useRef(0);
@@ -1172,6 +1185,7 @@ export default function PlanDetailPage() {
   const executionHistory = Array.isArray(plan?.execution_history) ? plan.execution_history : [];
   const cloudTargetState = safeObject(plan?.cloud_target_state);
   const cloudTargetMismatch = Boolean(cloudTargetState?.is_mismatch);
+  const autoDestroyScheduled = hasScheduledAutoDestroy(plan);
   const hasOutputsData = Boolean(
     outputsResponse?.outputs &&
       typeof outputsResponse.outputs === 'object' &&
@@ -1225,19 +1239,40 @@ export default function PlanDetailPage() {
       if (resetLoading) setLoading(true);
       try {
         const prevStatus = prevStatusRef.current;
+        const previousTaskId = prevTaskIdRef.current || '';
+        const currentMsg = msgRef.current;
 
         const data = await api.getPlan(id);
         setPlan(data);
+        planRef.current = data;
         setLoading(false);
 
         const nowStatus = data?.status;
+        const nowLastAction = String(data?.last_action || data?.lastAction || '').toLowerCase();
         const nowTerminal = nowStatus === 'SUCCESS' || nowStatus === 'FAILURE';
         const wasRunning = prevStatus === TASK_STATE_RUNNING || prevStatus === TASK_STATE_PENDING;
 
         const nowRunning = nowStatus === TASK_STATE_RUNNING || nowStatus === TASK_STATE_PENDING;
+        const shouldWatchAutoDestroy = hasScheduledAutoDestroy(data);
+        const currentTaskId = data?.task_id || '';
+        const autoDestroyJustStarted =
+          nowRunning &&
+          nowLastAction === 'destroy' &&
+          (!wasRunning || previousTaskId !== currentTaskId);
 
         // Si el plan está corriendo y no hay mensaje activo, muestra uno único (evita duplicados)
-        if (nowRunning && !msg) {
+        if (
+          autoDestroyJustStarted &&
+          !(typeof currentMsg === 'object' && currentMsg?.meta === 'started')
+        ) {
+          setMsg({
+            meta: 'auto-destroy-started',
+            severity: 'warning',
+            text: t('plans.detail.autoDestroyStarted', {
+              task: data?.task_id ? ` task_id=${data.task_id}` : '',
+            }),
+          });
+        } else if (nowRunning && !currentMsg) {
           setMsg({
             severity: 'info',
             text: t('plans.detail.runningConflict') + (data?.task_id ? ` (task_id=${data.task_id})` : ''),
@@ -1247,8 +1282,8 @@ export default function PlanDetailPage() {
         // Si inició una acción y el usuario recarga la página mientras estaba RUNNING,
         // igual queremos limpiar el banner “iniciado” cuando detectemos estado terminal.
         const msgLooksLikeStarted =
-          typeof msg === 'object' &&
-          msg?.meta === 'started';
+          typeof currentMsg === 'object' &&
+          currentMsg?.meta === 'started';
 
         if ((wasRunning && nowTerminal) || (msgLooksLikeStarted && nowTerminal)) {
           const terminalSeverity = nowStatus === 'SUCCESS' ? 'success' : 'error';
@@ -1264,7 +1299,7 @@ export default function PlanDetailPage() {
 
         // Si el usuario está viendo Logs, refrescamos el contenido durante el polling
         // para que el progreso se vea en tiempo real sin requerir clic manual.
-        if (tab === 'logs') {
+        if (tabRef.current === 'logs') {
           if (nowRunning || nowTerminal) {
             await fetchPlanLogs();
           }
@@ -1272,11 +1307,15 @@ export default function PlanDetailPage() {
 
         // Actualiza el prevStatus para el próximo poll
         prevStatusRef.current = nowStatus;
+        prevTaskIdRef.current = currentTaskId;
 
-        // Poll solo si está corriendo
-        if (nowStatus === TASK_STATE_RUNNING || nowStatus === TASK_STATE_PENDING) {
+        // Poll mientras corre o mientras exista un auto-destroy programado.
+        if (nowRunning || shouldWatchAutoDestroy) {
           if (timerRef.current) clearTimeout(timerRef.current);
-          timerRef.current = setTimeout(() => fetchPlan(), POLL_MS);
+          timerRef.current = setTimeout(
+            () => fetchPlan(),
+            nowRunning ? POLL_MS : AUTO_DESTROY_WATCH_MS,
+          );
         }
       } catch (e) {
         setLoading(false);
@@ -1287,7 +1326,7 @@ export default function PlanDetailPage() {
     },
     // OJO: incluimos `id` y `msg` porque usamos ambos para decidir si limpiar el banner.
     // No incluimos `plan` para evitar estados viejos.
-    [id, msg, tab]
+    [id, t]
   );
 
   async function fetchOutputs() {
@@ -1340,8 +1379,8 @@ export default function PlanDetailPage() {
       setPlanRiskSummary(parseTerraformPlanSummary(finalText));
     } catch (e) {
       // Fallback: intenta leer el log desde task_status si existe task_id
-      if (plan?.task_id) {
-        await fetchTaskLog(plan.task_id);
+      if (planRef.current?.task_id) {
+        await fetchTaskLog(planRef.current.task_id);
         return;
       }
       const backendMsg = e?.response?.data?.error || e?.response?.data?.detail;
@@ -1353,8 +1392,22 @@ export default function PlanDetailPage() {
   }
 
   useEffect(() => {
+    planRef.current = plan;
+  }, [plan]);
+
+  useEffect(() => {
+    msgRef.current = msg;
+  }, [msg]);
+
+  useEffect(() => {
+    tabRef.current = tab;
+  }, [tab]);
+
+  useEffect(() => {
     // reset de prevStatus cuando cambia el id
     prevStatusRef.current = null;
+    prevTaskIdRef.current = null;
+    planRef.current = null;
     fetchPlan({ resetLoading: true });
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -1763,6 +1816,14 @@ export default function PlanDetailPage() {
           {msg && (
             <Alert severity={typeof msg === 'string' ? 'success' : msg.severity || 'success'} sx={{ mb: 2 }}>
               {typeof msg === 'string' ? msg : msg.text}
+            </Alert>
+          )}
+          {autoDestroyScheduled && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              {t('plans.detail.autoDestroyScheduled', {
+                date: formatDateTime(plan?.auto_destroy_at || plan?.autoDestroyAt),
+                task: plan?.auto_destroy_task_id ? ` task_id=${plan.auto_destroy_task_id}.` : '',
+              })}
             </Alert>
           )}
           {plan?.error && (

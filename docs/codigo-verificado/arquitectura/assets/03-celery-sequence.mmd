@@ -1,0 +1,23 @@
+sequenceDiagram
+    participant U as Usuario / Frontend
+    participant W as Vista Django
+    participant C as Cola Celery
+    participant K as Worker Celery
+    participant T as Task process_network_plan
+    participant E as AwsProviderExecutor
+    participant TF as Terraform CLI
+
+    U->>W: POST /deploy/
+    W->>C: process_network_plan.delay(...)
+    W-->>U: 202 Accepted + task_id
+    C->>K: entrega tarea
+    K->>T: ejecuta process_network_plan(...)
+    T->>E: build_bundle(...)
+    T->>E: prepare_workspace(...)
+    T->>E: terraform_init(...)
+    E->>TF: terraform init
+    T->>E: terraform_plan(...)
+    E->>TF: terraform plan
+    T->>E: terraform_apply(...) si aplica
+    E->>TF: terraform apply
+    T-->>K: resultado + logs + outputs

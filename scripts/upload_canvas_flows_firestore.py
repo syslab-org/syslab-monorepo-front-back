@@ -24,7 +24,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from urllib import error, parse, request
 
 
-DEFAULT_FIREBASE_API_KEY = "AIzaSyDSfElmWzT9wekgHsjSKnOchWaIubTRqpE"
+DEFAULT_FIREBASE_API_KEY = ""
 DEFAULT_PROJECT_ID = "syslab-vite"
 DEFAULT_COLLECTION = "vpcs"
 
@@ -64,8 +64,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--api-key",
-        default=DEFAULT_FIREBASE_API_KEY,
-        help="Firebase Web API key (Identity Toolkit).",
+        default=None,
+        help="Firebase Web API key (Identity Toolkit). If omitted, reads FIREBASE_API_KEY.",
     )
     parser.add_argument(
         "--collection",
@@ -327,16 +327,21 @@ def main() -> int:
     if not files:
         raise SystemExit(f"No files matched pattern '{args.pattern}' in {input_dir}")
 
+    api_key = str(args.api_key or env_value("FIREBASE_API_KEY") or DEFAULT_FIREBASE_API_KEY).strip()
     email = (args.email or env_value("FIREBASE_EMAIL")).strip()
     password = (args.password or env_value("FIREBASE_PASSWORD")).strip()
 
     id_token = ""
     if not args.dry_run:
+        if not api_key:
+            raise SystemExit(
+                "FIREBASE_API_KEY (or --api-key) is required unless --dry-run is used."
+            )
         if not email or not password:
             raise SystemExit(
                 "FIREBASE_EMAIL/FIREBASE_PASSWORD (or --email/--password) are required unless --dry-run is used."
             )
-        sign_in = firebase_sign_in(args.api_key, email, password)
+        sign_in = firebase_sign_in(api_key, email, password)
         id_token = str(sign_in.get("idToken") or "")
         if not id_token:
             raise SystemExit("Firebase sign-in succeeded but did not return idToken.")

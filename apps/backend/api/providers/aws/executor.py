@@ -55,7 +55,9 @@ class AwsProviderExecutor(ProviderExecutor):
         diag = aws_creds_diagnostics(runtime_env)
         allow_local_apply = diag["allow_local_apply"]
         sts_ok, sts_reason = can_call_aws_sts(runtime_env)
-        creds_ok_for_apply = bool(runtime_env or diag["running_in_ecs"] or (allow_local_apply and sts_ok))
+        creds_ok_for_apply = bool(
+            runtime_env or diag["running_with_task_runtime"] or (allow_local_apply and sts_ok)
+        )
 
         return ProviderExecutionBundle(
             provider=self.provider,
@@ -133,7 +135,7 @@ class AwsProviderExecutor(ProviderExecutor):
     def blocked_credentials_message(self, action: str, bundle: ProviderExecutionBundle) -> str:
         return (
             f"Terraform {action} BLOQUEADO: no hay credenciales AWS resolubles en este container. "
-            "En ECS se resuelve por task role. En local requiere ALLOW_LOCAL_APPLY=1 y credenciales disponibles "
+            "En un runtime con IAM role se resuelve automaticamente. En local requiere ALLOW_LOCAL_APPLY=1 y credenciales disponibles "
             "(env vars o AWS_PROFILE + ~/.aws montado). "
             f"Diagnóstico: {bundle.diag} / sts_reason={bundle.sts_reason}"
         )

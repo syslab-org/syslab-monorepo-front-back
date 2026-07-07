@@ -39,7 +39,7 @@ resource "aws_elasticache_cluster" "redis" {
   port = 6379
 
   # Importante: ElastiCache NO tiene IP pública; solo privada dentro del VPC
-  # Al estar en el mismo VPC/subnets, tus tareas ECS podrán conectarse.
+  # Solo runtimes dentro del VPC con el SG autorizado podrán conectarse.
 
   tags = {
     Project = var.project

@@ -42,7 +42,7 @@ def _planned_probe_live_resources(_plan, _runtime_env: dict | None = None):
 
 def _aws_can_run_real_execution(runtime_env: dict | None = None) -> bool:
     runtime_env = runtime_env or {}
-    running_in_ecs = bool(
+    running_with_task_runtime = bool(
         os.getenv("ECS_TASK_DEFINITION")
         or os.getenv("ECS_CONTAINER_METADATA_URI")
         or os.getenv("ECS_CONTAINER_METADATA_URI_V4")
@@ -59,7 +59,7 @@ def _aws_can_run_real_execution(runtime_env: dict | None = None) -> bool:
     )
     if runtime_env and has_static_creds:
         return True
-    return running_in_ecs or (allow_local and (has_static_creds or has_profile))
+    return running_with_task_runtime or (allow_local and (has_static_creds or has_profile))
 
 
 def _aws_probe_live_resources(plan, runtime_env: dict | None = None):

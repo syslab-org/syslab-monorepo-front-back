@@ -69,6 +69,17 @@ def read_outputs_json(cwd: str, env=None) -> dict:
     return simplified
 
 
+def _resolve_state_root() -> str:
+    configured_root = str(os.getenv("TF_STATE_ROOT") or "/tfstate").strip() or "/tfstate"
+    try:
+        os.makedirs(configured_root, exist_ok=True)
+        return configured_root
+    except OSError:
+        fallback_root = os.path.join(tempfile.gettempdir(), "syslab-tfstate")
+        os.makedirs(fallback_root, exist_ok=True)
+        return fallback_root
+
+
 def render_workspace(plan_id: str, payload: dict, simulate_only: bool, prefix: str) -> tuple[str, str, str]:
     """Crea un workdir Terraform con backend local y main.tf renderizado."""
     env = Environment(
@@ -81,9 +92,10 @@ def render_workspace(plan_id: str, payload: dict, simulate_only: bool, prefix: s
     tf_text = tpl.render(payload=payload, simulate_only=simulate_only)
 
     workdir = tempfile.mkdtemp(prefix=prefix)
-    state_dir = f"/tfstate/{plan_id}"
+    state_root = _resolve_state_root()
+    state_dir = os.path.join(state_root, plan_id)
     os.makedirs(state_dir, exist_ok=True)
-    state_path = f"{state_dir}/terraform.tfstate"
+    state_path = os.path.join(state_dir, "terraform.tfstate")
 
     backend_tf = f"""terraform {{
         backend "local" {{

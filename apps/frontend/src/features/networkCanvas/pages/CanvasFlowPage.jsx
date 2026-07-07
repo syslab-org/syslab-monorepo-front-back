@@ -207,7 +207,7 @@ function CanvasFlowPage() {
 
   const isPlanRunning = useCallback((st) => {
     const s = String(st || '').toUpperCase();
-    return s === 'RUNNING' || s === 'PENDING' || s === 'STARTED';
+    return s === 'RUNNING' || s === 'STARTED';
   }, []);
 
   // Load plan metadata (planId + planCanvasHash) from backend and keep it actualizado en

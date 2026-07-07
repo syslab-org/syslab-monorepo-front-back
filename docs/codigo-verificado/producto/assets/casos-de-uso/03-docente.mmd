@@ -1,0 +1,37 @@
+flowchart LR
+    DOC[Docente]
+    AWS[AWS]
+    ENG[Celery + Terraform]
+
+    subgraph SYS[SysLab]
+        UC01([Gestionar curso])
+        UC02([Gestionar alumnos])
+        UC03([Preparar entorno compartido])
+        UC03A([Registrar conexion compartida])
+        UC03B([Registrar catalogo compartido])
+        UC04([Acompanhar laboratorio])
+        UC05([Validar laboratorio])
+        UC06([Desplegar laboratorio])
+        UC07([Destruir laboratorio])
+        UC08([Revisar evidencias])
+    end
+
+    DOC --> UC01
+    DOC --> UC02
+    DOC --> UC03
+    DOC --> UC04
+    DOC --> UC05
+    DOC --> UC06
+    DOC --> UC07
+    DOC --> UC08
+
+    UC01 -. "<<include>>" .-> UC02
+    UC03 -. "<<include>>" .-> UC03A
+    UC03 -. "<<include>>" .-> UC03B
+    UC04 -. "<<include>>" .-> UC08
+    UC06 -. "<<include>>" .-> UC05
+
+    UC03A --> AWS
+    UC05 --> ENG
+    UC06 --> ENG
+    UC07 --> ENG

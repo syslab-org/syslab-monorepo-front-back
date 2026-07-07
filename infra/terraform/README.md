@@ -31,7 +31,6 @@ Este documento explica **cómo usar la carpeta `infra/terraform/`**, qué recurs
 - **Qué es**: repositorio privado de imágenes Docker en AWS.
 - **Por qué lo usamos**:
   - Guardar nuestras imágenes de `backend` y `celery`.
-  - ECS (Elastic Container Service) desplegará directamente desde ECR.
 - **En este proyecto**:
   - `tesis-dev-backend`
   - `tesis-dev-celery`
