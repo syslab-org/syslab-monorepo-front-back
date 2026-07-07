@@ -3,8 +3,15 @@ from rest_framework import status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import Course, Lab, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, CloudConnection, VISIBILITY_COURSE, VISIBILITY_OWNER
-from .permissions import can_edit_cloud_connection, can_edit_lab, is_platform_admin, is_student, is_teacher, visible_cloud_connections_queryset, visible_labs_queryset
+from .models import CloudConnection, Course, Lab, VISIBILITY_COURSE, VISIBILITY_OWNER
+from .permissions import (
+    can_edit_lab,
+    is_platform_admin,
+    is_student,
+    is_teacher,
+    visible_cloud_connections_queryset,
+    visible_labs_queryset,
+)
 from .serializers import LabCreateSerializer, LabSerializer, LabUpdateSerializer
 
 

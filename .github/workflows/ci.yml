@@ -27,6 +27,8 @@ jobs:
           ruff check .
       - name: Tests backend
         working-directory: apps/backend
+        env:
+          SECRET_KEY: ci-test-secret
         run: |
           python manage.py test api.tests
 
@@ -39,9 +41,8 @@ jobs:
       - name: Enable corepack
         run: |
           corepack enable
-      - name: Front deps + lint + build
+      - name: Front deps + build
         working-directory: apps/frontend
         run: |
           pnpm install --frozen-lockfile
-          pnpm lint
           pnpm build

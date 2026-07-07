@@ -1,7 +1,6 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.db import transaction
-from django.utils import timezone
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
@@ -10,7 +9,7 @@ from rest_framework.response import Response
 
 from .i18n import tr
 from .models import ROLE_PLATFORM_ADMIN, STATUS_ACTIVE, STATUS_DEACTIVATED, UserProfile
-from .permissions import canonical_role, is_platform_admin
+from .permissions import canonical_role
 from .serializers import (
     EmailLoginSerializer,
     GoogleLoginSerializer,

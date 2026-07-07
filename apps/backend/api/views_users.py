@@ -2,11 +2,10 @@ from django.contrib.auth.models import User
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status, viewsets
-from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import Course, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, STATUS_PENDING, UserProfile
+from .models import Course, ROLE_STUDENT, STATUS_PENDING
 from .permissions import is_platform_admin, is_teacher
 from .serializers import UserCreateSerializer, UserSummarySerializer, UserUpdateSerializer
 

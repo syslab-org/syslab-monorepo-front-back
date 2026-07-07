@@ -24,7 +24,6 @@ from .models import (
     STATUS_ACTIVE,
     STATUS_DEACTIVATED,
     STATUS_PENDING,
-    UserProfile,
     VisibilityScopeChoices,
 )
 from .permissions import can_edit_cloud_connection, can_execute_plan, canonical_role
