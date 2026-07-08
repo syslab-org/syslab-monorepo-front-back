@@ -5,6 +5,10 @@ on:
   push:
     branches: ["**"]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ci:
     runs-on: ubuntu-22.04
@@ -15,6 +19,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: apps/backend/requirements.txt
       - name: Backend deps
         working-directory: apps/backend
         run: |
