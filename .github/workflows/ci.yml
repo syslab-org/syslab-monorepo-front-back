@@ -31,6 +31,12 @@ jobs:
           SECRET_KEY: ci-test-secret
         run: |
           python manage.py test api.tests
+      - name: Check backend migrations
+        working-directory: apps/backend
+        env:
+          SECRET_KEY: ci-test-secret
+        run: |
+          python manage.py makemigrations --check --dry-run
 
       # Frontend: Node
       - uses: pnpm/action-setup@v4
@@ -49,3 +55,14 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm build
+
+      # Infra: Terraform static validation
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.5
+      - name: Terraform fmt + validate
+        working-directory: infra/terraform
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false -input=false
+          terraform validate
