@@ -1725,7 +1725,7 @@ const es = {
         "Error durante la validación. Revisa los detalles antes de continuar.",
       canvasOutdated:
         "El canvas cambió desde la última validación. Debes validar nuevamente.",
-      busyValidating: "Validando infraestructura. Espera un momento...",
+      busyValidating: "Validando despliegue. Espera un momento...",
       busyProcessing: "Procesando la operación. No cierres este modal todavía.",
       busyDescription:
         "Mientras corre esta acción, el modal queda bloqueado para evitar estados inconsistentes.",

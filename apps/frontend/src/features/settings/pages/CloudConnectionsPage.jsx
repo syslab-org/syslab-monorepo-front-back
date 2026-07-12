@@ -55,6 +55,7 @@ export default function CloudConnectionsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [messageSeverity, setMessageSeverity] = useState("success");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
 
@@ -123,6 +124,7 @@ export default function CloudConnectionsPage() {
     setSaving(true);
     setError("");
     setMessage("");
+    setMessageSeverity("success");
     try {
       const payload = {
         name: form.name,
@@ -172,6 +174,7 @@ export default function CloudConnectionsPage() {
     if (!window.confirm(t("settings.cloudConnections.deleteConfirm", { name: item.name }))) return;
     setError("");
     setMessage("");
+    setMessageSeverity("success");
     try {
       await api.deleteCloudConnection(item.id);
       setMessage(t("settings.cloudConnections.deleted"));
@@ -186,6 +189,7 @@ export default function CloudConnectionsPage() {
     setMessage("");
     try {
       const result = await api.testCloudConnection(item.id);
+      setMessageSeverity(result?.ok ? "success" : "error");
       setMessage(
         result?.ok
           ? t("settings.cloudConnections.testOk", { message: result?.message })
@@ -206,7 +210,7 @@ export default function CloudConnectionsPage() {
       />
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {message && <Alert severity="success" sx={{ mb: 2 }}>{message}</Alert>}
+      {message && <Alert severity={messageSeverity} sx={{ mb: 2 }}>{message}</Alert>}
 
       <Paper sx={{ p: 2.5, mb: 3 }}>
         <Typography variant="body2" color="text.secondary">

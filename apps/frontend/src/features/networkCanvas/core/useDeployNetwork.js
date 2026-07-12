@@ -442,7 +442,7 @@ const useDeployNetwork = ({
         payload.plan_canvas_hash = canvasHash;
       }
 
-      await api.updateLab(canvasId, payload);
+      await api.updateLab(canvasId, payload, { trackLoading: false });
     } catch (e) {
       console.warn("No se pudo persistir planId en backend:", e);
     }
@@ -782,14 +782,12 @@ const useDeployNetwork = ({
       return;
     }
 
-    setLoadingFlow(true);
     setSuccessMessage(null);
     setErrorMessage(null);
     setValidationError(null);
 
     try {
       if (!transformedData) {
-        setLoadingFlow(false);
         setValidationState(PLAN_STATES.ERROR);
         setValidationError(t("canvas.deployRuntime.noDataToValidate"));
         setErrorMessage(t("canvas.deployRuntime.noDataToValidate"));
@@ -798,7 +796,6 @@ const useDeployNetwork = ({
 
       if (providerCapability?.status !== "ready") {
         const message = t("canvas.deployRuntime.providerUnavailable");
-        setLoadingFlow(false);
         setValidationState(PLAN_STATES.ERROR);
         setValidationError(message);
         setErrorMessage(message);
@@ -817,7 +814,7 @@ const useDeployNetwork = ({
       const syncRes = await api.syncPlanFromCanvas({
         ...transformedData,
         name: stableName,
-      });
+      }, { trackLoading: false });
 
       const planId = syncRes?.plan_id;
 
@@ -833,7 +830,7 @@ const useDeployNetwork = ({
       setValidationResult({ plan_id: planId, created: !!syncRes?.created });
       setValidationState(PLAN_STATES.PLANNING);
 
-      await api.deployPlan(planId, { simulateOnly: true });
+      await api.deployPlan(planId, { simulateOnly: true, trackLoading: false });
 
       const finalPlan = await pollPlanUntilDone(planId);
       const finalStatus = String(finalPlan?.status || "");
@@ -883,14 +880,12 @@ const useDeployNetwork = ({
         });
       }
 
-      setLoadingFlow(false);
     } catch (error) {
       const code = error?.data?.code;
       const msg =
         code === "PLAN_ALREADY_APPLIED"
           ? t("canvas.deployRuntime.planAlreadyApplied")
           : error?.message || t("canvas.deployRuntime.unknownError");
-      setLoadingFlow(false);
       setValidationState(PLAN_STATES.ERROR);
       setValidationError(msg);
       setErrorMessage(msg);

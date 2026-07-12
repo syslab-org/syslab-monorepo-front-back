@@ -239,8 +239,9 @@ export const api = {
   getPlanPayload: (id) => jsonFetch(`/api/network/plans/${id}/payload/`),
   getPlanOutputs: (id) => jsonFetch(`/api/network/plans/${id}/outputs/`),
   getPlanLogs: (id) => jsonFetch(`/api/network/plans/${id}/logs/`),
-  syncPlanFromCanvas(payload) {
+  syncPlanFromCanvas(payload, options = {}) {
     return jsonFetch("/api/network/plans/sync-from-canvas/", {
+      ...options,
       method: "POST",
       body: typeof payload === "string" ? payload : JSON.stringify(payload),
     });
@@ -252,8 +253,9 @@ export const api = {
     });
   },
   deployPlan(id, opts = {}) {
-    const { applyMode, simulateOnly } = opts;
+    const { applyMode, simulateOnly, ...requestOptions } = opts;
     return jsonFetch(`/api/network/plans/${id}/deploy/`, {
+      ...requestOptions,
       method: "POST",
       body: JSON.stringify({
         simulate_only:

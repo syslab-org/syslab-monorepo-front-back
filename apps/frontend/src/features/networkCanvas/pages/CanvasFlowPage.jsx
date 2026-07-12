@@ -433,7 +433,7 @@ function CanvasFlowPage() {
               showConfirmation,
               restorationDone,
               handleCancelDeploy,
-              validationState: validationStateForToolbar,
+              validationState,
               canvasState,
               planStatus: canvasPlanInfo,
               validationResult,

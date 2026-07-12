@@ -2,7 +2,7 @@ from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, NoCredentialsError
 from django.contrib.auth.models import User
 from django.test import SimpleTestCase
 from django.utils import timezone
@@ -11,7 +11,7 @@ from rest_framework.test import APITestCase
 from .domain.network_intent import normalize_network_intent
 from .models import CLOUD_AUTH_AWS_ASSUME_ROLE, CLOUD_SCOPE_COURSE_SHARED, CLOUD_SCOPE_PERSONAL, CloudConnection, CloudExecutionDelegation, Course, KeyPairCatalogEntry, Lab, Plan, PlanExecutionRecord, ROLE_PLATFORM_ADMIN, ROLE_STUDENT, ROLE_TEACHER, STATUS_ACTIVE, VISIBILITY_COURSE, VISIBILITY_OWNER
 from .providers import get_provider_adapter, get_provider_executor
-from .cloud_connections import build_aws_runtime_env
+from .cloud_connections import build_aws_runtime_env, test_aws_connection
 from .providers.runtime_registry import get_provider_runtime_hooks, test_cloud_connection
 from .providers.aws.runtime import build_nat_cleanup_targets, check_key_pairs_preflight, collect_required_key_pairs
 from .providers.aws.terraform import render_workspace
@@ -494,6 +494,26 @@ class AssumeRoleConnectionTests(SimpleTestCase):
         self.assertEqual(env["AWS_SECRET_ACCESS_KEY"], "temp-secret")
         self.assertEqual(env["AWS_SESSION_TOKEN"], "temp-token")
         self.assertEqual(env["AWS_REGION"], "us-east-1")
+
+    @patch("api.cloud_connections.build_base_aws_session")
+    def test_test_aws_connection_returns_failure_when_base_credentials_are_missing(self, mocked_base_session):
+        fake_sts = SimpleNamespace(
+            assume_role=lambda **_kwargs: (_ for _ in ()).throw(NoCredentialsError())
+        )
+        mocked_base_session.return_value = SimpleNamespace(client=lambda *_args, **_kwargs: fake_sts)
+        connection = CloudConnection(
+            name="AWS role",
+            provider="aws",
+            auth_type=CLOUD_AUTH_AWS_ASSUME_ROLE,
+            aws_role_arn="arn:aws:iam::123456789012:role/syslab-course-role",
+            default_region="us-east-1",
+        )
+
+        ok, message, identity = test_aws_connection(connection)
+
+        self.assertFalse(ok)
+        self.assertEqual(identity, {})
+        self.assertIn("no_credentials", message)
 
 
 class ProviderRuntimeRegistryTests(SimpleTestCase):

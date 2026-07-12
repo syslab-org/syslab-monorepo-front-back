@@ -1732,7 +1732,7 @@ const en = {
         "Validation error. Review the details before continuing.",
       canvasOutdated:
         "The canvas changed since the last validation. You must validate again.",
-      busyValidating: "Validating infrastructure. Please wait a moment...",
+      busyValidating: "Validating deploy. Please wait a moment...",
       busyProcessing: "Processing the operation. Do not close this modal yet.",
       busyDescription:
         "While this action runs, the modal is locked to avoid inconsistent states.",
