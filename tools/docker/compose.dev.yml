@@ -43,13 +43,8 @@ services:
       # 👉 fuerza Postgres local (host = nombre del servicio "postgres")
       - DATABASE_URL=postgres://teg:teg@postgres:5432/teg
       - DB_SSL_REQUIRE=false
-      # ✅ DEV seguro: usa AWS profile montado (no keys en .env.dev)
       - AWS_SDK_LOAD_CONFIG=1
-      - AWS_PROFILE=${AWS_PROFILE:-tesis}
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
       - TF_PLUGIN_CACHE_DIR=/tfplugin-cache
-      # ✅ Habilita apply/destroy real en local (tasks.py lo exige)
-      - ALLOW_LOCAL_APPLY=${ALLOW_LOCAL_APPLY:-1}
     ports:
       - "8000:8000"
     depends_on:
@@ -90,11 +85,7 @@ services:
       - DATABASE_URL=postgres://teg:teg@postgres:5432/teg
       - DB_SSL_REQUIRE=false
       - AWS_SDK_LOAD_CONFIG=1
-      - AWS_PROFILE=${AWS_PROFILE:-tesis}
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
       - TF_PLUGIN_CACHE_DIR=/tfplugin-cache
-      - ALLOW_LOCAL_APPLY=${ALLOW_LOCAL_APPLY:-1}
-      - KEEP_TF_DIRS=${KEEP_TF_DIRS:-1} # Evita que celery borre los directorios temporales de terraform
     depends_on:
       postgres:
         condition: service_healthy

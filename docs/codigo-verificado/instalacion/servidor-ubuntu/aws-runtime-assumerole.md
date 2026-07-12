@@ -2,6 +2,8 @@
 
 Esta guia aclara la parte que mas facilmente se presta a confusion en el servidor Ubuntu: que identidad AWS usa realmente el backend y como interactua eso con `Cloud Connections`.
 
+Tambien documenta el flujo validado actual del proyecto, donde el principal base recomendado del backend es `syslab-backend-assumer`.
+
 ## Resumen corto
 
 En el estado actual del proyecto hay dos capas distintas:
@@ -49,11 +51,12 @@ Importante:
 - en modo `server`, ya no dependes de exportar `AWS_PROFILE` en el shell para que llegue al contenedor
 - el valor fuente debe quedar en `.env.server`
 - si cambias `.env.server`, debes recrear el stack, no solo reiniciarlo
+- esto es distinto al modo local, donde el override normal vive en `.env.dev`
 
-Ejemplo:
+Ejemplo recomendado:
 
 ```env
-AWS_PROFILE=tesis
+AWS_PROFILE=syslab-backend-assumer
 AWS_DEFAULT_REGION=us-east-1
 ```
 
@@ -75,7 +78,7 @@ print(boto3.Session().client('sts').get_caller_identity())
 Si ahí ves por ejemplo:
 
 ```text
-arn:aws:iam::034739223309:user/tesis-admin
+arn:aws:iam::034739223309:user/syslab-backend-assumer
 ```
 
 entonces esa es la identidad que debe poder asumir el role de la `Cloud Connection`.
@@ -103,7 +106,7 @@ Ejemplo:
     {
       "Effect": "Allow",
       "Principal": {
-        "AWS": "arn:aws:iam::034739223309:user/tesis-admin"
+        "AWS": "arn:aws:iam::034739223309:user/syslab-backend-assumer"
       },
       "Action": "sts:AssumeRole",
       "Condition": {
@@ -135,19 +138,19 @@ Ejemplo:
 }
 ```
 
-## Caso validado durante la instalacion
+## Caso validado durante la instalacion actual
 
 En el servidor validado:
 
-- `AWS_PROFILE=tesis`
+- `AWS_PROFILE=syslab-backend-assumer`
 - el backend resolvio como caller:
-  - `arn:aws:iam::034739223309:user/tesis-admin`
+  - `arn:aws:iam::034739223309:user/syslab-backend-assumer`
 
 Por lo tanto:
 
-- aunque existiera un usuario `syslab-backend-assumer`
-- el backend no iba a usarlo automaticamente
-- el role debia autorizar a `tesis-admin`, o el servidor debia cambiar su `AWS_PROFILE`
+- el role compartido del curso debe confiar en `syslab-backend-assumer`
+- el backend debe conservar una access key valida para ese perfil en `~/.aws/credentials`
+- si el role exige `sts:ExternalId`, la `Cloud Connection` debe guardar exactamente ese mismo valor
 
 ## Dos formas correctas de organizarlo
 
@@ -189,6 +192,118 @@ docker compose -f tools/docker/compose.server.yml up -d
 Ventaja:
 
 - separacion mas clara entre credenciales del servidor y credenciales operativas de SysLab
+
+En la instalacion actual del proyecto, esta opcion B es la recomendada y la validada.
+
+## Paso a paso recomendado en servidor
+
+### 1. Crear el perfil tecnico en AWS
+
+- usuario IAM: `syslab-backend-assumer`
+- sin acceso de consola
+- con permiso `sts:AssumeRole` sobre los roles `syslab-*` necesarios
+
+### 2. Guardar credenciales en el host Ubuntu
+
+`~/.aws/credentials`
+
+```ini
+[syslab-backend-assumer]
+aws_access_key_id = TU_ACCESS_KEY
+aws_secret_access_key = TU_SECRET_KEY
+```
+
+`~/.aws/config`
+
+```ini
+[profile syslab-backend-assumer]
+region = us-east-1
+output = json
+```
+
+### 3. Configurar `.env.server`
+
+```env
+AWS_PROFILE=syslab-backend-assumer
+AWS_DEFAULT_REGION=us-east-1
+```
+
+Notas:
+
+- `compose.server.yml` ya fija `AWS_SDK_LOAD_CONFIG=1` dentro del contenedor
+- la variable importante que decides en `.env.server` es el perfil base real que debe usar el backend
+
+### 4. Recrear el stack
+
+```bash
+docker compose -f tools/docker/compose.server.yml down
+docker compose -f tools/docker/compose.server.yml up -d
+```
+
+### 5. Verificar la identidad base del backend
+
+```bash
+docker compose -f tools/docker/compose.server.yml exec backend \
+python manage.py shell -c "
+import boto3, os
+print('AWS_PROFILE=', os.getenv('AWS_PROFILE'))
+print('AWS_DEFAULT_REGION=', os.getenv('AWS_DEFAULT_REGION'))
+print(boto3.Session().client('sts').get_caller_identity())
+"
+```
+
+Lo esperado es:
+
+```text
+arn:aws:iam::034739223309:user/syslab-backend-assumer
+```
+
+### 6. Verificar una `Cloud Connection` con `AssumeRole`
+
+```bash
+docker compose -f tools/docker/compose.server.yml exec backend \
+python manage.py shell -c "
+from api.models import CloudConnection
+from api.cloud_connections import test_aws_connection
+c = CloudConnection.objects.get(name='Redes-1')
+print(test_aws_connection(c))
+"
+```
+
+Lo esperado es:
+
+```python
+(True, 'sts_ok', {...})
+```
+
+## Errores tipicos y como leerlos
+
+### `InvalidClientTokenId`
+
+Significa:
+
+- la identidad base del backend es invalida
+
+No suele ser problema de trust policy ni de `ExternalId`.
+
+Revisar:
+
+- `~/.aws/credentials`
+- access key desactivada o rotada
+- perfil activo en `.env.server`
+
+### `AccessDenied` al llamar `AssumeRole`
+
+Significa:
+
+- la identidad base ya autentica
+- pero no fue autorizada a asumir el role
+
+Revisar:
+
+- trust policy del role
+- policy del usuario `syslab-backend-assumer`
+- `ExternalId` de la `Cloud Connection`
 
 ## Cómo probar AssumeRole desde el backend
 
