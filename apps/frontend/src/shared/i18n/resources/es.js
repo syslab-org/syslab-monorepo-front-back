@@ -1725,10 +1725,15 @@ const es = {
         "Error durante la validación. Revisa los detalles antes de continuar.",
       canvasOutdated:
         "El canvas cambió desde la última validación. Debes validar nuevamente.",
+      busyEyebrow: "SYSLAB EN PROGRESO",
       busyValidating: "Validando despliegue. Espera un momento...",
       busyProcessing: "Procesando la operación. No cierres este modal todavía.",
       busyDescription:
         "Mientras corre esta acción, el modal queda bloqueado para evitar estados inconsistentes.",
+      busyValidatingDetail:
+        "Estamos generando la validación y sincronizando la vista para que el resultado refleje exactamente la topología actual.",
+      busyProcessingDetail:
+        "Estamos guardando tus cambios y actualizando el estado del despliegue para que no pierdas contexto.",
       redeployWarning:
         "Esta validación se hizo sobre infraestructura ya activa. Si despliegas ahora, Terraform actualizará el stack existente en AWS y algunos cambios podrían reemplazar o eliminar recursos.",
       chips: {

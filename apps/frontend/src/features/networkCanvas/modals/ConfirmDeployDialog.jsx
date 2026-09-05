@@ -9,9 +9,11 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  LinearProgress,
   Stack,
   Typography,
 } from "@mui/material";
+import AutorenewRoundedIcon from "@mui/icons-material/AutorenewRounded";
 import { useState } from "react";
 import { useTranslation } from 'react-i18next';
 
@@ -95,12 +97,12 @@ const ConfirmDeployDialog = ({
   canvasState,
   planStatus,
   validationResult,
+  isApplying = false,
   transformedData,
   targetProvider,
   onValidate,
   onDeploy,
   onViewPlan,
-  loadingFlow,
   providerAvailabilityNotice,
   onCloseProviderAvailabilityNotice,
 }) => {
@@ -162,7 +164,13 @@ const ConfirmDeployDialog = ({
   const secondaryActionLabel = isRedeployPreview
     ? t('canvas.deployDialog.revalidateRedeploy')
     : t('canvas.deployDialog.validateDeploy');
-  const isBusy = Boolean(loadingFlow || isSyncing);
+  const isBusy = Boolean(isApplying || isSyncing);
+  const busyTitle = isSyncing
+    ? t('canvas.deployDialog.busyValidating')
+    : t('canvas.deployDialog.busyProcessing');
+  const busyDetail = isSyncing
+    ? t('canvas.deployDialog.busyValidatingDetail')
+    : t('canvas.deployDialog.busyProcessingDetail');
 
   const riskAlertSeverity =
     riskSeverity === 'destructive'
@@ -413,311 +421,417 @@ const ConfirmDeployDialog = ({
       disableEscapeKeyDown={isBusy}
       maxWidth="md"
       fullWidth
+      PaperProps={{
+        sx: isBusy
+          ? {
+            position: "relative",
+            overflow: "visible",
+            background: "transparent",
+            boxShadow: "none",
+            maxWidth: "unset",
+          }
+          : {
+            position: "relative",
+            overflow: "hidden",
+          },
+      }}
     >
-      <DialogTitle>{t('canvas.deployDialog.title')}</DialogTitle>
-      <DialogContent dividers>
-        <Box sx={{ position: "relative" }}>
-          {isBusy && (
-            <Box
-              sx={{
+      {isBusy ? (
+        <DialogContent
+          sx={{
+            p: 0,
+            overflow: "visible",
+            background: "transparent",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Box
+            sx={{
+              width: "min(100%, 470px)",
+              borderRadius: "34px",
+              overflow: "hidden",
+              color: "#F7FAFF",
+              background:
+                "radial-gradient(circle at top left, rgba(72,130,255,0.18), transparent 34%), linear-gradient(180deg, #1F2B47 0%, #273552 100%)",
+              boxShadow:
+                "0 26px 70px rgba(17, 24, 39, 0.42), 0 2px 0 rgba(255,255,255,0.08) inset",
+              border: "1px solid rgba(148, 163, 184, 0.22)",
+              position: "relative",
+              px: { xs: 2.5, sm: 3.5 },
+              py: { xs: 2.5, sm: 3 },
+              "&::before": {
+                content: '""',
                 position: "absolute",
-                inset: 0,
-                zIndex: 2,
-                bgcolor: "rgba(255,255,255,0.64)",
-                backdropFilter: "blur(1px)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: 1,
-              }}
-            >
-              <Stack
-                spacing={1.5}
-                alignItems="center"
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 4,
+                background:
+                  "linear-gradient(90deg, #28D7A1 0%, #33C4FF 52%, #3D78FF 100%)",
+              },
+              "&::after": {
+                content: '""',
+                position: "absolute",
+                inset: 1,
+                borderRadius: "33px",
+                border: "1px solid rgba(255,255,255,0.03)",
+                pointerEvents: "none",
+              },
+            }}
+          >
+            <Stack direction="row" spacing={2} alignItems="center">
+              <Box
                 sx={{
-                  px: 3,
-                  py: 2,
-                  borderRadius: 2,
-                  bgcolor: "background.paper",
-                  boxShadow: 3,
+                  width: 72,
+                  height: 72,
+                  flexShrink: 0,
+                  borderRadius: "50%",
+                  display: "grid",
+                  placeItems: "center",
+                  position: "relative",
+                  background:
+                    "radial-gradient(circle at 30% 30%, rgba(75, 132, 255, 0.22), rgba(28, 47, 90, 0.92))",
+                  boxShadow:
+                    "0 0 0 1px rgba(126, 167, 255, 0.18), inset 0 1px 0 rgba(255,255,255,0.06)",
                 }}
               >
-                <CircularProgress size={28} />
-                <Typography variant="subtitle2">
-                  {isSyncing
-                    ? t('canvas.deployDialog.busyValidating')
-                    : t('canvas.deployDialog.busyProcessing')}
+                <CircularProgress
+                  size={58}
+                  thickness={4}
+                  sx={{
+                    color: "rgba(87, 158, 255, 0.82)",
+                    position: "absolute",
+                  }}
+                />
+                <AutorenewRoundedIcon sx={{ fontSize: 28, color: "#F8FBFF" }} />
+              </Box>
+
+              <Stack spacing={1} sx={{ minWidth: 0, flex: 1 }}>
+                <Typography
+                  variant="overline"
+                  sx={{
+                    color: "rgba(226, 235, 255, 0.72)",
+                    letterSpacing: "0.28em",
+                    lineHeight: 1.1,
+                    fontWeight: 600,
+                  }}
+                >
+                  {t('canvas.deployDialog.busyEyebrow')}
                 </Typography>
-                <Typography variant="body2" color="text.secondary" textAlign="center">
-                  {t('canvas.deployDialog.busyDescription')}
+                <Typography
+                  variant="h5"
+                  sx={{
+                    fontWeight: 700,
+                    lineHeight: 1.1,
+                    fontSize: { xs: "1.45rem", sm: "1.7rem" },
+                    color: "#F8FBFF",
+                  }}
+                >
+                  {busyTitle}
                 </Typography>
               </Stack>
-            </Box>
-          )}
-          {renderBanner()}
-
-          {isRedeployPreview && (
-            <Alert severity="warning" sx={{ mt: 2 }}>
-              {t('canvas.deployDialog.redeployWarning')}
-            </Alert>
-          )}
-
-          <Box mt={2}>
-            <Stack direction="row" spacing={1} flexWrap="wrap">
-              <Chip
-                label={isRedeployPreview ? t('canvas.deployDialog.chips.mainRedeploy') : t('canvas.deployDialog.chips.mainDeploy')}
-                color={isRedeployPreview ? "warning" : "primary"}
-                variant="filled"
-              />
-              <Chip
-                label={isRedeployPreview ? t('canvas.deployDialog.chips.destroyAvailable') : t('canvas.deployDialog.chips.destroyUnavailable')}
-                color={isRedeployPreview ? "error" : "default"}
-                variant={isRedeployPreview ? "outlined" : "outlined"}
-              />
             </Stack>
-          </Box>
 
-          {planRiskSummary?.hasChanges && (
-            <Box mt={2}>
-              <Alert severity={riskAlertSeverity}>
-                {riskSeverity === 'destructive'
-                  ? t('canvas.deployDialog.risk.destructive')
-                  : riskSeverity === 'caution'
-                    ? t('canvas.deployDialog.risk.caution')
-                    : t('canvas.deployDialog.risk.safe')}
-              </Alert>
-              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1.5 }}>
-                <Chip label={`Add: ${planRiskSummary.add}`} size="small" />
-                <Chip label={`Change: ${planRiskSummary.change}`} size="small" />
-                <Chip label={`Destroy: ${planRiskSummary.destroy}`} size="small" color={planRiskSummary.destroy > 0 ? 'error' : 'default'} />
-                <Chip label={`Replace: ${planRiskSummary.replace}`} size="small" color={planRiskSummary.replace > 0 ? 'error' : 'default'} />
-              </Stack>
-              {Array.isArray(planRiskSummary.examples) && planRiskSummary.examples.length > 0 && (
-                <Box mt={1}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('canvas.deployDialog.risk.sensitiveResources')}
-                  </Typography>
-                  <Stack spacing={0.5} sx={{ mt: 0.75 }}>
-                    {planRiskSummary.examples.map((item) => (
-                      <Typography key={`${item.action}-${item.resource}`} variant="caption" color="text.secondary">
-                        {item.action.toUpperCase()}: {item.resource}
-                      </Typography>
-                    ))}
+            <LinearProgress
+              sx={{
+                mt: 2.25,
+                mb: 2,
+                height: 8,
+                borderRadius: 999,
+                bgcolor: "rgba(203, 213, 225, 0.26)",
+                "& .MuiLinearProgress-bar": {
+                  borderRadius: 999,
+                  background:
+                    "linear-gradient(90deg, #27D6A1 0%, #2BC3FF 55%, #3E7BFF 100%)",
+                },
+              }}
+            />
+
+            <Typography
+              variant="body1"
+              sx={{
+                color: "rgba(233, 240, 255, 0.88)",
+                lineHeight: 1.55,
+                maxWidth: 360,
+              }}
+            >
+              {busyDetail}
+            </Typography>
+          </Box>
+        </DialogContent>
+      ) : (
+        <>
+          <DialogTitle>{t('canvas.deployDialog.title')}</DialogTitle>
+          <DialogContent dividers>
+            <Box sx={{ position: "relative" }}>
+              {renderBanner()}
+
+              {isRedeployPreview && (
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                  {t('canvas.deployDialog.redeployWarning')}
+                </Alert>
+              )}
+
+              <Box mt={2}>
+                <Stack direction="row" spacing={1} flexWrap="wrap">
+                  <Chip
+                    label={isRedeployPreview ? t('canvas.deployDialog.chips.mainRedeploy') : t('canvas.deployDialog.chips.mainDeploy')}
+                    color={isRedeployPreview ? "warning" : "primary"}
+                    variant="filled"
+                  />
+                  <Chip
+                    label={isRedeployPreview ? t('canvas.deployDialog.chips.destroyAvailable') : t('canvas.deployDialog.chips.destroyUnavailable')}
+                    color={isRedeployPreview ? "error" : "default"}
+                    variant={isRedeployPreview ? "outlined" : "outlined"}
+                  />
+                </Stack>
+              </Box>
+
+              {planRiskSummary?.hasChanges && (
+                <Box mt={2}>
+                  <Alert severity={riskAlertSeverity}>
+                    {riskSeverity === 'destructive'
+                      ? t('canvas.deployDialog.risk.destructive')
+                      : riskSeverity === 'caution'
+                        ? t('canvas.deployDialog.risk.caution')
+                        : t('canvas.deployDialog.risk.safe')}
+                  </Alert>
+                  <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1.5 }}>
+                    <Chip label={`Add: ${planRiskSummary.add}`} size="small" />
+                    <Chip label={`Change: ${planRiskSummary.change}`} size="small" />
+                    <Chip label={`Destroy: ${planRiskSummary.destroy}`} size="small" color={planRiskSummary.destroy > 0 ? 'error' : 'default'} />
+                    <Chip label={`Replace: ${planRiskSummary.replace}`} size="small" color={planRiskSummary.replace > 0 ? 'error' : 'default'} />
                   </Stack>
+                  {Array.isArray(planRiskSummary.examples) && planRiskSummary.examples.length > 0 && (
+                    <Box mt={1}>
+                      <Typography variant="body2" color="text.secondary">
+                        {t('canvas.deployDialog.risk.sensitiveResources')}
+                      </Typography>
+                      <Stack spacing={0.5} sx={{ mt: 0.75 }}>
+                        {planRiskSummary.examples.map((item) => (
+                          <Typography key={`${item.action}-${item.resource}`} variant="caption" color="text.secondary">
+                            {item.action.toUpperCase()}: {item.resource}
+                          </Typography>
+                        ))}
+                      </Stack>
+                    </Box>
+                  )}
                 </Box>
               )}
+
+              <Box mt={3}>
+                <Typography variant="subtitle1" gutterBottom>
+                  {t('canvas.deployDialog.summaryTitle')}
+                </Typography>
+                <Stack direction="row" spacing={1} flexWrap="wrap">
+                  <Chip label={t('canvas.deployDialog.summary.provider', { value: providerDisplayLabel })} />
+                  <Chip label={t('canvas.deployDialog.summary.segments', { count: segments.length })} />
+                  <Chip label={t('canvas.deployDialog.summary.zones', { count: summary.totalZones })} />
+                  <Chip label={t('canvas.deployDialog.summary.workloads', { count: summary.totalWorkloads })} />
+                  <Chip
+                    label={t('canvas.deployDialog.summary.directLinks', { count: directLinks })}
+                    color={directLinks > 0 ? "secondary" : "default"}
+                    variant={directLinks > 0 ? "filled" : "outlined"}
+                  />
+                  <Chip
+                    label={t('canvas.deployDialog.summary.hubs', { count: hubRouters })}
+                    color={hubRouters > 0 ? "primary" : "default"}
+                    variant={hubRouters > 0 ? "filled" : "outlined"}
+                  />
+                  <Chip
+                    label={t('canvas.deployDialog.summary.attachments', { count: hubAttachments })}
+                    color={hubAttachments > 0 ? "primary" : "default"}
+                    variant={hubAttachments > 0 ? "filled" : "outlined"}
+                  />
+                </Stack>
+              </Box>
+
+              <Alert severity="info" sx={{ mt: 2 }}>
+                {isAwsProvider
+                  ? t('canvas.deployDialog.postDeployHint')
+                  : t('canvas.deployDialog.providerPreviewHint', { provider: providerDisplayLabel })}
+              </Alert>
+
+              <Box mt={3}>
+                <Typography variant="subtitle1" gutterBottom>
+                  {t('canvas.deployDialog.neutralTitle')}
+                </Typography>
+                <Stack spacing={1}>
+                  {neutralInterpretation.map((line) => (
+                    <Alert key={line} severity="info" variant="outlined">
+                      {line}
+                    </Alert>
+                  ))}
+                </Stack>
+              </Box>
+
+              <Box mt={3}>
+                <Typography variant="subtitle1" gutterBottom>
+                  {providerInterpretationTitle}
+                </Typography>
+                <Stack spacing={1}>
+                  {providerInterpretation.map((line) => (
+                    <Alert key={line} severity="info" variant="outlined">
+                      {line}
+                    </Alert>
+                  ))}
+                </Stack>
+              </Box>
+
+              <Box mt={4}>
+                {segments.map((segment) => {
+                  const aws = segment?.provider_overrides?.aws || {};
+                  const gcp = segment?.provider_overrides?.gcp || {};
+                  const segmentZones = Array.isArray(segment?.zones) ? segment.zones : [];
+                  const gcpPrivateGoogleAccessCount = segmentZones.filter(
+                    (zone) => Boolean(zone?.provider_overrides?.gcp?.private_google_access),
+                  ).length;
+                  const gcpFlowLogsCount = segmentZones.filter(
+                    (zone) => Boolean(zone?.provider_overrides?.gcp?.flow_logs),
+                  ).length;
+                  const gcpExternalIpCount = segmentZones.reduce((acc, zone) => {
+                    const workloads = Array.isArray(zone?.workloads) ? zone.workloads : [];
+                    return acc + workloads.filter(
+                      (workload) => Boolean(workload?.provider_overrides?.gcp?.external_ip ?? workload?.access?.public_ip),
+                    ).length;
+                  }, 0);
+                  const gcpSshRanges = Array.isArray(gcp?.firewall?.ssh_source_ranges)
+                    ? gcp.firewall.ssh_source_ranges.filter(Boolean)
+                    : [];
+                  return (
+                    <Box
+                      key={segment.id}
+                      mb={2}
+                      p={2}
+                      border="1px solid #eee"
+                      borderRadius={2}
+                    >
+                      <Typography variant="subtitle2">{segment.name}</Typography>
+                      <Stack direction="row" spacing={1} mt={1} flexWrap="wrap">
+                        <Chip label={t('canvas.deployDialog.segment.cidr', { value: segment.cidr || segment.cidr_block })} size="small" />
+                        <Chip label={t('canvas.deployDialog.segment.region', { value: segment.region })} size="small" />
+                        <Chip
+                          label={t('canvas.deployDialog.segment.model', {
+                            value: String(segment.exposure || "internal").replace(/_/g, " "),
+                          })}
+                          size="small"
+                          variant="outlined"
+                        />
+                        <Chip
+                          label={t('canvas.deployDialog.segment.providerNetwork', {
+                            provider: providerDisplayLabel,
+                            kind: providerDefinition.segment?.kindLabel || 'Network',
+                          })}
+                          size="small"
+                          variant="outlined"
+                        />
+                        {isAwsProvider && aws.internet_gateway && (
+                          <Chip label={t('canvas.deployDialog.segment.igw')} size="small" color="primary" />
+                        )}
+                        {isAwsProvider && aws.nat_gateway?.enabled && (
+                          <Chip label={t('canvas.deployDialog.segment.nat')} size="small" color="secondary" />
+                        )}
+                        {isAwsProvider && aws.nat_gateway?.enabled && aws.nat_gateway?.elastic_ip && (
+                          <Chip
+                            label={t('canvas.deployDialog.segment.natEip', {
+                              value: aws.nat_gateway.elastic_ip,
+                            })}
+                            size="small"
+                            color="warning"
+                          />
+                        )}
+                        {isGcpProvider && gcp.cloud_nat?.enabled && (
+                          <Chip label={t('canvas.deployDialog.segment.cloudNat')} size="small" color="secondary" />
+                        )}
+                        {isGcpProvider && gcpSshRanges.length > 0 && (
+                          <Chip
+                            label={t('canvas.deployDialog.segment.sshRanges', { count: gcpSshRanges.length })}
+                            size="small"
+                            color="primary"
+                          />
+                        )}
+                        {isGcpProvider && gcpPrivateGoogleAccessCount > 0 && (
+                          <Chip
+                            label={t('canvas.deployDialog.segment.privateGoogleAccess', {
+                              count: gcpPrivateGoogleAccessCount,
+                            })}
+                            size="small"
+                            color="info"
+                          />
+                        )}
+                        {isGcpProvider && gcpFlowLogsCount > 0 && (
+                          <Chip
+                            label={t('canvas.deployDialog.segment.flowLogs', {
+                              count: gcpFlowLogsCount,
+                            })}
+                            size="small"
+                            color="info"
+                          />
+                        )}
+                        {isGcpProvider && gcpExternalIpCount > 0 && (
+                          <Chip
+                            label={t('canvas.deployDialog.segment.externalIps', {
+                              count: gcpExternalIpCount,
+                            })}
+                            size="small"
+                            color="warning"
+                          />
+                        )}
+                      </Stack>
+                      {isAwsProvider && aws.nat_gateway?.enabled && (
+                        <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+                          {t('canvas.deployDialog.segment.natHelp')}
+                        </Typography>
+                      )}
+                      {isGcpProvider && gcpSshRanges.length > 0 && (
+                        <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+                          {t('canvas.deployDialog.segment.sshRangesDetail', {
+                            value: gcpSshRanges.join(', '),
+                          })}
+                        </Typography>
+                      )}
+                    </Box>
+                  )
+                })}
+              </Box>
             </Box>
-          )}
-
-          <Box mt={3}>
-            <Typography variant="subtitle1" gutterBottom>
-              {t('canvas.deployDialog.summaryTitle')}
-            </Typography>
-            <Stack direction="row" spacing={1} flexWrap="wrap">
-              <Chip label={t('canvas.deployDialog.summary.provider', { value: providerDisplayLabel })} />
-              <Chip label={t('canvas.deployDialog.summary.segments', { count: segments.length })} />
-              <Chip label={t('canvas.deployDialog.summary.zones', { count: summary.totalZones })} />
-              <Chip label={t('canvas.deployDialog.summary.workloads', { count: summary.totalWorkloads })} />
-              <Chip
-                label={t('canvas.deployDialog.summary.directLinks', { count: directLinks })}
-                color={directLinks > 0 ? "secondary" : "default"}
-                variant={directLinks > 0 ? "filled" : "outlined"}
-              />
-              <Chip
-                label={t('canvas.deployDialog.summary.hubs', { count: hubRouters })}
-                color={hubRouters > 0 ? "primary" : "default"}
-                variant={hubRouters > 0 ? "filled" : "outlined"}
-              />
-              <Chip
-                label={t('canvas.deployDialog.summary.attachments', { count: hubAttachments })}
-                color={hubAttachments > 0 ? "primary" : "default"}
-                variant={hubAttachments > 0 ? "filled" : "outlined"}
-              />
-            </Stack>
-          </Box>
-
-          <Alert severity="info" sx={{ mt: 2 }}>
-            {isAwsProvider
-              ? t('canvas.deployDialog.postDeployHint')
-              : t('canvas.deployDialog.providerPreviewHint', { provider: providerDisplayLabel })}
-          </Alert>
-
-          <Box mt={3}>
-            <Typography variant="subtitle1" gutterBottom>
-              {t('canvas.deployDialog.neutralTitle')}
-            </Typography>
-            <Stack spacing={1}>
-              {neutralInterpretation.map((line) => (
-                <Alert key={line} severity="info" variant="outlined">
-                  {line}
-                </Alert>
-              ))}
-            </Stack>
-          </Box>
-
-          <Box mt={3}>
-            <Typography variant="subtitle1" gutterBottom>
-              {providerInterpretationTitle}
-            </Typography>
-            <Stack spacing={1}>
-              {providerInterpretation.map((line) => (
-                <Alert key={line} severity="info" variant="outlined">
-                  {line}
-                </Alert>
-              ))}
-            </Stack>
-          </Box>
-
-          <Box mt={4}>
-            {segments.map((segment) => {
-              const aws = segment?.provider_overrides?.aws || {};
-              const gcp = segment?.provider_overrides?.gcp || {};
-              const segmentZones = Array.isArray(segment?.zones) ? segment.zones : [];
-              const gcpPrivateGoogleAccessCount = segmentZones.filter(
-                (zone) => Boolean(zone?.provider_overrides?.gcp?.private_google_access),
-              ).length;
-              const gcpFlowLogsCount = segmentZones.filter(
-                (zone) => Boolean(zone?.provider_overrides?.gcp?.flow_logs),
-              ).length;
-              const gcpExternalIpCount = segmentZones.reduce((acc, zone) => {
-                const workloads = Array.isArray(zone?.workloads) ? zone.workloads : [];
-                return acc + workloads.filter(
-                  (workload) => Boolean(workload?.provider_overrides?.gcp?.external_ip ?? workload?.access?.public_ip),
-                ).length;
-              }, 0);
-              const gcpSshRanges = Array.isArray(gcp?.firewall?.ssh_source_ranges)
-                ? gcp.firewall.ssh_source_ranges.filter(Boolean)
-                : [];
-              return (
-                <Box
-                  key={segment.id}
-                  mb={2}
-                  p={2}
-                  border="1px solid #eee"
-                  borderRadius={2}
-                >
-                  <Typography variant="subtitle2">{segment.name}</Typography>
-                  <Stack direction="row" spacing={1} mt={1} flexWrap="wrap">
-                    <Chip label={t('canvas.deployDialog.segment.cidr', { value: segment.cidr || segment.cidr_block })} size="small" />
-                    <Chip label={t('canvas.deployDialog.segment.region', { value: segment.region })} size="small" />
-                    <Chip
-                      label={t('canvas.deployDialog.segment.model', {
-                        value: String(segment.exposure || "internal").replace(/_/g, " "),
-                      })}
-                      size="small"
-                      variant="outlined"
-                    />
-                    <Chip
-                      label={t('canvas.deployDialog.segment.providerNetwork', {
-                        provider: providerDisplayLabel,
-                        kind: providerDefinition.segment?.kindLabel || 'Network',
-                      })}
-                      size="small"
-                      variant="outlined"
-                    />
-                    {isAwsProvider && aws.internet_gateway && (
-                      <Chip label={t('canvas.deployDialog.segment.igw')} size="small" color="primary" />
-                    )}
-                    {isAwsProvider && aws.nat_gateway?.enabled && (
-                      <Chip label={t('canvas.deployDialog.segment.nat')} size="small" color="secondary" />
-                    )}
-                    {isAwsProvider && aws.nat_gateway?.enabled && aws.nat_gateway?.elastic_ip && (
-                      <Chip
-                        label={t('canvas.deployDialog.segment.natEip', {
-                          value: aws.nat_gateway.elastic_ip,
-                        })}
-                        size="small"
-                        color="warning"
-                      />
-                    )}
-                    {isGcpProvider && gcp.cloud_nat?.enabled && (
-                      <Chip label={t('canvas.deployDialog.segment.cloudNat')} size="small" color="secondary" />
-                    )}
-                    {isGcpProvider && gcpSshRanges.length > 0 && (
-                      <Chip
-                        label={t('canvas.deployDialog.segment.sshRanges', { count: gcpSshRanges.length })}
-                        size="small"
-                        color="primary"
-                      />
-                    )}
-                    {isGcpProvider && gcpPrivateGoogleAccessCount > 0 && (
-                      <Chip
-                        label={t('canvas.deployDialog.segment.privateGoogleAccess', {
-                          count: gcpPrivateGoogleAccessCount,
-                        })}
-                        size="small"
-                        color="info"
-                      />
-                    )}
-                    {isGcpProvider && gcpFlowLogsCount > 0 && (
-                      <Chip
-                        label={t('canvas.deployDialog.segment.flowLogs', {
-                          count: gcpFlowLogsCount,
-                        })}
-                        size="small"
-                        color="info"
-                      />
-                    )}
-                    {isGcpProvider && gcpExternalIpCount > 0 && (
-                      <Chip
-                        label={t('canvas.deployDialog.segment.externalIps', {
-                          count: gcpExternalIpCount,
-                        })}
-                        size="small"
-                        color="warning"
-                      />
-                    )}
-                  </Stack>
-                  {isAwsProvider && aws.nat_gateway?.enabled && (
-                    <Typography variant="caption" color="text.secondary" display="block" mt={1}>
-                      {t('canvas.deployDialog.segment.natHelp')}
-                    </Typography>
-                  )}
-                  {isGcpProvider && gcpSshRanges.length > 0 && (
-                    <Typography variant="caption" color="text.secondary" display="block" mt={1}>
-                      {t('canvas.deployDialog.segment.sshRangesDetail', {
-                        value: gcpSshRanges.join(', '),
-                      })}
-                    </Typography>
-                  )}
-                </Box>
-              )
-            })}
-          </Box>
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={isBusy}>{t('actions.cancel')}</Button>
-        <Button
-          variant="contained"
-          onClick={handleValidateClick}
-          disabled={isBusy}
-        >
-          {secondaryActionLabel}
-        </Button>
-        <Button
-          variant="outlined"
-          onClick={() => exportPlanToJson(transformedData, transformedData?.name || "plan")}
-          disabled={!transformedData || isBusy}
-        >
-          {t('canvas.deployDialog.exportJson')}
-        </Button>
-        <Button
-          variant="outlined"
-          onClick={onViewPlan}
-          disabled={!hasReusablePlanId || isBusy}
-        >
-          {t('canvas.deployDialog.viewPlan')}
-        </Button>
-        <Button
-          variant="contained"
-          color={isRedeployPreview ? "warning" : "success"}
-          onClick={handleDeployClick}
-          disabled={(!isValidated || !hasReusablePlanId) ? isAwsProvider || isBusy : isBusy}
-        >
-          {isRedeployPreview ? t('canvas.deployDialog.applyRedeploy') : t('canvas.deployDialog.deploy')}
-        </Button>
-      </DialogActions>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={onClose} disabled={isBusy}>{t('actions.cancel')}</Button>
+            <Button
+              variant="contained"
+              onClick={handleValidateClick}
+              disabled={isBusy}
+            >
+              {secondaryActionLabel}
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => exportPlanToJson(transformedData, transformedData?.name || "plan")}
+              disabled={!transformedData || isBusy}
+            >
+              {t('canvas.deployDialog.exportJson')}
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={onViewPlan}
+              disabled={!hasReusablePlanId || isBusy}
+            >
+              {t('canvas.deployDialog.viewPlan')}
+            </Button>
+            <Button
+              variant="contained"
+              color={isRedeployPreview ? "warning" : "success"}
+              onClick={handleDeployClick}
+              disabled={(!isValidated || !hasReusablePlanId) ? isAwsProvider || isBusy : isBusy}
+            >
+              {isRedeployPreview ? t('canvas.deployDialog.applyRedeploy') : t('canvas.deployDialog.deploy')}
+            </Button>
+          </DialogActions>
+        </>
+      )}
 
       <Dialog
         open={providerInfoOpen || externalProviderInfoOpen}

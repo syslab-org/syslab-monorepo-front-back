@@ -1732,10 +1732,15 @@ const en = {
         "Validation error. Review the details before continuing.",
       canvasOutdated:
         "The canvas changed since the last validation. You must validate again.",
+      busyEyebrow: "SYSLAB IN PROGRESS",
       busyValidating: "Validating deploy. Please wait a moment...",
       busyProcessing: "Processing the operation. Do not close this modal yet.",
       busyDescription:
         "While this action runs, the modal is locked to avoid inconsistent states.",
+      busyValidatingDetail:
+        "We are generating the validation and syncing the view so the result reflects the current topology exactly.",
+      busyProcessingDetail:
+        "We are saving your changes and refreshing the deployment state so you do not lose context.",
       redeployWarning:
         "This validation was performed over already active infrastructure. If you deploy now, Terraform will update the existing stack in AWS and some changes may replace or remove resources.",
       chips: {

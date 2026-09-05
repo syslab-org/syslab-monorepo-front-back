@@ -1,10 +1,9 @@
 // apps/frontend/src/components/flow/flow-hooks/useDeployNetwork.js
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { RouterPolicy } from "@/features/networkCanvas/utils/networking";
 import { useAuth } from "@/app/providers/AuthContext";
-import { LoadingFlowContext } from "@/app/providers/LoadingFlowContext";
 import { api } from "@/infrastructure/http/api";
 import { useProviderCapabilities } from "@/features/networkCanvas/core/useProviderCapabilities";
 import { decideRouterMode } from "@/features/networkCanvas/domain/decideRouterMode";
@@ -322,7 +321,6 @@ const useDeployNetwork = ({
   const [errorMessage, setErrorMessage] = useState(null);
   const [providerAvailabilityNotice, setProviderAvailabilityNotice] = useState(null);
   const [canvasLabName, setCanvasLabName] = useState("");
-  const { setLoadingFlow } = useContext(LoadingFlowContext);
   const [simulateOnly, setSimulateOnly] = useState(true);
   // Máquina de estados explícita del plan
   const PLAN_STATES = {
@@ -336,6 +334,7 @@ const useDeployNetwork = ({
   const [validationState, setValidationState] = useState(PLAN_STATES.IDLE);
   const [validationError, setValidationError] = useState(null);
   const [validationResult, setValidationResult] = useState(null);
+  const [isApplying, setIsApplying] = useState(false);
   // Ahora representa hash de infraestructura real (payload Terraform), no del canvas visual
   const [validatedCanvasHash, setValidatedCanvasHash] = useState(null);
 
@@ -945,7 +944,7 @@ const useDeployNetwork = ({
       return;
     }
 
-    setLoadingFlow(true);
+    setIsApplying(true);
     setSuccessMessage(null);
     setErrorMessage(null);
 
@@ -961,15 +960,19 @@ const useDeployNetwork = ({
       await api.syncPlanFromCanvas({
         ...transformedData,
         name: stableName,
-      });
+      }, { trackLoading: false });
 
       // 2) Apply real (Terraform apply)
-      await api.deployPlan(planId, { simulateOnly: false, applyMode: true });
+      await api.deployPlan(planId, {
+        simulateOnly: false,
+        applyMode: true,
+        trackLoading: false,
+      });
 
-      setLoadingFlow(false);
+      setIsApplying(false);
       navigate(`/admin/plans/${planId}`);
     } catch (error) {
-      setLoadingFlow(false);
+      setIsApplying(false);
       const code = error?.data?.code;
       if (error?.status === 403 && code === "PLAN_EXECUTION_FORBIDDEN") {
         setErrorMessage(
@@ -1021,6 +1024,7 @@ const useDeployNetwork = ({
     validationState,
     validationError,
     validationResult,
+    isApplying,
     handleValidatePlan,
     handleApplyReal,
     handleOpenPlanDetails,
