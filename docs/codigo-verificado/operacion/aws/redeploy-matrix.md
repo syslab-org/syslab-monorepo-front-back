@@ -1,12 +1,10 @@
 # Matriz de Redeploy AWS
 
-Este documento resume las pruebas manuales de redeploy realizadas sobre el laboratorio `lab-peering-valid` y los hallazgos técnicos obtenidos al validar y aplicar cambios sobre infraestructura ya desplegada en AWS.
+Este documento define la matriz reproducible para validar cambios sobre infraestructura ya desplegada en AWS.
 
 ## Alcance
 
-- Provider probado: `aws`
-- Plan validado: `d829ce3b-2da2-41ab-ac2b-fbb2efc53077`
-- Canvas/Lab: `6a361285-dacf-4a64-bd30-1863ec54c759`
+- Provider: `aws`
 - Región: `us-east-1`
 - Topología base:
   - 2 VPCs públicas
@@ -14,9 +12,9 @@ Este documento resume las pruebas manuales de redeploy realizadas sobre el labor
   - 2 instancias EC2
   - 1 peering entre VPCs
 
-## Estado base validado
+## Estado base requerido
 
-Se confirmó un despliegue exitoso con:
+Antes de ejecutar la matriz, confirmar un despliegue con:
 
 - `status = SUCCESS`
 - `applied = true`
@@ -24,16 +22,7 @@ Se confirmó un despliegue exitoso con:
 - `simulate_only = false`
 - `can_destroy = true`
 
-Outputs relevantes del estado base:
-
-- `vpc_ids`
-  - `0qs41rig -> vpc-076ba7056cb8bba35`
-  - `35qwoshy -> vpc-0d0759e000c6fcc6c`
-- `instance_ids`
-  - `0qs41rig:bastion-a1 -> i-0ba1e50ae8d37987a`
-  - `35qwoshy:bastion-b1 -> i-01418fa17d4739a51`
-- `peering_ids`
-  - `0qs41rig--35qwoshy -> pcx-0cd6f27a65d13a3ce`
+Registrar como evidencia los `vpc_ids`, `instance_ids` y `peering_ids` devueltos por esa ejecucion; no reutilizar identificadores de corridas anteriores.
 
 ## Casos probados
 
@@ -170,8 +159,8 @@ Fix aplicado:
 - Se unificaron las reglas ICMP entre VPCs conectadas dentro del mismo `aws_security_group.vm_sg`.
 - Se eliminaron los recursos separados `aws_security_group_rule.cross_vpc_ping_peering_*` y `aws_security_group_rule.cross_vpc_ping_tgw_*`.
 - Referencia técnica:
-  - [main.tf.j2](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/provisioning/templates/main.tf.j2#L128)
-  - [main.tf.j2](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/provisioning/templates/main.tf.j2#L205)
+  - [main.tf.j2](../../../../apps/backend/provisioning/templates/main.tf.j2#L128)
+  - [main.tf.j2](../../../../apps/backend/provisioning/templates/main.tf.j2#L205)
 
 Resultado tras revalidar y redeployar:
 

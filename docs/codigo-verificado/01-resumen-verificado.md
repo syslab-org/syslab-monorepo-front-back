@@ -27,7 +27,7 @@ Flujo real actual:
 ## 3. Estado funcional confirmado
 
 - Frontend: compila correctamente con `pnpm build`.
-- Backend: la API, modelos y tasks estan implementados, pero en este shell no fue posible correr tests por faltar dependencias Python instaladas localmente.
+- Backend: 57 pruebas de `api.tests` ejecutadas correctamente.
 - Runtime cloud real: `AWS` es el unico provider con soporte ejecutable completo.
 - `GCP` y `Azure`: aparecen en frontend, adapters y registries, pero su estado operativo sigue siendo `planned`.
 
@@ -51,7 +51,7 @@ El sistema ya no es AWS-only en estructura, pero si en operacion real.
 - `GCP`: UI y backend preparados para expansion, sin ejecucion real.
 - `Azure`: UI y backend preparados para expansion, sin ejecucion real.
 
-## 6. Legacy que sigue vivo
+## 6. Compatibilidad vigente
 
 Persisten rutas y aliases de compatibilidad:
 
@@ -60,10 +60,6 @@ Persisten rutas y aliases de compatibilidad:
 - ruta frontend legacy `/admin/vpcs/:vpcid/mainflow`,
 - endpoint legacy `sync_from_canvas` ademas de `sync-from-canvas`.
 
-## 7. Recomendacion de lectura canonica
+## 7. Fuente canonica
 
-Para entender el codigo actual, usar esta carpeta antes que:
-
-- `apps/frontend/README.md`,
-- documentos historicos ya retirados del repo,
-- diagramas o notas antiguas que describian rutas o estados superados.
+Esta carpeta documenta el comportamiento vigente. Los README internos enlazan estas guias o describen contratos concretos junto al codigo correspondiente.

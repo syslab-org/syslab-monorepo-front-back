@@ -5,8 +5,8 @@ Esta carpeta concentra la documentacion explicativa del codigo que hoy si esta a
 Objetivo:
 
 - reunir en un solo lugar la explicacion tecnica del sistema,
-- separar lo verificado en codigo de lo historico o academico,
-- dejar explicitadas las brechas entre documentacion y realidad implementada.
+- documentar solamente comportamiento respaldado por la implementacion actual,
+- mantener separadas las guias conceptuales de los procedimientos operativos.
 
 ## Como leer esta carpeta
 
@@ -21,21 +21,14 @@ Subcarpetas activas:
 
 - `instalacion/`: guias por entorno.
 - `operacion/`: playbooks y matrices operativas.
-- `arquitectura/`: flujo tecnico detallado y assets de arquitectura.
-- `producto/`: casos de uso y graficas funcionales.
-
-## Criterio usado
-
-- `Verificado en codigo`: confirmado leyendo implementacion actual.
-- `Verificado por ejecucion`: confirmado corriendo build o comandos locales.
-- `Parcial`: la idea general sigue vigente, pero el detalle ya no coincide del todo.
-- `Legacy o desactualizado`: conserva valor historico, pero no debe usarse como fuente canonica del codigo actual.
+- `arquitectura/`: flujo tecnico vigente y assets de arquitectura.
+- `producto/`: guion de demo, casos de uso y graficas funcionales.
 
 ## Verificacion rapida realizada
 
 - `pnpm build` en `apps/frontend/`: exitoso.
-- `python apps/backend/manage.py test api.tests` en `apps/backend/`: 56 tests OK.
+- `python apps/backend/manage.py test api.tests` en `apps/backend/`: 57 tests OK.
 
 ## Alcance
 
-Esta carpeta no reemplaza las guias de instalacion u operacion. Se vuelve el punto de entrada recomendado para entender el codigo vigente.
+Esta carpeta es el punto de entrada para entender, instalar y operar el codigo vigente. Las capacidades futuras se identifican solo cuando resulta necesario aclarar que no estan disponibles.

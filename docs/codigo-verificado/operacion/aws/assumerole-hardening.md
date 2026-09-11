@@ -1,28 +1,28 @@
 # Hardening de AssumeRole e IAM Mínimo
 
-Este documento baja a decisiones operativas lo que falta para endurecer el flujo `AssumeRole` del MVP sin cambiar su modelo funcional.
+Este documento define la configuracion operativa para endurecer el flujo `AssumeRole` del MVP sin cambiar su modelo funcional.
 
 ## 1. Identidad técnica dedicada del backend
 
-## Problema actual
+## Dependencia del runtime
 
 Hoy `AssumeRole` funciona, pero depende de una identidad base válida en backend para llamar `sts:AssumeRole`.
 
-En local esa identidad puede ser una cuenta humana, por ejemplo:
+En un entorno local esa identidad puede ser una cuenta humana, por ejemplo:
 
-- `arn:aws:iam::034739223309:user/tesis-admin`
+- `arn:aws:iam::123456789012:user/desarrollador-local`
 
-Eso sirve para validación del MVP, pero no es el estado ideal para producción ni para una tesis que quiera dejar clara la separación entre usuario humano y principal técnico.
+Para servidor o producción se debe separar la identidad humana del principal técnico.
 
-## Estado recomendado
+## Configuracion recomendada
 
 Crear un principal técnico dedicado, por ejemplo:
 
-- `arn:aws:iam::034739223309:user/syslab-backend-assumer`
+- `arn:aws:iam::123456789012:user/syslab-backend-assumer`
 
 o mejor aún:
 
-- `arn:aws:iam::034739223309:role/syslab-backend-runtime`
+- `arn:aws:iam::123456789012:role/syslab-backend-runtime`
 
 Ese principal debería ser:
 
@@ -44,7 +44,7 @@ Ejemplo:
     {
       "Effect": "Allow",
       "Principal": {
-        "AWS": "arn:aws:iam::034739223309:role/syslab-backend-runtime"
+        "AWS": "arn:aws:iam::123456789012:role/syslab-backend-runtime"
       },
       "Action": "sts:AssumeRole",
       "Condition": {

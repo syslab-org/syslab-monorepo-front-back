@@ -123,8 +123,6 @@ El cliente HTTP ya contempla:
 - sync desde canvas,
 - deploy y destroy.
 
-## 7. Hallazgos importantes
+## 7. Convencion de invitaciones
 
-- `apps/frontend/README.md` no describe el frontend real; es un placeholder de Vite.
-- el nombre de ruta `/registration/:userId` no refleja que el valor real es un `invite_token`.
-- la documentacion historica que menciona `MainFlow.jsx` esta desactualizada: la pagina activa es `CanvasFlowPage.jsx`.
+La ruta publica conserva `/registration/:userId`, pero el parametro transporta el `invite_token` que valida el backend.

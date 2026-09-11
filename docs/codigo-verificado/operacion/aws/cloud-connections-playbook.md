@@ -43,14 +43,14 @@ En el flujo actual hay dos identidades distintas:
 1. principal base que asume el role
 2. role destino que se usa para desplegar
 
-Ejemplo validado en local:
+Ejemplo con el principal tecnico recomendado:
 
 - principal base del backend:
-  - `arn:aws:iam::034739223309:user/tesis-admin`
+  - `arn:aws:iam::123456789012:user/syslab-backend-assumer`
 - role destino:
-  - `arn:aws:iam::034739223309:role/syslab-alumno22-role`
+  - `arn:aws:iam::123456789012:role/syslab-alumno22-role`
 
-Eso significa que la trust policy del role debe confiar en `tesis-admin`, no en `alumno22-syslab`, porque quien hace `AssumeRole` hoy es el backend.
+Eso significa que la trust policy del role debe confiar en `syslab-backend-assumer`, porque quien hace `AssumeRole` es el backend.
 
 ## Escenarios recomendados de prueba
 
@@ -149,19 +149,19 @@ En el entorno que usa el backend:
 aws sts get-caller-identity
 ```
 
-Ejemplo validado:
+Ejemplo:
 
 ```json
 {
-  "UserId": "AIDAQQFU6PMG6XQANVDVH",
-  "Account": "034739223309",
-  "Arn": "arn:aws:iam::034739223309:user/tesis-admin"
+  "UserId": "AIDAEXAMPLE",
+  "Account": "123456789012",
+  "Arn": "arn:aws:iam::123456789012:user/syslab-backend-assumer"
 }
 ```
 
 ### 2. Crear el role destino en AWS
 
-Ejemplo de trust policy validada:
+Ejemplo de trust policy:
 
 ```json
 {
@@ -170,7 +170,7 @@ Ejemplo de trust policy validada:
     {
       "Effect": "Allow",
       "Principal": {
-        "AWS": "arn:aws:iam::034739223309:user/tesis-admin"
+        "AWS": "arn:aws:iam::123456789012:user/syslab-backend-assumer"
       },
       "Action": "sts:AssumeRole",
       "Condition": {
@@ -197,7 +197,7 @@ Ejemplo validado para `alumno22`:
 - `Scope`: `Personal`
 - `Autenticación`: `AWS AssumeRole`
 - `Region`: `us-east-1`
-- `AWS Role ARN`: `arn:aws:iam::034739223309:role/syslab-alumno22-role`
+- `AWS Role ARN`: `arn:aws:iam::123456789012:role/syslab-alumno22-role`
 - `External ID`: `syslab-alumno22-2026`
 
 ### 4. Probar la conexión
@@ -209,7 +209,7 @@ Resultado esperado:
 
 La identidad resultante debe verse como una sesión asumida, por ejemplo:
 
-- `arn:aws:sts::034739223309:assumed-role/syslab-alumno22-role/syslab-...`
+- `arn:aws:sts::123456789012:assumed-role/syslab-alumno22-role/syslab-...`
 
 ### 5. Fijar la conexión en el laboratorio
 
@@ -224,8 +224,8 @@ En `Próxima ejecución real`, revisar:
 - `Scope: personal`
 - `Region: us-east-1`
 - `Conexión efectiva: assume-role-alumno22`
-- `Cuenta AWS prevista: 034739223309`
-- `ARN conocido: arn:aws:sts::034739223309:assumed-role/syslab-alumno22-role/syslab-...`
+- `Cuenta AWS prevista: 123456789012`
+- `ARN conocido: arn:aws:sts::123456789012:assumed-role/syslab-alumno22-role/syslab-...`
 
 ### 7. Verificar después del deploy
 
@@ -238,9 +238,9 @@ En `Evidencia del último APPLY real`, revisar:
 
 Si el `ARN` muestra `assumed-role/...`, quedó confirmado que el deploy real usó la sesión temporal del role y no una key estática final.
 
-## Evidencia adicional ya validada
+## Baseline endurecido recomendado
 
-Además del flujo base, ya quedó validado un caso concreto de endurecimiento:
+Para evitar que el runtime dependa de una identidad humana, usar esta configuracion:
 
 - principal técnico dedicado del backend:
   - `syslab-backend-assumer`

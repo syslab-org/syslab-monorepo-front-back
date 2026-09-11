@@ -128,7 +128,7 @@ Acciones reales de `Plan`:
 - `destroy`
 - `canvas_update`
 
-Esto corrige documentacion historica que hablaba de estados como `ACTIVE`, `DESTROYED` o `PREVIEW`.
+El estado visual derivado de la UI no agrega estados al modelo persistido.
 
 ## 7. Ejecucion asincrona real
 
@@ -170,8 +170,6 @@ Sigue implementada compatibilidad para:
 - `firestore_vpc_id` en serializacion y modelos como alias de `canvas_id`,
 - `sync_from_canvas` como alias legacy del endpoint canonico.
 
-## 10. Hallazgos importantes
+## 10. Alcance operativo
 
-- `apps/backend/README.md` esta bastante alineado con el backend real.
-- la parte multi-cloud esta bien encapsulada en arquitectura, pero no en capacidad operativa real.
-- el backend ya modela mejor auditoria y control de ejecucion que varios documentos historicos.
+La abstraccion multi-cloud esta implementada, pero la capacidad de ejecucion real permanece limitada a AWS.

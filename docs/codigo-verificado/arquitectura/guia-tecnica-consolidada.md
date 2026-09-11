@@ -6,7 +6,7 @@ Este documento reemplaza la necesidad de leer multiples notas dispersas para ent
 - que hace cada area funcional
 - como viaja la informacion desde la UI hasta AWS
 - que tecnologias participan en cada etapa
-- que partes de la documentacion historica siguen alineadas y cuales quedaron desactualizadas
+- que limites funcionales siguen vigentes
 
 ## 1. Resumen ejecutivo
 
@@ -595,7 +595,7 @@ Estado real actual:
 - no es solo metadata
 - se importan desde `apps/frontend/examples/network-scenarios/generated-canvas/`
 
-Esto es una diferencia importante con documentacion vieja que todavia lo presentaba como trabajo pendiente.
+Las plantillas son funcionales y forman parte del flujo actual de creacion de laboratorios.
 
 ### 7.6 Canvas de red
 
@@ -921,65 +921,7 @@ Eso significa:
 - el dominio neutral ya existe
 - pero solo `AWS` tiene adapter + executor que llegan hasta Terraform real
 
-## 11. Comparacion entre documentacion existente y codigo actual
-
-Esta seccion resume donde la documentacion sigue bien y donde ya no describe fielmente el repo.
-
-### 11.1 Documentacion que sigue alineada
-
-- `docs/codigo-verificado/operacion/aws/redeploy-matrix.md`
-  - sigue alineado con el foco `AWS-first`
-  - sigue siendo coherente con la idea de `redeploy`, `OUTDATED`, `Plan Detail` y comportamiento Terraform
-- `docs/codigo-verificado/05-cloud-execution-model.md`
-  - sigue alineado con la logica de permisos reales en backend
-- `docs/codigo-verificado/operacion/aws/cloud-connections-playbook.md`
-  - sigue alineado con `Static Keys`, `AssumeRole` y evidencia en `Plan Detail`
-- `docs/codigo-verificado/06-permissions-matrix.md`
-  - sigue alineado con `can_execute_plan`, `course_shared` y delegacion
-
-### 11.2 Documentacion parcialmente desactualizada
-
-- `README.md`
-  - sirve como bitacora general de infra y despliegue
-  - pero ya no alcanza para describir bien la capa de dominio, permisos, auditoria y flujo del canvas
-- `apps/backend/README.md`
-  - da una buena intuicion del dominio neutral y la compatibilidad legacy
-  - pero no cubre en detalle el flujo real de `CloudConnection`, `PlanExecutionRecord` y delegaciones
-- el plan academico historico ya no forma parte de la documentacion activa del repo
-  - describe correctamente varias decisiones de producto
-  - pero contiene trabajo futuro que en codigo ya fue avanzado, por ejemplo la parte de plantillas de laboratorio
-
-### 11.3 Documentacion claramente desactualizada
-
-- `apps/frontend/README.md`
-  - sigue siendo el README boilerplate de Vite
-  - no documenta nada del sistema real
-- `infra/terraform/README.md`
-  - hoy describe basicamente ECR y el backend remoto de Terraform
-  - todavia puede ampliarse para reflejar mejor la capa auxiliar actual: VPC, RDS, Redis, IAM, S3 y secrets
-
-### 11.4 Hallazgos concretos de desalineacion
-
-1. Plantillas de laboratorio
-   - documentacion vieja: lo presenta como mejora pendiente
-   - codigo actual: ya existe `buildTemplateFlow()` y se precargan flows reales desde ejemplos generados
-
-2. Multi-cloud
-   - parte de la documentacion puede sonar mas amplia a nivel conceptual
-   - codigo actual: solo `AWS` es operativo; `GCP` y `Azure` son planned
-
-3. Documentacion frontend
-   - la documentacion actual del frontend no refleja el uso de React Flow, Zustand, roles, tours, validacion ni deploy
-
-4. Documentacion de infra plataforma
-   - la documentacion actual no refleja la cantidad real de recursos Terraform hoy presentes en `infra/terraform/`
-
-5. Habilitacion de ejecucion real en AWS
-   - el backend actual combina `ALLOW_LOCAL_APPLY`, credenciales resueltas y una deteccion de runtime AWS basada en variables de entorno del contenedor
-   - eso no rompe el flujo validado de `Docker Compose` local ni de servidor Ubuntu, porque ambos usan `AWS_PROFILE`, `AWS_SDK_LOAD_CONFIG=1` y `~/.aws` montado
-   - mejora futura recomendada: reemplazar esa deteccion por una verificacion basada en `STS` para que la decision dependa solo de credenciales realmente utilizables
-
-## 12. Recomendacion de lectura si quieres entender el codigo rapido
+## 11. Recorrido de lectura
 
 Si alguien nuevo entra al repo, este es el mejor recorrido:
 
@@ -994,14 +936,14 @@ Si alguien nuevo entra al repo, este es el mejor recorrido:
 9. abrir `apps/backend/api/providers/aws/executor.py`
 10. abrir `apps/backend/provisioning/templates/main.tf.j2`
 
-## 13. Conclusiones tecnicas
+## 12. Conclusiones tecnicas
 
 El proyecto ya no es solo un canvas visual ni una demo CRUD. El codigo actual implementa un flujo bastante claro y serio de:
 
 - modelado visual
 - traduccion a dominio neutral
 - compilacion AWS
-- ejecucion asyncrona con Terraform
+- ejecucion asincrona con Terraform
 - permisos academicos separados de permisos cloud
 - trazabilidad de ejecucion real
 
@@ -1014,4 +956,4 @@ La mejor manera de describir el estado actual es esta:
 - frontend como modelador y orquestador de experiencia
 - Celery + Terraform como motor de ejecucion
 
-Si en adelante se quiere mantener la documentacion ordenada, este archivo deberia pasar a ser el documento principal de entrada y los demas quedar como anexos de validacion, evidencias o runbooks especificos.
+Los documentos restantes complementan esta guia con contratos, instalacion y runbooks operativos concretos.

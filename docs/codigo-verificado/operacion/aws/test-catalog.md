@@ -2,7 +2,7 @@
 
 Este documento organiza una bateria presentable y repetible de pruebas para el MVP actual de SysLab.
 
-Aqui "todos los posibles escenarios" significa todos los casos funcionales que hoy aparecen explicitamente en el producto, en los escenarios versionados del frontend y en la evidencia tecnica ya validada en AWS:
+El catalogo cubre los casos funcionales representados por el producto y por los escenarios versionados del frontend:
 
 - configuracion previa de `cloud connections`
 - configuracion previa de `key pairs`
@@ -14,18 +14,18 @@ Aqui "todos los posibles escenarios" significa todos los casos funcionales que h
 ## Alcance real
 
 - provider desplegable real del MVP: `AWS`
-- regiones observadas en la evidencia actual: principalmente `us-east-1`
+- region usada en los ejemplos: `us-east-1`
 - conectividad soportada en canvas: `isolated`, `direct links` traducidos a `peering`, y `hub routing` traducido a `Transit Gateway`
 - modelado soportado: `Network Segment` (VPC), `Zone` (subnet), `Workload` (EC2) y `Connectivity Policy` (router)
 
 Fuentes base de este catalogo:
 
-- [Playbook de Conexiones Cloud AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/operacion/aws/cloud-connections-playbook.md)
-- [Playbook de Key Pairs y Acceso SSH en AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/operacion/aws/key-pairs-ssh-playbook.md)
-- [Matriz de Managed Egress AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/operacion/aws/managed-egress-matrix.md)
-- [Matriz de Redeploy AWS](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/operacion/aws/redeploy-matrix.md)
-- [Modelo de Ejecucion Cloud por Usuario](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/05-cloud-execution-model.md)
-- [Escenarios versionados del frontend](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/frontend/examples/network-scenarios/README.md)
+- [Playbook de Conexiones Cloud AWS](../../../../docs/codigo-verificado/operacion/aws/cloud-connections-playbook.md)
+- [Playbook de Key Pairs y Acceso SSH en AWS](../../../../docs/codigo-verificado/operacion/aws/key-pairs-ssh-playbook.md)
+- [Matriz de Managed Egress AWS](../../../../docs/codigo-verificado/operacion/aws/managed-egress-matrix.md)
+- [Matriz de Redeploy AWS](../../../../docs/codigo-verificado/operacion/aws/redeploy-matrix.md)
+- [Modelo de Ejecucion Cloud por Usuario](../../../../docs/codigo-verificado/05-cloud-execution-model.md)
+- [Escenarios versionados del frontend](../../../../apps/frontend/examples/network-scenarios/README.md)
 
 ## Vista rapida de la suite
 

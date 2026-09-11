@@ -78,7 +78,7 @@ print(boto3.Session().client('sts').get_caller_identity())
 Si ahí ves por ejemplo:
 
 ```text
-arn:aws:iam::034739223309:user/syslab-backend-assumer
+arn:aws:iam::123456789012:user/syslab-backend-assumer
 ```
 
 entonces esa es la identidad que debe poder asumir el role de la `Cloud Connection`.
@@ -106,7 +106,7 @@ Ejemplo:
     {
       "Effect": "Allow",
       "Principal": {
-        "AWS": "arn:aws:iam::034739223309:user/syslab-backend-assumer"
+        "AWS": "arn:aws:iam::123456789012:user/syslab-backend-assumer"
       },
       "Action": "sts:AssumeRole",
       "Condition": {
@@ -132,7 +132,7 @@ Ejemplo:
     {
       "Effect": "Allow",
       "Action": "sts:AssumeRole",
-      "Resource": "arn:aws:iam::034739223309:role/syslab-course-redes1-role"
+      "Resource": "arn:aws:iam::123456789012:role/syslab-course-redes1-role"
     }
   ]
 }
@@ -144,7 +144,7 @@ En el servidor validado:
 
 - `AWS_PROFILE=syslab-backend-assumer`
 - el backend resolvio como caller:
-  - `arn:aws:iam::034739223309:user/syslab-backend-assumer`
+  - `arn:aws:iam::123456789012:user/syslab-backend-assumer`
 
 Por lo tanto:
 
@@ -255,7 +255,7 @@ print(boto3.Session().client('sts').get_caller_identity())
 Lo esperado es:
 
 ```text
-arn:aws:iam::034739223309:user/syslab-backend-assumer
+arn:aws:iam::123456789012:user/syslab-backend-assumer
 ```
 
 ### 6. Verificar una `Cloud Connection` con `AssumeRole`
@@ -313,7 +313,7 @@ docker compose -f tools/docker/compose.server.yml exec backend \
 python manage.py shell -c "
 import boto3
 resp = boto3.Session().client('sts').assume_role(
-    RoleArn='arn:aws:iam::034739223309:role/syslab-course-redes1-role',
+    RoleArn='arn:aws:iam::123456789012:role/syslab-course-redes1-role',
     RoleSessionName='debug-redes1',
     ExternalId='syslab-course-redes1',
 )

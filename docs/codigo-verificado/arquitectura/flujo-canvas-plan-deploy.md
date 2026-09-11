@@ -1,4 +1,4 @@
-# Roadmap Visual del Flujo Canvas -> Plan -> Deploy
+# Flujo Vigente Canvas -> Plan -> Deploy
 
 Este documento resume, de forma visual y tecnica, el recorrido que hace el sistema desde que llega un canvas al backend hasta que una ejecucion termina en `SUCCESS` o `FAILURE`.
 
@@ -7,8 +7,8 @@ Este documento resume, de forma visual y tecnica, el recorrido que hace el siste
 ![Vista general del flujo Canvas a Deploy](./assets/01-canvas-plan-deploy-overview.svg)
 
 Fuente:
-- [01-canvas-plan-deploy-overview.mmd](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/arquitectura/assets/01-canvas-plan-deploy-overview.mmd)
-- [01-canvas-plan-deploy-overview.svg](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/arquitectura/assets/01-canvas-plan-deploy-overview.svg)
+- [01-canvas-plan-deploy-overview.mmd](./assets/01-canvas-plan-deploy-overview.mmd)
+- [01-canvas-plan-deploy-overview.svg](./assets/01-canvas-plan-deploy-overview.svg)
 
 ## Capas del flujo
 
@@ -19,7 +19,7 @@ La capa web recibe requests HTTP, valida el payload, persiste `Plan` y `Lab`, y 
 #### Sync desde canvas
 
 - Endpoint: `POST /api/network/plans/sync-from-canvas/`
-- Implementacion: [apps/backend/api/views_plans.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/views_plans.py:139)
+- Implementacion: [apps/backend/api/views_plans.py](../../../apps/backend/api/views_plans.py)
 
 Recorrido:
 
@@ -33,7 +33,7 @@ Recorrido:
 #### Deploy de un plan
 
 - Endpoint: `POST /api/network/plans/<plan_id>/deploy/`
-- Implementacion: [apps/backend/api/views.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/views.py:344)
+- Implementacion: [apps/backend/api/views.py](../../../apps/backend/api/views.py)
 
 Checks principales:
 
@@ -58,8 +58,8 @@ Esta capa toma una entrada relativamente flexible y la convierte a un formato es
 ![Flujo de validacion y compilacion](./assets/02-validacion-compilacion.svg)
 
 Fuente:
-- [02-validacion-compilacion.mmd](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/arquitectura/assets/02-validacion-compilacion.mmd)
-- [02-validacion-compilacion.svg](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/arquitectura/assets/02-validacion-compilacion.svg)
+- [02-validacion-compilacion.mmd](./assets/02-validacion-compilacion.mmd)
+- [02-validacion-compilacion.svg](./assets/02-validacion-compilacion.svg)
 
 #### Que significa "compilar el payload"
 
@@ -78,14 +78,14 @@ El sistema acepta dos familias de entrada:
 - formato legacy estilo AWS con `vlan`, `vpcs`, `links`, `routers`
 
 Archivo clave:
-- [apps/backend/api/domain/network_intent.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/domain/network_intent.py:189)
+- [apps/backend/api/domain/network_intent.py](../../../apps/backend/api/domain/network_intent.py)
 
 #### Salida estricta
 
 El resultado final para AWS se valida con `MultiPlanSerializer`.
 
 Archivo clave:
-- [apps/backend/api/serializers.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/serializers.py:1065)
+- [apps/backend/api/serializers.py](../../../apps/backend/api/serializers.py)
 
 Estructura esperada:
 
@@ -105,9 +105,9 @@ Antes de cualquier ejecucion real, el backend decide:
 
 Archivos clave:
 
-- [apps/backend/api/permissions.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/permissions.py:131)
-- [apps/backend/api/cloud_connections.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/cloud_connections.py:94)
-- [apps/backend/api/serializers.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/serializers.py:632)
+- [apps/backend/api/permissions.py](../../../apps/backend/api/permissions.py)
+- [apps/backend/api/cloud_connections.py](../../../apps/backend/api/cloud_connections.py)
+- [apps/backend/api/serializers.py](../../../apps/backend/api/serializers.py)
 
 Resolucion de cuenta cloud:
 
@@ -122,8 +122,8 @@ Celery no sabe Terraform por si mismo. Celery ejecuta una tarea Python en backgr
 ![Secuencia Celery y Terraform](./assets/03-celery-sequence.svg)
 
 Fuente:
-- [03-celery-sequence.mmd](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/arquitectura/assets/03-celery-sequence.mmd)
-- [03-celery-sequence.svg](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/docs/codigo-verificado/arquitectura/assets/03-celery-sequence.svg)
+- [03-celery-sequence.mmd](./assets/03-celery-sequence.mmd)
+- [03-celery-sequence.svg](./assets/03-celery-sequence.svg)
 
 Cadena real para `terraform init`:
 
@@ -138,16 +138,16 @@ Cadena real para `terraform init`:
 
 Archivos clave:
 
-- [apps/backend/api/tasks.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/tasks.py:130)
-- [apps/backend/api/providers/aws/executor.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/providers/aws/executor.py:141)
-- [apps/backend/api/providers/aws/terraform.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/providers/aws/terraform.py:112)
+- [apps/backend/api/tasks.py](../../../apps/backend/api/tasks.py)
+- [apps/backend/api/providers/aws/executor.py](../../../apps/backend/api/providers/aws/executor.py)
+- [apps/backend/api/providers/aws/terraform.py](../../../apps/backend/api/providers/aws/terraform.py)
 
 ### 5. Capa Terraform
 
 En esta capa ya se ejecutan binarios reales del sistema operativo.
 
 Archivo clave:
-- [apps/backend/api/providers/aws/terraform.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/providers/aws/terraform.py:39)
+- [apps/backend/api/providers/aws/terraform.py](../../../apps/backend/api/providers/aws/terraform.py)
 
 Funciones importantes:
 
@@ -172,7 +172,7 @@ Los dos modelos centrales de la ejecucion son:
 - `PlanExecutionRecord`: historial auditado de ejecuciones
 
 Archivo clave:
-- [apps/backend/api/models.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/models.py:377)
+- [apps/backend/api/models.py](../../../apps/backend/api/models.py)
 
 Campos importantes en `Plan`:
 
@@ -191,7 +191,7 @@ Campos importantes en `Plan`:
 La funcion `_reconcile_running_plan(plan)` no ejecuta Terraform. Solo compara el estado persistido del plan con el estado real de la tarea en Celery.
 
 Archivo clave:
-- [apps/backend/api/views_plans.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/views_plans.py:24)
+- [apps/backend/api/views_plans.py](../../../apps/backend/api/views_plans.py)
 
 Que hace:
 
@@ -221,13 +221,13 @@ Que hace:
 
 Si quieres seguir el flujo completo desde cero, este es el orden mas util:
 
-1. [apps/backend/api/views_plans.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/views_plans.py:139)
-2. [apps/backend/api/validators.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/validators.py:8)
-3. [apps/backend/api/domain/network_intent.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/domain/network_intent.py:189)
-4. [apps/backend/api/providers/aws/adapter.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/providers/aws/adapter.py:184)
-5. [apps/backend/api/views.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/views.py:344)
-6. [apps/backend/api/permissions.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/permissions.py:131)
-7. [apps/backend/api/cloud_connections.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/cloud_connections.py:94)
-8. [apps/backend/api/tasks.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/tasks.py:130)
-9. [apps/backend/api/providers/aws/executor.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/providers/aws/executor.py:42)
-10. [apps/backend/api/providers/aws/terraform.py](/Users/juliocaicedo/Sites/tesis/syslab-monorepo-front-back/apps/backend/api/providers/aws/terraform.py:72)
+1. [apps/backend/api/views_plans.py](../../../apps/backend/api/views_plans.py)
+2. [apps/backend/api/validators.py](../../../apps/backend/api/validators.py)
+3. [apps/backend/api/domain/network_intent.py](../../../apps/backend/api/domain/network_intent.py)
+4. [apps/backend/api/providers/aws/adapter.py](../../../apps/backend/api/providers/aws/adapter.py)
+5. [apps/backend/api/views.py](../../../apps/backend/api/views.py)
+6. [apps/backend/api/permissions.py](../../../apps/backend/api/permissions.py)
+7. [apps/backend/api/cloud_connections.py](../../../apps/backend/api/cloud_connections.py)
+8. [apps/backend/api/tasks.py](../../../apps/backend/api/tasks.py)
+9. [apps/backend/api/providers/aws/executor.py](../../../apps/backend/api/providers/aws/executor.py)
+10. [apps/backend/api/providers/aws/terraform.py](../../../apps/backend/api/providers/aws/terraform.py)

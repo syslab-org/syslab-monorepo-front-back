@@ -72,7 +72,7 @@ Hay dos usos distintos de Terraform:
 - `infra/terraform/`: despliega la plataforma donde vive el sistema.
 - `apps/backend/provisioning/templates/`: genera la infraestructura del laboratorio del usuario.
 
-Esa diferencia aparece en codigo y conviene mantenerla explicitada porque varios documentos historicos la mezclan.
+Ambos flujos son independientes y no comparten state ni ciclo de vida.
 
 ## 6. Estado local de Terraform para laboratorios
 
@@ -95,23 +95,17 @@ Conclusion operativa:
 - la ruta validada sigue siendo Compose con volumen persistente,
 - si se quiere operar este flujo en otro runtime, conviene definir un `TF_STATE_ROOT` escribible y persistente.
 
-## 7. Mejora futura documentada
+## 7. Habilitacion del runtime AWS
 
-Area: `apps/backend/api/providers/runtime_registry.py`, `apps/backend/api/providers/aws/runtime.py` y `apps/backend/api/providers/aws/executor.py`
-
-Pendiente tecnico:
-
-- hoy el backend todavia usa una deteccion de runtime AWS basada en variables de entorno del contenedor para decidir parte de la habilitacion de `apply` y `destroy` reales.
-- esa logica no afecta el flujo validado actual, porque `compose.dev` y `compose.server` operan con `AWS_PROFILE`, `AWS_SDK_LOAD_CONFIG=1`, `~/.aws` montado y `ALLOW_LOCAL_APPLY=1`.
-- si en el futuro se quisiera endurecer este criterio, la mejora recomendada es reemplazar esa deteccion por una comprobacion mas robusta basada en `STS`, de forma que la habilitacion dependa de credenciales realmente resolubles y no del tipo de runtime.
+El backend combina la disponibilidad declarada del runtime, `ALLOW_LOCAL_APPLY` y las credenciales resueltas. `compose.dev` y `compose.server` cargan perfiles desde sus archivos de entorno, fijan `AWS_SDK_LOAD_CONFIG=1` y montan `~/.aws` en backend y Celery.
 
 ## 8. Verificaciones ejecutadas
 
 - `pnpm build` en `apps/frontend/`: exitoso.
-- `python apps/backend/manage.py test api.tests`: 56 tests OK.
+- `python apps/backend/manage.py test api.tests`: 57 tests OK.
 
-## 9. Hallazgos importantes
+## 9. Guias operativas
 
-- la guia de instalacion local esta razonablemente alineada con `compose.dev.yml`.
-- la guia AWS quedo acotada a la infraestructura auxiliar que hoy si existe en Terraform.
-- el README raiz ya fue reducido a una entrada corta y vigente.
+- [Instalacion local](./instalacion/local.md)
+- [Instalacion en servidor Ubuntu](./instalacion/servidor-ubuntu/README.md)
+- [Infraestructura auxiliar AWS](./instalacion/aws.md)

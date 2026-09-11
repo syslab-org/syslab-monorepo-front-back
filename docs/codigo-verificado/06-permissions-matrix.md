@@ -75,7 +75,7 @@ Esto evita un error sutil pero crítico:
 
 ## Delegación explícita y auditable
 
-La delegación implementada en este corte es:
+La delegación implementada es:
 
 - específica por laboratorio
 - asociada a la conexión personal resuelta del owner

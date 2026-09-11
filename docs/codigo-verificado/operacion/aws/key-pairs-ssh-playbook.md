@@ -124,7 +124,7 @@ Resultado validado:
 Ejemplo validado:
 
 ```powershell
-ssh -i "C:\Users\Julio Caicedo\Documents\redes1-demo-aws-generated.pem" ec2-user@<IP_PUBLICA_BASTION>
+ssh -i "C:\Users\<usuario>\Documents\redes1-demo-aws-generated.pem" ec2-user@<IP_PUBLICA_BASTION>
 ```
 
 Resultado esperado:
@@ -212,7 +212,7 @@ Resultado validado:
 Ejemplo validado:
 
 ```powershell
-ssh -i "C:\Users\Julio Caicedo\.ssh\redes1-estudiante-b" ec2-user@<IP_PUBLICA_BASTION>
+ssh -i "C:\Users\<usuario>\.ssh\redes1-estudiante-b" ec2-user@<IP_PUBLICA_BASTION>
 ```
 
 Resultado esperado:
@@ -304,7 +304,7 @@ Orden sugerido:
 
 ## Documentos relacionados
 
-- [Playbook de Conexiones Cloud AWS](./aws-cloud-connections-playbook.md)
+- [Playbook de Conexiones Cloud AWS](./cloud-connections-playbook.md)
 - [AWS runtime y AssumeRole](../../instalacion/servidor-ubuntu/aws-runtime-assumerole.md)
 - [Servidor Ubuntu en LAN](../../instalacion/servidor-ubuntu/README.md)
 - [Casos de uso del MVP](../../producto/casos-de-uso-mvp.md)
