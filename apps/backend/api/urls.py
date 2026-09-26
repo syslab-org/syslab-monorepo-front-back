@@ -1,7 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .auth_views import login_with_email, login_with_google, logout_view, me_view, registration_view
+from .auth_views import login_with_email, login_with_google, logout_view, me_avatar_view, me_view, registration_view
 from .views import (
     destroy_last_plan,
     destroy_plan,
@@ -37,6 +37,7 @@ urlpatterns = [
     path("auth/logout/", logout_view, name="auth-logout"),
     path("auth/register/<uuid:invite_token>/", registration_view, name="auth-register"),
     path("me/", me_view, name="me"),
+    path("me/avatar/", me_avatar_view, name="me-avatar"),
     path("providers/capabilities/", provider_capabilities_view, name="provider-capabilities"),
     path("tasks/run/", run_prueba, name="run_prueba"),
     path("tasks/status/<str:task_id>/", task_status, name="task_status"),

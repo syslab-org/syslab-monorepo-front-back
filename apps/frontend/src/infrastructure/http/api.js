@@ -43,8 +43,9 @@ async function jsonFetch(path, options = {}) {
   const token = getAuthToken();
   const method = String(options.method || "GET").toUpperCase();
   const shouldTrackLoading = ["POST", "PATCH", "PUT", "DELETE"].includes(method) && options.trackLoading !== false;
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   const headers = {
-    ...(options.body ? { "Content-Type": "application/json" } : {}),
+    ...(options.body && !isFormData ? { "Content-Type": "application/json" } : {}),
     ...(options.headers || {}),
   };
 
@@ -116,6 +117,20 @@ export const api = {
       ...options,
       method: "PATCH",
       body: JSON.stringify(payload),
+    }),
+  uploadMyAvatar: (file, options = {}) => {
+    const formData = new FormData();
+    formData.append("avatar", file);
+    return jsonFetch("/api/me/avatar/", {
+      ...options,
+      method: "POST",
+      body: formData,
+    });
+  },
+  deleteMyAvatar: (options = {}) =>
+    jsonFetch("/api/me/avatar/", {
+      ...options,
+      method: "DELETE",
     }),
   getRegistration: (inviteToken) => jsonFetch(`/api/auth/register/${inviteToken}/`),
   registerWithPassword: (inviteToken, payload) =>

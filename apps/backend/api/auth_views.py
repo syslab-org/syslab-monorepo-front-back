@@ -11,6 +11,7 @@ from .i18n import tr
 from .models import ROLE_PLATFORM_ADMIN, STATUS_ACTIVE, STATUS_DEACTIVATED, UserProfile
 from .permissions import canonical_role
 from .serializers import (
+    AvatarUploadSerializer,
     EmailLoginSerializer,
     GoogleLoginSerializer,
     MeSerializer,
@@ -181,6 +182,29 @@ def me_view(request):
         profile.save(update_fields=profile_updates)
 
     return Response(MeSerializer(user).data)
+
+
+@api_view(["POST", "DELETE"])
+@permission_classes([IsAuthenticated])
+def me_avatar_view(request):
+    profile = _ensure_active_profile(request.user)
+
+    if request.method == "DELETE":
+        if profile.avatar:
+            profile.avatar.delete(save=False)
+            profile.avatar = None
+            profile.save(update_fields=["avatar", "updated_at"])
+        return Response(MeSerializer(request.user).data)
+
+    serializer = AvatarUploadSerializer(data=request.data or {})
+    serializer.is_valid(raise_exception=True)
+
+    if profile.avatar:
+        profile.avatar.delete(save=False)
+    profile.avatar = serializer.validated_data["avatar"]
+    profile.save(update_fields=["avatar", "updated_at"])
+
+    return Response(MeSerializer(request.user).data)
 
 
 @api_view(["GET", "POST"])

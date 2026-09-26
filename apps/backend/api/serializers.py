@@ -386,7 +386,7 @@ class CourseSummarySerializer(serializers.ModelSerializer):
 class UserSummarySerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
     status = serializers.CharField(source="profile.status", read_only=True)
-    photo_url = serializers.CharField(source="profile.photo_url", read_only=True)
+    photo_url = serializers.SerializerMethodField()
     course = serializers.SerializerMethodField()
     display_name = serializers.SerializerMethodField()
 
@@ -408,6 +408,14 @@ class UserSummarySerializer(serializers.ModelSerializer):
 
     def get_role(self, obj):
         return canonical_role(obj)
+
+    def get_photo_url(self, obj):
+        profile = getattr(obj, "profile", None)
+        if not profile:
+            return ""
+        if profile.avatar:
+            return profile.avatar.url
+        return profile.photo_url
 
     def get_course(self, obj):
         profile = getattr(obj, "profile", None)
@@ -470,6 +478,10 @@ class ProfileUpdateSerializer(serializers.Serializer):
     email = serializers.EmailField(required=False)
     photo_url = serializers.URLField(required=False, allow_blank=True)
     settings = serializers.JSONField(required=False)
+
+
+class AvatarUploadSerializer(serializers.Serializer):
+    avatar = serializers.ImageField(max_length=None, allow_empty_file=False)
 
 
 class CourseCreateSerializer(serializers.Serializer):

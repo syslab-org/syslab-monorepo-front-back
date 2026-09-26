@@ -1,5 +1,5 @@
 import * as yup from 'yup';
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import {
@@ -8,12 +8,16 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Divider,
+  IconButton,
   Paper,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 
 import { useAuth } from '@/app/providers/AuthContext';
 import { LoadingFlowContext } from '@/app/providers/LoadingFlowContext';
@@ -33,7 +37,6 @@ const EMPTY_PROFILE_VALUES = {
   first_name: '',
   last_name: '',
   email: '',
-  photo_url: '',
 };
 
 const roleLabels = {
@@ -54,6 +57,9 @@ const statusColor = {
   [STATUS_USER_PENDING]: 'warning',
   [STATUS_USER_DESACTIVE]: 'default',
 };
+
+const MAX_AVATAR_SIZE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_AVATAR_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 
 const trimText = (value) => (typeof value === 'string' ? value.trim() : value);
 
@@ -77,25 +83,12 @@ const schema = yup.object({
     .transform((value) => optionalText(value))
     .email('Ingresa un correo valido')
     .required('El correo es obligatorio'),
-  photo_url: yup
-    .string()
-    .transform((value) => optionalText(value))
-    .test('is-valid-url', 'Ingresa una URL valida', (value) => {
-      if (!value) return true;
-      try {
-        new URL(value);
-        return true;
-      } catch {
-        return false;
-      }
-    }),
 }).required();
 
 const getProfileValues = (user) => ({
   first_name: user?.first_name || user?.display_name || '',
   last_name: user?.last_name || '',
   email: user?.email || '',
-  photo_url: user?.photo_url || '',
 });
 
 const getFullName = (firstName, lastName, fallback) => {
@@ -118,6 +111,8 @@ const ProfilePage = () => {
   const { user, refreshUser } = useAuth();
   const { setLoadingFlow } = useContext(LoadingFlowContext);
   const [feedback, setFeedback] = useState({ severity: '', message: '' });
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarInputRef = useRef(null);
 
   const {
     register,
@@ -139,7 +134,6 @@ const ProfilePage = () => {
 
   const watchedFirstName = watch('first_name');
   const watchedLastName = watch('last_name');
-  const watchedPhotoUrl = watch('photo_url');
   const watchedEmail = watch('email');
 
   const previewName = useMemo(
@@ -147,10 +141,7 @@ const ProfilePage = () => {
     [watchedFirstName, watchedLastName, user?.display_name, user?.email],
   );
 
-  const avatarSrc = useMemo(() => {
-    const candidate = optionalText(watchedPhotoUrl) || user?.photo_url || '';
-    return candidate || undefined;
-  }, [watchedPhotoUrl, user?.photo_url]);
+  const avatarSrc = user?.photo_url || undefined;
 
   const roleLabel = roleLabels[user?.role] || user?.role || 'Sin rol';
   const statusLabel = statusLabels[user?.status] || user?.status || 'Sin estado';
@@ -158,6 +149,57 @@ const ProfilePage = () => {
   const handleReset = () => {
     reset(getProfileValues(user));
     setFeedback({ severity: '', message: '' });
+  };
+
+  const handleAvatarButtonClick = () => {
+    avatarInputRef.current?.click();
+  };
+
+  const handleAvatarFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
+      setFeedback({ severity: 'error', message: 'Formato no soportado. Usa JPG, PNG, WEBP o GIF.' });
+      return;
+    }
+    if (file.size > MAX_AVATAR_SIZE_BYTES) {
+      setFeedback({ severity: 'error', message: 'La imagen no puede superar los 5 MB.' });
+      return;
+    }
+
+    setAvatarUploading(true);
+    setFeedback({ severity: '', message: '' });
+    try {
+      await api.uploadMyAvatar(file, { trackLoading: false });
+      await refreshUser();
+      setFeedback({ severity: 'success', message: 'Tu foto de perfil se actualizo correctamente.' });
+    } catch (error) {
+      setFeedback({
+        severity: 'error',
+        message: error?.message || 'No se pudo subir la imagen.',
+      });
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    setAvatarUploading(true);
+    setFeedback({ severity: '', message: '' });
+    try {
+      await api.deleteMyAvatar({ trackLoading: false });
+      await refreshUser();
+      setFeedback({ severity: 'success', message: 'Se elimino tu foto de perfil.' });
+    } catch (error) {
+      setFeedback({
+        severity: 'error',
+        message: error?.message || 'No se pudo eliminar la imagen.',
+      });
+    } finally {
+      setAvatarUploading(false);
+    }
   };
 
   const onSubmit = async (data) => {
@@ -175,7 +217,6 @@ const ProfilePage = () => {
           first_name: optionalText(data.first_name),
           last_name: optionalText(data.last_name),
           email: optionalText(data.email),
-          photo_url: optionalText(data.photo_url),
         },
         { trackLoading: false },
       );
@@ -211,20 +252,83 @@ const ProfilePage = () => {
           }}
         >
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} alignItems={{ xs: 'flex-start', md: 'center' }}>
-            <Avatar
-              src={avatarSrc}
-              alt={previewName}
-              sx={{
-                width: 96,
-                height: 96,
-                fontSize: 32,
-                fontWeight: 700,
-                bgcolor: 'primary.main',
-                color: 'primary.contrastText',
-              }}
-            >
-              {getInitials(previewName)}
-            </Avatar>
+            <Box sx={{ position: 'relative', width: 96, height: 96, flexShrink: 0 }}>
+              <Avatar
+                src={avatarSrc}
+                alt={previewName}
+                sx={{
+                  width: 96,
+                  height: 96,
+                  fontSize: 32,
+                  fontWeight: 700,
+                  bgcolor: 'primary.main',
+                  color: 'primary.contrastText',
+                }}
+              >
+                {getInitials(previewName)}
+              </Avatar>
+
+              {avatarUploading ? (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: '50%',
+                    bgcolor: 'rgba(0, 0, 0, 0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <CircularProgress size={28} sx={{ color: 'common.white' }} />
+                </Box>
+              ) : null}
+
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept={ALLOWED_AVATAR_TYPES.join(',')}
+                hidden
+                onChange={handleAvatarFileChange}
+              />
+
+              <IconButton
+                size="small"
+                onClick={handleAvatarButtonClick}
+                disabled={avatarUploading}
+                aria-label="Cambiar foto de perfil"
+                sx={{
+                  position: 'absolute',
+                  bottom: -4,
+                  right: -4,
+                  bgcolor: 'background.paper',
+                  border: (theme) => `1px solid ${theme.palette.divider}`,
+                  '&:hover': { bgcolor: 'background.paper' },
+                }}
+              >
+                <PhotoCameraIcon fontSize="small" />
+              </IconButton>
+
+              {user?.photo_url && !avatarUploading ? (
+                <IconButton
+                  size="small"
+                  onClick={handleRemoveAvatar}
+                  aria-label="Quitar foto de perfil"
+                  sx={{
+                    position: 'absolute',
+                    top: -4,
+                    right: -4,
+                    width: 22,
+                    height: 22,
+                    bgcolor: 'background.paper',
+                    border: (theme) => `1px solid ${theme.palette.divider}`,
+                    '&:hover': { bgcolor: 'background.paper' },
+                  }}
+                >
+                  <CloseIcon sx={{ fontSize: 14 }} />
+                </IconButton>
+              ) : null}
+            </Box>
 
             <Stack spacing={1} flex={1} minWidth={0}>
               <Typography variant="h5" sx={{ fontWeight: 700 }}>
@@ -298,15 +402,6 @@ const ProfilePage = () => {
               {...register('email')}
               error={!!errors.email}
               helperText={errors.email?.message}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-            />
-
-            <TextField
-              label="URL del avatar"
-              {...register('photo_url')}
-              error={!!errors.photo_url}
-              helperText={errors.photo_url?.message || 'Opcional. Si lo dejas vacio, se mostraran tus iniciales.'}
               fullWidth
               InputLabelProps={{ shrink: true }}
             />

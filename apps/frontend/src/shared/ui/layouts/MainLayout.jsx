@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import {
   Avatar,
-  Badge,
   Box,
   Button,
   CssBaseline,
@@ -16,8 +15,6 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import MailOutline from "@mui/icons-material/MailOutline";
-import NotificationsIcon from "@mui/icons-material/Notifications";
 import MenuIcon from "@mui/icons-material/Menu";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import LogoutIcon from "@mui/icons-material/Logout";
@@ -187,18 +184,6 @@ function MainLayout() {
                 {mode === "light" ? <DarkModeIcon /> : <LightModeIcon />}
               </IconButton>
             </Tooltip>
-
-            <IconButton size="large" color="inherit">
-              <Badge badgeContent={4} color="error">
-                <MailOutline />
-              </Badge>
-            </IconButton>
-
-            <IconButton size="large" color="inherit">
-              <Badge badgeContent={17} color="error">
-                <NotificationsIcon />
-              </Badge>
-            </IconButton>
 
             <Tooltip title={t("common.account")}>
               <IconButton

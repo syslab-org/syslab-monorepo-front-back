@@ -199,6 +199,7 @@ class UserProfile(models.Model):
         related_name="students",
     )
     photo_url = models.URLField(blank=True, default="")
+    avatar = models.ImageField(upload_to="avatars/%Y/%m/", blank=True, null=True)
     settings = models.JSONField(default=dict, blank=True)
     google_sub = models.CharField(max_length=255, blank=True, default="")
     invite_token = models.UUIDField(null=True, blank=True, unique=True)
