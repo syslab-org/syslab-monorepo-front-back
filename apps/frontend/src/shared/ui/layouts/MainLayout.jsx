@@ -100,6 +100,15 @@ function MainLayout() {
   const logout = auth?.logout || (() => { });
   const { mode, toggle } = useThemeMode();
   const role = user?.role;
+  const userName = user?.display_name || user?.email || t("labels.user");
+  const roleLabel = useMemo(() => {
+    const labels = {
+      [USER_ROL_SUPER_ADMIN]: t("labels.adminPrimary"),
+      [USER_ROL_TEACHER]: t("labels.teacher"),
+      [USER_ROL_STUDENT]: t("labels.student"),
+    };
+    return labels[role] || role || t("labels.user");
+  }, [role, t]);
   const settings = useMemo(() => {
     const items = [
       { label: t("layout.menu.profile"), url: "/admin/settings/profile" },
@@ -185,18 +194,51 @@ function MainLayout() {
               </IconButton>
             </Tooltip>
 
-            <Tooltip title={t("common.account")}>
-              <IconButton
-                size="large"
-                edge="end"
-                color="inherit"
+            <Tooltip title={`${userName} - ${roleLabel}`}>
+              <Box
+                component="button"
+                type="button"
+                aria-label={t("common.account")}
                 onClick={handleOpenUserMenu}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.25,
+                  ml: 0.5,
+                  p: 0.5,
+                  pl: { xs: 0.5, sm: 1.25 },
+                  color: "inherit",
+                  font: "inherit",
+                  textAlign: "left",
+                  border: 0,
+                  borderRadius: 3,
+                  backgroundColor: "transparent",
+                  cursor: "pointer",
+                  "&:hover": { backgroundColor: "action.hover" },
+                  "&:focus-visible": {
+                    outline: "2px solid currentColor",
+                    outlineOffset: 2,
+                  },
+                }}
               >
+                <Typography
+                  variant="body2"
+                  component="span"
+                  noWrap
+                  sx={{
+                    display: { xs: "none", sm: "block" },
+                    maxWidth: { sm: 180, md: 260 },
+                    fontWeight: 600,
+                  }}
+                >
+                  {userName} - {roleLabel}
+                </Typography>
                 <Avatar
-                  alt={user?.display_name || user?.email || "User"}
+                  alt={userName}
                   src={user?.photo_url || "https://i.pravatar.cc/100"}
+                  sx={{ width: 40, height: 40 }}
                 />
-              </IconButton>
+              </Box>
             </Tooltip>
 
             <Menu
