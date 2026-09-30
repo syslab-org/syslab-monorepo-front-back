@@ -14,11 +14,13 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  IconButton,
   Paper,
   Stack,
   Switch,
   Tab,
   Tabs,
+  Tooltip,
   Typography,
   LinearProgress,
 } from '@mui/material';
@@ -26,6 +28,8 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined';
 import AutorenewRoundedIcon from '@mui/icons-material/AutorenewRounded';
 import BoltRoundedIcon from '@mui/icons-material/BoltRounded';
+import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import { useTranslation } from 'react-i18next';
 
 import { TASK_STATE_PENDING, TASK_STATE_RUNNING } from '@/shared/constants';
@@ -37,6 +41,67 @@ import { translate as tr } from '@/shared/i18n';
 
 const POLL_MS = 2000;
 const AUTO_DESTROY_WATCH_MS = 10000;
+
+function CopyableCommand({ command }) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef(null);
+
+  useEffect(() => () => clearTimeout(copiedTimerRef.current), []);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(command);
+      setCopied(true);
+      clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  const label = copied ? t('actions.copiedCommand') : t('actions.copyCommand');
+
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1,
+        p: 0.5,
+        pl: 1,
+        bgcolor: 'background.default',
+      }}
+    >
+      <Box
+        component="pre"
+        sx={{
+          flex: 1,
+          minWidth: 0,
+          m: 0,
+          overflow: 'auto',
+          whiteSpace: 'pre-wrap',
+          overflowWrap: 'anywhere',
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          fontSize: 12,
+        }}
+      >
+        {command}
+      </Box>
+      <Tooltip title={label}>
+        <IconButton
+          size="small"
+          color={copied ? 'success' : 'primary'}
+          aria-label={label}
+          onClick={handleCopy}
+        >
+          {copied ? <CheckRoundedIcon fontSize="small" /> : <ContentCopyRoundedIcon fontSize="small" />}
+        </IconButton>
+      </Tooltip>
+    </Paper>
+  );
+}
 
 function formatDateTime(value) {
   if (!value) return '—';
@@ -2779,22 +2844,7 @@ export default function PlanDetailPage() {
                             <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
                               {check.context}
                             </Typography>
-                            <Paper
-                              variant="outlined"
-                              sx={{ p: 1, bgcolor: 'background.default', overflow: 'auto' }}
-                            >
-                              <Box
-                                component="pre"
-                                sx={{
-                                  m: 0,
-                                  whiteSpace: 'pre-wrap',
-                                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                                  fontSize: 12,
-                                }}
-                              >
-                                {check.command}
-                              </Box>
-                            </Paper>
+                            <CopyableCommand command={check.command} />
                           </Box>
                         ))}
                       </Stack>
@@ -2838,22 +2888,7 @@ export default function PlanDetailPage() {
                             <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
                               {check.context}
                             </Typography>
-                            <Paper
-                              variant="outlined"
-                              sx={{ p: 1, bgcolor: 'background.default', overflow: 'auto' }}
-                            >
-                              <Box
-                                component="pre"
-                                sx={{
-                                  m: 0,
-                                  whiteSpace: 'pre-wrap',
-                                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                                  fontSize: 12,
-                                }}
-                              >
-                                {check.command}
-                              </Box>
-                            </Paper>
+                            <CopyableCommand command={check.command} />
                           </Box>
                         ))}
                       </Stack>
@@ -2917,22 +2952,7 @@ export default function PlanDetailPage() {
                           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
                             {check.context}
                           </Typography>
-                          <Paper
-                            variant="outlined"
-                            sx={{ p: 1, bgcolor: 'background.default', overflow: 'auto' }}
-                          >
-                            <Box
-                              component="pre"
-                              sx={{
-                                m: 0,
-                                whiteSpace: 'pre-wrap',
-                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                                fontSize: 12,
-                              }}
-                            >
-                              {check.command}
-                            </Box>
-                          </Paper>
+                          <CopyableCommand command={check.command} />
                         </Box>
                       ))}
                     </Stack>
@@ -3225,17 +3245,7 @@ ssh -i "$TMPK" ec2-user@${consoleGuide.bastions[0]?.publicIp || 'IP_PUBLICA_BAST
                       <Typography variant="caption" display="block" color="text.secondary" sx={{ mb: 0.75 }}>
                         {check.context}
                       </Typography>
-                      <Box
-                        component="pre"
-                        sx={{
-                          m: 0,
-                          whiteSpace: 'pre-wrap',
-                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                          fontSize: 12,
-                        }}
-                      >
-                        {check.command}
-                      </Box>
+                      <CopyableCommand command={check.command} />
                     </Paper>
                   )),
                 )}

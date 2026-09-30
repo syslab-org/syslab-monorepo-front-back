@@ -21,6 +21,8 @@ const en = {
     cancel: "Cancel",
     clearFilters: "Clear filters",
     close: "Close",
+    copiedCommand: "Command copied",
+    copyCommand: "Copy command",
     copyLink: "Copy link",
     create: "Create",
     createInvitation: "Create invitation",

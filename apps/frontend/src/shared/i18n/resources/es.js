@@ -21,6 +21,8 @@ const es = {
     cancel: "Cancelar",
     clearFilters: "Limpiar filtros",
     close: "Cerrar",
+    copiedCommand: "Comando copiado",
+    copyCommand: "Copiar comando",
     copyLink: "Copiar enlace",
     create: "Crear",
     createInvitation: "Crear invitación",
